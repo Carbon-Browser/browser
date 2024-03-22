@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,11 +13,12 @@ import androidx.annotation.VisibleForTesting;
 
 import com.google.vr.ndk.base.DaydreamApi;
 
+import org.jni_zero.CalledByNative;
+import org.jni_zero.JNINamespace;
+import org.jni_zero.NativeMethods;
+
 import org.chromium.base.ContextUtils;
 import org.chromium.base.Log;
-import org.chromium.base.annotations.CalledByNative;
-import org.chromium.base.annotations.JNINamespace;
-import org.chromium.base.annotations.NativeMethods;
 import org.chromium.chrome.vr.R;
 import org.chromium.components.messages.DismissReason;
 import org.chromium.components.messages.MessageBannerProperties;
@@ -30,9 +31,7 @@ import org.chromium.content_public.browser.WebContents;
 import org.chromium.ui.base.WindowAndroid;
 import org.chromium.ui.modelutil.PropertyModel;
 
-/**
- * Manages logic around VrCore Installation and Versioning
- */
+/** Manages logic around VrCore Installation and Versioning */
 @JNINamespace("vr")
 public class VrCoreInstallUtils {
     private static final String TAG = "VrCoreInstallUtils";
@@ -58,9 +57,7 @@ public class VrCoreInstallUtils {
         return new VrCoreInstallUtils(nativeVrCoreInstallUtils);
     }
 
-    /**
-     * See {@link Activity#onActivityResult}.
-     */
+    /** See {@link Activity#onActivityResult}. */
     public static boolean onActivityResultWithNative(int requestCode, int resultCode) {
         // Handles the result of requesting to update VR services.
         if (requestCode == VR_SERVICES_UPDATE_RESULT) {
@@ -82,9 +79,7 @@ public class VrCoreInstallUtils {
         return sVrCoreVersionChecker;
     }
 
-    /**
-     * Returns the current {@VrSupportLevel}.
-     */
+    /** Returns the current {@VrSupportLevel}. */
     @CalledByNative
     public static int getVrSupportLevel() {
         if (sVrSupportLevel == null) {
@@ -99,9 +94,7 @@ public class VrCoreInstallUtils {
         return sVrSupportLevel;
     }
 
-    /**
-     * Returns the @{VrSupportLevel}, if known, without attempting to recalculate.
-     */
+    /** Returns the @{VrSupportLevel}, if known, without attempting to recalculate. */
     public static Integer getCachedVrSupportLevel() {
         return sVrSupportLevel;
     }
@@ -111,9 +104,7 @@ public class VrCoreInstallUtils {
         return getVrSupportLevel() == VrSupportLevel.VR_NEEDS_UPDATE;
     }
 
-    /**
-     * Returns whether the device has support for Daydream.
-     */
+    /** Returns whether the device has support for Daydream. */
     /* package */ static boolean hasDaydreamSupport() {
         return getVrSupportLevel() == VrSupportLevel.VR_DAYDREAM;
     }
@@ -134,9 +125,7 @@ public class VrCoreInstallUtils {
                 == VrCoreVersionChecker.VrCoreCompatibility.VR_READY;
     }
 
-    /**
-     * Forces a recalculation of the current @{VrSupportLevel} as it may have changed.
-     */
+    /** Forces a recalculation of the current @{VrSupportLevel} as it may have changed. */
     private static int updateVrSupportLevel() {
         sVrSupportLevel = null;
         return getVrSupportLevel();
@@ -158,9 +147,7 @@ public class VrCoreInstallUtils {
         return window.getActivity().get();
     }
 
-    /**
-     * Prompts the user to install or update VRSupport if needed.
-     */
+    /** Prompts the user to install or update VRSupport if needed. */
     @CalledByNative
     @VisibleForTesting
     protected void requestInstallVrCore(final WebContents webContents) {
@@ -207,21 +194,27 @@ public class VrCoreInstallUtils {
         if (messageDispatcher == null) return;
         PropertyModel message =
                 new PropertyModel.Builder(MessageBannerProperties.ALL_KEYS)
-                        .with(MessageBannerProperties.MESSAGE_IDENTIFIER,
+                        .with(
+                                MessageBannerProperties.MESSAGE_IDENTIFIER,
                                 MessageIdentifier.VR_SERVICES_UPGRADE)
                         .with(MessageBannerProperties.TITLE, messageTitle)
-                        .with(MessageBannerProperties.DESCRIPTION,
-                                context.getString(org.chromium.chrome.vr.R.string
-                                                          .vr_services_check_message_description))
-                        .with(MessageBannerProperties.ICON_RESOURCE_ID,
+                        .with(
+                                MessageBannerProperties.DESCRIPTION,
+                                context.getString(
+                                        org.chromium.chrome.vr.R.string
+                                                .vr_services_check_message_description))
+                        .with(
+                                MessageBannerProperties.ICON_RESOURCE_ID,
                                 org.chromium.chrome.vr.R.drawable.vr_services)
                         .with(MessageBannerProperties.PRIMARY_BUTTON_TEXT, buttonText)
-                        .with(MessageBannerProperties.ON_PRIMARY_ACTION,
+                        .with(
+                                MessageBannerProperties.ON_PRIMARY_ACTION,
                                 () -> {
                                     assert sRequestInstallInstance == null;
                                     sRequestInstallInstance = VrCoreInstallUtils.this;
                                     activity.startActivityForResult(
-                                            new Intent(Intent.ACTION_VIEW,
+                                            new Intent(
+                                                    Intent.ACTION_VIEW,
                                                     Uri.parse(VR_CORE_MARKET_URI)),
                                             VR_SERVICES_UPDATE_RESULT);
                                     return PrimaryActionClickBehavior.DISMISS_IMMEDIATELY;
@@ -239,9 +232,7 @@ public class VrCoreInstallUtils {
         maybeNotifyNativeOnInstallResult(updateVrSupportLevel() != VrSupportLevel.VR_NEEDS_UPDATE);
     }
 
-    /**
-     * Helper used to notify native code about the result of the request to install VRCore.
-     */
+    /** Helper used to notify native code about the result of the request to install VRCore. */
     private void maybeNotifyNativeOnInstallResult(boolean success) {
         if (mNativeVrCoreInstallUtils != 0) {
             VrCoreInstallUtilsJni.get().onInstallResult(mNativeVrCoreInstallUtils, success);

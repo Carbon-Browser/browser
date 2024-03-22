@@ -20,14 +20,12 @@
 
 #include <string>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 
 #include "base/files/file_path.h"
-#include "base/strings/string_piece_forward.h"
 #include "base/timer/timer.h"
 #include "components/adblock/core/subscription/ongoing_subscription_request.h"
 #include "components/adblock/core/subscription/subscription_downloader.h"
-#include "components/prefs/pref_member.h"
 #include "net/base/backoff_entry.h"
 #include "net/base/network_change_notifier.h"
 #include "services/network/public/cpp/shared_url_loader_factory.h"
@@ -40,7 +38,6 @@ class OngoingSubscriptionRequestImpl final
       public net::NetworkChangeNotifier::NetworkChangeObserver {
  public:
   OngoingSubscriptionRequestImpl(
-      PrefService* prefs,
       const net::BackoffEntry::Policy* backoff_policy,
       scoped_refptr<network::SharedURLLoaderFactory> url_loader_factory);
   ~OngoingSubscriptionRequestImpl() final;
@@ -51,21 +48,17 @@ class OngoingSubscriptionRequestImpl final
   size_t GetNumberOfRedirects() const final;
 
   // NetworkChangeObserver:
-  void OnNetworkChanged(net::NetworkChangeNotifier::ConnectionType) final;
+  void OnNetworkChanged(
+      net::NetworkChangeNotifier::ConnectionType connection_type) final;
 
  private:
   bool IsStarted() const;
-  bool IsConnectionAllowed() const;
-  void CheckAllowedConnectionType();
   void StartInternal();
-  void StopInternal();
   void OnDownloadFinished(base::FilePath downloaded_file);
   void OnHeadersReceived(scoped_refptr<net::HttpResponseHeaders> headers);
   const char* MethodToString() const;
 
   SEQUENCE_CHECKER(sequence_checker_);
-  StringPrefMember allowed_connection_type_;
-  BooleanPrefMember adblocking_enabled_;
   std::unique_ptr<net::BackoffEntry> backoff_entry_;
   scoped_refptr<network::SharedURLLoaderFactory> url_loader_factory_;
   GURL url_;

@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,7 +9,6 @@ import android.content.SharedPreferences;
 import android.util.Base64;
 
 import androidx.annotation.Nullable;
-import androidx.annotation.VisibleForTesting;
 import androidx.annotation.WorkerThread;
 import androidx.browser.trusted.Token;
 
@@ -87,8 +86,9 @@ public class InstalledWebappPermissionStore {
         // On some versions of Android, creating the Preferences object involves a disk read (to
         // check if the Preferences directory exists, not even to read the actual Preferences).
         try (StrictModeContext ignored = StrictModeContext.allowDiskReads()) {
-            mPreferences = ContextUtils.getApplicationContext().getSharedPreferences(
-                    SHARED_PREFS_FILE, Context.MODE_PRIVATE);
+            mPreferences =
+                    ContextUtils.getApplicationContext()
+                            .getSharedPreferences(SHARED_PREFS_FILE, Context.MODE_PRIVATE);
         }
     }
 
@@ -158,15 +158,21 @@ public class InstalledWebappPermissionStore {
      * Returns whether {@code true} if state was changed, {@code false} if the provided state was
      * the same as the state beforehand.
      */
-    boolean setStateForOrigin(Origin origin, String packageName, String appName,
-            @ContentSettingsType int type, @ContentSettingValues int settingValue) {
+    boolean setStateForOrigin(
+            Origin origin,
+            String packageName,
+            String appName,
+            @ContentSettingsType int type,
+            @ContentSettingValues int settingValue) {
         boolean modified = !getStoredOrigins().contains(origin.toString());
 
         if (!modified) {
             // Don't bother with these extra checks if we have a brand new origin.
-            boolean settingChanged = settingValue
-                    != mPreferences.getInt(
-                            createPermissionSettingKey(type, origin), ContentSettingValues.ASK);
+            boolean settingChanged =
+                    settingValue
+                            != mPreferences.getInt(
+                                    createPermissionSettingKey(type, origin),
+                                    ContentSettingValues.ASK);
             boolean packageChanged =
                     !packageName.equals(mPreferences.getString(createPackageNameKey(origin), null));
             boolean appNameChanged =
@@ -176,7 +182,8 @@ public class InstalledWebappPermissionStore {
 
         addOrigin(origin);
 
-        mPreferences.edit()
+        mPreferences
+                .edit()
                 .putInt(createPermissionSettingKey(type, origin), settingValue)
                 .putString(createPackageNameKey(origin), packageName)
                 .putString(createAppNameKey(origin), appName)
@@ -190,7 +197,8 @@ public class InstalledWebappPermissionStore {
         Set<String> origins = getStoredOrigins();
         origins.remove(origin.toString());
 
-        mPreferences.edit()
+        mPreferences
+                .edit()
                 .putStringSet(KEY_ALL_ORIGINS, origins)
                 .remove(createPermissionKey(ContentSettingsType.NOTIFICATIONS, origin))
                 .remove(createPermissionSettingKey(ContentSettingsType.NOTIFICATIONS, origin))
@@ -204,7 +212,8 @@ public class InstalledWebappPermissionStore {
 
     /** Reset permission {@type} from the store. */
     void resetPermission(Origin origin, @ContentSettingsType int type) {
-        mPreferences.edit()
+        mPreferences
+                .edit()
                 .remove(createPermissionKey(type, origin))
                 .remove(createPermissionSettingKey(type, origin))
                 .apply();
@@ -213,7 +222,8 @@ public class InstalledWebappPermissionStore {
     /** Stores the notification permission setting the origin had before the app was installed. */
     void setPreInstallNotificationPermission(
             Origin origin, @ContentSettingValues int settingValue) {
-        mPreferences.edit()
+        mPreferences
+                .edit()
                 .putInt(createPreInstallNotificationPermissionSettingKey(origin), settingValue)
                 .apply();
     }
@@ -237,14 +247,12 @@ public class InstalledWebappPermissionStore {
             return enabled ? ContentSettingValues.ALLOW : ContentSettingValues.BLOCK;
         }
 
-        @ContentSettingValues
-        int settingValue = mPreferences.getInt(key, ContentSettingValues.ASK);
+        @ContentSettingValues int settingValue = mPreferences.getInt(key, ContentSettingValues.ASK);
         mPreferences.edit().remove(key).apply();
         return settingValue;
     }
 
     /** Clears the store, for testing. */
-    @VisibleForTesting
     public void clearForTesting() {
         mPreferences.edit().clear().apply();
     }

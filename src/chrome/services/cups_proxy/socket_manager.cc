@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -17,9 +17,10 @@
 
 #include "base/logging.h"
 #include "base/memory/weak_ptr.h"
+#include "base/ranges/algorithm.h"
 #include "base/sequence_checker.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/threading/sequence_bound.h"
-#include "base/threading/sequenced_task_runner_handle.h"
 #include "base/threading/thread_checker.h"
 #include "chrome/services/cups_proxy/public/cpp/cups_util.h"
 #include "chrome/services/cups_proxy/public/cpp/type_conversions.h"
@@ -122,7 +123,7 @@ class SocketManagerImpl : public SocketManager {
       : impl(delegate->GetIOTaskRunner(),
              std::move(socket),
              delegate,
-             base::SequencedTaskRunnerHandle::Get()) {}
+             base::SequencedTaskRunner::GetCurrentDefault()) {}
 
   ~SocketManagerImpl() override = default;
 
@@ -158,8 +159,9 @@ void ThreadSafeHelper::ProxyToCups(std::vector<uint8_t> request,
 
   // Fill io_buffer with request to write.
   in_flight_->io_buffer = base::MakeRefCounted<net::DrainableIOBuffer>(
-      base::MakeRefCounted<net::IOBuffer>(request.size()), request.size());
-  std::copy(request.begin(), request.end(), in_flight_->io_buffer->data());
+      base::MakeRefCounted<net::IOBufferWithSize>(request.size()),
+      request.size());
+  base::ranges::copy(request, in_flight_->io_buffer->data());
 
   ConnectIfNeeded();
 }
@@ -219,7 +221,7 @@ void ThreadSafeHelper::OnWrite(int result) {
   // Prime io_buffer for reading.
   in_flight_->response = std::make_unique<std::vector<uint8_t>>();
   in_flight_->io_buffer = base::MakeRefCounted<net::DrainableIOBuffer>(
-      base::MakeRefCounted<net::IOBuffer>(kHttpMaxBufferSize),
+      base::MakeRefCounted<net::IOBufferWithSize>(kHttpMaxBufferSize),
       kHttpMaxBufferSize);
 
   // Start reading response from CUPS.

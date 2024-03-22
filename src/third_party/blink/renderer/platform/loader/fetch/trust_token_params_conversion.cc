@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -16,7 +16,8 @@ network::OptionalTrustTokenParams ConvertTrustTokenParams(
 
   network::mojom::TrustTokenParamsPtr out =
       network::mojom::TrustTokenParams::New();
-  out->type = in.type;
+  out->version = in.version;
+  out->operation = in.operation;
   out->refresh_policy = in.refresh_policy;
   out->sign_request_data = in.sign_request_data;
   out->include_timestamp_header = in.include_timestamp_header;

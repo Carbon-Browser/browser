@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,7 +8,7 @@ import {AnnotationTool} from '../annotation_tool.js';
  * Wraps the Ink component with an API that can be called
  * across an IFrame boundary.
  */
-export class InkAPI {
+export class InkApi {
   private canvas_: drawings.Canvas;
   private camera_: drawings.Box|null = null;
 
@@ -21,18 +21,18 @@ export class InkAPI {
     this.canvas_.addUndoRedoListener(listener);
   }
 
-  async setPDF(buffer: ArrayBuffer) {
+  async setPdf(buffer: ArrayBuffer) {
     // We change the type from ArrayBuffer to Uint8Array due to the consequences
     // of the buffer being passed across the iframe boundary. This realm has a
     // different ArrayBuffer constructor than `buffer`.
     return this.canvas_.setPDF(new Uint8Array(buffer));
   }
 
-  async getPDF(): Promise<Uint8Array> {
+  async getPdf(): Promise<Uint8Array> {
     return this.canvas_.getPDF();
   }
 
-  async getPDFDestructive(): Promise<Uint8Array> {
+  async getPdfDestructive(): Promise<Uint8Array> {
     return this.canvas_.getPDFDestructive();
   }
 
@@ -80,5 +80,5 @@ export class InkAPI {
 
 window.initInk = async function() {
   const canvas = await drawings.Canvas.execute(document.body);
-  return new InkAPI(canvas);
+  return new InkApi(canvas);
 };

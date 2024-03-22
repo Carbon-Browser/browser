@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -75,7 +75,6 @@ class TabLifecycleUnitSource : public BrowserListObserver,
   friend class TabLifecycleStateObserver;
   friend class TabLifecycleUnitTest;
   friend class TabManagerTest;
-  friend class TabActivityWatcherTest;
   FRIEND_TEST_ALL_PREFIXES(TabManagerTest, TabManagerWasDiscarded);
   FRIEND_TEST_ALL_PREFIXES(TabManagerTest,
                            TabManagerWasDiscardedCrossSiteSubFrame);
@@ -138,7 +137,8 @@ class TabLifecycleUnitSource : public BrowserListObserver,
   BrowserTabStripTracker browser_tab_strip_tracker_;
 
   // Pretend that this is the TabStripModel of the focused window, for testing.
-  raw_ptr<TabStripModel> focused_tab_strip_model_for_testing_ = nullptr;
+  raw_ptr<TabStripModel, AcrossTasksDanglingUntriaged>
+      focused_tab_strip_model_for_testing_ = nullptr;
 
   // The currently focused TabLifecycleUnit. Updated by UpdateFocusedTab().
   raw_ptr<TabLifecycleUnit> focused_lifecycle_unit_ = nullptr;

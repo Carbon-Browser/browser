@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -84,9 +84,6 @@ GURL LoginWebDialog::GetDialogContentURL() const {
   return url_;
 }
 
-void LoginWebDialog::GetWebUIMessageHandlers(
-    std::vector<WebUIMessageHandler*>* handlers) const {}
-
 void LoginWebDialog::GetDialogSize(gfx::Size* size) const {
   // TODO(https://crbug.com/1022774): Fix for the lock screen.
   if (!parent_window_) {
@@ -153,7 +150,7 @@ bool LoginWebDialog::HandleOpenURLFromTab(WebContents* source,
   // fire an auto-reload, which in turn leads to opening a new browser window,
   // so we must suppress it.
   // http://crbug.com/443096
-  return (source && !chrome::FindBrowserWithWebContents(source));
+  return (source && !chrome::FindBrowserWithTab(source));
 }
 
 bool LoginWebDialog::HandleShouldOverrideWebContentsCreation() {

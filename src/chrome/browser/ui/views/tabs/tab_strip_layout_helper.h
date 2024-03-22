@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,9 +7,9 @@
 
 #include <vector>
 
-#include "base/callback.h"
-#include "base/callback_forward.h"
-#include "base/memory/raw_ptr.h"
+#include "base/functional/callback.h"
+#include "base/functional/callback_forward.h"
+#include "base/memory/raw_ref.h"
 #include "chrome/browser/ui/tabs/tab_types.h"
 #include "chrome/browser/ui/views/tabs/tab_layout_state.h"
 #include "chrome/browser/ui/views/tabs/tab_slot_view.h"
@@ -21,7 +21,7 @@
 
 class Tab;
 class TabGroupHeader;
-class TabStripController;
+class TabContainerController;
 
 namespace tab_groups {
 class TabGroupId;
@@ -34,7 +34,7 @@ class TabStripLayoutHelper {
  public:
   using GetTabsCallback = base::RepeatingCallback<views::ViewModelT<Tab>*()>;
 
-  TabStripLayoutHelper(const TabStripController* controller,
+  TabStripLayoutHelper(const TabContainerController& controller,
                        GetTabsCallback get_tabs_callback);
   TabStripLayoutHelper(const TabStripLayoutHelper&) = delete;
   TabStripLayoutHelper& operator=(const TabStripLayoutHelper&) = delete;
@@ -50,8 +50,6 @@ class TabStripLayoutHelper {
 
   int active_tab_width() { return active_tab_width_; }
   int inactive_tab_width() { return inactive_tab_width_; }
-  int first_non_pinned_tab_index() { return first_non_pinned_tab_index_; }
-  int first_non_pinned_tab_x() { return first_non_pinned_tab_x_; }
 
   // Returns the number of pinned tabs in the tabstrip.
   size_t GetPinnedTabCount() const;
@@ -67,11 +65,10 @@ class TabStripLayoutHelper {
 
   // Marks the tab at |model_index| as closing, but does not remove it from
   // |slots_|.
-  void RemoveTabAt(int model_index, Tab* tab);
+  void MarkTabAsClosing(int model_index, Tab* tab);
 
-  // Invoked when |tab| has been destroyed by TabStrip (i.e. the remove
-  // animation has completed).
-  void OnTabDestroyed(Tab* tab);
+  // Removes `tab` from `slots_`.
+  void RemoveTab(Tab* tab);
 
   // Moves the tab at |prev_index| with group |moving_tab_group| to |new_index|.
   // Also updates the group header's location if necessary.
@@ -141,11 +138,6 @@ class TabStripLayoutHelper {
   // in |slots_|.
   int GetSlotIndexForGroupHeader(tab_groups::TabGroupId group) const;
 
-  // Compares |cached_slots_| to the TabAnimations in |animator_| and DCHECKs if
-  // the TabAnimation::ViewType do not match. Prevents bugs that could cause the
-  // wrong callback being run when a tab or group is deleted.
-  void VerifyAnimationsMatchTabSlots() const;
-
   // Updates the value of either |active_tab_width_| or |inactive_tab_width_|,
   // as appropriate.
   void UpdateCachedTabWidth(int tab_index, int tab_width, bool active);
@@ -153,8 +145,8 @@ class TabStripLayoutHelper {
   // True iff the slot at index |i| is a tab that is in a collapsed group.
   bool SlotIsCollapsedTab(int i) const;
 
-  // The owning tabstrip's controller.
-  const raw_ptr<const TabStripController> controller_;
+  // The owning TabContainer's controller.
+  const raw_ref<const TabContainerController, DanglingUntriaged> controller_;
 
   // Callback to get the necessary View objects from the owning tabstrip.
   GetTabsCallback get_tabs_callback_;
@@ -170,9 +162,6 @@ class TabStripLayoutHelper {
   // into these widths, the initial tabs in the strip will be 1 px larger.
   int active_tab_width_;
   int inactive_tab_width_;
-
-  int first_non_pinned_tab_index_;
-  int first_non_pinned_tab_x_;
 };
 
 #endif  // CHROME_BROWSER_UI_VIEWS_TABS_TAB_STRIP_LAYOUT_HELPER_H_

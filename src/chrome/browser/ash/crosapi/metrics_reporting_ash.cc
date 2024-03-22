@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,9 +6,9 @@
 
 #include <utility>
 
-#include "base/bind.h"
 #include "base/callback_list.h"
 #include "base/check.h"
+#include "base/functional/bind.h"
 #include "base/memory/raw_ptr.h"
 #include "chrome/browser/ash/settings/stats_reporting_controller.h"
 #include "chrome/browser/profiles/profile_manager.h"
@@ -51,7 +51,7 @@ class DelegateImpl : public MetricsReportingAsh::Delegate {
   }
 
  private:
-  const raw_ptr<metrics::MetricsService> metrics_service_;
+  const raw_ptr<metrics::MetricsService, DanglingUntriaged> metrics_service_;
 };
 
 absl::optional<std::string> MaybeGetClientId(

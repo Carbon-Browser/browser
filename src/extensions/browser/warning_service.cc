@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -19,7 +19,8 @@ WarningService::WarningService(content::BrowserContext* browser_context)
   DCHECK_CURRENTLY_ON(BrowserThread::UI);
   if (browser_context_) {
     extension_registry_observation_.Observe(ExtensionRegistry::Get(
-        ExtensionsBrowserClient::Get()->GetOriginalContext(browser_context_)));
+        ExtensionsBrowserClient::Get()->GetContextRedirectedToOriginal(
+            browser_context_, /*force_guest_profile=*/true)));
   }
 }
 

@@ -1,10 +1,8 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/ash/file_system_provider/operations/open_file.h"
-
-#include <string>
 
 #include "chrome/common/extensions/api/file_system_provider.h"
 #include "chrome/common/extensions/api/file_system_provider_internal.h"
@@ -13,12 +11,12 @@ namespace ash {
 namespace file_system_provider {
 namespace operations {
 
-OpenFile::OpenFile(extensions::EventRouter* event_router,
+OpenFile::OpenFile(RequestDispatcher* dispatcher,
                    const ProvidedFileSystemInfo& file_system_info,
                    const base::FilePath& file_path,
                    OpenFileMode mode,
                    ProvidedFileSystemInterface::OpenFileCallback callback)
-    : Operation(event_router, file_system_info),
+    : Operation(dispatcher, file_system_info),
       file_path_(file_path),
       mode_(mode),
       callback_(std::move(callback)) {}
@@ -40,11 +38,11 @@ bool OpenFile::Execute(int request_id) {
 
   switch (mode_) {
     case OPEN_FILE_MODE_READ:
-      options.mode = extensions::api::file_system_provider::OPEN_FILE_MODE_READ;
+      options.mode = extensions::api::file_system_provider::OpenFileMode::kRead;
       break;
     case OPEN_FILE_MODE_WRITE:
       options.mode =
-          extensions::api::file_system_provider::OPEN_FILE_MODE_WRITE;
+          extensions::api::file_system_provider::OpenFileMode::kWrite;
       break;
   }
 
@@ -57,7 +55,7 @@ bool OpenFile::Execute(int request_id) {
 }
 
 void OpenFile::OnSuccess(int request_id,
-                         std::unique_ptr<RequestValue> result,
+                         const RequestValue& result,
                          bool has_more) {
   // File handle is the same as request id of the OpenFile operation.
   DCHECK(callback_);
@@ -65,7 +63,7 @@ void OpenFile::OnSuccess(int request_id,
 }
 
 void OpenFile::OnError(int /* request_id */,
-                       std::unique_ptr<RequestValue> /* result */,
+                       const RequestValue& /* result */,
                        base::File::Error error) {
   DCHECK(callback_);
   std::move(callback_).Run(0 /* file_handle */, error);

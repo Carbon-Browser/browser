@@ -29,14 +29,14 @@ video.onloadeddata = t.step_func(_ => {
       var playbackSpeedsList = playbackSpeedMenu(video);
       assert_equals(playbackSpeedsList.getAttribute('aria-label'), 'Options');
       var listHeader = playbackSpeedListHeader(video);
-      assert_equals(listHeader.getAttribute('aria-label'), 'hide playback speed menu');
+      assert_equals(listHeader.getAttribute('aria-label'), 'back to options');
 
       const playbackSpeeds = [0.25, 0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2];
       playbackSpeeds.forEach(function(playbackSpeed, index) {
         var playbackSpeedListItem = playbackSpeedListItemAtPlaybackRate(video, playbackSpeed);
         assert_equals(playbackSpeedListItem.innerText, playbackSpeed == 1.0 ? 'Normal' : `${playbackSpeed}`);
         assert_equals(playbackSpeedListItem.getAttribute('role'), 'menuitemcheckbox');
-        assert_equals(playbackSpeedListItem.getAttribute('aria-setsize'), '9');
+        assert_equals(playbackSpeedListItem.getAttribute('aria-setsize'), `${playbackSpeeds.length}`);
         assert_equals(playbackSpeedListItem.getAttribute('aria-posinset'), `${index + 1}`);
       });
     }));

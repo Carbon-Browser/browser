@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,7 +12,6 @@
 
 #include "base/check.h"
 #include "base/check_op.h"
-#include "base/cxx17_backports.h"
 #include "base/numerics/checked_math.h"
 #include "base/values.h"
 #include "ui/gfx/geometry/size.h"
@@ -109,9 +108,9 @@ size_t CalculateImageDataSize(int stride, int height) {
 }  // namespace
 
 Thumbnail::Thumbnail(const gfx::Size& page_size, float device_pixel_ratio)
-    : device_pixel_ratio_(base::clamp(device_pixel_ratio,
-                                      kMinDevicePixelRatio,
-                                      kMaxDevicePixelRatio)),
+    : device_pixel_ratio_(std::clamp(device_pixel_ratio,
+                                     kMinDevicePixelRatio,
+                                     kMaxDevicePixelRatio)),
       image_size_(CalculateBestFitSize(page_size, device_pixel_ratio_)),
       stride_(CalculateStride(image_size_.width())),
       image_data_(CalculateImageDataSize(stride(), image_size().height())) {

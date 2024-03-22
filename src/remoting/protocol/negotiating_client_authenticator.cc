@@ -1,17 +1,17 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "remoting/protocol/negotiating_client_authenticator.h"
 
-#include <algorithm>
 #include <memory>
 #include <sstream>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback.h"
 #include "base/check_op.h"
+#include "base/containers/contains.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/memory/ptr_util.h"
 #include "base/notreached.h"
 #include "base/strings/string_split.h"
@@ -22,8 +22,7 @@
 #include "remoting/protocol/v2_authenticator.h"
 #include "third_party/libjingle_xmpp/xmllite/xmlelement.h"
 
-namespace remoting {
-namespace protocol {
+namespace remoting::protocol {
 
 NegotiatingClientAuthenticator::NegotiatingClientAuthenticator(
     const std::string& local_id,
@@ -63,9 +62,9 @@ void NegotiatingClientAuthenticator::ProcessMessage(
     // The host must pick a method that is valid and supported by the client,
     // and it must not change methods after it has picked one.
     if (method_set_by_host_ || method == Method::INVALID ||
-        std::find(methods_.begin(), methods_.end(), method) == methods_.end()) {
+        !base::Contains(methods_, method)) {
       state_ = REJECTED;
-      rejection_reason_ = PROTOCOL_ERROR;
+      rejection_reason_ = RejectionReason::PROTOCOL_ERROR;
       std::move(resume_callback).Run();
       return;
     }
@@ -105,7 +104,8 @@ NegotiatingClientAuthenticator::GetNextMessage() {
     if (is_paired()) {
       // If the client is paired with the host then attach pairing client_id to
       // the message.
-      jingle_xmpp::XmlElement* pairing_tag = new jingle_xmpp::XmlElement(kPairingInfoTag);
+      jingle_xmpp::XmlElement* pairing_tag =
+          new jingle_xmpp::XmlElement(kPairingInfoTag);
       result->AddElement(pairing_tag);
       pairing_tag->AddAttr(kClientIdAttribute, config_.pairing_client_id);
     }
@@ -113,8 +113,9 @@ NegotiatingClientAuthenticator::GetNextMessage() {
     // Include a list of supported methods.
     std::string supported_methods;
     for (Method method : methods_) {
-      if (!supported_methods.empty())
+      if (!supported_methods.empty()) {
         supported_methods += kSupportedMethodsSeparator;
+      }
       supported_methods += MethodToString(method);
     }
     result->AddAttr(kSupportedMethodsAttributeQName, supported_methods);
@@ -185,9 +186,7 @@ void NegotiatingClientAuthenticator::CreateAuthenticatorForCurrentMethod(
 }
 
 void NegotiatingClientAuthenticator::CreatePreferredAuthenticator() {
-  if (is_paired() &&
-      std::find(methods_.begin(), methods_.end(), Method::PAIRED_SPAKE2_P224) !=
-          methods_.end()) {
+  if (is_paired() && base::Contains(methods_, Method::PAIRED_SPAKE2_P224)) {
     PairingClientAuthenticator* pairing_authenticator =
         new PairingClientAuthenticator(
             config_, base::BindRepeating(&V2Authenticator::CreateForClient));
@@ -220,5 +219,4 @@ bool NegotiatingClientAuthenticator::is_paired() {
   return !config_.pairing_client_id.empty() && !config_.pairing_secret.empty();
 }
 
-}  // namespace protocol
-}  // namespace remoting
+}  // namespace remoting::protocol

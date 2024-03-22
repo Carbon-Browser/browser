@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,7 +12,7 @@ namespace mojo {
 GenericPendingReceiver::GenericPendingReceiver() = default;
 
 GenericPendingReceiver::GenericPendingReceiver(
-    base::StringPiece interface_name,
+    std::string_view interface_name,
     mojo::ScopedMessagePipeHandle receiving_pipe)
     : interface_name_(std::string(interface_name)),
       pipe_(std::move(receiving_pipe)) {}

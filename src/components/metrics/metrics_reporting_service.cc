@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,10 +6,11 @@
 
 #include "components/metrics/metrics_reporting_service.h"
 
-#include "base/bind.h"
-#include "base/callback.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/metrics/histogram_macros.h"
+#include "components/metrics/metrics_logs_event_manager.h"
 #include "components/metrics/metrics_pref_names.h"
 #include "components/metrics/metrics_service_client.h"
 #include "components/metrics/unsent_log_store_metrics_impl.h"
@@ -24,14 +25,19 @@ void MetricsReportingService::RegisterPrefs(PrefRegistrySimple* registry) {
   MetricsLogStore::RegisterPrefs(registry);
 }
 
-MetricsReportingService::MetricsReportingService(MetricsServiceClient* client,
-                                                 PrefService* local_state)
+MetricsReportingService::MetricsReportingService(
+    MetricsServiceClient* client,
+    PrefService* local_state,
+    MetricsLogsEventManager* logs_event_manager_)
     : ReportingService(client,
                        local_state,
-                       client->GetStorageLimits().max_ongoing_log_size),
+                       client->GetStorageLimits()
+                           .ongoing_log_queue_limits.max_log_size_bytes,
+                       logs_event_manager_),
       metrics_log_store_(local_state,
                          client->GetStorageLimits(),
-                         client->GetUploadSigningKey()) {}
+                         client->GetUploadSigningKey(),
+                         logs_event_manager_) {}
 
 MetricsReportingService::~MetricsReportingService() {}
 

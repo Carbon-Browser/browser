@@ -1,4 +1,4 @@
-// Copyright (c) 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,8 +6,8 @@
 
 #include <memory>
 
-#include "base/bind.h"
 #include "base/command_line.h"
+#include "base/functional/bind.h"
 #include "base/metrics/histogram_functions.h"
 #include "build/build_config.h"
 #include "components/live_caption/caption_bubble_context.h"
@@ -41,37 +41,13 @@ namespace captions {
 LiveCaptionController::LiveCaptionController(
     PrefService* profile_prefs,
     PrefService* global_prefs,
+    const std::string& application_locale,
     content::BrowserContext* browser_context)
     : profile_prefs_(profile_prefs),
       global_prefs_(global_prefs),
-      browser_context_(browser_context) {}
-
-LiveCaptionController::~LiveCaptionController() {
-  if (enabled_) {
-    enabled_ = false;
-    StopLiveCaption();
-  }
-}
-
-// static
-void LiveCaptionController::RegisterProfilePrefs(
-    user_prefs::PrefRegistrySyncable* registry) {
-  registry->RegisterBooleanPref(
-      prefs::kLiveCaptionEnabled, false,
-      user_prefs::PrefRegistrySyncable::SYNCABLE_PREF);
-
-  // Initially default the language to en-US.
-  registry->RegisterStringPref(prefs::kLiveCaptionLanguageCode,
-                               speech::kUsEnglishLocale,
-                               user_prefs::PrefRegistrySyncable::SYNCABLE_PREF);
-
-  registry->RegisterListPref(
-      prefs::kLiveCaptionMediaFoundationRendererErrorSilenced,
-      user_prefs::PrefRegistrySyncable::SYNCABLE_PREF);
-}
-
-void LiveCaptionController::Init() {
-  base::UmaHistogramBoolean("Accessibility.LiveCaption.FeatureEnabled",
+      browser_context_(browser_context),
+      application_locale_(application_locale) {
+  base::UmaHistogramBoolean("Accessibility.LiveCaption.FeatureEnabled2",
                             IsLiveCaptionFeatureSupported());
 
   // Hidden behind a feature flag.
@@ -96,12 +72,43 @@ void LiveCaptionController::Init() {
                           base::Unretained(this)));
 
   enabled_ = IsLiveCaptionEnabled();
-  base::UmaHistogramBoolean("Accessibility.LiveCaption", enabled_);
+  base::UmaHistogramBoolean("Accessibility.LiveCaption2", enabled_);
   if (enabled_) {
     StartLiveCaption();
-  } else {
+  }
+}
+
+LiveCaptionController::~LiveCaptionController() {
+  if (enabled_) {
+    enabled_ = false;
     StopLiveCaption();
   }
+}
+
+// static
+void LiveCaptionController::RegisterProfilePrefs(
+    user_prefs::PrefRegistrySyncable* registry) {
+  registry->RegisterBooleanPref(
+      prefs::kLiveCaptionBubbleExpanded, false,
+      user_prefs::PrefRegistrySyncable::SYNCABLE_PREF);
+  registry->RegisterBooleanPref(
+      prefs::kLiveCaptionBubblePinned, false,
+      user_prefs::PrefRegistrySyncable::SYNCABLE_PREF);
+  registry->RegisterBooleanPref(
+      prefs::kLiveCaptionEnabled, false,
+      user_prefs::PrefRegistrySyncable::SYNCABLE_PREF);
+  registry->RegisterBooleanPref(
+      prefs::kLiveCaptionMaskOffensiveWords, false,
+      user_prefs::PrefRegistrySyncable::SYNCABLE_PREF);
+
+  // Initially default the language to en-US.
+  registry->RegisterStringPref(prefs::kLiveCaptionLanguageCode,
+                               speech::kUsEnglishLocale,
+                               user_prefs::PrefRegistrySyncable::SYNCABLE_PREF);
+
+  registry->RegisterListPref(
+      prefs::kLiveCaptionMediaFoundationRendererErrorSilenced,
+      user_prefs::PrefRegistrySyncable::SYNCABLE_PREF);
 }
 
 void LiveCaptionController::OnLiveCaptionEnabledChanged() {
@@ -163,7 +170,9 @@ void LiveCaptionController::OnSodaInstalled(
   CreateUI();
 }
 
-void LiveCaptionController::OnSodaError(speech::LanguageCode language_code) {
+void LiveCaptionController::OnSodaInstallError(
+    speech::LanguageCode language_code,
+    speech::SodaInstaller::ErrorCode error_code) {
   // Check that language code matches the selected language for Live Caption or
   // is LanguageCode::kNone (signifying the SODA binary failed).
   if (!prefs::IsLanguageCodeForLiveCaption(language_code, profile_prefs_) &&
@@ -181,7 +190,8 @@ void LiveCaptionController::CreateUI() {
 
   is_ui_constructed_ = true;
 
-  caption_bubble_controller_ = CaptionBubbleController::Create();
+  caption_bubble_controller_ =
+      CaptionBubbleController::Create(profile_prefs_, application_locale_);
   caption_bubble_controller_->UpdateCaptionStyle(caption_style_);
 
   // Observe native theme changes for caption style updates.
@@ -243,8 +253,13 @@ void LiveCaptionController::OnAudioStreamEnd(
 }
 
 void LiveCaptionController::OnLanguageIdentificationEvent(
+    CaptionBubbleContext* caption_bubble_context,
     const media::mojom::LanguageIdentificationEventPtr& event) {
   // TODO(crbug.com/1175357): Implement the UI for language identification.
+  if (caption_bubble_controller_) {
+    return caption_bubble_controller_->OnLanguageIdentificationEvent(
+        caption_bubble_context, event);
+  }
 }
 
 #if BUILDFLAG(IS_MAC) || BUILDFLAG(IS_CHROMEOS)

@@ -1,8 +1,10 @@
-// Copyright (c) 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "content/browser/ppapi_plugin_sandboxed_process_launcher_delegate.h"
+
+#include <string>
 
 #include "base/command_line.h"
 #include "build/build_config.h"
@@ -10,7 +12,6 @@
 #include "sandbox/policy/mojom/sandbox.mojom.h"
 
 #if BUILDFLAG(IS_WIN)
-#include "base/win/windows_version.h"
 #include "sandbox/policy/win/sandbox_win.h"
 #include "sandbox/win/src/process_mitigations.h"
 #include "sandbox/win/src/sandbox_policy.h"
@@ -20,38 +21,41 @@
 
 namespace content {
 #if BUILDFLAG(IS_WIN)
-bool PpapiPluginSandboxedProcessLauncherDelegate::PreSpawnTarget(
-    sandbox::TargetPolicy* policy) {
+std::string PpapiPluginSandboxedProcessLauncherDelegate::GetSandboxTag() {
+  return sandbox::policy::SandboxWin::GetSandboxTagForDelegate(
+      "ppapi", GetSandboxType());
+}
+
+bool PpapiPluginSandboxedProcessLauncherDelegate::InitializeConfig(
+    sandbox::TargetConfig* config) {
+  DCHECK(!config->IsConfigured());
+
   // The Pepper process is as locked-down as a renderer except that it can
   // create the server side of Chrome pipes.
   sandbox::ResultCode result;
-  result = policy->AddRule(sandbox::SubSystem::kNamedPipes,
-                           sandbox::Semantics::kNamedPipesAllowAny,
-                           L"\\\\.\\pipe\\chrome.*");
-  if (result != sandbox::SBOX_ALL_OK)
-    return false;
-
 #if !defined(NACL_WIN64)
-  // We don't support PPAPI win32k lockdown prior to Windows 10.
-  if (base::win::GetVersion() >= base::win::Version::WIN10) {
-    result = sandbox::policy::SandboxWin::AddWin32kLockdownPolicy(policy);
-    if (result != sandbox::SBOX_ALL_OK)
-      return false;
+  result = sandbox::policy::SandboxWin::AddWin32kLockdownPolicy(config);
+  if (result != sandbox::SBOX_ALL_OK) {
+    return false;
   }
 #endif  // !defined(NACL_WIN64)
 
   // No plugins can generate executable code.
-  sandbox::MitigationFlags flags = policy->GetDelayedProcessMitigations();
+  sandbox::MitigationFlags flags = config->GetDelayedProcessMitigations();
   flags |= sandbox::MITIGATION_DYNAMIC_CODE_DISABLE;
-  if (sandbox::SBOX_ALL_OK != policy->SetDelayedProcessMitigations(flags))
+  if (sandbox::SBOX_ALL_OK != config->SetDelayedProcessMitigations(flags))
     return false;
 
   return true;
 }
+
+bool PpapiPluginSandboxedProcessLauncherDelegate::AllowWindowsFontsDir() {
+  return true;
+}
 #endif  // BUILDFLAG(IS_WIN)
 
-#if BUILDFLAG(USE_ZYGOTE_HANDLE)
-ZygoteHandle PpapiPluginSandboxedProcessLauncherDelegate::GetZygote() {
+#if BUILDFLAG(USE_ZYGOTE)
+ZygoteCommunication* PpapiPluginSandboxedProcessLauncherDelegate::GetZygote() {
   const base::CommandLine& browser_command_line =
       *base::CommandLine::ForCurrentProcess();
   base::CommandLine::StringType plugin_launcher =
@@ -60,7 +64,7 @@ ZygoteHandle PpapiPluginSandboxedProcessLauncherDelegate::GetZygote() {
     return nullptr;
   return GetGenericZygote();
 }
-#endif  // BUILDFLAG(USE_ZYGOTE_HANDLE)
+#endif  // BUILDFLAG(USE_ZYGOTE)
 
 sandbox::mojom::Sandbox
 PpapiPluginSandboxedProcessLauncherDelegate::GetSandboxType() {

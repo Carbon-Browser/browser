@@ -43,6 +43,7 @@ class LayoutSVGFilterPrimitive final : public LayoutObject {
     return false;
   }
 
+  void WillBeDestroyed() override;
   void StyleDidChange(StyleDifference, const ComputedStyle*) override;
   void UpdateLayout() override;
 
@@ -57,6 +58,10 @@ class LayoutSVGFilterPrimitive final : public LayoutObject {
            LayoutObject::IsOfType(type);
   }
   gfx::RectF ObjectBoundingBox() const override {
+    NOT_DESTROYED();
+    return gfx::RectF();
+  }
+  gfx::RectF StrokeBoundingBox() const override {
     NOT_DESTROYED();
     return gfx::RectF();
   }

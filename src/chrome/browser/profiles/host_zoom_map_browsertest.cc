@@ -1,22 +1,23 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include <stddef.h>
 
-#include <algorithm>
 #include <memory>
 #include <string>
 #include <vector>
 
-#include "base/bind.h"
 #include "base/command_line.h"
+#include "base/containers/contains.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
 #include "base/memory/ref_counted.h"
 #include "base/path_service.h"
 #include "base/run_loop.h"
 #include "base/strings/stringprintf.h"
+#include "base/value_iterators.h"
 #include "base/values.h"
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
@@ -65,7 +66,7 @@ class ZoomLevelChangeObserver {
   ZoomLevelChangeObserver& operator=(const ZoomLevelChangeObserver&) = delete;
 
   void BlockUntilZoomLevelForHostHasChanged(const std::string& host) {
-    while (!std::count(changed_hosts_.begin(), changed_hosts_.end(), host)) {
+    while (!base::Contains(changed_hosts_, host)) {
       message_loop_runner_->Run();
       message_loop_runner_ = new content::MessageLoopRunner;
     }
@@ -121,22 +122,23 @@ class HostZoomMapBrowserTest : public InProcessBrowserTest {
 
   std::vector<std::string> GetHostsWithZoomLevelsFromPrefs() {
     PrefService* prefs = browser()->profile()->GetPrefs();
-    const base::Value* dictionaries =
-        prefs->GetDictionary(prefs::kPartitionPerHostZoomLevels);
+    const base::Value::Dict& dictionaries =
+        prefs->GetDict(prefs::kPartitionPerHostZoomLevels);
     std::string partition_key =
         ChromeZoomLevelPrefs::GetPartitionKeyForTesting(base::FilePath());
-    const base::Value* values = dictionaries->FindDictPath(partition_key);
+    const base::Value::Dict* values =
+        dictionaries.FindDictByDottedPath(partition_key);
     std::vector<std::string> results;
     if (values) {
-      for (const auto it : values->DictItems())
-        results.push_back(it.first);
+      for (const auto key_value_pair : *values)
+        results.push_back(key_value_pair.first);
     }
     return results;
   }
 
   GURL ConstructTestServerURL(const char* url_template) {
-    return GURL(base::StringPrintf(
-        url_template, embedded_test_server()->port()));
+    return GURL(base::StringPrintfNonConstexpr(url_template,
+                                               embedded_test_server()->port()));
   }
 
  private:

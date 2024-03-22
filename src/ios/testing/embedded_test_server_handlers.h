@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -52,6 +52,12 @@ std::unique_ptr<net::test_server::HttpResponse> HandleForm(
 // of the response is taken from the number passed as URL query (1 byte if the
 // length is not provided).
 std::unique_ptr<net::test_server::HttpResponse> HandleDownload(
+    const net::test_server::HttpRequest& request);
+
+// Returns a slow response that would take several hours to finish. This is
+// useful in scenarios where a test needs to interrupt a navigation after it
+// starts loading but before it finishes.
+std::unique_ptr<net::test_server::HttpResponse> HandleSlow(
     const net::test_server::HttpRequest& request);
 
 }  // namespace testing

@@ -1,13 +1,14 @@
-# Copyright 2018 The Chromium Authors. All rights reserved.
+# Copyright 2018 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
 import("//chrome/common/features.gni")
 import("//third_party/closure_compiler/compile_js.gni")
+import("//tools/grit/grit_rule.gni")
 import("//tools/grit/preprocess_if_expr.gni")
 import("//tools/polymer/html_to_js.gni")
 import("//ui/webui/resources/tools/generate_grd.gni")
-import("../../tools/optimize_webui.gni")
+import("//ui/webui/resources/tools/optimize_webui.gni")
 
 preprocess_folder = "preprocessed"
 preprocess_manifest = "preprocessed_manifest.json"
@@ -18,25 +19,28 @@ if (optimize_webui) {
 
   optimize_webui("build") {
     host = "internet-detail-dialog"
-    js_out_files = [ "internet_detail_dialog_container.rollup.js" ]
     js_module_in_files = [ "internet_detail_dialog_container.js" ]
     input = rebase_path("$target_gen_dir/$preprocess_folder", root_build_dir)
 
     out_manifest = "$target_gen_dir/$build_manifest"
     excludes = [
-      "chrome://resources/mojo/chromeos/services/network_config/public/mojom/cros_network_config.mojom-lite.js",
-      "chrome://resources/cr_components/chromeos/network/mojo_interface_provider.m.js",
-      "chrome://resources/mojo/chromeos/services/network_config/public/mojom/network_types.mojom-lite.js",
-      "chrome://resources/mojo/mojo/public/js/mojo_bindings_lite.js",
-      "chrome://resources/mojo/services/network/public/mojom/ip_address.mojom-lite.js",
-      "chrome://resources/js/cr.m.js",
+      "chrome://resources/mojo/chromeos/services/network_config/public/mojom/cros_network_config.mojom-webui.js",
+      "chrome://resources/mojo/chromeos/services/network_config/public/mojom/network_types.mojom-webui.js",
+      "chrome://resources/mojo/services/network/public/mojom/ip_address.mojom-webui.js",
+      "chrome://resources/ash/common/network/mojo_interface_provider.js",
+      "chrome://resources/ash/common/hotspot/cros_hotspot_config.mojom-webui.js",
     ]
 
     deps = [
       ":preprocess",
       ":preprocess_generated",
-      "../../../../../ui/webui/resources:library",
-      "../../../../../ui/webui/resources:preprocess",
+      "//ash/webui/common/resources:css_wrapper_files",
+      "//ash/webui/common/resources:html_wrapper_files",
+      "//ash/webui/common/resources:preprocess",
+      "//ui/webui/resources/cr_components/color_change_listener:build_ts",
+      "//ui/webui/resources/cr_components/localized_link:build_ts",
+      "//ui/webui/resources/cr_elements:build_ts",
+      "//ui/webui/resources/mojo:build_ts",
     ]
   }
 }
@@ -81,6 +85,7 @@ preprocess_if_expr("preprocess_generated") {
 
 js_type_check("closure_compile") {
   is_polymer3 = true
+  closure_flags = default_closure_args + mojom_js_args
   deps = [
     ":internet_detail_dialog",
     ":internet_detail_dialog_browser_proxy",
@@ -89,19 +94,39 @@ js_type_check("closure_compile") {
 
 js_library("internet_detail_dialog") {
   deps = [
-    "//ui/webui/resources/cr_components/chromeos/network:cr_policy_network_behavior_mojo.m",
-    "//ui/webui/resources/cr_components/chromeos/network:network_listener_behavior.m",
-    "//ui/webui/resources/cr_components/chromeos/network:onc_mojo.m",
-    "//ui/webui/resources/js:assert.m",
-    "//ui/webui/resources/js:i18n_behavior.m",
+    "//ash/webui/common/resources:assert",
+    "//ash/webui/common/resources:i18n_behavior",
+    "//ash/webui/common/resources/network:apn_list",
+    "//ash/webui/common/resources/network:cr_policy_network_behavior_mojo",
+    "//ash/webui/common/resources/network:network_listener_behavior",
+    "//ash/webui/common/resources/network:onc_mojo",
+    "//third_party/polymer/v3_0/components-chromium/iron-collapse:iron-collapse",
   ]
   externs_list = [ "$externs_path/chrome_send.js" ]
 }
 
 js_library("internet_detail_dialog_browser_proxy") {
-  deps = [ "//ui/webui/resources/js:cr.m" ]
+  deps = [ "//ash/webui/common/resources:cr_deprecated" ]
+  externs_list = [ "$externs_path/chrome_send.js" ]
 }
 
 html_to_js("web_components") {
   js_files = [ "internet_detail_dialog.js" ]
+}
+
+grit("resources") {
+  defines = chrome_grit_defines
+
+  # These arguments are needed since the grd is generated at build time.
+  enable_input_discovery_for_gn_analyze = false
+  source = "$target_gen_dir/internet_detail_dialog_resources.grd"
+  deps = [ ":build_grd" ]
+
+  outputs = [
+    "grit/internet_detail_dialog_resources.h",
+    "grit/internet_detail_dialog_resources_map.cc",
+    "grit/internet_detail_dialog_resources_map.h",
+    "internet_detail_dialog_resources.pak",
+  ]
+  output_dir = "$root_gen_dir/chrome"
 }

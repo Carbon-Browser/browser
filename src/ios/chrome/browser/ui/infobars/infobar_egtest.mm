@@ -1,10 +1,10 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #import <XCTest/XCTest.h>
 
-#include "base/strings/sys_string_conversions.h"
+#import "base/strings/sys_string_conversions.h"
 #import "base/test/ios/wait_util.h"
 #import "ios/chrome/browser/ui/infobars/banners/infobar_banner_constants.h"
 #import "ios/chrome/browser/ui/infobars/infobar_constants.h"
@@ -14,13 +14,9 @@
 #import "ios/chrome/test/earl_grey/chrome_test_case.h"
 #import "ios/testing/earl_grey/app_launch_manager.h"
 #import "ios/testing/earl_grey/earl_grey_test.h"
-#include "net/test/embedded_test_server/embedded_test_server.h"
-#include "url/gurl.h"
-#include "url/url_constants.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
+#import "net/test/embedded_test_server/embedded_test_server.h"
+#import "url/gurl.h"
+#import "url/url_constants.h"
 
 using base::test::ios::WaitUntilConditionOrTimeout;
 
@@ -36,22 +32,21 @@ void VerifyTestInfoBarVisibleForCurrentTab(bool visible, NSString* message) {
   // After `kInfobarBannerDefaultPresentationDurationInSeconds` seconds the
   // banner should disappear. Includes `kWaitForUIElementTimeout` for EG
   // synchronization.
-  NSTimeInterval delay = kInfobarBannerDefaultPresentationDurationInSeconds +
-                         base::test::ios::kWaitForUIElementTimeout;
-  BOOL bannerShown =
-      WaitUntilConditionOrTimeout(delay, ^{
+  constexpr base::TimeDelta kDelay = kInfobarBannerDefaultPresentationDuration +
+                                     base::test::ios::kWaitForUIElementTimeout;
+  const BOOL banner_shown =
+      WaitUntilConditionOrTimeout(kDelay, ^{
         NSError* error = nil;
-        [[EarlGrey
-            selectElementWithMatcher:grey_allOf(
-                                         grey_accessibilityID(
-                                             kInfobarBannerViewIdentifier),
-                                         grey_accessibilityLabel(message), nil)]
+        [[EarlGrey selectElementWithMatcher:
+                       grey_allOf(grey_accessibilityID(
+                                      kInfobarBannerLabelsStackViewIdentifier),
+                                  grey_accessibilityLabel(message), nil)]
             assertWithMatcher:expected_visibility
                         error:&error];
         return error == nil;
       });
 
-  GREYAssertTrue(bannerShown, condition_name);
+  GREYAssertTrue(banner_shown, condition_name);
 }
 
 }  // namespace
@@ -234,4 +229,49 @@ void VerifyTestInfoBarVisibleForCurrentTab(bool visible, NSString* message) {
   GREYAssertTrue([InfobarManagerAppInterface verifyInfobarCount:0],
                  @"Incorrect number of infobars.");
 }
+
+// Tests that the Infobar doesn't dismiss the keyboard when it is triggered
+// while the omnibox is focused.
+- (void)testInfobarWithOmniboxFocused {
+  // Open a new tab and navigate to the test page.
+  const GURL testURL = self.testServer->GetURL("/pony.html");
+  [ChromeEarlGrey loadURL:testURL];
+  [ChromeEarlGrey waitForMainTabCount:1];
+
+  [[EarlGrey selectElementWithMatcher:chrome_test_util::DefocusedLocationView()]
+      performAction:grey_tap()];
+
+  XCUIApplication* app = [[XCUIApplication alloc] init];
+  GREYAssert(app.keyboards.count > 0, @"The keyboard is not shown");
+
+  // Infobar Message
+  NSString* infoBarMessage = @"TestInfoBar";
+
+  // Add a test infobar to the current tab. Verify that the infobar is present
+  // in the model and that the infobar view is visible on screen.
+  GREYAssertTrue([InfobarManagerAppInterface
+                     addTestInfoBarToCurrentTabWithMessage:infoBarMessage],
+                 @"Failed to add infobar to test tab.");
+
+  GREYAssert(app.keyboards.count > 0, @"The keyboard was dismissed");
+
+  VerifyTestInfoBarVisibleForCurrentTab(false, infoBarMessage);
+  GREYAssertTrue([InfobarManagerAppInterface verifyInfobarCount:1],
+                 @"Incorrect number of infobars.");
+
+  // Cancel the omnibox focus. It should dismiss the keyboard and show the
+  // infobar.
+  if ([ChromeEarlGrey isCompactWidth]) {
+    [[EarlGrey
+        selectElementWithMatcher:grey_allOf(chrome_test_util::CancelButton(),
+                                            grey_sufficientlyVisible(), nil)]
+        performAction:grey_tap()];
+  } else {
+    [[EarlGrey selectElementWithMatcher:grey_accessibilityID(@"Typing Shield")]
+        performAction:grey_tap()];
+  }
+  GREYAssert(app.keyboards.count == 0, @"The keyboard is still visible");
+  VerifyTestInfoBarVisibleForCurrentTab(true, infoBarMessage);
+}
+
 @end

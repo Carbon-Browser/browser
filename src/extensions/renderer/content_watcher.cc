@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,6 +8,7 @@
 
 #include <set>
 
+#include "base/memory/raw_ref.h"
 #include "base/strings/string_piece.h"
 #include "content/public/renderer/render_frame.h"
 #include "content/public/renderer/render_frame_observer.h"
@@ -71,7 +72,7 @@ FrameContentWatcher::FrameContentWatcher(
       content::RenderFrameObserverTracker<FrameContentWatcher>(render_frame),
       css_selectors_(css_selectors) {}
 
-FrameContentWatcher::~FrameContentWatcher() {}
+FrameContentWatcher::~FrameContentWatcher() = default;
 
 void FrameContentWatcher::OnDestruct() {
   delete this;
@@ -140,8 +141,8 @@ void FrameContentWatcher::NotifyBrowserOfChange() {
 
 }  // namespace
 
-ContentWatcher::ContentWatcher() {}
-ContentWatcher::~ContentWatcher() {}
+ContentWatcher::ContentWatcher() = default;
+ContentWatcher::~ContentWatcher() = default;
 
 void ContentWatcher::OnWatchPages(
     const std::vector<std::string>& new_css_selectors_utf8) {
@@ -158,7 +159,7 @@ void ContentWatcher::OnWatchPages(
   if (!changed)
     return;
 
-  css_selectors_.Swap(new_css_selectors);
+  css_selectors_.swap(new_css_selectors);
 
   // Tell each frame's document about the new set of watched selectors. These
   // will trigger calls to DidMatchCSS after Blink has a chance to apply the new
@@ -169,11 +170,13 @@ void ContentWatcher::OnWatchPages(
         : css_selectors(css_selectors) {}
 
     bool Visit(content::RenderFrame* frame) override {
-      FrameContentWatcher::Get(frame)->UpdateCSSSelectors(css_selectors);
+      FrameContentWatcher::Get(frame)->UpdateCSSSelectors(*css_selectors);
       return true;  // Continue visiting.
     }
 
-    const blink::WebVector<blink::WebString>& css_selectors;
+    const raw_ref<const blink::WebVector<blink::WebString>,
+                  ExperimentalRenderer>
+        css_selectors;
   };
   WatchSelectors visitor(css_selectors_);
   content::RenderFrame::ForEach(&visitor);

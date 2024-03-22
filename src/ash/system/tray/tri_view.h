@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,8 +6,11 @@
 #define ASH_SYSTEM_TRAY_TRI_VIEW_H_
 
 #include <memory>
+#include <utility>
 
 #include "ash/ash_export.h"
+#include "base/memory/raw_ptr.h"
+#include "ui/base/metadata/metadata_header_macros.h"
 #include "ui/gfx/geometry/insets.h"
 #include "ui/gfx/geometry/size.h"
 #include "ui/views/view.h"
@@ -37,6 +40,8 @@ class SizeRangeLayout;
 // The default BoxLayout will use a center alignment for both the main axis and
 // cross axis alignment.
 class ASH_EXPORT TriView : public views::View {
+  METADATA_HEADER(TriView, views::View)
+
  public:
   enum class Orientation {
     HORIZONTAL,
@@ -72,6 +77,8 @@ class ASH_EXPORT TriView : public views::View {
 
   ~TriView() override;
 
+  views::BoxLayout* box_layout() { return box_layout_; }
+
   // Set the minimum height for all containers to |height|.
   void SetMinHeight(int height);
 
@@ -84,10 +91,27 @@ class ASH_EXPORT TriView : public views::View {
   // Set the maximum size for the given |container|.
   void SetMaxSize(Container container, const gfx::Size& size);
 
-  // Adds the child |view| to the specified |container|.
+  // Adds the child `view` to the specified `container`. Returns a raw pointer
+  // to the view.
+  template <typename T>
+  T* AddView(Container container, std::unique_ptr<T> view) {
+    return GetContainer(container)->AddChildView(std::move(view));
+  }
+
+  // Adds the child `view` to the specified `container` at the child index.
+  // Returns a raw pointer to the view.
+  template <typename T>
+  T* AddViewAt(Container container, std::unique_ptr<T> view, int index) {
+    return GetContainer(container)->AddChildViewAt(std::move(view), index);
+  }
+
+  // Adds the child `view` to the specified `container`. Takes ownership of the
+  // view. Prefer the unique_ptr version above when possible.
   void AddView(Container container, views::View* view);
 
-  // Adds the child |view| to the specified |container| at the child index.
+  // Adds the child `view` to the specified `container` at the child index.
+  // Takes ownership of the view. Prefer the unique_ptr version above when
+  // possible.
   void AddViewAt(Container container, views::View* view, int index);
 
   // During layout the |insets| are applied to the host views entire space
@@ -139,11 +163,14 @@ class ASH_EXPORT TriView : public views::View {
 
   // Type spcific layout manager installed on |this|. Responsible for laying out
   // the container Views.
-  views::BoxLayout* box_layout_ = nullptr;
+  raw_ptr<views::BoxLayout, ExperimentalAsh> box_layout_ = nullptr;
 
-  SizeRangeLayout* start_container_layout_manager_ = nullptr;
-  SizeRangeLayout* center_container_layout_manager_ = nullptr;
-  SizeRangeLayout* end_container_layout_manager_ = nullptr;
+  raw_ptr<SizeRangeLayout, ExperimentalAsh> start_container_layout_manager_ =
+      nullptr;
+  raw_ptr<SizeRangeLayout, ExperimentalAsh> center_container_layout_manager_ =
+      nullptr;
+  raw_ptr<SizeRangeLayout, ExperimentalAsh> end_container_layout_manager_ =
+      nullptr;
 
   // In order to detect direct manipulation of child views the
   // ViewHierarchyChanged() event override fails on a DCHECK. However, we need

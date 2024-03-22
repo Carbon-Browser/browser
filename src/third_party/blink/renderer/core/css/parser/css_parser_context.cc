@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -19,6 +19,7 @@
 #include "third_party/blink/renderer/core/loader/document_loader.h"
 #include "third_party/blink/renderer/core/page/page.h"
 #include "third_party/blink/renderer/core/permissions_policy/layout_animations_policy.h"
+#include "third_party/blink/renderer/platform/runtime_enabled_features.h"
 
 namespace blink {
 
@@ -175,9 +176,12 @@ CSSParserContext::CSSParserContext(
       use_legacy_background_size_shorthand_behavior_(
           use_legacy_background_size_shorthand_behavior),
       secure_context_mode_(secure_context_mode),
-      charset_(charset),
       document_(use_counter_document),
-      resource_fetch_restriction_(resource_fetch_restriction) {}
+      resource_fetch_restriction_(resource_fetch_restriction) {
+  if (!RuntimeEnabledFeatures::CSSParserIgnoreCharsetForURLsEnabled()) {
+    charset_ = charset;
+  }
+}
 
 bool CSSParserContext::operator==(const CSSParserContext& other) const {
   return base_url_ == other.base_url_ && origin_clean_ == other.origin_clean_ &&
@@ -221,21 +225,32 @@ bool CSSParserContext::IsSecureContext() const {
 }
 
 KURL CSSParserContext::CompleteURL(const String& url) const {
-  if (url.IsNull())
+  if (url.IsNull()) {
     return KURL();
-  if (!Charset().IsValid())
+  }
+  if (!Charset().IsValid()) {
     return KURL(BaseURL(), url);
+  }
   return KURL(BaseURL(), url, Charset());
 }
 
+KURL CSSParserContext::CompleteNonEmptyURL(const String& url) const {
+  if (url.empty() && !url.IsNull()) {
+    return KURL(g_empty_string);
+  }
+  return CompleteURL(url);
+}
+
 void CSSParserContext::Count(WebFeature feature) const {
-  if (IsUseCounterRecordingEnabled())
+  if (IsUseCounterRecordingEnabled()) {
     document_->CountUse(feature);
+  }
 }
 
 void CSSParserContext::CountDeprecation(WebFeature feature) const {
-  if (IsUseCounterRecordingEnabled() && document_)
+  if (IsUseCounterRecordingEnabled() && document_) {
     Deprecation::CountDeprecation(document_->GetExecutionContext(), feature);
+  }
 }
 
 void CSSParserContext::Count(CSSParserMode mode, CSSPropertyID property) const {
@@ -260,15 +275,18 @@ const ExecutionContext* CSSParserContext::GetExecutionContext() const {
 
 void CSSParserContext::ReportLayoutAnimationsViolationIfNeeded(
     const StyleRuleKeyframe& rule) const {
-  if (!document_ || !document_->GetExecutionContext())
+  if (!document_ || !document_->GetExecutionContext()) {
     return;
+  }
   for (unsigned i = 0; i < rule.Properties().PropertyCount(); ++i) {
     CSSPropertyID id = rule.Properties().PropertyAt(i).Id();
-    if (id == CSSPropertyID::kVariable)
+    if (id == CSSPropertyID::kVariable) {
       continue;
+    }
     const CSSProperty& property = CSSProperty::Get(id);
-    if (!LayoutAnimationsPolicy::AffectedCSSProperties().Contains(&property))
+    if (!LayoutAnimationsPolicy::AffectedCSSProperties().Contains(&property)) {
       continue;
+    }
     LayoutAnimationsPolicy::ReportViolation(property,
                                             *document_->GetExecutionContext());
   }

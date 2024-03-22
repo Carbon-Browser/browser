@@ -1,18 +1,19 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/vr/elements/ui_element.h"
 
+#include <algorithm>
 #include <limits>
 
 #include "base/check_op.h"
-#include "base/cxx17_backports.h"
+#include "base/containers/adapters.h"
 #include "base/notreached.h"
+#include "base/ranges/algorithm.h"
 #include "base/strings/string_split.h"
 #include "base/strings/stringprintf.h"
 #include "base/time/time.h"
-#include "chrome/browser/vr/input_event.h"
 #include "chrome/browser/vr/model/camera_model.h"
 #include "device/vr/vr_gl_util.h"
 #include "third_party/skia/include/core/SkRRect.h"
@@ -152,10 +153,6 @@ void UiElement::Initialize(SkiaSurfaceProvider* provider) {}
 
 void UiElement::OnHoverEnter(const gfx::PointF& position,
                              base::TimeTicks timestamp) {
-  if (GetSounds().hover_enter != kSoundNone && audio_delegate_) {
-    audio_delegate_->PlaySound(GetSounds().hover_enter);
-  }
-
   if (event_handlers_.hover_enter) {
     event_handlers_.hover_enter.Run();
   } else if (parent() && bubble_events()) {
@@ -164,72 +161,12 @@ void UiElement::OnHoverEnter(const gfx::PointF& position,
 }
 
 void UiElement::OnHoverLeave(base::TimeTicks timestamp) {
-  if (GetSounds().hover_leave != kSoundNone && audio_delegate_) {
-    audio_delegate_->PlaySound(GetSounds().hover_leave);
-  }
   if (event_handlers_.hover_leave) {
     event_handlers_.hover_leave.Run();
   } else if (parent() && bubble_events()) {
     parent()->OnHoverLeave(timestamp);
   }
 }
-
-void UiElement::OnHoverMove(const gfx::PointF& position,
-                            base::TimeTicks timestamp) {
-  if (GetSounds().hover_move != kSoundNone && audio_delegate_) {
-    audio_delegate_->PlaySound(GetSounds().hover_move);
-  }
-  if (event_handlers_.hover_move) {
-    event_handlers_.hover_move.Run(position);
-  } else if (parent() && bubble_events()) {
-    parent()->OnHoverMove(position, timestamp);
-  }
-}
-
-void UiElement::OnButtonDown(const gfx::PointF& position,
-                             base::TimeTicks timestamp) {
-  if (GetSounds().button_down != kSoundNone && audio_delegate_) {
-    audio_delegate_->PlaySound(GetSounds().button_down);
-  }
-  if (event_handlers_.button_down) {
-    event_handlers_.button_down.Run();
-  } else if (parent() && bubble_events()) {
-    parent()->OnButtonDown(position, timestamp);
-  }
-}
-
-void UiElement::OnButtonUp(const gfx::PointF& position,
-                           base::TimeTicks timestamp) {
-  if (GetSounds().button_up != kSoundNone && audio_delegate_) {
-    audio_delegate_->PlaySound(GetSounds().button_up);
-  }
-  if (event_handlers_.button_up) {
-    event_handlers_.button_up.Run();
-  } else if (parent() && bubble_events()) {
-    parent()->OnButtonUp(position, timestamp);
-  }
-}
-
-void UiElement::OnTouchMove(const gfx::PointF& position,
-                            base::TimeTicks timestamp) {
-  if (GetSounds().touch_move != kSoundNone && audio_delegate_) {
-    audio_delegate_->PlaySound(GetSounds().touch_move);
-  }
-  if (event_handlers_.touch_move) {
-    event_handlers_.touch_move.Run(position);
-  } else if (parent() && bubble_events()) {
-    parent()->OnTouchMove(position, timestamp);
-  }
-}
-
-void UiElement::OnFlingCancel(std::unique_ptr<InputEvent> gesture,
-                              const gfx::PointF& position) {}
-void UiElement::OnScrollBegin(std::unique_ptr<InputEvent> gesture,
-                              const gfx::PointF& position) {}
-void UiElement::OnScrollUpdate(std::unique_ptr<InputEvent> gesture,
-                               const gfx::PointF& position) {}
-void UiElement::OnScrollEnd(std::unique_ptr<InputEvent> gesture,
-                            const gfx::PointF& position) {}
 
 void UiElement::OnFocusChanged(bool focused) {
   NOTREACHED();
@@ -460,7 +397,7 @@ gfx::TransformOperations UiElement::GetTargetTransform() const {
 gfx::Transform UiElement::ComputeTargetWorldSpaceTransform() const {
   gfx::Transform m;
   for (const UiElement* current = this; current; current = current->parent()) {
-    m.ConcatTransform(current->GetTargetLocalTransform());
+    m.PostConcat(current->GetTargetLocalTransform());
   }
   return m;
 }
@@ -658,11 +595,6 @@ void UiElement::DumpGeometry(std::ostringstream* os) const {
 }
 #endif
 
-void UiElement::SetSounds(Sounds sounds, AudioDelegate* delegate) {
-  sounds_ = sounds;
-  audio_delegate_ = delegate;
-}
-
 void UiElement::OnUpdatedWorldSpaceTransform() {}
 
 void UiElement::AddChild(std::unique_ptr<UiElement> child) {
@@ -685,10 +617,8 @@ std::unique_ptr<UiElement> UiElement::ReplaceChild(
   to_remove->parent_ = nullptr;
   size_t old_size = children_.size();
 
-  auto it = std::find_if(std::begin(children_), std::end(children_),
-                         [to_remove](const std::unique_ptr<UiElement>& child) {
-                           return child.get() == to_remove;
-                         });
+  auto it = base::ranges::find(children_, to_remove,
+                               &std::unique_ptr<UiElement>::get);
   DCHECK(it != std::end(children_));
 
   std::unique_ptr<UiElement> removed(it->release());
@@ -724,19 +654,16 @@ void UiElement::UpdateBindings() {
 }
 
 gfx::Point3F UiElement::GetCenter() const {
-  gfx::Point3F center;
-  world_space_transform_.TransformPoint(&center);
-  return center;
+  return world_space_transform_.MapPoint(gfx::Point3F());
 }
 
 gfx::PointF UiElement::GetUnitRectangleCoordinates(
     const gfx::Point3F& world_point) const {
-  gfx::Point3F origin;
-  gfx::Vector3dF x_axis(1, 0, 0);
-  gfx::Vector3dF y_axis(0, 1, 0);
-  world_space_transform_.TransformPoint(&origin);
-  world_space_transform_.TransformVector(&x_axis);
-  world_space_transform_.TransformVector(&y_axis);
+  gfx::Vector3dF x_axis =
+      world_space_transform_.MapVector(gfx::Vector3dF(1, 0, 0));
+  gfx::Vector3dF y_axis =
+      world_space_transform_.MapVector(gfx::Vector3dF(0, 1, 0));
+  gfx::Point3F origin = world_space_transform_.MapPoint(gfx::Point3F());
   gfx::Vector3dF origin_to_world = world_point - origin;
   float x = gfx::DotProduct(origin_to_world, x_axis) /
             gfx::DotProduct(x_axis, x_axis);
@@ -746,10 +673,10 @@ gfx::PointF UiElement::GetUnitRectangleCoordinates(
 }
 
 gfx::Vector3dF UiElement::GetNormal() const {
-  gfx::Vector3dF x_axis(1, 0, 0);
-  gfx::Vector3dF y_axis(0, 1, 0);
-  world_space_transform_.TransformVector(&x_axis);
-  world_space_transform_.TransformVector(&y_axis);
+  gfx::Vector3dF x_axis =
+      world_space_transform_.MapVector(gfx::Vector3dF(1, 0, 0));
+  gfx::Vector3dF y_axis =
+      world_space_transform_.MapVector(gfx::Vector3dF(0, 1, 0));
   gfx::Vector3dF normal = CrossProduct(x_axis, y_axis);
   normal.GetNormalized(&normal);
   return normal;
@@ -765,7 +692,7 @@ bool UiElement::GetRayDistance(const gfx::Point3F& ray_origin,
 void UiElement::OnFloatAnimated(const float& value,
                                 int target_property_id,
                                 gfx::KeyframeModel* keyframe_model) {
-  opacity_ = base::clamp(value, 0.0f, 1.0f);
+  opacity_ = std::clamp(value, 0.0f, 1.0f);
 }
 
 void UiElement::OnTransformAnimated(const gfx::TransformOperations& operations,
@@ -872,11 +799,9 @@ gfx::RectF UiElement::ComputeContributingChildrenBounds() {
     gfx::RectF outer_bounds(child->size());
     gfx::RectF inner_bounds(child->size());
     if (!child->bounds_contain_padding_) {
-      // TODO(crbug.com/1312352): The order of bottom_padding_ and top_padding_
-      // seems incorrect.
       inner_bounds.Inset(
-          gfx::InsetsF::TLBR(child->bottom_padding_, child->left_padding_,
-                             child->top_padding_, child->right_padding_));
+          gfx::InsetsF::TLBR(child->top_padding_, child->left_padding_,
+                             child->bottom_padding_, child->right_padding_));
     }
     gfx::SizeF size = inner_bounds.size();
     if (size.IsEmpty())
@@ -890,8 +815,8 @@ gfx::RectF UiElement::ComputeContributingChildrenBounds() {
     gfx::Point3F child_upper_left = child_center + corner_offset;
     gfx::Point3F child_lower_right = child_center - corner_offset;
 
-    child->LocalTransform().TransformPoint(&child_upper_left);
-    child->LocalTransform().TransformPoint(&child_lower_right);
+    child_upper_left = child->LocalTransform().MapPoint(child_upper_left);
+    child_lower_right = child->LocalTransform().MapPoint(child_lower_right);
     gfx::RectF local_rect =
         gfx::RectF(child_upper_left.x(), child_upper_left.y(),
                    child_lower_right.x() - child_upper_left.x(),
@@ -899,10 +824,8 @@ gfx::RectF UiElement::ComputeContributingChildrenBounds() {
     bounds.Union(local_rect);
   }
 
-  // TODO(crbug.com/1312352): The order of bottom_padding_ and top_padding_
-  // seems incorrect.
-  bounds.Inset(gfx::InsetsF::TLBR(-bottom_padding_, -left_padding_,
-                                  -top_padding_, -right_padding_));
+  bounds.Inset(gfx::InsetsF::TLBR(-top_padding_, -left_padding_,
+                                  -bottom_padding_, -right_padding_));
   bounds.set_origin(bounds.CenterPoint());
   if (local_origin_ != bounds.origin()) {
     world_space_transform_dirty_ = true;
@@ -970,16 +893,17 @@ void UiElement::ClipChildren(const gfx::RectF& abs_clip) {
       continue;
 
     DCHECK(child->LocalTransform().IsScaleOrTranslation());
-    auto child_abs_clip = abs_clip;
-    child->LocalTransform().TransformRectReverse(&child_abs_clip);
+    absl::optional<gfx::RectF> child_abs_clip =
+        child->LocalTransform().InverseMapRect(abs_clip);
+    DCHECK(child_abs_clip);
     if (!child->size().IsEmpty()) {
-      child->clip_rect_ = child_abs_clip;
+      child->clip_rect_ = *child_abs_clip;
       child->clip_rect_.Scale(1.0f / child->size().width(),
                               1.0f / child->size().height());
     } else {
       child->clip_rect_ = kRelativeFullRectClip;
     }
-    child->ClipChildren(child_abs_clip);
+    child->ClipChildren(*child_abs_clip);
   }
 }
 
@@ -1001,16 +925,13 @@ void UiElement::SetClipRect(const gfx::RectF& rect) {
 }
 
 UiElement* UiElement::FirstLaidOutChild() const {
-  auto i = std::find_if(
-      children_.begin(), children_.end(),
-      [](const std::unique_ptr<UiElement>& e) { return e->requires_layout(); });
+  auto i = base::ranges::find_if(children_, &UiElement::requires_layout);
   return i == children_.end() ? nullptr : i->get();
 }
 
 UiElement* UiElement::LastLaidOutChild() const {
-  auto i = std::find_if(
-      children_.rbegin(), children_.rend(),
-      [](const std::unique_ptr<UiElement>& e) { return e->requires_layout(); });
+  auto i = base::ranges::find_if(base::Reversed(children_),
+                                 &UiElement::requires_layout);
   return i == children_.rend() ? nullptr : i->get();
 }
 
@@ -1043,10 +964,10 @@ bool UiElement::UpdateWorldSpaceTransform(bool parent_changed) {
     gfx::Transform inheritable = LocalTransform();
 
     if (parent_) {
-      inheritable.ConcatTransform(parent_->inheritable_transform());
+      inheritable.PostConcat(parent_->inheritable_transform());
     }
 
-    transform.ConcatTransform(inheritable);
+    transform.PostConcat(inheritable);
     changed = !transform.ApproximatelyEqual(world_space_transform_) ||
               !inheritable.ApproximatelyEqual(inheritable_transform_);
     set_world_space_transform(transform);
@@ -1072,10 +993,6 @@ gfx::Transform UiElement::LocalTransform() const {
 
 gfx::Transform UiElement::GetTargetLocalTransform() const {
   return layout_offset_.Apply() * GetTargetTransform().Apply();
-}
-
-const Sounds& UiElement::GetSounds() const {
-  return sounds_;
 }
 
 bool UiElement::ShouldUpdateWorldSpaceTransform(

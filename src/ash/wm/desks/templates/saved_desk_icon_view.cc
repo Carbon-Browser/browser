@@ -1,20 +1,22 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "ash/wm/desks/templates/saved_desk_icon_view.h"
 
-#include "ash/public/cpp/desks_templates_delegate.h"
+#include <cstddef>
+#include <utility>
+
 #include "ash/public/cpp/rounded_image_view.h"
+#include "ash/public/cpp/saved_desk_delegate.h"
 #include "ash/shell.h"
 #include "ash/style/ash_color_provider.h"
-#include "ash/wm/desks/templates/saved_desk_icon_container.h"
-#include "base/bind.h"
+#include "base/check.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/utf_string_conversions.h"
 #include "ui/base/metadata/metadata_impl_macros.h"
 #include "ui/base/resource/resource_bundle.h"
-#include "ui/compositor/layer.h"
+#include "ui/chromeos/styles/cros_tokens_color_mappings.h"
 #include "ui/gfx/geometry/rect.h"
 #include "ui/gfx/geometry/size.h"
 #include "ui/gfx/image/image_skia.h"
@@ -22,6 +24,7 @@
 #include "ui/native_theme/native_theme.h"
 #include "ui/resources/grit/ui_resources.h"
 #include "ui/views/accessibility/view_accessibility.h"
+#include "ui/views/background.h"
 #include "ui/views/border.h"
 #include "ui/views/controls/label.h"
 #include "url/gurl.h"
@@ -46,6 +49,12 @@ constexpr int kIconSize = 27;
 // invisible padding.
 constexpr int kDefaultIconSize = 22;
 
+// The size of the background the icon sits inside of.
+constexpr int kIconViewSize = 28;
+
+constexpr size_t kDefaultIconSortingKey = SIZE_MAX - 1;
+constexpr size_t kOverflowIconSortingKey = SIZE_MAX;
+
 // Return the formatted string for `count`. If `count` is <=99, the string will
 // be "+<count>". If `count` is >99, the string will be "+99". If `show_plus` is
 // false, the string will be just the count.
@@ -66,62 +75,136 @@ gfx::ImageSkia CreateResizedImageToIconSize(const gfx::ImageSkia& icon,
 
 }  // namespace
 
-SavedDeskIconView::SavedDeskIconView() = default;
+// -----------------------------------------------------------------------------
+// SavedDeskIconView:
+SavedDeskIconView::SavedDeskIconView(int count, size_t sorting_key)
+    : count_(count), sorting_key_(sorting_key) {}
 
 SavedDeskIconView::~SavedDeskIconView() = default;
 
-void SavedDeskIconView::SetIconIdentifierAndCount(
+gfx::Size SavedDeskIconView::CalculatePreferredSize() const {
+  // The width for the icon. The overflow icon doesn't have an icon so it's
+  // zero.
+  int width = (IsOverflowIcon() ? 0 : kIconViewSize);
+
+  // Add the label width if the label view exists. The reason for having the max
+  // is to have a minimum width.
+  width += count_label_
+               ? std::max(kIconViewSize,
+                          count_label_->CalculatePreferredSize().width())
+               : 0;
+
+  return gfx::Size(width, kIconViewSize);
+}
+
+void SavedDeskIconView::UpdateCount(int count) {
+  // We should never get there. We only update `count_` for the overflow icon.
+  // For the regular icon, `count_` remains unchanged after initializing it.
+  NOTREACHED();
+}
+
+void SavedDeskIconView::CreateCountLabelChildView(bool show_plus,
+                                                  int inset_size) {
+  DCHECK(!count_label_);
+  count_label_ =
+      AddChildView(views::Builder<views::Label>()
+                       .SetText(GetCountString(GetCountToShow(), show_plus))
+                       .SetBorder(views::CreateEmptyBorder(gfx::Insets::TLBR(
+                           kCountLabelInsetSize, kCountLabelInsetSize,
+                           kCountLabelInsetSize, inset_size)))
+                       .SetEnabledColorId(cros_tokens::kCrosSysSecondary)
+                       .SetBackgroundColorId(cros_tokens::kCrosSysSystemOnBase)
+                       .SetAutoColorReadabilityEnabled(false)
+                       .Build());
+}
+
+BEGIN_METADATA(SavedDeskIconView, views::View)
+END_METADATA
+
+// -----------------------------------------------------------------------------
+// SavedDeskRegularIconView:
+SavedDeskRegularIconView::SavedDeskRegularIconView(
+    const ui::ColorProvider* incognito_window_color_provider,
     const std::string& icon_identifier,
-    const std::string& app_id,
     const std::string& app_title,
     int count,
-    bool show_plus) {
-  icon_identifier_ = icon_identifier;
-  count_ = count;
-
-  // The count to be displayed on the label. If `icon_identifier_` is empty, it
-  // is an overflow icon and should display the number of hidden icons.
-  // Otherwise, it should display `count_` - 1 to avoid overcounting the
-  // displayed icon.
-  const int visible_count =
-      count_ > 1 && !icon_identifier_.empty() ? count_ - 1 : count_;
-
-  if (count_ > 1 || icon_identifier_.empty()) {
-    DCHECK(!count_label_);
-    count_label_ = AddChildView(
-        views::Builder<views::Label>()
-            .SetText(GetCountString(visible_count, show_plus))
-            .SetBorder(views::CreateEmptyBorder(gfx::Insets::TLBR(
-                kCountLabelInsetSize, kCountLabelInsetSize,
-                kCountLabelInsetSize,
-                icon_identifier_.empty() ? kCountLabelInsetSize
-                                         : 2 * kCountLabelInsetSize)))
-            .SetBackgroundColor(AshColorProvider::Get()->GetControlsLayerColor(
-                AshColorProvider::ControlsLayerType::
-                    kControlBackgroundColorInactive))
-            .SetEnabledColor(AshColorProvider::Get()->GetContentLayerColor(
-                AshColorProvider::ContentLayerType::kTextColorPrimary))
-            .Build());
+    size_t sorting_key,
+    base::OnceCallback<void(views::View*)> on_icon_loaded)
+    : SavedDeskIconView(count, sorting_key),
+      icon_identifier_(icon_identifier),
+      on_icon_loaded_(std::move(on_icon_loaded)) {
+  if (GetCountToShow()) {
+    SetBackground(views::CreateThemedRoundedRectBackground(
+        cros_tokens::kCrosSysSystemOnBase,
+        /*radius=*/kIconViewSize / 2.0f));
   }
 
-  if (icon_identifier_.empty())
-    return;
+  CreateChildViews(incognito_window_color_provider, app_title);
+}
+
+SavedDeskRegularIconView::~SavedDeskRegularIconView() = default;
+
+void SavedDeskRegularIconView::Layout() {
+  DCHECK(icon_view_);
+  gfx::Size icon_preferred_size = icon_view_->CalculatePreferredSize();
+  icon_view_->SetBoundsRect(gfx::Rect(
+      base::ClampFloor((kIconViewSize - icon_preferred_size.width()) / 2.0),
+      base::ClampFloor((kIconViewSize - icon_preferred_size.height()) / 2.0),
+      icon_preferred_size.width(), icon_preferred_size.height()));
+
+  if (count_label_) {
+    count_label_->SetBoundsRect(
+        gfx::Rect(kIconViewSize, 0, width() - kIconViewSize, kIconViewSize));
+  }
+}
+
+void SavedDeskRegularIconView::OnThemeChanged() {
+  SavedDeskIconView::OnThemeChanged();
+
+  // The default icon is theme dependent, so it needs to be reloaded.
+  if (is_showing_default_icon_)
+    LoadDefaultIcon();
+}
+
+size_t SavedDeskRegularIconView::GetSortingKey() const {
+  return is_showing_default_icon_ ? kDefaultIconSortingKey : sorting_key_;
+}
+
+int SavedDeskRegularIconView::GetCount() const {
+  DCHECK(count_ >= 1);
+  return count_;
+}
+
+int SavedDeskRegularIconView::GetCountToShow() const {
+  DCHECK(count_ >= 1);
+  return count_ - 1;
+}
+
+bool SavedDeskRegularIconView::IsOverflowIcon() const {
+  return false;
+}
+
+void SavedDeskRegularIconView::CreateChildViews(
+    const ui::ColorProvider* incognito_window_color_provider,
+    const std::string& app_title) {
+  if (GetCountToShow())
+    CreateCountLabelChildView(/*show_plush*/ true, 2 * kCountLabelInsetSize);
 
   // Add the icon to the front so that it gets read out before `count_label_` by
   // spoken feedback.
   DCHECK(!icon_view_);
-  icon_view_ = AddChildViewAt(
-      views::Builder<RoundedImageView>().SetCornerRadius(kIconSize / 2).Build(),
-      0);
+  icon_view_ = AddChildViewAt(views::Builder<RoundedImageView>()
+                                  .SetCornerRadius(kIconSize / 2.0f)
+                                  .Build(),
+                              0);
 
   // First check if the `icon_identifier_` is a special value, i.e. NTP url or
   // incognito window. If it is, use the corresponding icon for the special
   // value.
-  auto* delegate = Shell::Get()->desks_templates_delegate();
-  absl::optional<gfx::ImageSkia> chrome_icon =
+  auto* delegate = Shell::Get()->saved_desk_delegate();
+  std::optional<gfx::ImageSkia> chrome_icon =
       delegate->MaybeRetrieveIconForSpecialIdentifier(
-          icon_identifier_, static_cast<SavedDeskIconContainer*>(parent())
-                                ->incognito_window_color_provider());
+          icon_identifier_, incognito_window_color_provider);
 
   icon_view_->GetViewAccessibility().OverrideRole(ax::mojom::Role::kImage);
   if (!app_title.empty())
@@ -142,87 +225,104 @@ void SavedDeskIconView::SetIconIdentifierAndCount(
   // app id. If `icon_identifier_` is not a valid url then it's an app id.
   GURL potential_url{icon_identifier_};
   if (!potential_url.is_valid()) {
-    delegate->GetIconForAppId(icon_identifier_, kAppIdImageSize,
-                              base::BindOnce(&SavedDeskIconView::OnIconLoaded,
-                                             weak_ptr_factory_.GetWeakPtr()));
+    delegate->GetIconForAppId(
+        icon_identifier_, kAppIdImageSize,
+        base::BindOnce(&SavedDeskRegularIconView::OnIconLoaded,
+                       weak_ptr_factory_.GetWeakPtr()));
     return;
   }
 
-  delegate->GetFaviconForUrl(icon_identifier_,
-                             base::BindOnce(&SavedDeskIconView::OnIconLoaded,
-                                            weak_ptr_factory_.GetWeakPtr()),
-                             &cancelable_task_tracker_);
+  delegate->GetFaviconForUrl(
+      icon_identifier_,
+      base::BindOnce(&SavedDeskRegularIconView::OnIconLoaded,
+                     weak_ptr_factory_.GetWeakPtr()),
+      &cancelable_task_tracker_);
 }
 
-void SavedDeskIconView::UpdateCount(int count) {
-  count_ = count;
-  DCHECK(count_label_);
-  count_label_->SetText(GetCountString(count_, /*show_plus=*/true));
-}
-
-gfx::Size SavedDeskIconView::CalculatePreferredSize() const {
-  int width = (icon_view_ ? kIconViewSize : 0);
-  if (count_ > 1 && count_label_) {
-    width +=
-        std::max(kIconViewSize, count_label_->CalculatePreferredSize().width());
-  }
-  return gfx::Size(width, kIconViewSize);
-}
-
-void SavedDeskIconView::Layout() {
-  if (icon_view_) {
-    gfx::Size icon_preferred_size = icon_view_->CalculatePreferredSize();
-    icon_view_->SetBoundsRect(gfx::Rect(
-        base::ClampCeil((kIconViewSize - icon_preferred_size.width()) / 2.0),
-        base::ClampCeil((kIconViewSize - icon_preferred_size.height()) / 2.0),
-        icon_preferred_size.width(), icon_preferred_size.height()));
-  }
-  if (count_label_) {
-    count_label_->SetBoundsRect(
-        gfx::Rect(icon_view_ ? kIconViewSize : 0, 0,
-                  width() - (icon_view_ ? kIconViewSize : 0), kIconViewSize));
-  }
-}
-
-void SavedDeskIconView::OnIconLoaded(const gfx::ImageSkia& icon) {
+void SavedDeskRegularIconView::OnIconLoaded(const gfx::ImageSkia& icon) {
   if (!icon.isNull()) {
     icon_view_->SetImage(
         CreateResizedImageToIconSize(icon, /*is_default=*/false));
     return;
   }
+
   LoadDefaultIcon();
+
+  // Notify the icon container to update the icon order and visibility.
+  if (parent() && on_icon_loaded_)
+    std::move(on_icon_loaded_).Run(this);
 }
 
-void SavedDeskIconView::LoadDefaultIcon() {
+void SavedDeskRegularIconView::LoadDefaultIcon() {
+  is_showing_default_icon_ = true;
+
   const ui::NativeTheme* native_theme =
       ui::NativeTheme::GetInstanceForNativeUi();
   // Use a higher resolution image as it will look better after resizing.
   const int resource_id = native_theme && native_theme->ShouldUseDarkColors()
                               ? IDR_DEFAULT_FAVICON_DARK_64
                               : IDR_DEFAULT_FAVICON_64;
-  icon_view_->SetImage(CreateResizedImageToIconSize(
-      gfx::ImageSkiaOperations::CreateColorMask(
-          ui::ResourceBundle::GetSharedInstance()
-              .GetImageNamed(resource_id)
-              .AsImageSkia(),
-          AshColorProvider::Get()->GetContentLayerColor(
-              AshColorProvider::ContentLayerType::kIconColorPrimary)),
-      /*is_default=*/true));
 
-  // Move `this` to the back of the visible icons, i.e. before any invisible
-  // siblings and before the overflow counter. Notify the a11y API so that the
-  // spoken feedback order matches the view order.
-  auto siblings = parent()->children();
-  if (siblings.size() >= 2) {
-    size_t i = 0;
-    while (i < siblings.size() - 2 && siblings[i]->GetVisible())
-      ++i;
-    parent()->ReorderChildView(this, i);
-    parent()->NotifyAccessibilityEvent(ax::mojom::Event::kTreeChanged, true);
+  // `color_provider` only exist when view is created, otherwise it will be a
+  // nullptr. This will be called on `OnThemeChanged` again to ensure `SetImage`
+  // is done.
+  if (auto* color_provider = GetColorProvider()) {
+    icon_view_->SetImage(CreateResizedImageToIconSize(
+        gfx::ImageSkiaOperations::CreateColorMask(
+            ui::ResourceBundle::GetSharedInstance()
+                .GetImageNamed(resource_id)
+                .AsImageSkia(),
+            color_provider->GetColor(cros_tokens::kCrosSysOnSurface)),
+        /*is_default=*/true));
   }
 }
 
-BEGIN_METADATA(SavedDeskIconView, views::View)
+BEGIN_METADATA(SavedDeskRegularIconView, views::View)
+END_METADATA
+
+// -----------------------------------------------------------------------------
+// SavedDeskOverflowIconView:
+SavedDeskOverflowIconView::SavedDeskOverflowIconView(int count, bool show_plus)
+    : SavedDeskIconView(count, kOverflowIconSortingKey) {
+  SetBackground(views::CreateThemedRoundedRectBackground(
+      cros_tokens::kCrosSysSystemOnBase,
+      /*radius=*/kIconViewSize / 2.0f));
+
+  CreateCountLabelChildView(show_plus, kCountLabelInsetSize);
+}
+
+SavedDeskOverflowIconView::~SavedDeskOverflowIconView() = default;
+
+void SavedDeskOverflowIconView::Layout() {
+  DCHECK(count_label_);
+  count_label_->SetBoundsRect(gfx::Rect(0, 0, width(), kIconViewSize));
+}
+
+void SavedDeskOverflowIconView::UpdateCount(int count) {
+  DCHECK(count_label_);
+  count_ = count;
+  count_label_->SetText(GetCountString(GetCountToShow(), /*show_plus=*/true));
+}
+
+size_t SavedDeskOverflowIconView::GetSortingKey() const {
+  return kOverflowIconSortingKey;
+}
+
+int SavedDeskOverflowIconView::GetCount() const {
+  DCHECK(count_ >= 0);
+  return count_;
+}
+
+int SavedDeskOverflowIconView::GetCountToShow() const {
+  DCHECK(count_ >= 0);
+  return count_;
+}
+
+bool SavedDeskOverflowIconView::IsOverflowIcon() const {
+  return true;
+}
+
+BEGIN_METADATA(SavedDeskOverflowIconView, views::View)
 END_METADATA
 
 }  // namespace ash

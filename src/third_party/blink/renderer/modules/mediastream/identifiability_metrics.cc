@@ -1,10 +1,10 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "third_party/blink/renderer/modules/mediastream/identifiability_metrics.h"
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "third_party/blink/public/common/privacy_budget/identifiability_metric_builder.h"
 #include "third_party/blink/public/common/privacy_budget/identifiability_study_settings.h"
 #include "third_party/blink/public/common/privacy_budget/identifiable_token.h"
@@ -225,6 +225,8 @@ void Visit(IdentifiableTokenBuilder& builder,
   Visit(builder, set.getTiltOr(nullptr));
   Visit(builder, set.getZoomOr(nullptr));
   Visit(builder, set.getTorchOr(nullptr));
+  Visit(builder, set.getBackgroundBlurOr(nullptr));
+  Visit(builder, set.getFaceFramingOr(nullptr));
 }
 
 void Visit(IdentifiableTokenBuilder& builder,

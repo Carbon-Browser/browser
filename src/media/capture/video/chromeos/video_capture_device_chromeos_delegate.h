@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,6 +8,7 @@
 #include <memory>
 
 #include "base/containers/flat_map.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/task/single_thread_task_runner.h"
 #include "base/threading/thread.h"
@@ -75,7 +76,7 @@ class CAPTURE_EXPORT VideoCaptureDeviceChromeOSDelegate final
 
   // A reference to the CameraHalDelegate instance in the VCD factory.  This is
   // used by AllocateAndStart to query camera info and create the camera device.
-  CameraHalDelegate* camera_hal_delegate_;
+  raw_ptr<CameraHalDelegate, ExperimentalAsh> camera_hal_delegate_;
 
   // A reference to the thread that all the VideoCaptureDevice interface methods
   // are expected to be called on.

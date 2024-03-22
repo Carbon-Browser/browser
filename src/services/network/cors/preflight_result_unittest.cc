@@ -1,18 +1,17 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "services/network/cors/preflight_result.h"
 
+#include "base/check_deref.h"
 #include "base/test/simple_test_tick_clock.h"
 #include "base/time/time.h"
 #include "base/values.h"
 #include "net/http/http_request_headers.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
-namespace network {
-
-namespace cors {
+namespace network::cors {
 
 namespace {
 
@@ -210,7 +209,12 @@ const TestCase kMethodCases[] = {
      mojom::CredentialsMode::kOmit,
      absl::nullopt},
 
-    // Request method is normalized to upper-case, but allowed methods is not.
+    // Neither request methods nor allowed methods are normalized to upper-case,
+    // no matter whether the method is listed in
+    // https://fetch.spec.whatwg.org/#concept-method-normalize,
+    // because request methods should be normalized when requests are created
+    // (e.g. https://fetch.spec.whatwg.org/#dom-request), before entering the
+    // network service.
     // Comparison is in case-sensitive, that means allowed methods should be in
     // upper case.
     {"put",
@@ -221,7 +225,7 @@ const TestCase kMethodCases[] = {
      mojom::CredentialsMode::kOmit,
      CorsErrorStatus(mojom::CorsError::kMethodDisallowedByPreflightResponse,
                      "PUT")},
-    {"put",
+    {"PUT",
      "",
      mojom::CredentialsMode::kOmit,
      "put",
@@ -229,13 +233,37 @@ const TestCase kMethodCases[] = {
      mojom::CredentialsMode::kOmit,
      CorsErrorStatus(mojom::CorsError::kMethodDisallowedByPreflightResponse,
                      "put")},
-    {"PUT",
+    {"put",
      "",
      mojom::CredentialsMode::kOmit,
      "put",
      {},
      mojom::CredentialsMode::kOmit,
      absl::nullopt},
+    {"patch",
+     "",
+     mojom::CredentialsMode::kOmit,
+     "PATCH",
+     {},
+     mojom::CredentialsMode::kOmit,
+     CorsErrorStatus(mojom::CorsError::kMethodDisallowedByPreflightResponse,
+                     "PATCH")},
+    {"PATCH",
+     "",
+     mojom::CredentialsMode::kOmit,
+     "patch",
+     {},
+     mojom::CredentialsMode::kOmit,
+     CorsErrorStatus(mojom::CorsError::kMethodDisallowedByPreflightResponse,
+                     "patch")},
+    {"patch",
+     "",
+     mojom::CredentialsMode::kOmit,
+     "patch",
+     {},
+     mojom::CredentialsMode::kOmit,
+     absl::nullopt},
+
     // ... But, GET is always allowed by the safe list.
     {"get",
      "",
@@ -357,8 +385,8 @@ TEST_F(PreflightResultTest, EnsureMethods) {
         PreflightResult::Create(test.cache_credentials_mode, test.allow_methods,
                                 test.allow_headers, absl::nullopt, nullptr);
     ASSERT_TRUE(result);
-    EXPECT_EQ(test.expected_result,
-              result->EnsureAllowedCrossOriginMethod(test.request_method));
+    EXPECT_EQ(test.expected_result, result->EnsureAllowedCrossOriginMethod(
+                                        test.request_method, true));
   }
 }
 
@@ -389,7 +417,7 @@ TEST_F(PreflightResultTest, EnsureRequest) {
     EXPECT_EQ(test.expected_result == absl::nullopt,
               result->EnsureAllowedRequest(
                   test.request_credentials_mode, test.request_method, headers,
-                  false, NonWildcardRequestHeadersSupport(false)));
+                  false, NonWildcardRequestHeadersSupport(false), true));
   }
 
   for (const auto& test : kHeaderCases) {
@@ -403,7 +431,7 @@ TEST_F(PreflightResultTest, EnsureRequest) {
     EXPECT_EQ(test.expected_result == absl::nullopt,
               result->EnsureAllowedRequest(
                   test.request_credentials_mode, test.request_method, headers,
-                  false, NonWildcardRequestHeadersSupport(false)));
+                  false, NonWildcardRequestHeadersSupport(false), true));
   }
 
   struct {
@@ -430,7 +458,7 @@ TEST_F(PreflightResultTest, EnsureRequest) {
     EXPECT_EQ(test.expected_result,
               result->EnsureAllowedRequest(
                   test.request_credentials_mode, "GET", headers, false,
-                  NonWildcardRequestHeadersSupport(false)));
+                  NonWildcardRequestHeadersSupport(false), true));
   }
 }
 
@@ -492,7 +520,7 @@ TEST_F(PreflightResultTest, ParseAllowControlAllowMethods) {
     if (test.strict_check_result == kNoError) {
       for (const auto& request_method : test.values_to_be_accepted) {
         EXPECT_EQ(absl::nullopt,
-                  result->EnsureAllowedCrossOriginMethod(request_method));
+                  result->EnsureAllowedCrossOriginMethod(request_method, true));
       }
     }
   }
@@ -623,16 +651,14 @@ TEST_F(PreflightResultTest, NetLogParams) {
         mojom::CredentialsMode::kOmit, test.allow_methods, test.allow_headers,
         absl::nullopt, nullptr);
     ASSERT_TRUE(result);
-    base::Value dict = result->NetLogParams();
-    EXPECT_EQ(dict.FindKey("access-control-allow-methods")->GetString(),
+    base::Value::Dict dict = result->NetLogParams();
+    EXPECT_EQ(CHECK_DEREF(dict.FindString("access-control-allow-methods")),
               test.expected_methods);
-    EXPECT_EQ(dict.FindKey("access-control-allow-headers")->GetString(),
+    EXPECT_EQ(CHECK_DEREF(dict.FindString("access-control-allow-headers")),
               test.expected_headers);
   }
 }
 
 }  // namespace
 
-}  // namespace cors
-
-}  // namespace network
+}  // namespace network::cors

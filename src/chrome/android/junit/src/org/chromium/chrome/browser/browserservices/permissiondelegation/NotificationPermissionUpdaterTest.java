@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -38,19 +38,17 @@ import org.chromium.components.content_settings.ContentSettingValues;
 import org.chromium.components.content_settings.ContentSettingsType;
 import org.chromium.components.embedder_support.util.Origin;
 
-/**
- * Tests for {@link NotificationPermissionUpdater}.
- */
+/** Tests for {@link NotificationPermissionUpdater}. */
 @RunWith(BaseRobolectricTestRunner.class)
 @Config(manifest = Config.NONE)
 @LooperMode(LooperMode.Mode.LEGACY)
 public class NotificationPermissionUpdaterTest {
     private static final Origin ORIGIN = Origin.create("https://www.website.com");
+    private static final String URL = "https://www.website.com";
     private static final String PACKAGE_NAME = "com.package.name";
     private static final String OTHER_PACKAGE_NAME = "com.other.package.name";
 
-    @Rule
-    public TestRule mProcessor = new Features.JUnitProcessor();
+    @Rule public TestRule mProcessor = new Features.JUnitProcessor();
 
     @Mock public InstalledWebappPermissionManager mPermissionManager;
     @Mock public TrustedWebActivityClient mTrustedWebActivityClient;
@@ -58,8 +56,7 @@ public class NotificationPermissionUpdaterTest {
     private NotificationPermissionUpdater mNotificationPermissionUpdater;
     private ShadowPackageManager mShadowPackageManager;
 
-    @ContentSettingValues
-    private int mNotificationPermission;
+    @ContentSettingValues private int mNotificationPermission;
 
     @Before
     public void setUp() {
@@ -76,7 +73,7 @@ public class NotificationPermissionUpdaterTest {
     @Test
     @Feature("TrustedWebActivities")
     public void doesntRegister_whenClientDoesntHaveService() {
-        mNotificationPermissionUpdater.onOriginVerified(ORIGIN, PACKAGE_NAME);
+        mNotificationPermissionUpdater.onOriginVerified(ORIGIN, URL, PACKAGE_NAME);
 
         verifyPermissionNotUpdated();
     }
@@ -87,7 +84,7 @@ public class NotificationPermissionUpdaterTest {
         installTrustedWebActivityService(ORIGIN, PACKAGE_NAME);
         setNotificationPermission(ContentSettingValues.BLOCK);
 
-        mNotificationPermissionUpdater.onOriginVerified(ORIGIN, PACKAGE_NAME);
+        mNotificationPermissionUpdater.onOriginVerified(ORIGIN, URL, PACKAGE_NAME);
 
         verifyPermissionUpdated(ContentSettingValues.BLOCK);
     }
@@ -98,7 +95,7 @@ public class NotificationPermissionUpdaterTest {
         installTrustedWebActivityService(ORIGIN, PACKAGE_NAME);
         setNotificationPermission(ContentSettingValues.ALLOW);
 
-        mNotificationPermissionUpdater.onOriginVerified(ORIGIN, PACKAGE_NAME);
+        mNotificationPermissionUpdater.onOriginVerified(ORIGIN, URL, PACKAGE_NAME);
 
         verifyPermissionUpdated(ContentSettingValues.ALLOW);
     }
@@ -109,11 +106,11 @@ public class NotificationPermissionUpdaterTest {
 
         installTrustedWebActivityService(ORIGIN, PACKAGE_NAME);
         setNotificationPermission(ContentSettingValues.ALLOW);
-        mNotificationPermissionUpdater.onOriginVerified(ORIGIN, PACKAGE_NAME);
+        mNotificationPermissionUpdater.onOriginVerified(ORIGIN, URL, PACKAGE_NAME);
         verifyPermissionUpdated(ContentSettingValues.ALLOW);
 
         setNotificationPermission(ContentSettingValues.BLOCK);
-        mNotificationPermissionUpdater.onOriginVerified(ORIGIN, PACKAGE_NAME);
+        mNotificationPermissionUpdater.onOriginVerified(ORIGIN, URL, PACKAGE_NAME);
         verifyPermissionUpdated(ContentSettingValues.BLOCK);
     }
 
@@ -122,12 +119,12 @@ public class NotificationPermissionUpdaterTest {
     public void updatesPermission_onNewClient() {
         installTrustedWebActivityService(ORIGIN, PACKAGE_NAME);
         setNotificationPermission(ContentSettingValues.ALLOW);
-        mNotificationPermissionUpdater.onOriginVerified(ORIGIN, PACKAGE_NAME);
+        mNotificationPermissionUpdater.onOriginVerified(ORIGIN, URL, PACKAGE_NAME);
         verifyPermissionUpdated(ContentSettingValues.ALLOW);
 
         installTrustedWebActivityService(ORIGIN, OTHER_PACKAGE_NAME);
         setNotificationPermission(ContentSettingValues.BLOCK);
-        mNotificationPermissionUpdater.onOriginVerified(ORIGIN, OTHER_PACKAGE_NAME);
+        mNotificationPermissionUpdater.onOriginVerified(ORIGIN, URL, OTHER_PACKAGE_NAME);
         verifyPermissionUpdated(OTHER_PACKAGE_NAME, ContentSettingValues.BLOCK);
     }
 
@@ -137,7 +134,7 @@ public class NotificationPermissionUpdaterTest {
         installTrustedWebActivityService(ORIGIN, PACKAGE_NAME);
         setNotificationPermission(ContentSettingValues.ALLOW);
 
-        mNotificationPermissionUpdater.onOriginVerified(ORIGIN, PACKAGE_NAME);
+        mNotificationPermissionUpdater.onOriginVerified(ORIGIN, URL, PACKAGE_NAME);
 
         uninstallTrustedWebActivityService(ORIGIN);
         mNotificationPermissionUpdater.onClientAppUninstalled(ORIGIN);
@@ -152,7 +149,7 @@ public class NotificationPermissionUpdaterTest {
         installTrustedWebActivityService(ORIGIN, PACKAGE_NAME);
         setNotificationPermission(ContentSettingValues.ALLOW);
 
-        mNotificationPermissionUpdater.onOriginVerified(ORIGIN, PACKAGE_NAME);
+        mNotificationPermissionUpdater.onOriginVerified(ORIGIN, URL, PACKAGE_NAME);
         verifyPermissionUpdated(ContentSettingValues.ALLOW);
 
         // Since we haven't called uninstallTrustedWebActivityService, the Updater sees that
@@ -182,12 +179,17 @@ public class NotificationPermissionUpdaterTest {
     /** "Installs" a Trusted Web Activity Service for the origin. */
     @SuppressWarnings("unchecked")
     private void installTrustedWebActivityService(Origin origin, String packageName) {
-        doAnswer(invocation -> {
-            TrustedWebActivityClient.PermissionCallback callback = invocation.getArgument(1);
-            callback.onPermission(
-                    new ComponentName(packageName, "FakeClass"), mNotificationPermission);
-            return true;
-        }).when(mTrustedWebActivityClient).checkNotificationPermission(eq(origin), any());
+        doAnswer(
+                        invocation -> {
+                            TrustedWebActivityClient.PermissionCallback callback =
+                                    invocation.getArgument(1);
+                            callback.onPermission(
+                                    new ComponentName(packageName, "FakeClass"),
+                                    mNotificationPermission);
+                            return true;
+                        })
+                .when(mTrustedWebActivityClient)
+                .checkNotificationPermission(eq(origin.toString()), any());
     }
 
     private void setNotificationPermission(@ContentSettingValues int permission) {
@@ -195,11 +197,15 @@ public class NotificationPermissionUpdaterTest {
     }
 
     private void uninstallTrustedWebActivityService(Origin origin) {
-        doAnswer(invocation -> {
-            TrustedWebActivityClient.PermissionCallback callback = invocation.getArgument(1);
-            callback.onNoTwaFound();
-            return true;
-        }).when(mTrustedWebActivityClient).checkNotificationPermission(eq(origin), any());
+        doAnswer(
+                        invocation -> {
+                            TrustedWebActivityClient.PermissionCallback callback =
+                                    invocation.getArgument(1);
+                            callback.onNoTwaFound();
+                            return true;
+                        })
+                .when(mTrustedWebActivityClient)
+                .checkNotificationPermission(eq(origin.toString()), any());
     }
 
     private void verifyPermissionNotUpdated() {
@@ -213,8 +219,11 @@ public class NotificationPermissionUpdaterTest {
 
     private void verifyPermissionUpdated(String packageName, @ContentSettingValues int permission) {
         verify(mPermissionManager)
-                .updatePermission(eq(ORIGIN), eq(packageName),
-                        eq(ContentSettingsType.NOTIFICATIONS), eq(permission));
+                .updatePermission(
+                        eq(ORIGIN),
+                        eq(packageName),
+                        eq(ContentSettingsType.NOTIFICATIONS),
+                        eq(permission));
     }
 
     private void verifyPermissionUnregistered() {

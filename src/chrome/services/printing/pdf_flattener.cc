@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -42,6 +42,10 @@ void PdfFlattener::FlattenPdf(base::ReadOnlySharedMemoryRegion src_pdf_region,
   memcpy(region_mapping.mapping.memory(), output_pdf_buffer.data(),
          output_pdf_buffer.size());
   std::move(callback).Run(std::move(region_mapping.region));
+}
+
+void PdfFlattener::SetUseSkiaRendererPolicy(bool use_skia) {
+  chrome_pdf::SetUseSkiaRendererPolicy(use_skia);
 }
 
 }  // namespace printing

@@ -40,11 +40,10 @@ class ExceptionState;
 class DateTimeLocalInputType final : public BaseTemporalInputType {
  public:
   explicit DateTimeLocalInputType(HTMLInputElement& element)
-      : BaseTemporalInputType(element) {}
+      : BaseTemporalInputType(Type::kDateTimeLocal, element) {}
 
  private:
   void CountUsage() override;
-  const AtomicString& FormControlType() const override;
   double ValueAsDate() const override;
   void SetValueAsDate(const absl::optional<base::Time>&,
                       ExceptionState&) const override;
@@ -70,6 +69,13 @@ class DateTimeLocalInputType final : public BaseTemporalInputType {
                      bool has_minute,
                      bool has_second) const override;
   String AriaLabelForPickerIndicator() const override;
+};
+
+template <>
+struct DowncastTraits<DateTimeLocalInputType> {
+  static bool AllowFrom(const InputType& type) {
+    return type.IsDateTimeLocalInputType();
+  }
 };
 
 }  // namespace blink

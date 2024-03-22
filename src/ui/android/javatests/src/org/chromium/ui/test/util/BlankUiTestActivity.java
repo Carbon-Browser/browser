@@ -1,9 +1,10 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 package org.chromium.ui.test.util;
 
+import android.content.SharedPreferences;
 import android.os.Bundle;
 import android.view.KeyEvent;
 import android.view.MotionEvent;
@@ -13,6 +14,7 @@ import androidx.annotation.StyleRes;
 import androidx.appcompat.app.AppCompatActivity;
 
 import org.chromium.base.Callback;
+import org.chromium.base.ContextUtils;
 import org.chromium.components.browser_ui.modaldialog.AppModalPresenter;
 import org.chromium.ui.modaldialog.ModalDialogManager;
 import org.chromium.ui.modaldialog.ModalDialogManager.ModalDialogType;
@@ -45,6 +47,12 @@ public class BlankUiTestActivity extends AppCompatActivity implements ModalDialo
     public void onDestroy() {
         mModalDialogManager.destroy();
         super.onDestroy();
+    }
+
+    /** Required to make preference fragments use InMemorySharedPreferences in tests. */
+    @Override
+    public SharedPreferences getSharedPreferences(String name, int mode) {
+        return ContextUtils.getApplicationContext().getSharedPreferences(name, mode);
     }
 
     /**

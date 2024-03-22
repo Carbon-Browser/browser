@@ -1,19 +1,16 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #import "ios/chrome/browser/ui/incognito_reauth/incognito_reauth_view.h"
 
-#include "base/strings/sys_string_conversions.h"
+#import "base/strings/sys_string_conversions.h"
+#import "ios/chrome/browser/shared/ui/symbols/symbols.h"
 #import "ios/chrome/browser/ui/incognito_reauth/incognito_reauth_util.h"
 #import "ios/chrome/browser/ui/incognito_reauth/incognito_reauth_view_label.h"
 #import "ios/chrome/common/ui/util/constraints_ui_util.h"
-#include "ios/chrome/grit/ios_strings.h"
-#include "ui/base/l10n/l10n_util.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
+#import "ios/chrome/grit/ios_strings.h"
+#import "ui/base/l10n/l10n_util.h"
 
 namespace {
 // Button content padding (Vertical and Horizontal).
@@ -56,8 +53,9 @@ const CGFloat kVerticalContentPadding = 70.0f;
     blurBackgroundView.translatesAutoresizingMaskIntoConstraints = NO;
     AddSameConstraints(self, blurBackgroundView);
 
-    UIImage* incognitoLogo = [UIImage imageNamed:@"incognito_logo_reauth"];
+    UIImage* incognitoLogo = CustomSymbolWithPointSize(kIncognitoSymbol, 28);
     _logoView = [[UIImageView alloc] initWithImage:incognitoLogo];
+    _logoView.tintColor = UIColor.whiteColor;
     _logoView.translatesAutoresizingMaskIntoConstraints = NO;
     [blurBackgroundView.contentView addSubview:_logoView];
     AddSameCenterXConstraint(_logoView, blurBackgroundView);
@@ -136,7 +134,7 @@ const CGFloat kVerticalContentPadding = 70.0f;
   titleLabel.font = [UIFont preferredFontForTextStyle:UIFontTextStyleTitle2];
   titleLabel.text = l10n_util::GetNSStringF(
       IDS_IOS_INCOGNITO_REAUTH_UNLOCK_BUTTON,
-      base::SysNSStringToUTF16(biometricAuthenticationTypeString()));
+      base::SysNSStringToUTF16(BiometricAuthenticationTypeString()));
   [titleLabel
       setContentCompressionResistancePriority:UILayoutPriorityRequired
                                       forAxis:UILayoutConstraintAxisHorizontal];
@@ -152,7 +150,7 @@ const CGFloat kVerticalContentPadding = 70.0f;
 
   button.accessibilityLabel = l10n_util::GetNSStringF(
       IDS_IOS_INCOGNITO_REAUTH_UNLOCK_BUTTON_VOICEOVER_LABEL,
-      base::SysNSStringToUTF16(biometricAuthenticationTypeString()));
+      base::SysNSStringToUTF16(BiometricAuthenticationTypeString()));
   button.translatesAutoresizingMaskIntoConstraints = NO;
 
   button.pointerInteractionEnabled = YES;
@@ -167,10 +165,9 @@ const CGFloat kVerticalContentPadding = 70.0f;
   [effectView.contentView addSubview:button];
   backgroundView = effectView;
   AddSameConstraintsWithInsets(
-
       button, titleLabel,
-      ChromeDirectionalEdgeInsetsMake(-kButtonPaddingV, -kButtonPaddingH,
-                                      -kButtonPaddingV, -kButtonPaddingH));
+      NSDirectionalEdgeInsetsMake(-kButtonPaddingV, -kButtonPaddingH,
+                                  -kButtonPaddingV, -kButtonPaddingH));
 
   backgroundView.backgroundColor =
       [IncognitoReauthView blurButtonBackgroundColor];

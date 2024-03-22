@@ -1,35 +1,36 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #import <UIKit/UIKit.h>
 #import <XCTest/XCTest.h>
 
-#include "base/ios/ios_util.h"
-#include "base/strings/stringprintf.h"
-#include "base/strings/utf_string_conversions.h"
+#import "base/ios/ios_util.h"
+#import "base/strings/stringprintf.h"
+#import "base/strings/sys_string_conversions.h"
+#import "base/strings/utf_string_conversions.h"
 #import "base/test/ios/wait_util.h"
-#include "components/url_formatter/elide_url.h"
+#import "components/sync/base/command_line_switches.h"
+#import "components/url_formatter/elide_url.h"
+#import "ios/chrome/browser/shared/public/features/features.h"
+#import "ios/chrome/browser/shared/ui/table_view/table_view_constants.h"
+#import "ios/chrome/browser/signin/model/fake_system_identity.h"
+#import "ios/chrome/browser/ui/authentication/signin_earl_grey.h"
+#import "ios/chrome/browser/ui/authentication/signin_earl_grey_ui_test_util.h"
 #import "ios/chrome/browser/ui/history/history_ui_constants.h"
 #import "ios/chrome/browser/ui/popup_menu/popup_menu_constants.h"
 #import "ios/chrome/browser/ui/settings/cells/clear_browsing_data_constants.h"
-#import "ios/chrome/browser/ui/table_view/table_view_constants.h"
-#import "ios/chrome/browser/ui/ui_feature_flags.h"
-#include "ios/chrome/common/string_util.h"
-#include "ios/chrome/grit/ios_strings.h"
+#import "ios/chrome/common/string_util.h"
+#import "ios/chrome/grit/ios_strings.h"
 #import "ios/chrome/test/earl_grey/chrome_earl_grey.h"
 #import "ios/chrome/test/earl_grey/chrome_earl_grey_ui.h"
 #import "ios/chrome/test/earl_grey/chrome_matchers.h"
 #import "ios/chrome/test/earl_grey/chrome_test_case.h"
 #import "ios/testing/earl_grey/earl_grey_test.h"
 #import "net/base/mac/url_conversions.h"
-#include "net/test/embedded_test_server/embedded_test_server.h"
-#include "net/test/embedded_test_server/http_request.h"
-#include "net/test/embedded_test_server/http_response.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
+#import "net/test/embedded_test_server/embedded_test_server.h"
+#import "net/test/embedded_test_server/http_request.h"
+#import "net/test/embedded_test_server/http_response.h"
 
 using chrome_test_util::ButtonWithAccessibilityLabelId;
 using chrome_test_util::HistoryEntry;
@@ -47,6 +48,9 @@ char kTitle2[] = "Page 2";
 char kResponse1[] = "Test Page 1 content";
 char kResponse2[] = "Test Page 2 content";
 char kResponse3[] = "Test Page 3 content";
+
+// Constant for timeout while waiting for asynchronous sync operations.
+constexpr base::TimeDelta kSyncOperationTimeout = base::Seconds(10);
 
 // Matcher for the edit button in the navigation bar.
 id<GREYMatcher> NavigationEditButton() {
@@ -113,6 +117,13 @@ std::unique_ptr<net::test_server::HttpResponse> StandardResponse(
 
 @implementation HistoryUITestCase
 
+- (AppLaunchConfiguration)appConfigurationForTestCase {
+  AppLaunchConfiguration config = [super appConfigurationForTestCase];
+  config.additional_args.push_back(std::string("--") +
+                                   syncer::kSyncShortNudgeDelayForTest);
+  return config;
+}
+
 - (void)setUp {
   [super setUp];
   self.testServer->RegisterRequestHandler(
@@ -144,6 +155,10 @@ std::unique_ptr<net::test_server::HttpResponse> StandardResponse(
   // Some tests change the default values for the "Clear Browsing Data" settings
   // screen.
   [ChromeEarlGrey resetBrowsingDataPrefs];
+
+  // Shutdown network process after tests run to avoid hanging from
+  // clearing browsing history.
+  [ChromeEarlGrey killWebKitNetworkProcess];
   [super tearDown];
 }
 
@@ -229,12 +244,6 @@ std::unique_ptr<net::test_server::HttpResponse> StandardResponse(
 
 // Tests that searching history displays only entries matching the search term.
 - (void)testSearchHistory {
-  // TODO(crbug.com/753098): Re-enable this test on iPad once grey_typeText
-  // works on iOS 11.
-  if ([ChromeEarlGrey isIPadIdiom]) {
-    EARL_GREY_TEST_DISABLED(@"Test disabled on iPad.");
-  }
-
   [self loadTestURLs];
   [self openHistoryPanel];
   [[EarlGrey selectElementWithMatcher:SearchIconButton()]
@@ -249,7 +258,7 @@ std::unique_ptr<net::test_server::HttpResponse> StandardResponse(
       [NSString stringWithFormat:@"%s", _URL1.path().c_str()];
 
   [[EarlGrey selectElementWithMatcher:SearchIconButton()]
-      performAction:grey_typeText(searchString)];
+      performAction:grey_replaceText(searchString)];
 
   // Verify that scrim is not visible.
   [[EarlGrey selectElementWithMatcher:grey_accessibilityID(
@@ -264,6 +273,83 @@ std::unique_ptr<net::test_server::HttpResponse> StandardResponse(
                       FormatUrlForDisplayOmitSchemePathTrivialSubdomainsAndMobilePrefix(
                           _URL1)),
               kTitle1)] assertWithMatcher:grey_notNil()];
+  [[EarlGrey
+      selectElementWithMatcher:
+          HistoryEntry(
+              base::UTF16ToUTF8(
+                  url_formatter::
+                      FormatUrlForDisplayOmitSchemePathTrivialSubdomainsAndMobilePrefix(
+                          _URL2)),
+              kTitle2)] assertWithMatcher:grey_nil()];
+  [[EarlGrey
+      selectElementWithMatcher:
+          HistoryEntry(
+              base::UTF16ToUTF8(
+                  url_formatter::
+                      FormatUrlForDisplayOmitSchemePathTrivialSubdomainsAndMobilePrefix(
+                          _URL3)),
+              _URL3.GetContent())] assertWithMatcher:grey_nil()];
+}
+
+// Tests that searching a typed URL (after Sync is enabled and the URL is
+// uploaded to the Sync server) displays only entries matching the search term.
+- (void)testSearchSyncedHistory {
+  const char syncedURL[] = "http://mockurl/sync/";
+  const GURL mockURL(syncedURL);
+
+  // Sign in to sync.
+  FakeSystemIdentity* fakeIdentity = [FakeSystemIdentity fakeIdentity1];
+  [SigninEarlGrey addFakeIdentity:fakeIdentity];
+  [SigninEarlGreyUI signinWithFakeIdentity:fakeIdentity];
+
+  [ChromeEarlGrey
+      waitForSyncTransportStateActiveWithTimeout:kSyncOperationTimeout];
+
+  // Add a typed URL and wait for it to show up on the server.
+  [ChromeEarlGrey addHistoryServiceTypedURL:mockURL];
+    NSArray<NSURL*>* URLs = @[
+      net::NSURLWithGURL(mockURL),
+    ];
+    [ChromeEarlGrey waitForSyncServerHistoryURLs:URLs
+                                         timeout:kSyncOperationTimeout];
+
+  [self loadTestURLs];
+  [self openHistoryPanel];
+
+  [[EarlGrey selectElementWithMatcher:SearchIconButton()]
+      performAction:grey_tap()];
+
+  // Verify that scrim is visible.
+  [[EarlGrey selectElementWithMatcher:grey_accessibilityID(
+                                          kHistorySearchScrimIdentifier)]
+      assertWithMatcher:grey_notNil()];
+
+  NSString* searchString = base::SysUTF8ToNSString(mockURL.spec().c_str());
+
+  [[EarlGrey selectElementWithMatcher:SearchIconButton()]
+      performAction:grey_replaceText(searchString)];
+
+  // Verify that scrim is not visible.
+  [[EarlGrey selectElementWithMatcher:grey_accessibilityID(
+                                          kHistorySearchScrimIdentifier)]
+      assertWithMatcher:grey_nil()];
+
+  [[EarlGrey
+      selectElementWithMatcher:
+          grey_allOf(chrome_test_util::StaticTextWithAccessibilityLabel(
+                         @"mockurl/sync/"),
+                     grey_ancestor(grey_kindOfClassName(@"TableViewURLCell")),
+                     grey_sufficientlyVisible(), nil)]
+      assertWithMatcher:grey_notNil()];
+
+  [[EarlGrey
+      selectElementWithMatcher:
+          HistoryEntry(
+              base::UTF16ToUTF8(
+                  url_formatter::
+                      FormatUrlForDisplayOmitSchemePathTrivialSubdomainsAndMobilePrefix(
+                          _URL1)),
+              kTitle1)] assertWithMatcher:grey_nil()];
   [[EarlGrey
       selectElementWithMatcher:
           HistoryEntry(
@@ -435,7 +521,8 @@ std::unique_ptr<net::test_server::HttpResponse> StandardResponse(
 }
 
 // Tests clear browsing history.
-- (void)testClearBrowsingHistory {
+// TODO(crbug.com/1408647): Fix flakiness.
+- (void)DISABLED_testClearBrowsingHistory {
   [self loadTestURLs];
   [self openHistoryPanel];
 
@@ -680,7 +767,7 @@ std::unique_ptr<net::test_server::HttpResponse> StandardResponse(
   NSString* searchString =
       [NSString stringWithFormat:@"%s", _URL1.path().c_str()];
   [[EarlGrey selectElementWithMatcher:SearchIconButton()]
-      performAction:grey_typeText(searchString)];
+      performAction:grey_replaceText(searchString)];
 
   // Swipe TableView down.
   [[EarlGrey selectElementWithMatcher:grey_accessibilityID(
@@ -697,6 +784,8 @@ std::unique_ptr<net::test_server::HttpResponse> StandardResponse(
 - (void)testAccessibilityOnHistory {
   [self loadTestURLs];
   [self openHistoryPanel];
+  [ChromeEarlGrey waitForSufficientlyVisibleElementWithMatcher:
+                      grey_accessibilityID(kHistoryTableViewIdentifier)];
   [ChromeEarlGrey verifyAccessibilityForCurrentScreen];
   // Close history.
     id<GREYMatcher> exitMatcher =
@@ -705,27 +794,27 @@ std::unique_ptr<net::test_server::HttpResponse> StandardResponse(
 }
 
 - (void)testEmptyState {
-  [self loadTestURLs];
-  [self openHistoryPanel];
+    [self loadTestURLs];
+    [self openHistoryPanel];
 
-  // The toolbar should contain the CBD and edit buttons.
-  [[EarlGrey selectElementWithMatcher:chrome_test_util::
-                                          HistoryClearBrowsingDataButton()]
-      assertWithMatcher:grey_notNil()];
-  [[EarlGrey selectElementWithMatcher:NavigationEditButton()]
-      assertWithMatcher:grey_notNil()];
+    // The toolbar should contain the CBD and edit buttons.
+    [[EarlGrey selectElementWithMatcher:chrome_test_util::
+                                            HistoryClearBrowsingDataButton()]
+        assertWithMatcher:grey_notNil()];
+    [[EarlGrey selectElementWithMatcher:NavigationEditButton()]
+        assertWithMatcher:grey_notNil()];
 
-  [ChromeEarlGreyUI openAndClearBrowsingDataFromHistory];
+    [ChromeEarlGreyUI openAndClearBrowsingDataFromHistory];
 
-  // Toolbar should only contain CBD button and the background should contain
-  // the Illustrated empty view
-  [[EarlGrey selectElementWithMatcher:chrome_test_util::
-                                          HistoryClearBrowsingDataButton()]
-      assertWithMatcher:grey_notNil()];
-  [[EarlGrey selectElementWithMatcher:NavigationEditButton()]
-      assertWithMatcher:grey_nil()];
-  [[EarlGrey selectElementWithMatcher:EmptyIllustratedTableViewBackground()]
-      assertWithMatcher:grey_notNil()];
+    // Toolbar should only contain CBD button and the background should contain
+    // the Illustrated empty view
+    [[EarlGrey selectElementWithMatcher:chrome_test_util::
+                                            HistoryClearBrowsingDataButton()]
+        assertWithMatcher:grey_notNil()];
+    [[EarlGrey selectElementWithMatcher:NavigationEditButton()]
+        assertWithMatcher:grey_nil()];
+    [[EarlGrey selectElementWithMatcher:EmptyIllustratedTableViewBackground()]
+        assertWithMatcher:grey_notNil()];
 }
 
 #pragma mark Multiwindow

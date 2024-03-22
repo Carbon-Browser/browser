@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,20 +6,16 @@
 
 #import <Foundation/Foundation.h>
 
-#include "components/security_interstitials/core/unsafe_resource.h"
+#import "components/security_interstitials/core/unsafe_resource.h"
 #import "ios/components/security_interstitials/safe_browsing/fake_safe_browsing_client.h"
 #import "ios/components/security_interstitials/safe_browsing/fake_safe_browsing_service.h"
 #import "ios/web/public/test/fakes/fake_browser_state.h"
 #import "ios/web/public/test/fakes/fake_web_state.h"
-#include "ios/web/public/test/web_task_environment.h"
-#include "services/network/public/mojom/fetch_api.mojom.h"
-#include "testing/gmock/include/gmock/gmock.h"
-#include "testing/gtest/include/gtest/gtest.h"
-#include "testing/platform_test.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
+#import "ios/web/public/test/web_task_environment.h"
+#import "services/network/public/mojom/fetch_api.mojom.h"
+#import "testing/gmock/include/gmock/gmock.h"
+#import "testing/gtest/include/gtest/gtest.h"
+#import "testing/platform_test.h"
 
 using security_interstitials::UnsafeResource;
 using testing::_;
@@ -29,12 +25,14 @@ namespace {
 class MockQueryManagerObserver : public SafeBrowsingQueryManager::Observer {
  public:
   MockQueryManagerObserver() {}
-  ~MockQueryManagerObserver() {}
+  ~MockQueryManagerObserver() override {}
 
-  MOCK_METHOD3(SafeBrowsingQueryFinished,
+  MOCK_METHOD4(SafeBrowsingQueryFinished,
                void(SafeBrowsingQueryManager*,
                     const SafeBrowsingQueryManager::Query&,
-                    const SafeBrowsingQueryManager::Result&));
+                    const SafeBrowsingQueryManager::Result&,
+                    safe_browsing::SafeBrowsingUrlCheckerImpl::PerformedCheck
+                        performed_check));
 
   // Override rather than mocking so that the observer can remove itself.
   void SafeBrowsingQueryManagerDestroyed(
@@ -106,7 +104,7 @@ class SafeBrowsingQueryManagerTest
 // Tests a query for a safe URL.
 TEST_P(SafeBrowsingQueryManagerTest, SafeURLQuery) {
   GURL url("http://chromium.test");
-  EXPECT_CALL(observer_, SafeBrowsingQueryFinished(manager(), _, _))
+  EXPECT_CALL(observer_, SafeBrowsingQueryFinished(manager(), _, _, _))
       .WillOnce(VerifyQueryFinished(url, http_method_, navigation_item_id_,
                                     /*is_url_safe=*/true));
 
@@ -120,7 +118,7 @@ TEST_P(SafeBrowsingQueryManagerTest, SafeURLQuery) {
 // Tests a query for an unsafe URL.
 TEST_P(SafeBrowsingQueryManagerTest, UnsafeURLQuery) {
   GURL url("http://" + FakeSafeBrowsingService::kUnsafeHost);
-  EXPECT_CALL(observer_, SafeBrowsingQueryFinished(manager(), _, _))
+  EXPECT_CALL(observer_, SafeBrowsingQueryFinished(manager(), _, _, _))
       .WillOnce(VerifyQueryFinished(url, http_method_, navigation_item_id_,
                                     /*is_url_safe=*/false));
 
@@ -142,7 +140,7 @@ TEST_P(SafeBrowsingQueryManagerTest, UnsafeURLQuery) {
 // UnsafeResource on both queries.
 TEST_P(SafeBrowsingQueryManagerTest, MultipleUnsafeURLQueries) {
   GURL url("http://" + FakeSafeBrowsingService::kUnsafeHost);
-  EXPECT_CALL(observer_, SafeBrowsingQueryFinished(manager(), _, _))
+  EXPECT_CALL(observer_, SafeBrowsingQueryFinished(manager(), _, _, _))
       .Times(2)
       .WillRepeatedly(VerifyQueryFinished(url, http_method_,
                                           navigation_item_id_,
@@ -169,7 +167,7 @@ TEST_P(SafeBrowsingQueryManagerTest, MultipleUnsafeURLQueries) {
 // queries that match the UnsafeResource's URL.
 TEST_P(SafeBrowsingQueryManagerTest, StoreUnsafeResourceMultipleQueries) {
   GURL url("http://" + FakeSafeBrowsingService::kUnsafeHost);
-  EXPECT_CALL(observer_, SafeBrowsingQueryFinished(manager(), _, _))
+  EXPECT_CALL(observer_, SafeBrowsingQueryFinished(manager(), _, _, _))
       .Times(2)
       .WillRepeatedly(VerifyQueryFinished(url, http_method_,
                                           navigation_item_id_,
@@ -204,7 +202,7 @@ INSTANTIATE_TEST_SUITE_P(
 
 namespace {
 // An observer that owns a WebState and destroys it when it gets a
-// |SafeBrowsingQueryFinished| callback.
+// `SafeBrowsingQueryFinished` callback.
 class WebStateDestroyingQueryManagerObserver
     : public SafeBrowsingQueryManager::Observer {
  public:
@@ -218,7 +216,9 @@ class WebStateDestroyingQueryManagerObserver
   void SafeBrowsingQueryFinished(
       SafeBrowsingQueryManager* query_manager,
       const SafeBrowsingQueryManager::Query& query,
-      const SafeBrowsingQueryManager::Result& result) override {
+      const SafeBrowsingQueryManager::Result& result,
+      safe_browsing::SafeBrowsingUrlCheckerImpl::PerformedCheck performed_check)
+      override {
     web_state_.reset();
   }
 

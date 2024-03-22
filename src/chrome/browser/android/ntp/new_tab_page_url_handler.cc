@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -25,14 +25,6 @@ bool HandleAndroidNativePageURL(GURL* url,
   if (url->SchemeIs(content::kChromeUIScheme)) {
     if (url->host() == chrome::kChromeUINewTabHost) {
       *url = GURL(chrome::kChromeUINativeNewTabURL);
-      return true;
-    }
-
-    // TODO(twellington): stop redirecting chrome://history to
-    // chrome-native://history when M57 is a distant memory.
-    // See http://crbug.com/654071.
-    if (url->host() == kChromeUIHistoryHost) {
-      *url = GURL(kChromeUINativeHistoryURL);
       return true;
     }
   }

@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,7 +8,6 @@
 #include "components/security_interstitials/content/security_interstitial_controller_client.h"
 #include "components/security_interstitials/content/settings_page_helper.h"
 #include "ui/base/resource/resource_bundle.h"
-#include "ui/base/webui/jstemplate_builder.h"
 #include "ui/base/webui/web_ui_util.h"
 
 namespace security_interstitials {
@@ -68,8 +67,7 @@ std::string TestSafeBrowsingBlockingPageQuiet::GetHTML() {
       ui::ResourceBundle::GetSharedInstance().LoadDataResourceString(
           IDR_SECURITY_INTERSTITIAL_QUIET_HTML);
   webui::AppendWebUiCssTextDefaults(&html);
-  html = webui::GetI18nTemplateHtml(html, load_time_data);
-  return html;
+  return webui::GetLocalizedHtml(html, load_time_data);
 }
 
 }  // namespace security_interstitials

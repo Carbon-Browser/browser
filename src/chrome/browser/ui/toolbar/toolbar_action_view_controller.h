@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,7 +10,8 @@
 #include "chrome/browser/extensions/extension_context_menu_model.h"
 #include "chrome/browser/extensions/site_permissions_helper.h"
 #include "chrome/browser/ui/extensions/extension_popup_types.h"
-#include "ui/gfx/image/image.h"
+#include "chrome/browser/ui/toolbar/toolbar_action_hover_card_types.h"
+#include "ui/base/models/image_model.h"
 
 namespace content {
 class WebContents;
@@ -25,6 +26,7 @@ class MenuModel;
 }
 
 class ToolbarActionViewDelegate;
+class ToolbarActionView;
 
 // The basic controller class for an action that is shown on the toolbar -
 // an extension action (like browser actions) or a component action (like
@@ -60,7 +62,39 @@ class ToolbarActionViewController {
     kMaxValue = kRequestAccessButton,
   };
 
-  virtual ~ToolbarActionViewController() {}
+  // State for the toolbar action view's hover card.
+  struct HoverCardState {
+    enum class SiteAccess {
+      // All extensions are allowed on the current site by the user.
+      kAllExtensionsAllowed,
+
+      // All extensions are blocked on the current site by the user.
+      kAllExtensionsBlocked,
+
+      // The extension has access to the current site.
+      kExtensionHasAccess,
+
+      // The extension requests access to the current site.
+      kExtensionRequestsAccess,
+
+      // The extension does not want access to the current site.
+      kExtensionDoesNotWantAccess,
+    };
+
+    enum class AdminPolicy {
+      kNone,
+      // Extension is force pinned by administrator.
+      kPinnedByAdmin,
+
+      // Extension if force installed by administrator.
+      kInstalledByAdmin,
+    };
+
+    SiteAccess site_access;
+    AdminPolicy policy;
+  };
+
+  virtual ~ToolbarActionViewController() = default;
 
   // Returns the unique ID of this particular action. For extensions, this is
   // the extension id; for component actions, this is the name of the component.
@@ -70,8 +104,8 @@ class ToolbarActionViewController {
   virtual void SetDelegate(ToolbarActionViewDelegate* delegate) = 0;
 
   // Returns the icon to use for the given |web_contents| and |size|.
-  virtual gfx::Image GetIcon(content::WebContents* web_contents,
-                             const gfx::Size& size) = 0;
+  virtual ui::ImageModel GetIcon(content::WebContents* web_contents,
+                                 const gfx::Size& size) = 0;
 
   // Returns the name of the action, which can be separate from the accessible
   // name or name for the tooltip.
@@ -87,14 +121,19 @@ class ToolbarActionViewController {
   virtual std::u16string GetTooltip(
       content::WebContents* web_contents) const = 0;
 
+  // Returns the hover card state to use for the given `web_contents`.
+  virtual HoverCardState GetHoverCardState(
+      content::WebContents* web_contents) const = 0;
+
   // Returns true if the action should be enabled on the given |web_contents|.
   virtual bool IsEnabled(content::WebContents* web_contents) const = 0;
 
   // Returns whether there is currently a popup visible.
   virtual bool IsShowingPopup() const = 0;
 
-  // Returns whether the action is requesting site access to `web_contents`.
-  virtual bool IsRequestingSiteAccess(
+  // Returns whether the action should show site access requests in the toolbar
+  // for `web_contents`;
+  virtual bool ShouldShowSiteAccessRequestInToolbar(
       content::WebContents* web_contents) const = 0;
 
   // Hides the current popup, if one is visible.
@@ -108,13 +147,15 @@ class ToolbarActionViewController {
       extensions::ExtensionContextMenuModel::ContextMenuSource
           context_menu_source) = 0;
 
-  // Called when a context menu is shown so the controller can perform any
-  // necessary setup.
-  virtual void OnContextMenuShown() {}
+  // Called when a context menu is shown from `source` so the controller can
+  // perform any necessary setup.
+  virtual void OnContextMenuShown(
+      extensions::ExtensionContextMenuModel::ContextMenuSource source) {}
 
-  // Called when a context menu has closed so the controller can perform any
-  // necessary cleanup.
-  virtual void OnContextMenuClosed() {}
+  // Called when a context menu has closed from `source` so the controller can
+  // perform any necessary cleanup.
+  virtual void OnContextMenuClosed(
+      extensions::ExtensionContextMenuModel::ContextMenuSource source) {}
 
   // Executes the default behavior associated with the action. This should only
   // be called as a result of a user action.
@@ -127,6 +168,10 @@ class ToolbarActionViewController {
 
   // Updates the current state of the action.
   virtual void UpdateState() = 0;
+
+  // Updates the hover card for `action_view` based on `update_type`.
+  virtual void UpdateHoverCard(ToolbarActionView* action_view,
+                               ToolbarActionHoverCardUpdateType update_type) {}
 
   // Registers an accelerator. Called when the view is added to a widget.
   virtual void RegisterCommand() {}

@@ -1,11 +1,11 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CHROMECAST_MEDIA_CMA_BASE_DEMUXER_STREAM_ADAPTER_H_
 #define CHROMECAST_MEDIA_CMA_BASE_DEMUXER_STREAM_ADAPTER_H_
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/weak_ptr.h"
 #include "base/threading/thread_checker.h"
 #include "base/time/time.h"
@@ -54,7 +54,7 @@ class DemuxerStreamAdapter : public CodedFrameProvider {
   // Callback invoked from the demuxer stream to signal a buffer is ready.
   void OnNewBuffer(ReadCB read_cb,
                    ::media::DemuxerStream::Status status,
-                   scoped_refptr<::media::DecoderBuffer> input);
+                   ::media::DemuxerStream::DecoderBufferVector input);
 
   base::ThreadChecker thread_checker_;
 

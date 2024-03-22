@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,6 +12,7 @@
 #include "base/containers/flat_map.h"
 #include "base/run_loop.h"
 #include "base/unguessable_token.h"
+#include "mojo/public/cpp/bindings/receiver.h"
 #include "mojo/public/cpp/bindings/receiver_set.h"
 #include "mojo/public/cpp/bindings/remote_set.h"
 #include "services/media_session/public/cpp/media_metadata.h"
@@ -58,6 +59,7 @@ class COMPONENT_EXPORT(MEDIA_SESSION_TEST_SUPPORT_CPP)
       const std::vector<mojom::MediaAudioVideoState>& wanted_states);
 
   void WaitForControllable(bool is_controllable);
+  void WaitForExpectedHideMetadata(bool hide_metadata);
 
   void WaitForEmptyMetadata();
   void WaitForExpectedMetadata(const MediaMetadata& metadata);
@@ -113,6 +115,7 @@ class COMPONENT_EXPORT(MEDIA_SESSION_TEST_SUPPORT_CPP)
   absl::optional<MediaMetadata> expected_metadata_;
   absl::optional<std::set<mojom::MediaSessionAction>> expected_actions_;
   absl::optional<bool> expected_controllable_;
+  absl::optional<bool> expected_hide_metadata_;
   absl::optional<
       std::pair<mojom::MediaSessionImageType, std::vector<MediaImage>>>
       expected_images_of_type_;
@@ -156,6 +159,8 @@ class COMPONENT_EXPORT(MEDIA_SESSION_TEST_SUPPORT_CPP) MockMediaSession
   void PreviousTrack() override;
   void NextTrack() override;
   void SkipAd() override {}
+  void PreviousSlide() override {}
+  void NextSlide() override {}
   void Seek(base::TimeDelta seek_time) override;
   void Stop(SuspendType type) override;
   void GetMediaImageBitmap(const MediaImage& image,
@@ -172,6 +177,8 @@ class COMPONENT_EXPORT(MEDIA_SESSION_TEST_SUPPORT_CPP) MockMediaSession
   void HangUp() override {}
   void Raise() override {}
   void SetMute(bool mute) override {}
+  void RequestMediaRemoting() override {}
+  void EnterAutoPictureInPicture() override {}
 
   void SetIsControllable(bool value);
   void SetPreferStop(bool value) { prefer_stop_ = value; }

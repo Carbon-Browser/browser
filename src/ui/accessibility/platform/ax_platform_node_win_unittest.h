@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,6 +14,7 @@
 #include "base/win/atl.h"  // Must be before UIAutomationCore.h
 #include "ui/accessibility/ax_position.h"
 #include "ui/accessibility/platform/ax_fragment_root_delegate_win.h"
+#include "ui/accessibility/platform/sequence_affine_com_object_root_win.h"
 
 #include <UIAutomationCore.h>
 
@@ -49,9 +50,8 @@ class TestFragmentRootDelegate : public AXFragmentRootDelegateWin {
   bool is_control_element_ = true;
 };
 
-class MockIRawElementProviderSimple
-    : public CComObjectRootEx<CComMultiThreadModel>,
-      public IRawElementProviderSimple {
+class MockIRawElementProviderSimple : public SequenceAffineComObjectRoot,
+                                      public IRawElementProviderSimple {
  public:
   BEGIN_COM_MAP(MockIRawElementProviderSimple)
   COM_INTERFACE_ENTRY(IRawElementProviderSimple)

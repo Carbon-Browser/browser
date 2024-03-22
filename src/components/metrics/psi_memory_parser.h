@@ -1,10 +1,11 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef COMPONENTS_METRICS_PSI_MEMORY_PARSER_H_
 #define COMPONENTS_METRICS_PSI_MEMORY_PARSER_H_
 
+#include <cstdint>
 #include <string>
 
 #include "base/gtest_prod_util.h"

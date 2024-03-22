@@ -1,16 +1,15 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 package org.chromium.chrome.browser.profiles;
 
-import org.chromium.base.annotations.CalledByNative;
-import org.chromium.base.annotations.NativeMethods;
+import org.jni_zero.CalledByNative;
+import org.jni_zero.NativeMethods;
+
 import org.chromium.components.embedder_support.simple_factory_key.SimpleFactoryKeyHandle;
 
-/**
- * Wrapper that allows passing a ProfileKey reference around in the Java layer.
- */
+/** Wrapper that allows passing a ProfileKey reference around in the Java layer. */
 public class ProfileKey implements SimpleFactoryKeyHandle {
     /** Whether this wrapper corresponds to an off the record ProfileKey. */
     private final boolean mIsOffTheRecord;
@@ -82,8 +81,11 @@ public class ProfileKey implements SimpleFactoryKeyHandle {
     @NativeMethods
     interface Natives {
         ProfileKey getLastUsedRegularProfileKey();
+
         ProfileKey getOriginalKey(long nativeProfileKeyAndroid);
+
         boolean isOffTheRecord(long nativeProfileKeyAndroid);
+
         long getSimpleFactoryKeyPointer(long nativeProfileKeyAndroid);
     }
 }

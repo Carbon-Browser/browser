@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,8 +7,8 @@
 #include <cstddef>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/logging.h"
 #include "base/path_service.h"
 #include "net/base/filename_util.h"
@@ -169,6 +169,9 @@ void FileTransferMessageHandler::OnRequestTransfer() {
 void FileTransferMessageHandler::OnSuccess() {
   DCHECK_EQ(kEof, state_);
   SetState(kClosed);
+
+  // Ensure any resources tied to the reader's lifetime are released.
+  file_reader_.reset();
 }
 
 void FileTransferMessageHandler::OnError(protocol::FileTransfer_Error error) {

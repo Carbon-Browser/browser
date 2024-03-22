@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,8 +9,12 @@
 #include <string>
 #include <vector>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
+#include "base/types/expected.h"
+#include "base/uuid.h"
+#include "base/values.h"
 #include "chrome/common/extensions/api/tabs.h"
+#include "components/tab_groups/tab_group_id.h"
 #include "extensions/common/features/feature.h"
 #include "ui/base/window_open_disposition.h"
 
@@ -20,19 +24,13 @@ class ExtensionFunction;
 class GURL;
 class Profile;
 class TabStripModel;
-
-namespace base {
-class DictionaryValue;
-class ListValue;
-}
-
 namespace content {
 class BrowserContext;
 class WebContents;
 }
 
-namespace gfx {
-class Rect;
+namespace blink::mojom {
+class WindowFeatures;
 }
 
 namespace extensions {
@@ -62,41 +60,33 @@ class ExtensionTabUtil {
     OpenTabParams();
     ~OpenTabParams();
 
-    bool create_browser_if_needed;
-    std::unique_ptr<int> window_id;
-    std::unique_ptr<int> opener_tab_id;
-    std::unique_ptr<std::string> url;
-    std::unique_ptr<bool> active;
-    std::unique_ptr<bool> pinned;
-    std::unique_ptr<int> index;
-  };
-
-  // Platform specific delegate.
-  class Delegate {
-   public:
-    virtual ~Delegate() {}
-    // Platform specific scrubbing of tab info for |extension|.
-    virtual ExtensionTabUtil::ScrubTabBehaviorType GetScrubTabBehavior(
-        const Extension* extension) = 0;
+    bool create_browser_if_needed = false;
+    absl::optional<int> window_id;
+    absl::optional<int> opener_tab_id;
+    absl::optional<std::string> url;
+    absl::optional<bool> active;
+    absl::optional<bool> pinned;
+    absl::optional<int> index;
+    absl::optional<base::Uuid> bookmark_id;
   };
 
   // Opens a new tab given an extension function |function| and creation
-  // parameters |params|. Returns a Tab object if successful, or NULL and
-  // optionally sets |error| if an error occurs.
-  static base::DictionaryValue* OpenTab(ExtensionFunction* function,
-                                        const OpenTabParams& params,
-                                        bool user_gesture,
-                                        std::string* error);
+  // parameters |params|. If a tab can be produced, it will return a
+  // base::Value::Dict representing the tab, otherwise it will optionally return
+  // an error message, if any is appropriate.
+  static base::expected<base::Value::Dict, std::string> OpenTab(
+      ExtensionFunction* function,
+      const OpenTabParams& params,
+      bool user_gesture);
 
   static int GetWindowId(const Browser* browser);
   static int GetWindowIdOfTabStripModel(const TabStripModel* tab_strip_model);
   static int GetTabId(const content::WebContents* web_contents);
   static std::string GetTabStatusText(content::WebContents* web_contents);
   static int GetWindowIdOfTab(const content::WebContents* web_contents);
-  static std::unique_ptr<base::ListValue> CreateTabList(
-      const Browser* browser,
-      const Extension* extension,
-      Feature::Context context);
+  static base::Value::List CreateTabList(const Browser* browser,
+                                         const Extension* extension,
+                                         Feature::Context context);
 
   static Browser* GetBrowserFromWindowID(
       const ChromeExtensionFunctionDetails& details,
@@ -122,27 +112,25 @@ class ExtensionTabUtil {
   // treated as having no permissions.
   // By default, tab information should always be scrubbed (kScrubTab) for any
   // data passed to any extension.
-  static std::unique_ptr<api::tabs::Tab> CreateTabObject(
-      content::WebContents* web_contents,
-      ScrubTabBehavior scrub_tab_behavior,
-      const Extension* extension) {
+  static api::tabs::Tab CreateTabObject(content::WebContents* web_contents,
+                                        ScrubTabBehavior scrub_tab_behavior,
+                                        const Extension* extension) {
     return CreateTabObject(web_contents, scrub_tab_behavior, extension, nullptr,
                            -1);
   }
-  static std::unique_ptr<api::tabs::Tab> CreateTabObject(
-      content::WebContents* web_contents,
-      ScrubTabBehavior scrub_tab_behavior,
-      const Extension* extension,
-      TabStripModel* tab_strip,
-      int tab_index);
+  static api::tabs::Tab CreateTabObject(content::WebContents* web_contents,
+                                        ScrubTabBehavior scrub_tab_behavior,
+                                        const Extension* extension,
+                                        TabStripModel* tab_strip,
+                                        int tab_index);
 
-  // Creates a DictionaryValue representing the window for the given |browser|,
-  // and scrubs any privacy-sensitive data that |extension| does not have
-  // access to. |populate_tab_behavior| determines whether tabs will be
+  // Creates a base::Value::Dict representing the window for the given
+  // |browser|, and scrubs any privacy-sensitive data that |extension| does not
+  // have access to. |populate_tab_behavior| determines whether tabs will be
   // populated in the result. |context| is used to determine the
   // ScrubTabBehavior for the populated tabs data.
   // TODO(devlin): Convert this to a api::Windows::Window object.
-  static std::unique_ptr<base::DictionaryValue> CreateWindowValueForExtension(
+  static base::Value::Dict CreateWindowValueForExtension(
       const Browser& browser,
       const Extension* extension,
       PopulateTabBehavior populate_tab_behavior,
@@ -150,12 +138,7 @@ class ExtensionTabUtil {
 
   // Creates a tab MutedInfo object (see chrome/common/extensions/api/tabs.json)
   // with information about the mute state of a browser tab.
-  static std::unique_ptr<api::tabs::MutedInfo> CreateMutedInfo(
-      content::WebContents* contents);
-
-  // Platform specific logic moved to delegate. This should be set during
-  // startup.
-  static void SetPlatformDelegate(std::unique_ptr<Delegate> delegate);
+  static api::tabs::MutedInfo CreateMutedInfo(content::WebContents* contents);
 
   // Gets the level of scrubbing of tab data that needs to happen for a given
   // extension and web contents. This is the preferred way to get
@@ -219,7 +202,7 @@ class ExtensionTabUtil {
   static GURL ResolvePossiblyRelativeURL(const std::string& url_string,
                                          const Extension* extension);
 
-  // Returns true if navigating to |url| would kill a page or the browser
+  // Returns true if navigating to |url| could kill a page or the browser
   // itself, whether by simulating a crash, browser quit, thread hang, or
   // equivalent. Extensions should be prevented from navigating to such URLs.
   //
@@ -228,18 +211,17 @@ class ExtensionTabUtil {
   static bool IsKillURL(const GURL& url);
 
   // Resolves the URL and ensures the extension is allowed to navigate to it.
-  // Returns true and sets |url| if successful. Returns false and sets |error|
-  // if an error occurs.
-  static bool PrepareURLForNavigation(const std::string& url_string,
-                                      const Extension* extension,
-                                      GURL* url,
-                                      std::string* error);
+  // Returns the url if successful, otherwise returns an error string.
+  static base::expected<GURL, std::string> PrepareURLForNavigation(
+      const std::string& url_string,
+      const Extension* extension,
+      content::BrowserContext* browser_context);
 
   // Opens a tab for the specified |web_contents|.
   static void CreateTab(std::unique_ptr<content::WebContents> web_contents,
                         const std::string& extension_id,
                         WindowOpenDisposition disposition,
-                        const gfx::Rect& initial_rect,
+                        const blink::mojom::WindowFeatures& window_features,
                         bool user_gesture);
 
   // Executes the specified callback for all tabs in all browser windows.
@@ -281,6 +263,9 @@ class ExtensionTabUtil {
 
   // Retrieve a TabStripModel only if every browser is editable.
   static TabStripModel* GetEditableTabStripModel(Browser* browser);
+
+  static bool TabIsInSavedTabGroup(content::WebContents* contents,
+                                   TabStripModel* tab_strip_model);
 };
 
 }  // namespace extensions

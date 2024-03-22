@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -30,15 +30,25 @@ using ::testing::Return;
 namespace policy {
 namespace android {
 namespace {
-// The list of policeis that can be cached is controlled by Java library. Hence
+// The list of policies that can be cached is controlled by Java library. Hence
 // we use real policy name for testing.
 constexpr char kPolicyName[] = "BrowserSignin";
 constexpr int kPolicyValue = 1;
 
 class StubPolicyHandler : public ConfigurationPolicyHandler {
  public:
-  StubPolicyHandler(const std::string& policy_name, bool has_error)
-      : policy_name_(policy_name), has_error_(has_error) {}
+  StubPolicyHandler(const std::string& policy_name,
+                    PolicyMap::MessageType error_level)
+      : StubPolicyHandler(policy_name,
+                          /*has_error=*/true,
+                          error_level) {}
+  StubPolicyHandler(
+      const std::string& policy_name,
+      bool has_error,
+      PolicyMap::MessageType error_level = PolicyMap::MessageType::kError)
+      : policy_name_(policy_name),
+        has_error_(has_error),
+        error_level_(error_level) {}
   StubPolicyHandler(const StubPolicyHandler&) = delete;
   StubPolicyHandler& operator=(const StubPolicyHandler&) = delete;
   ~StubPolicyHandler() override = default;
@@ -46,10 +56,11 @@ class StubPolicyHandler : public ConfigurationPolicyHandler {
   bool CheckPolicySettings(const PolicyMap& policies,
                            PolicyErrorMap* errors) override {
     if (has_error_) {
-      errors->AddError(policy_name_, IDS_POLICY_BLOCKED);
+      errors->AddError(policy_name_, IDS_POLICY_BLOCKED, /*error_path=*/{},
+                       error_level_);
     }
-    return policies.GetValue(kPolicyName, base::Value::Type::INTEGER) &&
-           !has_error_;
+    return policies.GetValue(policy_name_, base::Value::Type::INTEGER) &&
+           error_level_ != PolicyMap::MessageType::kError;
   }
 
  private:
@@ -57,8 +68,8 @@ class StubPolicyHandler : public ConfigurationPolicyHandler {
                            PrefValueMap* prefs) override {}
   std::string policy_name_;
   bool has_error_;
+  PolicyMap::MessageType error_level_;
 };
-
 }  // namespace
 
 class PolicyCacheUpdaterAndroidTest : public ::testing::Test {
@@ -69,14 +80,18 @@ class PolicyCacheUpdaterAndroidTest : public ::testing::Test {
         true /* is_first_policy_load_complete_return */);
     j_support_ = Java_PolicyCacheUpdaterTestSupporter_Constructor(env_);
     policy_service_ = std::make_unique<policy::PolicyServiceImpl>(
-        std::vector<ConfigurationPolicyProvider*>({&policy_provider_}));
+        std::vector<ConfigurationPolicyProvider*>{&policy_provider_});
     policy_handler_list_ = std::make_unique<ConfigurationPolicyHandlerList>(
         ConfigurationPolicyHandlerList::
             PopulatePolicyHandlerParametersCallback(),
         GetChromePolicyDetailsCallback(),
-        /*allow_future_policies=*/false);
+        /*are_future_policies_allowed_by_default=*/false);
   }
   ~PolicyCacheUpdaterAndroidTest() override = default;
+
+  void TearDown() override {
+    Java_PolicyCacheUpdaterTestSupporter_resetPolicyCache(env_, j_support_);
+  }
 
   void SetPolicy(const std::string& policy, int policy_value) {
     policy_map_.Set(policy, PolicyLevel::POLICY_LEVEL_MANDATORY,
@@ -88,12 +103,15 @@ class PolicyCacheUpdaterAndroidTest : public ::testing::Test {
 
   void UpdatePolicy() { policy_provider_.UpdateChromePolicy(policy_map_); }
 
-  void VerifyPolicyName(const std::string& policy,
-                        bool has_value,
-                        int expected_value) {
-    Java_PolicyCacheUpdaterTestSupporter_verifyPolicyCacheIntValue(
+  void VerifyIntPolicyNotCached(const std::string& policy) {
+    Java_PolicyCacheUpdaterTestSupporter_verifyIntPolicyNotCached(
+        env_, j_support_, base::android::ConvertUTF8ToJavaString(env_, policy));
+  }
+
+  void VerifyIntPolicyHasValue(const std::string& policy, int expected_value) {
+    Java_PolicyCacheUpdaterTestSupporter_verifyIntPolicyHasValue(
         env_, j_support_, base::android::ConvertUTF8ToJavaString(env_, policy),
-        has_value, expected_value);
+        expected_value);
   }
 
   ConfigurationPolicyHandlerList* policy_handler_list() {
@@ -121,7 +139,7 @@ TEST_F(PolicyCacheUpdaterAndroidTest, TestCachePolicy) {
   PolicyCacheUpdater updater(policy_service(), policy_handler_list());
   SetPolicy(kPolicyName, kPolicyValue);
   UpdatePolicy();
-  VerifyPolicyName(kPolicyName, /*has_value=*/true, kPolicyValue);
+  VerifyIntPolicyHasValue(kPolicyName, kPolicyValue);
 }
 
 TEST_F(PolicyCacheUpdaterAndroidTest, TestPolicyNotExist) {
@@ -130,7 +148,7 @@ TEST_F(PolicyCacheUpdaterAndroidTest, TestPolicyNotExist) {
 
   PolicyCacheUpdater updater(policy_service(), policy_handler_list());
   UpdatePolicy();
-  VerifyPolicyName(kPolicyName, /*has_value=*/false, kPolicyValue);
+  VerifyIntPolicyNotCached(kPolicyName);
 }
 
 TEST_F(PolicyCacheUpdaterAndroidTest, TestPolicyErrorPolicy) {
@@ -140,7 +158,7 @@ TEST_F(PolicyCacheUpdaterAndroidTest, TestPolicyErrorPolicy) {
   PolicyCacheUpdater updater(policy_service(), policy_handler_list());
   SetPolicy(kPolicyName, kPolicyValue);
   UpdatePolicy();
-  VerifyPolicyName(kPolicyName, /*has_value=*/false, kPolicyValue);
+  VerifyIntPolicyNotCached(kPolicyName);
 }
 
 TEST_F(PolicyCacheUpdaterAndroidTest, TestPolicyMapIgnoredPolicy) {
@@ -151,7 +169,7 @@ TEST_F(PolicyCacheUpdaterAndroidTest, TestPolicyMapIgnoredPolicy) {
   SetPolicy(kPolicyName, kPolicyValue);
   policy_map()->GetMutable(kPolicyName)->SetIgnored();
   UpdatePolicy();
-  VerifyPolicyName(kPolicyName, /*has_value=*/false, kPolicyValue);
+  VerifyIntPolicyNotCached(kPolicyName);
 }
 
 TEST_F(PolicyCacheUpdaterAndroidTest, TestPolicyMapErrorMessagePolicy) {
@@ -164,7 +182,7 @@ TEST_F(PolicyCacheUpdaterAndroidTest, TestPolicyMapErrorMessagePolicy) {
       ->GetMutable(kPolicyName)
       ->AddMessage(PolicyMap::MessageType::kError, IDS_POLICY_BLOCKED);
   UpdatePolicy();
-  VerifyPolicyName(kPolicyName, /*has_value=*/false, kPolicyValue);
+  VerifyIntPolicyNotCached(kPolicyName);
 }
 
 TEST_F(PolicyCacheUpdaterAndroidTest, TestPolicyMapWarningMessagePolicy) {
@@ -177,18 +195,49 @@ TEST_F(PolicyCacheUpdaterAndroidTest, TestPolicyMapWarningMessagePolicy) {
       ->GetMutable(kPolicyName)
       ->AddMessage(PolicyMap::MessageType::kWarning, IDS_POLICY_BLOCKED);
   UpdatePolicy();
-  VerifyPolicyName(kPolicyName, /*has_value=*/true, kPolicyValue);
+  VerifyIntPolicyHasValue(kPolicyName, kPolicyValue);
 }
 
-TEST_F(PolicyCacheUpdaterAndroidTest, TestPolicUpdatedBeforeUpdaterCreated) {
+TEST_F(PolicyCacheUpdaterAndroidTest, TestPolicyUpdatedBeforeUpdaterCreated) {
   policy_handler_list()->AddHandler(
       std::make_unique<StubPolicyHandler>(kPolicyName, /*has_error=*/false));
 
   SetPolicy(kPolicyName, kPolicyValue);
   UpdatePolicy();
-  VerifyPolicyName(kPolicyName, /*has_value=*/false, kPolicyValue);
+  VerifyIntPolicyNotCached(kPolicyName);
   PolicyCacheUpdater updater(policy_service(), policy_handler_list());
-  VerifyPolicyName(kPolicyName, /*has_value=*/true, kPolicyValue);
+  VerifyIntPolicyHasValue(kPolicyName, kPolicyValue);
+}
+
+TEST_F(PolicyCacheUpdaterAndroidTest,
+       TestWithFatalError_PolicyDoesntHaveValue) {
+  policy_handler_list()->AddHandler(std::make_unique<StubPolicyHandler>(
+      kPolicyName, PolicyMap::MessageType::kError));
+
+  PolicyCacheUpdater updater(policy_service(), policy_handler_list());
+  SetPolicy(kPolicyName, kPolicyValue);
+  UpdatePolicy();
+  VerifyIntPolicyNotCached(kPolicyName);
+}
+
+TEST_F(PolicyCacheUpdaterAndroidTest, TestWithWarningError_PolicyHasValue) {
+  policy_handler_list()->AddHandler(std::make_unique<StubPolicyHandler>(
+      kPolicyName, PolicyMap::MessageType::kWarning));
+
+  PolicyCacheUpdater updater(policy_service(), policy_handler_list());
+  SetPolicy(kPolicyName, kPolicyValue);
+  UpdatePolicy();
+  VerifyIntPolicyHasValue(kPolicyName, kPolicyValue);
+}
+
+TEST_F(PolicyCacheUpdaterAndroidTest, TestWithInfoError_PolicyHasValue) {
+  policy_handler_list()->AddHandler(std::make_unique<StubPolicyHandler>(
+      kPolicyName, PolicyMap::MessageType::kInfo));
+
+  PolicyCacheUpdater updater(policy_service(), policy_handler_list());
+  SetPolicy(kPolicyName, kPolicyValue);
+  UpdatePolicy();
+  VerifyIntPolicyHasValue(kPolicyName, kPolicyValue);
 }
 
 }  // namespace android

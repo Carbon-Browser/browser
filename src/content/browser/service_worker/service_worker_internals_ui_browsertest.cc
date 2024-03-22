@@ -1,9 +1,9 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include "base/bind.h"
 #include "base/command_line.h"
+#include "base/functional/bind.h"
 #include "base/memory/raw_ptr.h"
 #include "base/metrics/statistics_recorder.h"
 #include "base/run_loop.h"
@@ -17,6 +17,7 @@
 #include "content/browser/service_worker/service_worker_registration.h"
 #include "content/browser/service_worker/service_worker_test_utils.h"
 #include "content/browser/web_contents/web_contents_impl.h"
+#include "content/public/browser/browser_context.h"
 #include "content/public/browser/render_process_host.h"
 #include "content/public/browser/web_contents.h"
 #include "content/public/test/browser_test.h"
@@ -26,6 +27,7 @@
 #include "content/public/test/content_browser_test_utils.h"
 #include "content/public/test/test_utils.h"
 #include "content/shell/browser/shell.h"
+#include "net/base/features.h"
 #include "net/dns/mock_host_resolver.h"
 #include "net/test/embedded_test_server/embedded_test_server.h"
 #include "third_party/blink/public/common/service_worker/service_worker_status_code.h"
@@ -130,7 +132,7 @@ class SWOnStoppedObserver
     ASSERT_TRUE(BrowserThread::CurrentlyOn(BrowserThread::UI));
     const ServiceWorkerVersion* version =
         parent::context_->GetLiveVersion(version_id);
-    ASSERT_EQ(version->running_status(), EmbeddedWorkerStatus::STOPPED);
+    ASSERT_EQ(version->running_status(), blink::EmbeddedWorkerStatus::kStopped);
     parent::Quit();
   }
 
@@ -162,7 +164,7 @@ class SWOnStartedObserver
     ASSERT_TRUE(BrowserThread::CurrentlyOn(BrowserThread::UI));
     const ServiceWorkerVersion* version =
         parent::context_->GetLiveVersion(version_id);
-    ASSERT_EQ(version->running_status(), EmbeddedWorkerStatus::RUNNING);
+    ASSERT_EQ(version->running_status(), blink::EmbeddedWorkerStatus::kRunning);
     parent::Quit();
   }
 
@@ -254,7 +256,8 @@ class ServiceWorkerInternalsUIBrowserTest : public ContentBrowserTest {
     blink::ServiceWorkerStatusCode status;
     base::RunLoop loop;
     wrapper()->FindReadyRegistrationForClientUrl(
-        document_url, blink::StorageKey(url::Origin::Create(document_url)),
+        document_url,
+        blink::StorageKey::CreateFirstParty(url::Origin::Create(document_url)),
         base::BindLambdaForTesting(
             [&](blink::ServiceWorkerStatusCode find_status,
                 scoped_refptr<ServiceWorkerRegistration> registration) {
@@ -326,7 +329,8 @@ class ServiceWorkerInternalsUIBrowserTest : public ContentBrowserTest {
           blink::mojom::ScriptType::kClassic,
           blink::mojom::ServiceWorkerUpdateViaCache::kImports);
       // Set up the storage key for the service worker
-      blink::StorageKey key(url::Origin::Create(options.scope));
+      const blink::StorageKey key = blink::StorageKey::CreateFirstParty(
+          url::Origin::Create(options.scope));
       // Register returns when the promise is resolved.
       public_context()->RegisterServiceWorker(
           embedded_test_server()->GetURL(kServiceWorkerUrl), key, options,
@@ -340,8 +344,9 @@ class ServiceWorkerInternalsUIBrowserTest : public ContentBrowserTest {
   void UnRegisterServiceWorker() {
     {
       base::RunLoop run_loop;
-      blink::StorageKey key(url::Origin::Create(
-          embedded_test_server()->GetURL(kServiceWorkerScope)));
+      const blink::StorageKey key =
+          blink::StorageKey::CreateFirstParty(url::Origin::Create(
+              embedded_test_server()->GetURL(kServiceWorkerScope)));
       // Unregistering something should return true.
       public_context()->UnregisterServiceWorker(
           embedded_test_server()->GetURL(kServiceWorkerScope), key,
@@ -505,13 +510,13 @@ class ServiceWorkerInternalsUIBrowserTest : public ContentBrowserTest {
         }
       case RUNNING_STATUS:
         switch (registration.active_version.running_status) {
-          case EmbeddedWorkerStatus::STOPPED:
+          case blink::EmbeddedWorkerStatus::kStopped:
             return "STOPPED";
-          case EmbeddedWorkerStatus::STARTING:
+          case blink::EmbeddedWorkerStatus::kStarting:
             return "STARTING";
-          case EmbeddedWorkerStatus::RUNNING:
+          case blink::EmbeddedWorkerStatus::kRunning:
             return "RUNNING";
-          case EmbeddedWorkerStatus::STOPPING:
+          case blink::EmbeddedWorkerStatus::kStopping:
             return "STOPPING";
         }
       case PROCESS_ID:
@@ -583,8 +588,15 @@ IN_PROC_BROWSER_TEST_F(ServiceWorkerInternalsUIBrowserTest,
   TearDownWindow(sw_internal_ui_window);
 }
 
+// The test is flaky on Mac and Linux. crbug.com/1324856
+#if BUILDFLAG(IS_MAC) || BUILDFLAG(IS_LINUX)
+#define MAYBE_StopStartSWReflectedOnInternalUI \
+  DISABLED_StopStartSWReflectedOnInternalUI
+#else
+#define MAYBE_StopStartSWReflectedOnInternalUI StopStartSWReflectedOnInternalUI
+#endif
 IN_PROC_BROWSER_TEST_F(ServiceWorkerInternalsUIBrowserTest,
-                       StopStartSWReflectedOnInternalUI) {
+                       MAYBE_StopStartSWReflectedOnInternalUI) {
   Shell* sw_internal_ui_window = CreateNewWindow();
   NavigateToServiceWorkerInternalUI();
 
@@ -707,7 +719,7 @@ class ServiceWorkerInternalsUIBrowserTestWithStoragePartitioning
  public:
   ServiceWorkerInternalsUIBrowserTestWithStoragePartitioning() {
     scoped_feature_list_.InitAndEnableFeature(
-        blink::features::kThirdPartyStoragePartitioning);
+        net::features::kThirdPartyStoragePartitioning);
   }
 
  private:
@@ -742,9 +754,9 @@ IN_PROC_BROWSER_TEST_F(
         scope, blink::mojom::ScriptType::kClassic,
         blink::mojom::ServiceWorkerUpdateViaCache::kImports);
     // Set up the storage key for the service worker
-    blink::StorageKey key = blink::StorageKey::CreateWithOptionalNonce(
+    blink::StorageKey key = blink::StorageKey::Create(
         url::Origin::Create(options.scope),
-        net::SchemefulSite(url::Origin::Create(top_level_page)), nullptr,
+        net::SchemefulSite(url::Origin::Create(top_level_page)),
         blink::mojom::AncestorChainBit::kCrossSite);
     // Register returns when the promise is resolved.
     public_context()->RegisterServiceWorker(

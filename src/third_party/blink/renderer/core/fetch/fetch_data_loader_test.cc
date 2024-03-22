@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,6 +7,7 @@
 #include <memory>
 
 #include "base/run_loop.h"
+#include "base/task/single_thread_task_runner.h"
 #include "mojo/public/cpp/bindings/receiver.h"
 #include "mojo/public/cpp/bindings/remote.h"
 #include "mojo/public/cpp/system/data_pipe_utils.h"
@@ -93,7 +94,7 @@ class FetchDataLoaderTest : public testing::Test {
       completion_notifier_->SignalError(BytesConsumer::Error());
     }
 
-    BytesConsumer* GetDestination() { return destination_; }
+    BytesConsumer* GetDestination() { return destination_.Get(); }
 
     void Trace(Visitor* visitor) const override {
       visitor->Trace(destination_);

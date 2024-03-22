@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 
-<!-- Copyright 2013 The Chromium Authors. All rights reserved.
+<!-- Copyright 2013 The Chromium Authors
 
   Use of this source code is governed by a BSD-style license that can be
   found in the LICENSE file.
@@ -20,6 +20,13 @@
   <!-- Kerberos authentication -->
   <uses-permission android:name="android.permission.GET_ACCOUNTS" />
   <uses-permission android:name="android.permission.USE_CREDENTIALS" />
+
+  <!-- Features related to permissions we request. -->
+  <!-- android.permission.CAMERA -->
+  <uses-feature android:name="android.hardware.camera" android:required="false" />
+  <uses-feature android:name="android.hardware.camera.autofocus" android:required="false" />
+  <!-- android.permission.RECORD_AUDIO -->
+  <uses-feature android:name="android.hardware.microphone" android:required="false" />
 
   <application android:name="org.chromium.android_webview.shell.AwShellApplication"
       android:label="AwShellApplication"
@@ -49,6 +56,9 @@
         <category android:name="android.intent.category.FRAMEWORK_INSTRUMENTATION_TEST" />
       </intent-filter>
     </activity>
+
+    <!-- Digital Asset Links statement list -->
+    <meta-data android:name="asset_statements" android:resource="@string/asset_statements" />
 
     <provider android:name="org.chromium.android_webview.test.TestContentProvider"
         android:authorities="org.chromium.android_webview.test.TestContentProvider" />
@@ -122,6 +132,9 @@
     <!-- End of Developer UI related components -->
     <!-- Components for SafeMode, make sure that any changes in these components reflect
          the corresponding original components in nonembedded/java/AndroidManifest.xml -->
+    <provider android:name="org.chromium.android_webview.services.SafeModeVariationsSeedContentProvider"
+              android:exported="true"
+              android:authorities="org.chromium.android_webview.shell.SafeModeVariationsSeedContentProvider"/>
     <provider android:name="org.chromium.android_webview.services.SafeModeContentProvider"
               android:exported="true"
               android:authorities="org.chromium.android_webview.shell.SafeModeContentProvider"/>

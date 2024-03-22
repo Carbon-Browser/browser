@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,14 +8,13 @@
 #include "chrome/browser/history/history_service_factory.h"
 #include "chrome/browser/predictors/predictor_database_factory.h"
 #include "chrome/browser/preloading/prefetch/no_state_prefetch/chrome_no_state_prefetch_manager_delegate.h"
-#include "chrome/browser/profiles/incognito_helpers.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/sync/sync_service_factory.h"
-#include "components/keyed_service/content/browser_context_dependency_manager.h"
 #include "components/no_state_prefetch/browser/no_state_prefetch_manager.h"
 #include "extensions/buildflags/buildflags.h"
 
 #if BUILDFLAG(ENABLE_EXTENSIONS)
+#include "extensions/browser/api/declarative/rules_registry_service.h"
 #include "extensions/browser/extension_system_provider.h"
 #include "extensions/browser/extensions_browser_client.h"
 #endif
@@ -32,16 +31,25 @@ NoStatePrefetchManager* NoStatePrefetchManagerFactory::GetForBrowserContext(
 
 // static
 NoStatePrefetchManagerFactory* NoStatePrefetchManagerFactory::GetInstance() {
-  return base::Singleton<NoStatePrefetchManagerFactory>::get();
+  static base::NoDestructor<NoStatePrefetchManagerFactory> instance;
+  return instance.get();
 }
 
 NoStatePrefetchManagerFactory::NoStatePrefetchManagerFactory()
-    : BrowserContextKeyedServiceFactory(
+    : ProfileKeyedServiceFactory(
           "NoStatePrefetchManager",
-          BrowserContextDependencyManager::GetInstance()) {
+          ProfileSelections::Builder()
+              .WithRegular(ProfileSelection::kOwnInstance)
+              // TODO(crbug.com/1418376): Check if this service is needed in
+              // Guest mode.
+              .WithGuest(ProfileSelection::kOwnInstance)
+              .Build()) {
 #if BUILDFLAG(ENABLE_EXTENSIONS)
   DependsOn(
       extensions::ExtensionsBrowserClient::Get()->GetExtensionSystemFactory());
+  // NoStatePrefetchService has an indirect dependency on the
+  // RulesRegistryService through extensions::TabHelper::WebContentsDestroyed.
+  DependsOn(extensions::RulesRegistryService::GetFactoryInstance());
 #endif
   // PrerenderLocalPredictor observers the history visit DB.
   DependsOn(HistoryServiceFactory::GetInstance());
@@ -49,19 +57,15 @@ NoStatePrefetchManagerFactory::NoStatePrefetchManagerFactory()
   DependsOn(SyncServiceFactory::GetInstance());
 }
 
-NoStatePrefetchManagerFactory::~NoStatePrefetchManagerFactory() {}
+NoStatePrefetchManagerFactory::~NoStatePrefetchManagerFactory() = default;
 
-KeyedService* NoStatePrefetchManagerFactory::BuildServiceInstanceFor(
+std::unique_ptr<KeyedService>
+NoStatePrefetchManagerFactory::BuildServiceInstanceForBrowserContext(
     content::BrowserContext* browser_context) const {
-  return new NoStatePrefetchManager(
+  return std::make_unique<NoStatePrefetchManager>(
       Profile::FromBrowserContext(browser_context),
       std::make_unique<ChromeNoStatePrefetchManagerDelegate>(
           Profile::FromBrowserContext(browser_context)));
-}
-
-content::BrowserContext* NoStatePrefetchManagerFactory::GetBrowserContextToUse(
-    content::BrowserContext* context) const {
-  return chrome::GetBrowserContextOwnInstanceInIncognito(context);
 }
 
 }  // namespace prerender

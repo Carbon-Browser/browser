@@ -1,5 +1,5 @@
 <!--
-Copyright 2020 The Chromium Authors. All rights reserved.
+Copyright 2020 The Chromium Authors
 Use of this source code is governed by a BSD-style license that can be
 found in the LICENSE file.
 -->
@@ -218,16 +218,6 @@ chromium-metrics-reviews@google.com.
     TBD - Not run automatically yet, so this is just a placeholder for future
     metrics collection. Any samples collected here represent users running
     diagnostics manually.
-  </summary>
-</histogram>
-
-<histogram name="Diagnostics.RecoveryRun" enum="DiagnosticsRecoveryRun"
-    expires_after="M77">
-  <owner>Please list the metric's owners. Add more owner tags as needed.</owner>
-  <summary>
-    Count of the number of times diagnostics recovery is invoked or not, and how
-    it was invoked. A sample is added to this histogram once for each startup of
-    Chrome.
   </summary>
 </histogram>
 

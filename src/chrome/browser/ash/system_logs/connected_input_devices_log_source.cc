@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -46,9 +46,9 @@ void ConnectedInputDevicesLogSource::ProcessDeviceFillResponse(
   if (it != vendor_map.end())
     vendor_name.assign(static_cast<std::string>(it->second));
   else
-    vendor_name = base::StringPrintf("%#06x", dev.vendor_id);
+    vendor_name = base::StringPrintf("0x%04x", dev.vendor_id);
   response->emplace(vendor_key, vendor_name);
-  response->emplace(pid_key, base::StringPrintf("%#06x", dev.product_id));
+  response->emplace(pid_key, base::StringPrintf("0x%04x", dev.product_id));
 }
 
 void ConnectedInputDevicesLogSource::Fetch(SysLogsSourceCallback callback) {

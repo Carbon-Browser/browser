@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -63,6 +63,8 @@ class MediaController : public mojom::MediaController,
   void HangUp() override;
   void Raise() override;
   void SetMute(bool mute) override;
+  void RequestMediaRemoting() override;
+  void EnterAutoPictureInPicture() override;
 
   // mojom::MediaSessionObserver overrides.
   void MediaSessionInfoChanged(

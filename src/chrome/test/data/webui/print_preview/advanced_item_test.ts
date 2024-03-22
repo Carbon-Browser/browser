@@ -1,40 +1,22 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 import 'chrome://print/print_preview.js';
 
 import {PrintPreviewAdvancedSettingsItemElement, PrintPreviewModelElement} from 'chrome://print/print_preview.js';
-import {assert} from 'chrome://resources/js/assert.m.js';
 import {flush} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
-
 import {assertEquals, assertFalse, assertTrue} from 'chrome://webui-test/chai_assert.js';
-import {fakeDataBind} from 'chrome://webui-test/test_util.js';
+import {fakeDataBind} from 'chrome://webui-test/polymer_test_util.js';
 
 import {getCddTemplateWithAdvancedSettings} from './print_preview_test_utils.js';
 
-const advanced_item_test = {
-  suiteName: 'AdvancedItemTest',
-  TestNames: {
-    DisplaySelect: 'display select',
-    DisplayInput: 'display input',
-    DisplayCheckbox: 'display checkbox',
-    UpdateSelect: 'update select',
-    UpdateInput: 'update input',
-    UpdateCheckbox: 'update checkbox',
-    QueryName: 'query name',
-    QueryOption: 'query option',
-  },
-};
-
-Object.assign(window, {advanced_item_test: advanced_item_test});
-
-suite(advanced_item_test.suiteName, function() {
+suite('AdvancedItemTest', function() {
   let item: PrintPreviewAdvancedSettingsItemElement;
 
   /** @override */
   setup(function() {
-    document.body.innerHTML = '';
+    document.body.innerHTML = window.trustedTypes!.emptyHTML;
     const model: PrintPreviewModelElement =
         document.createElement('print-preview-model');
     document.body.appendChild(model);
@@ -53,7 +35,7 @@ suite(advanced_item_test.suiteName, function() {
   });
 
   // Test that a select capability is displayed correctly.
-  test(assert(advanced_item_test.TestNames.DisplaySelect), function() {
+  test('DisplaySelect', function() {
     const label = item.shadowRoot!.querySelector('.label')!;
     assertEquals('Paper Type', label.textContent);
 
@@ -71,7 +53,7 @@ suite(advanced_item_test.suiteName, function() {
         item.shadowRoot!.querySelector('cr-checkbox')!.parentElement!.hidden);
   });
 
-  test(assert(advanced_item_test.TestNames.DisplayInput), function() {
+  test('DisplayInput', function() {
     // Create capability
     item.capability = getCddTemplateWithAdvancedSettings(3, 'FooDevice')
                           .capabilities!.printer.vendor_capability![2]!;
@@ -91,7 +73,7 @@ suite(advanced_item_test.suiteName, function() {
         item.shadowRoot!.querySelector('cr-checkbox')!.parentElement!.hidden);
   });
 
-  test(assert(advanced_item_test.TestNames.DisplayCheckbox), function() {
+  test('DisplayCheckbox', function() {
     // Create capability
     item.capability = getCddTemplateWithAdvancedSettings(4, 'FooDevice')
                           .capabilities!.printer.vendor_capability![3]!;
@@ -113,7 +95,7 @@ suite(advanced_item_test.suiteName, function() {
 
   // Test that a select capability updates correctly when the setting is
   // updated (e.g. when sticky settings are set).
-  test(assert(advanced_item_test.TestNames.UpdateSelect), function() {
+  test('UpdateSelect', function() {
     // Check that the default option is selected.
     const select = item.shadowRoot!.querySelector('select')!;
     assertEquals(0, select.selectedIndex);
@@ -125,7 +107,7 @@ suite(advanced_item_test.suiteName, function() {
 
   // Test that an input capability updates correctly when the setting is
   // updated (e.g. when sticky settings are set).
-  test(assert(advanced_item_test.TestNames.UpdateInput), function() {
+  test('UpdateInput', function() {
     // Create capability
     item.capability = getCddTemplateWithAdvancedSettings(3, 'FooDevice')
                           .capabilities!.printer.vendor_capability![2]!;
@@ -142,7 +124,7 @@ suite(advanced_item_test.suiteName, function() {
 
   // Test that an checkbox capability updates correctly when the setting is
   // updated (e.g. when sticky settings are set).
-  test(assert(advanced_item_test.TestNames.UpdateCheckbox), function() {
+  test('UpdateCheckbox', function() {
     // Create capability
     item.capability = getCddTemplateWithAdvancedSettings(4, 'FooDevice')
                           .capabilities!.printer.vendor_capability![3]!;
@@ -159,7 +141,7 @@ suite(advanced_item_test.suiteName, function() {
 
   // Test that the setting is displayed correctly when the search query
   // matches its display name.
-  test(assert(advanced_item_test.TestNames.QueryName), function() {
+  test('QueryName', function() {
     const query = /(Type)/ig;
     assertTrue(item.hasMatch(query));
     item.updateHighlighting(query, new Map());
@@ -182,7 +164,7 @@ suite(advanced_item_test.suiteName, function() {
 
   // Test that the setting is displayed correctly when the search query
   // matches one of the select options.
-  test(assert(advanced_item_test.TestNames.QueryOption), function() {
+  test('QueryOption', function() {
     const query = /(cycle)/ig;
     assertTrue(item.hasMatch(query));
     item.updateHighlighting(query, new Map());

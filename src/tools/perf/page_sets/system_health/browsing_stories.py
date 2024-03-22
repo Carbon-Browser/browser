@@ -1,5 +1,5 @@
 # encoding: utf-8
-# Copyright 2016 The Chromium Authors. All rights reserved.
+# Copyright 2016 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -26,6 +26,7 @@ from py_utils import TimeoutException
 
 from telemetry.core import exceptions
 from telemetry.util import js_template
+from telemetry.util import wpr_modes
 
 
 class _BrowsingStory(system_health_story.SystemHealthStory):
@@ -810,8 +811,10 @@ class PhotoshopWarmStartupDesktopStory2021(_MediaBrowsingStory):
   '''
 
   WARMUP_RUNS_SCRIPT = '''
+      let performance_mark = window.performance.mark;
       window.__telemetry_first_load_finished = false;
       window.performance.mark = function (label) {
+        performance_mark.call(window.performance, label);
         if (label == 'Doc.open complete') {
           window.__telemetry_first_load_finished = true;
         }
@@ -1471,6 +1474,8 @@ class _GmailBrowsingStory(system_health_story.SystemHealthStory):
   """
   SKIP_LOGIN = False
 
+  USE_LOGINURL = False
+
   # Patch performance.mark and measure to get notified about page events.
   PERFOMANCE_MARK_AND_MEASURE = '''
     window.__telemetry_observed_page_events = new Set();
@@ -1503,8 +1508,9 @@ class _GmailBrowsingStory(system_health_story.SystemHealthStory):
 
   def __init__(self, story_set, take_memory_measurement,
                events_and_measures_reported):
-    super(_GmailBrowsingStory, self).__init__(story_set,
-                                              take_memory_measurement)
+    super(_GmailBrowsingStory,
+          self).__init__(story_set, take_memory_measurement,
+                         '--allow-browser-signin=false')
     self.script_to_evaluate_on_commit = js_template.Render(
         '''{{@events_and_measures_reported_by_page}}
         {{@performance_mark_and_measure}}''',
@@ -1512,18 +1518,23 @@ class _GmailBrowsingStory(system_health_story.SystemHealthStory):
         performance_mark_and_measure=self.PERFOMANCE_MARK_AND_MEASURE)
 
   def _Login(self, action_runner):
-    google_login.NewLoginGoogleAccount(action_runner, 'googletest')
+    if self.USE_LOGINURL or self.wpr_mode in [
+        wpr_modes.WPR_OFF, wpr_modes.WPR_RECORD
+    ]:
+      google_login.LoginWithLoginUrl(action_runner, self.URL)
+    else:
+      google_login.NewLoginGoogleAccount(action_runner, 'googletest')
 
-    # Navigating to http://mail.google.com immediately leads to an infinite
-    # redirection loop due to a bug in WPR (see
-    # https://bugs.chromium.org/p/chromium/issues/detail?id=1036791). We
-    # therefore first navigate to a dummy sub-URL to set up the session and
-    # hit the resulting redirection loop. Afterwards, we can safely navigate
-    # to http://mail.google.com.
-    action_runner.tab.WaitForDocumentReadyStateToBeComplete()
-    action_runner.Navigate(
-        'https://mail.google.com/mail/mu/mp/872/trigger_redirection_loop')
-    action_runner.tab.WaitForDocumentReadyStateToBeComplete()
+      # Navigating to http://mail.google.com immediately leads to an infinite
+      # redirection loop due to a bug in WPR (see
+      # https://bugs.chromium.org/p/chromium/issues/detail?id=1036791). We
+      # therefore first navigate to a dummy sub-URL to set up the session and
+      # hit the resulting redirection loop. Afterwards, we can safely navigate
+      # to http://mail.google.com.
+      action_runner.tab.WaitForDocumentReadyStateToBeComplete()
+      action_runner.Navigate(
+          'https://mail.google.com/mail/mu/mp/872/trigger_redirection_loop')
+      action_runner.tab.WaitForDocumentReadyStateToBeComplete()
 
 
 class GmailLabelClickStory2020(_GmailBrowsingStory):
@@ -1628,7 +1639,7 @@ class GmailSearchStory2020(_GmailBrowsingStory):
   SUPPORTED_PLATFORMS = platforms.DESKTOP_ONLY
   TAGS = [story_tags.YEAR_2020]
 
-  _SEARCH_SELECTOR = 'input[aria-label="Search mail and chat"]'
+  _SEARCH_SELECTOR = 'input[aria-label="Search mail"]'
 
   # Page event queries.
   SEARCH_BEGIN_EVENT = '''

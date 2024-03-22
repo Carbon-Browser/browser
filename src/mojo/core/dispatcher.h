@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,25 +14,29 @@
 
 #include "base/memory/ref_counted.h"
 #include "base/strings/string_piece.h"
-#include "base/synchronization/lock.h"
 #include "mojo/core/handle_signals_state.h"
-#include "mojo/core/ports/name.h"
-#include "mojo/core/ports/port_ref.h"
 #include "mojo/core/system_impl_export.h"
 #include "mojo/core/watch.h"
-#include "mojo/public/c/system/buffer.h"
 #include "mojo/public/c/system/data_pipe.h"
-#include "mojo/public/c/system/message_pipe.h"
 #include "mojo/public/c/system/quota.h"
 #include "mojo/public/c/system/trap.h"
 #include "mojo/public/c/system/types.h"
-#include "mojo/public/cpp/platform/platform_handle.h"
+
+struct MojoDuplicateBufferHandleOptions;
+struct MojoReadDataOptions;
+struct MojoSharedBufferInfo;
+struct MojoWriteDataOptions;
 
 namespace mojo {
+
+class PlatformHandle;
+
 namespace core {
 
 namespace ports {
+class PortRef;
 class UserMessageEvent;
+struct PortName;
 }
 
 class Dispatcher;
@@ -191,7 +195,9 @@ class MOJO_SYSTEM_IMPL_EXPORT Dispatcher
   // Supports the the |MojoBeginWriteData()| API if implemented by this
   // Dispatcher. Arguments correspond to the ones given to the original API
   // call. See |MojoBeginWriteData()| documentation.
-  virtual MojoResult BeginWriteData(void** buffer, uint32_t* buffer_num_bytes);
+  virtual MojoResult BeginWriteData(void** buffer,
+                                    uint32_t* buffer_num_bytes,
+                                    MojoBeginWriteDataFlags flags);
 
   // Supports the the |MojoEndWriteData()| API if implemented by this
   // Dispatcher. Arguments correspond to the ones given to the original API
@@ -201,13 +207,13 @@ class MOJO_SYSTEM_IMPL_EXPORT Dispatcher
   // Supports the |MojoAttachMessagePipeToInvitation()| API if implemented by
   // this Dispatcher. Arguments correspond to the ones given to the original API
   // call. See |MojoAttachMessagePipeToInvitation()| documentation.
-  virtual MojoResult AttachMessagePipe(base::StringPiece name,
+  virtual MojoResult AttachMessagePipe(std::string_view name,
                                        ports::PortRef remote_peer_port);
 
   // Supports the |MojoExtractMessagePipeFromInvitation()| API if implemented by
   // this Dispatcher. Arguments correspond to the ones given to the original API
   // call. See |MojoExtractMessagePipeFromInvitation()| documentation.
-  virtual MojoResult ExtractMessagePipe(base::StringPiece name,
+  virtual MojoResult ExtractMessagePipe(std::string_view name,
                                         MojoHandle* message_pipe_handle);
 
   // Supports the |MojoSetQuota()| API if implemented by this Dispatcher.

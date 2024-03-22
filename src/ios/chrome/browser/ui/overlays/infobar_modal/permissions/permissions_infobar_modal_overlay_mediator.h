@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,7 +12,6 @@
 @protocol PermissionsConsumer;
 
 // Mediator that configures the modal UI for permissions infobar.
-API_AVAILABLE(ios(15.0))
 @interface PermissionsInfobarModalOverlayMediator
     : InfobarModalOverlayMediator <InfobarModalDelegate, PermissionsDelegate>
 

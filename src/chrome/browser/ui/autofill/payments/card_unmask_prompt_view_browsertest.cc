@@ -1,15 +1,13 @@
-// Copyright (c) 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
-#include "base/guid.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/location.h"
 #include "base/memory/raw_ptr.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/task/single_thread_task_runner.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "build/build_config.h"
 #include "chrome/browser/ui/autofill/payments/card_unmask_prompt_view_tester.h"
 #include "chrome/browser/ui/autofill/payments/create_card_unmask_prompt_view.h"
@@ -20,6 +18,7 @@
 #include "components/autofill/core/browser/autofill_test_utils.h"
 #include "components/autofill/core/browser/payments/card_unmask_delegate.h"
 #include "components/autofill/core/browser/ui/payments/card_unmask_prompt_controller_impl.h"
+#include "components/autofill/core/browser/ui/payments/card_unmask_prompt_options.h"
 #include "components/autofill/core/browser/ui/payments/card_unmask_prompt_view.h"
 #include "components/user_prefs/user_prefs.h"
 #include "content/public/browser/browser_context.h"
@@ -96,7 +95,7 @@ class TestCardUnmaskPromptController : public CardUnmaskPromptControllerImpl {
     } else if (expected_failure_permanent_) {
       verification_message = u"This card can't be verified right now.";
     }
-    base::ThreadTaskRunnerHandle::Get()->PostDelayedTask(
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostDelayedTask(
         FROM_HERE,
         base::BindOnce(&TestCardUnmaskPromptController::ShowVerificationResult,
                        weak_factory_.GetWeakPtr(), verification_message,
@@ -140,7 +139,7 @@ class TestCardUnmaskPromptController : public CardUnmaskPromptControllerImpl {
 
   bool expected_failure_temporary_ = false;
   bool expected_failure_permanent_ = false;
-  scoped_refptr<content::MessageLoopRunner> runner_;
+  const scoped_refptr<content::MessageLoopRunner> runner_;
   base::WeakPtrFactory<TestCardUnmaskPromptController> weak_factory_{this};
 };
 
@@ -158,10 +157,14 @@ class CardUnmaskPromptViewBrowserTest : public DialogBrowserTest {
   // DialogBrowserTest:
   void SetUpOnMainThread() override {
     runner_ = new content::MessageLoopRunner;
-    contents_ = browser()->tab_strip_model()->GetActiveWebContents();
     controller_ =
-        std::make_unique<TestCardUnmaskPromptController>(contents_, runner_);
+        std::make_unique<TestCardUnmaskPromptController>(contents(), runner_);
     delegate_ = std::make_unique<TestCardUnmaskDelegate>();
+  }
+
+  void TearDownOnMainThread() override {
+    controller_.reset();
+    DialogBrowserTest::TearDownOnMainThread();
   }
 
   void ShowUi(const std::string& name) override {
@@ -169,10 +172,14 @@ class CardUnmaskPromptViewBrowserTest : public DialogBrowserTest {
     if (name == kExpiryExpired)
       card.SetExpirationYear(2016);
 
+    CardUnmaskPromptOptions card_unmask_prompt_options =
+        CardUnmaskPromptOptions(
+            /*challenge_option=*/
+            absl::nullopt, AutofillClient::UnmaskCardReason::kAutofill);
     controller()->ShowPrompt(base::BindOnce(&CreateCardUnmaskPromptView,
                                             base::Unretained(controller()),
                                             base::Unretained(contents())),
-                             card, AutofillClient::UnmaskCardReason::kAutofill,
+                             card, card_unmask_prompt_options,
                              delegate()->GetWeakPtr());
     // Setting error expectations and confirming the dialogs for some test
     // cases.
@@ -181,13 +188,15 @@ class CardUnmaskPromptViewBrowserTest : public DialogBrowserTest {
       controller()->set_expected_verification_failure(
           /*allow_retry*/ name == kExpiryValidTemporaryError);
       CardUnmaskPromptViewTester::For(controller()->view())
-          ->EnterCVCAndAccept();
+          ->EnterCVCAndAccept(u"123");
     }
   }
 
   void FreeDelegate() { delegate_.reset(); }
 
-  content::WebContents* contents() { return contents_; }
+  content::WebContents* contents() {
+    return browser()->tab_strip_model()->GetActiveWebContents();
+  }
   TestCardUnmaskPromptController* controller() { return controller_.get(); }
   TestCardUnmaskDelegate* delegate() { return delegate_.get(); }
 
@@ -196,7 +205,6 @@ class CardUnmaskPromptViewBrowserTest : public DialogBrowserTest {
   scoped_refptr<content::MessageLoopRunner> runner_;
 
  private:
-  raw_ptr<content::WebContents> contents_;
   std::unique_ptr<TestCardUnmaskPromptController> controller_;
   std::unique_ptr<TestCardUnmaskDelegate> delegate_;
 };
@@ -240,7 +248,7 @@ IN_PROC_BROWSER_TEST_F(CardUnmaskPromptViewBrowserTest,
   // Simulate the user clicking [x] before the "Success!" message disappears.
   CardUnmaskPromptViewTester::For(controller()->view())->Close();
   // Wait a little while; there should be no crash.
-  base::ThreadTaskRunnerHandle::Get()->PostDelayedTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostDelayedTask(
       FROM_HERE,
       base::BindOnce(&content::MessageLoopRunner::Quit,
                      base::Unretained(runner_.get())),
@@ -257,7 +265,7 @@ IN_PROC_BROWSER_TEST_F(CardUnmaskPromptViewBrowserTest,
   // destroyed before CardUnmaskPromptViewBridge::OnConstrainedWindowClosed() is
   // called.
   FreeDelegate();
-  browser()->tab_strip_model()->GetActiveWebContents()->Close();
+  contents()->Close();
 
   content::RunAllPendingInMessageLoop();
 }

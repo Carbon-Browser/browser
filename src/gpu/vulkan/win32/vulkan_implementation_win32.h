@@ -1,4 +1,4 @@
-// Copyright (c) 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -37,12 +37,8 @@ class COMPONENT_EXPORT(VULKAN_WIN32) VulkanImplementationWin32
   std::unique_ptr<gfx::GpuFence> ExportVkFenceToGpuFence(
       VkDevice vk_device,
       VkFence vk_fence) override;
-  VkSemaphore CreateExternalSemaphore(VkDevice vk_device) override;
-  VkSemaphore ImportSemaphoreHandle(VkDevice vk_device,
-                                    SemaphoreHandle handle) override;
-  SemaphoreHandle GetSemaphoreHandle(VkDevice vk_device,
-                                     VkSemaphore vk_semaphore) override;
-  VkExternalMemoryHandleTypeFlagBits GetExternalImageHandleType() override;
+  VkExternalSemaphoreHandleTypeFlagBits GetExternalSemaphoreHandleType()
+      override;
   bool CanImportGpuMemoryBuffer(
       VulkanDeviceQueue* device_queue,
       gfx::GpuMemoryBufferType memory_buffer_type) override;
@@ -50,7 +46,8 @@ class COMPONENT_EXPORT(VULKAN_WIN32) VulkanImplementationWin32
       VulkanDeviceQueue* device_queue,
       gfx::GpuMemoryBufferHandle gmb_handle,
       gfx::Size size,
-      VkFormat vk_format) override;
+      VkFormat vk_format,
+      const gfx::ColorSpace& color_space) override;
 
  private:
   VulkanInstance vulkan_instance_;

@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,7 +13,7 @@
 namespace cc {
 namespace {
 
-constexpr viz::SubtreeCaptureId kCaptureId{22};
+constexpr viz::SubtreeCaptureId kCaptureId(base::Token(0u, 22u));
 
 // A base class for tests that verifies the bahvior of the layer tree when a
 // sub layer has a valid viz::SubtreeCaptureId.

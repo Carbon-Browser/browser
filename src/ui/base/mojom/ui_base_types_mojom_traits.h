@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -157,6 +157,55 @@ struct EnumTraits<ui::mojom::MenuSourceType, ui::MenuSourceType> {
     }
     NOTREACHED();
     return false;
+  }
+};
+
+template <>
+struct EnumTraits<ui::mojom::WindowShowState, ui::WindowShowState> {
+  static ui::mojom::WindowShowState ToMojom(
+      ui::WindowShowState window_show_state) {
+    switch (window_show_state) {
+      case ui::SHOW_STATE_DEFAULT:
+        return ui::mojom::WindowShowState::SHOW_STATE_DEFAULT;
+      case ui::SHOW_STATE_FULLSCREEN:
+        return ui::mojom::WindowShowState::SHOW_STATE_FULLSCREEN;
+      case ui::SHOW_STATE_INACTIVE:
+        return ui::mojom::WindowShowState::SHOW_STATE_INACTIVE;
+      case ui::SHOW_STATE_MINIMIZED:
+        return ui::mojom::WindowShowState::SHOW_STATE_MINIMIZED;
+      case ui::SHOW_STATE_MAXIMIZED:
+        return ui::mojom::WindowShowState::SHOW_STATE_MAXIMIZED;
+      case ui::SHOW_STATE_NORMAL:
+        return ui::mojom::WindowShowState::SHOW_STATE_NORMAL;
+      case ui::SHOW_STATE_END:
+        NOTREACHED_NORETURN();
+    }
+    NOTREACHED_NORETURN();
+  }
+
+  static bool FromMojom(ui::mojom::WindowShowState window_show_state,
+                        ui::WindowShowState* out) {
+    switch (window_show_state) {
+      case ui::mojom::WindowShowState::SHOW_STATE_DEFAULT:
+        *out = ui::SHOW_STATE_DEFAULT;
+        return true;
+      case ui::mojom::WindowShowState::SHOW_STATE_FULLSCREEN:
+        *out = ui::SHOW_STATE_FULLSCREEN;
+        return true;
+      case ui::mojom::WindowShowState::SHOW_STATE_INACTIVE:
+        *out = ui::SHOW_STATE_INACTIVE;
+        return true;
+      case ui::mojom::WindowShowState::SHOW_STATE_MINIMIZED:
+        *out = ui::SHOW_STATE_MINIMIZED;
+        return true;
+      case ui::mojom::WindowShowState::SHOW_STATE_MAXIMIZED:
+        *out = ui::SHOW_STATE_MAXIMIZED;
+        return true;
+      case ui::mojom::WindowShowState::SHOW_STATE_NORMAL:
+        *out = ui::SHOW_STATE_NORMAL;
+        return true;
+    }
+    NOTREACHED_NORETURN();
   }
 };
 

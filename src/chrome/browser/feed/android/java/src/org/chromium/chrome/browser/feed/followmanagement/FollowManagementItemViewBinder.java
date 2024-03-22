@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,7 +8,6 @@ import org.chromium.ui.modelutil.PropertyKey;
 import org.chromium.ui.modelutil.PropertyModel;
 
 class FollowManagementItemViewBinder {
-    private static final String TAG = "FMItemViewBinder";
     public static void bind(
             PropertyModel model, FollowManagementItemView view, PropertyKey propertyKey) {
         if (FollowManagementItemProperties.TITLE_KEY == propertyKey) {

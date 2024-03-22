@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,24 +8,9 @@
 // ESLint doesn't like "declare class" without jsdoc.
 /* eslint-disable require-jsdoc */
 
-// This is currently a Chrome only API, and the spec is still in working draft
-// stage.
-// https://developer.mozilla.org/en-US/docs/Web/API/UIEvent/sourceCapabilities
-
-interface UIEvent extends Event {
-  readonly sourceCapabilities: InputDeviceCapabilities|null;
-}
-
-interface InputDeviceCapabilities {
-  readonly firesTouchEvents: boolean;
-  readonly pointerMovementScrolls: boolean;
-}
-
 // File System Access API: This is currently a Chrome only API, and the spec is
 // still in working draft stage.
 // https://wicg.github.io/file-system-access/
-
-type FileSystemWriteChunkType = Blob|BufferSource|string;
 
 interface FileSystemWritableFileStream extends WritableStream {
   seek(position: number): Promise<void>;
@@ -40,6 +25,11 @@ interface FileSystemCreateWritableOptions {
 interface FileSystemFileHandle {
   createWritable(options?: FileSystemCreateWritableOptions):
       Promise<FileSystemWritableFileStream>;
+
+  // move() is only implemented in Chrome so it's not in upstream type
+  // definitions. Ref:
+  // https://chromestatus.com/feature/5640802622504960
+  move(dir: FileSystemDirectoryHandle, name: string): Promise<void>;
 }
 
 interface FileSystemDirectoryHandle {
@@ -48,17 +38,6 @@ interface FileSystemDirectoryHandle {
 
 interface StorageManager {
   getDirectory(): Promise<FileSystemDirectoryHandle>;
-}
-
-// Chrome WebUI specific helper.
-// https://source.chromium.org/chromium/chromium/src/+/main:ui/webui/resources/js/load_time_data.js
-
-interface Window {
-  loadTimeData: {
-    getBoolean(id: string): boolean,
-    getString(id: string): string,
-    getStringF(id: string, ...args: Array<number|string>): string,
-  };
 }
 
 // v8 specific stack information.
@@ -144,9 +123,6 @@ interface VideoFrameMetadata {
   rtpTimestamp?: number;
 }
 
-type VideoFrameRequestCallback =
-    (now: DOMHighResTimeStamp, metadata: VideoFrameMetadata) => void;
-
 interface HTMLVideoElement {
   requestVideoFrameCallback(callback: VideoFrameRequestCallback): number;
   cancelVideoFrameCallback(handle: number): undefined;
@@ -176,55 +152,6 @@ type BarcodeFormat =
     'aztec'|'codabar'|'code_39'|'code_93'|'code_128'|'data_matrix'|'ean_8'|
     'ean_13'|'itf'|'pdf417'|'qr_code'|'unknown'|'upc_a'|'upc_e';
 
-// Trusted Types, this spec is still in draft stage.
-// https://w3c.github.io/webappsec-trusted-types/dist/spec/
-interface TrustedScriptURL {
-  toJSON(): string;
-}
-
-interface TrustedHTML {
-  toJSON(): string;
-}
-
-interface TrustedScript {
-  toJSON(): string;
-}
-
-interface TrustedTypePolicyOptions {
-  createHTML?: CreateHTMLCallback;
-  createScript?: CreateScriptCallback;
-  createScriptURL?: CreateScriptURLCallback;
-}
-
-type CreateHTMLCallback = (input: string, arguments: any) => string;
-type CreateScriptCallback = (input: string, arguments: any) => string;
-type CreateScriptURLCallback = (input: string, arguments: any) => string;
-
-interface TrustedTypePolicy {
-  readonly name: string;
-  createHTML(input: string, arguments?: any): TrustedHTML;
-  createScript(input: string, arguments?: any): TrustedScript;
-  createScriptURL(input: string, arguments?: any): TrustedScriptURL;
-}
-
-interface TrustedTypePolicyFactory {
-  createPolicy(policyName: string, policyOptions?: TrustedTypePolicyOptions):
-      TrustedTypePolicy;
-  isHTML(value: any): boolean;
-  isScript(value: any): boolean;
-  isScriptURL(value: any): boolean;
-  readonly emptyHTML: TrustedHTML;
-  readonly emptyScript: TrustedScript;
-  getAttributeType(
-      tagName: string, attribute: string, elementNs?: string,
-      attrNs?: string): string;
-  getPropertyType(tagName: string, property: string, elementNs?: string):
-      string;
-  readonly defaultPolicy: TrustedTypePolicy;
-}
-
-declare const trustedTypes: TrustedTypePolicyFactory;
-
 // Web Workers API interface. This is included in lib.webworker.d.ts and
 // available if we enable lib: ["webworker"] in tsconfig.json, but it conflicts
 // with the "dom" lib that we also need. For simplicity we're providing a
@@ -236,3 +163,57 @@ declare const trustedTypes: TrustedTypePolicyFactory;
 interface SharedWorkerGlobalScope {
   onconnect?: ((this: SharedWorkerGlobalScope, ev: MessageEvent) => any)|null;
 }
+
+// Measure Memory API interface. This is currently only supported in
+// Chromium-based browsers. https://wicg.github.io/performance-measure-memory/
+interface MemoryAttributionContainer {
+  id: string;
+  src: string;
+}
+
+interface MemoryAttribution {
+  // Container is absent if the memory attribution is for the same-origin
+  // top-level realm.
+  container?: MemoryAttributionContainer;
+  scope: string;
+  url: string;
+}
+
+interface MemoryBreakdownEntry {
+  attribution: MemoryAttribution[];
+  bytes: number;
+  types: string[];
+}
+
+interface MemoryMeasurement {
+  breakdown: MemoryBreakdownEntry[];
+  bytes: number;
+}
+
+// This interface is only exposed to cross-origin-isolated Window,
+// ServiceWorker, and SharedWorker.
+// https://wicg.github.io/performance-measure-memory/#processing-model
+interface Performance {
+  measureUserAgentSpecificMemory(): Promise<MemoryMeasurement>;
+}
+
+/*
+ * This is the return value for LitElement render function.
+ *
+ * Since the render function can return multiple different renderable types [1],
+ * the type gets really complex if we explicitly list all possible types.
+ * LitElement own typing use `unknown` for render return type, and upstream
+ * discussion [2] also suggests using `unknown`, so we just alias the type to
+ * `unknown` and don't further restrict what types can be returned by render.
+ *
+ * Since directly writing `unknown` as return type of the render function is
+ * a bit confusing to readers, we expose a type alias here makes the code more
+ * readable.
+ *
+ * Also see
+ * https://chromium-review.googlesource.com/c/chromium/src/+/4318288/comment/c7a4600e_6ce078bc/
+ *
+ * [1]: https://lit.dev/docs/components/rendering/#renderable-values
+ * [2]: https://github.com/lit/lit/discussions/2359
+ */
+type RenderResult = unknown;

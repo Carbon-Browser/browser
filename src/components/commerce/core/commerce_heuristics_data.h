@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -58,6 +58,11 @@ class CommerceHeuristicsData {
   // for coupon discount.
   const re2::RE2* GetCouponDiscountPartnerMerchantPattern();
 
+  // Try to get the pattern regex to decide if a merchant is one the merchants
+  // that currently have no discounts. This pattern is determined on the server
+  // side.
+  const re2::RE2* GetNoDiscountMerchantPattern();
+
   // Try to get the pattern regex to decide if a URL is cart page URL.
   const re2::RE2* GetCartPageURLPattern();
 
@@ -82,6 +87,10 @@ class CommerceHeuristicsData {
   // Try to get the pattern regex to decide if a URL is purchase page URL in
   // `domain`.
   const re2::RE2* GetPurchasePageURLPatternForDomain(const std::string& domain);
+
+  // Try to get the pattern regex used to match against XHR request URL to see
+  // if the request should be ignored for AddToCart detection in `domain`.
+  const re2::RE2* GetSkipAddToCartPatternForDomain(const std::string& domain);
 
   // Get the JSON data with product ID extraction heuristics.
   std::string GetProductIDExtractionJSON();
@@ -116,6 +125,7 @@ class CommerceHeuristicsData {
   std::unique_ptr<re2::RE2> product_skip_pattern_;
   std::unique_ptr<re2::RE2> rule_discount_partner_merchant_pattern_;
   std::unique_ptr<re2::RE2> coupon_discount_partner_merchant_pattern_;
+  std::unique_ptr<re2::RE2> no_discount_merchant_pattern_;
   std::unique_ptr<re2::RE2> cart_url_pattern_;
   std::unique_ptr<re2::RE2> checkout_url_pattern_;
   std::unique_ptr<re2::RE2> purchase_button_pattern_;
@@ -126,6 +136,8 @@ class CommerceHeuristicsData {
       domain_checkout_url_pattern_mapping_;
   std::map<std::string, std::unique_ptr<re2::RE2>>
       domain_purchase_url_pattern_mapping_;
+  std::map<std::string, std::unique_ptr<re2::RE2>>
+      domain_skip_add_to_cart_pattern_mapping_;
   std::string product_id_json_;
   std::string cart_extraction_script_;
 };

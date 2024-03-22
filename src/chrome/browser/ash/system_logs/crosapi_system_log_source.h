@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -26,7 +26,7 @@ class CrosapiSystemLogSource : public SystemLogsSource,
 
  private:
   // Callback for getting lacros feedback data.
-  void OnGetFeedbackData(base::Value system_infos);
+  void OnGetFeedbackData(base::Value::Dict system_infos);
 
   // crosapi::BrowserManagerObserver
   void OnMojoDisconnected() override;

@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -15,12 +15,12 @@
 #include "base/feature_list.h"
 #include "base/files/memory_mapped_file.h"
 #include "base/i18n/base_i18n_export.h"
-#include "base/memory/raw_ptr.h"
+#include "base/memory/raw_ptr_exclusion.h"
 
 namespace base::i18n {
 
 // Enable merging of icudtl.dat in Lacros.
-BASE_I18N_EXPORT extern const base::Feature kLacrosMergeIcuDataFile;
+BASE_I18N_EXPORT BASE_DECLARE_FEATURE(kLacrosMergeIcuDataFile);
 
 // Class wrapping the memory-mapped instance of Ash's icudtl.dat.
 // Needed to keep track of its file descriptor.
@@ -105,11 +105,15 @@ class BASE_I18N_EXPORT IcuMergeableDataFile {
   FilePath GetLacrosFilePath();
 
   File lacros_file_;
-  int64_t lacros_length_ = 0;
-  raw_ptr<uint8_t> lacros_data_ = nullptr;
+  size_t lacros_length_ = 0;
+
+  // This field is not a raw_ptr<> because it always points to a mmap'd
+  // region of memory outside of the PA heap. Thus, there would be overhead
+  // involved with using a raw_ptr<> but no safety gains.
+  RAW_PTR_EXCLUSION uint8_t* lacros_data_ = nullptr;
   bool used_cached_hashes_ = false;
 };
 
 }  // namespace base::i18n
 
-#endif  // BASE_I18N_MERGEABLE_ICU_DATA_FILE_H_
+#endif  // BASE_I18N_ICU_MERGEABLE_DATA_FILE_H_

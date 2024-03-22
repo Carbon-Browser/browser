@@ -1,3 +1,7 @@
+// Copyright 2022 The Chromium Authors
+// Use of this source code is governed by a BSD-style license that can be
+// found in the LICENSE file.
+
 #include "third_party/inspector_protocol/crdtp/test_platform.h"
 
 #include "base/test/values_test_util.h"
@@ -136,7 +140,7 @@ TEST(ProtocolTraits, ListValueSerialization) {
 TEST(ProtocolTraits, DictValueSerialization) {
   base::Value::Dict dict;
   EXPECT_THAT(RoundTrip(base::Value(dict.Clone())),
-              IsJson(base::Value(base::Value::Type::DICTIONARY)));
+              IsJson(base::Value(base::Value::Type::DICT)));
   dict.Set("int", 42);
   dict.Set("double", 2.718281828459045);
   dict.Set("string", "foo");

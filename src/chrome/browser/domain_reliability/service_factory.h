@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,12 +7,13 @@
 
 namespace domain_reliability {
 
-class DomainReliabilityServiceFactory {
- public:
-  static bool ShouldCreateService();
+// Determines if Domain Reliability service should be created based on
+// command line flags, Chrome policies, and field trials.
+// Used in //chrome/browser/net/profile_network_context_service.cc.
+bool ShouldCreateService();
 
-  static const char kUploadReporterString[];
-};
+// Identifies Chrome as the source of Domain Reliability uploads it sends.
+extern const char kUploadReporterString[];
 
 }  // namespace domain_reliability
 

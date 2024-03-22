@@ -1,11 +1,20 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "device/vr/openxr/openxr_scene_understanding_manager.h"
-#include <chrono>
+
+#include <algorithm>
+#include <memory>
+#include <string>
+#include <utility>
+#include <vector>
+
 #include "base/containers/contains.h"
+#include "device/vr/openxr/openxr_extension_helper.h"
 #include "device/vr/openxr/openxr_util.h"
+#include "third_party/abseil-cpp/absl/types/optional.h"
+#include "third_party/openxr/src/include/openxr/openxr.h"
 
 namespace {
 // - UpdateInterval is the idle time between triggering a scene-compute query
@@ -41,7 +50,7 @@ void OpenXRSceneUnderstandingManager::EnableSceneCompute() {
   if (scene_compute_state_ == SceneComputeState::Off) {
     if (!scene_observer_) {
       scene_observer_ =
-          std::make_unique<OpenXrSceneObserver>(extension_helper_, session_);
+          std::make_unique<OpenXrSceneObserver>(*extension_helper_, session_);
       scene_compute_state_ = SceneComputeState::Idle;
     }
   }
@@ -67,9 +76,9 @@ void OpenXRSceneUnderstandingManager::OnFrameUpdate(
         DCHECK(scene_observer_);
         scene_bounds_.space_ = mojo_space_;
         scene_bounds_.time_ = predicted_display_time;
-        static const std::vector<XrSceneComputeFeatureMSFT> scene_features{
+        static constexpr XrSceneComputeFeatureMSFT kSceneFeatures[] = {
             XR_SCENE_COMPUTE_FEATURE_PLANE_MSFT};
-        if (XR_SUCCEEDED(scene_observer_->ComputeNewScene(scene_features,
+        if (XR_SUCCEEDED(scene_observer_->ComputeNewScene(kSceneFeatures,
                                                           scene_bounds_))) {
           scene_compute_state_ = SceneComputeState::Waiting;
         }
@@ -147,9 +156,8 @@ void OpenXRSceneUnderstandingManager::RequestHitTest(
     gfx::Point3F plane_origin = gfx::Point3F(
         plane_pose.position.x, plane_pose.position.y, plane_pose.position.z);
     gfx::Transform mojo_to_plane = XrPoseToGfxTransform(plane_pose);
-    gfx::Vector3dF forward = {0, 0, -1};
-    gfx::Vector3dF plane_direction_vector = forward;
-    mojo_to_plane.TransformVector(&plane_direction_vector);
+    gfx::Vector3dF plane_direction_vector =
+        mojo_to_plane.MapVector(gfx::Vector3dF(0, 0, -1));
 
     absl::optional<float> distance_to_plane = GetRayPlaneDistance(
         ray_origin, ray_direction, plane_origin, plane_direction_vector);
@@ -157,8 +165,9 @@ void OpenXRSceneUnderstandingManager::RequestHitTest(
       gfx::Point3F hitpoint_position =
           ray_origin +
           gfx::ScaleVector3d(ray_direction, distance_to_plane.value());
-      gfx::Point3F hitpoint_in_plane_space = hitpoint_position;
-      mojo_to_plane.TransformPointReverse(&hitpoint_in_plane_space);
+      gfx::Point3F hitpoint_in_plane_space =
+          mojo_to_plane.InverseMapPoint(hitpoint_position)
+              .value_or(hitpoint_position);
 
       // Check to make sure that the hitpoint is within the plane boundaries.
       // XrScenePlaneMSFT does provide the triangle mesh for the plane
@@ -240,11 +249,11 @@ OpenXRSceneUnderstandingManager::GetHitTestSubscriptionResult(
   // Transform the ray according to the latest transform based on the XRSpace
   // used in hit test subscription.
 
-  gfx::Point3F origin = native_origin_ray.origin;
-  mojo_from_native_origin.TransformPoint(&origin);
+  gfx::Point3F origin =
+      mojo_from_native_origin.MapPoint(native_origin_ray.origin);
 
-  gfx::Vector3dF direction = native_origin_ray.direction;
-  mojo_from_native_origin.TransformVector(&direction);
+  gfx::Vector3dF direction =
+      mojo_from_native_origin.MapVector(native_origin_ray.direction);
 
   std::vector<mojom::XRHitResultPtr> hit_results;
   RequestHitTest(origin, direction, &hit_results);
@@ -266,12 +275,13 @@ OpenXRSceneUnderstandingManager::GetTransientHitTestSubscriptionResult(
 
   for (const auto& input_source_id_and_mojo_from_input_source :
        input_source_ids_and_mojo_from_input_sources) {
-    gfx::Point3F origin = input_source_ray.origin;
-    input_source_id_and_mojo_from_input_source.second.TransformPoint(&origin);
+    gfx::Point3F origin =
+        input_source_id_and_mojo_from_input_source.second.MapPoint(
+            input_source_ray.origin);
 
-    gfx::Vector3dF direction = input_source_ray.direction;
-    input_source_id_and_mojo_from_input_source.second.TransformVector(
-        &direction);
+    gfx::Vector3dF direction =
+        input_source_id_and_mojo_from_input_source.second.MapVector(
+            input_source_ray.direction);
 
     std::vector<mojom::XRHitResultPtr> hit_results;
     RequestHitTest(origin, direction, &hit_results);

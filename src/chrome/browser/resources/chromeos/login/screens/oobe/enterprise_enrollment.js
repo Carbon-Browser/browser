@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,7 +6,37 @@
  * @fileoverview Polymer element for Enterprise Enrollment screen.
  */
 
-/* #js_imports_placeholder */
+import '//resources/cr_elements/chromeos/cros_color_overrides.css.js';
+import '//resources/cr_elements/cr_input/cr_input.js';
+import '//resources/js/action_link.js';
+import '//resources/polymer/v3_0/iron-icon/iron-icon.js';
+import '../../components/gaia_dialog.js';
+import '../../components/oobe_icons.html.js';
+import '../../components/common_styles/oobe_common_styles.css.js';
+import '../../components/common_styles/oobe_dialog_host_styles.css.js';
+import '../../components/dialogs/oobe_adaptive_dialog.js';
+import '../../components/dialogs/oobe_loading_dialog.js';
+
+import {assert} from '//resources/ash/common/assert.js';
+import {loadTimeData} from '//resources/ash/common/load_time_data.m.js';
+import {html, mixinBehaviors, Polymer, PolymerElement} from '//resources/polymer/v3_0/polymer/polymer_bundled.min.js';
+
+import {Authenticator, AuthFlow, AuthMode, AuthParams, SUPPORTED_PARAMS} from '../../../../gaia_auth_host/authenticator.js';
+import {LoginScreenBehavior, LoginScreenBehaviorInterface} from '../../components/behaviors/login_screen_behavior.js';
+import {MultiStepBehavior, MultiStepBehaviorInterface} from '../../components/behaviors/multi_step_behavior.js';
+import {OobeI18nBehavior, OobeI18nBehaviorInterface} from '../../components/behaviors/oobe_i18n_behavior.js';
+import {OobeBackButton} from '../../components/buttons/oobe_back_button.js';
+import {OobeNextButton} from '../../components/buttons/oobe_next_button.js';
+import {OobeTextButton} from '../../components/buttons/oobe_text_button.js';
+import {OobeModalDialog} from '../../components/dialogs/oobe_modal_dialog.js';
+import {OOBE_UI_STATE, SCREEN_GAIA_SIGNIN} from '../../components/display_manager_types.js';
+import {InjectedKeyboardUtils} from '../../components/keyboard_utils.js';
+import {globalOobeKeyboard, KEYBOARD_UTILS_FOR_INJECTION} from '../../components/keyboard_utils_oobe.js';
+import {OobeTypes} from '../../components/oobe_types.js';
+import {Oobe} from '../../cr_ui.js';
+import * as OobeDebugger from '../../debug/debug.js';
+import {DisplayManager, invokePolymerMethod} from '../../display_manager.js';
+import {ActiveDirectoryErrorState, ADLoginStep, JoinConfigType} from '../common/offline_ad_login.js';
 
 /**
  * @constructor
@@ -15,9 +45,35 @@
  * @implements {LoginScreenBehaviorInterface}
  * @implements {MultiStepBehaviorInterface}
  */
-const EnterpriseEnrollmentElementBase = Polymer.mixinBehaviors(
-    [OobeI18nBehavior, LoginScreenBehavior, MultiStepBehavior],
-    Polymer.Element);
+const EnterpriseEnrollmentElementBase = mixinBehaviors(
+    [OobeI18nBehavior, LoginScreenBehavior, MultiStepBehavior], PolymerElement);
+
+/**
+ * @typedef {{
+ *   skipConfirmationDialog:  OobeModalDialog,
+ * }}
+ */
+EnterpriseEnrollmentElementBase.$;
+
+/**
+ * Data that is passed to the screen during onBeforeShow.
+ * @typedef {{
+ *   enrollment_mode: string,
+ *   is_enrollment_enforced: boolean,
+ *   attestationBased: boolean,
+ *   flow: string,
+ *   license: (string|undefined),
+ *   gaiaUrl: (string|undefined),
+ *   gaiaPath: (string|undefined),
+ *   gaia_buttons_type: (string|undefined),
+ *   clientId: (string|undefined),
+ *   hl: (string|undefined),
+ *   management_domain: (string|undefined),
+ *   email: (string|undefined),
+ *   webviewPartitionName: (string|undefined),
+ * }}
+ */
+let EnterpriseEnrollmentScreenData;
 
 /**
  * @polymer
@@ -27,7 +83,9 @@ class EnterpriseEnrollmentElement extends EnterpriseEnrollmentElementBase {
     return 'enterprise-enrollment-element';
   }
 
-  /* #html_template_placeholder */
+  static get template() {
+    return html`{__html_template__}`;
+  }
 
   static get properties() {
     return {
@@ -149,8 +207,8 @@ class EnterpriseEnrollmentElement extends EnterpriseEnrollmentElementBase {
       isMeet_: {
         type: Boolean,
         value() {
-          return loadTimeData.valueExists('flowType') &&
-              (loadTimeData.getString('flowType') == 'meet');
+          return loadTimeData.valueExists('deviceFlowType') &&
+              (loadTimeData.getString('deviceFlowType') == 'meet');
         },
         readOnly: true,
       },
@@ -178,6 +236,7 @@ class EnterpriseEnrollmentElement extends EnterpriseEnrollmentElementBase {
       'showAttributePromptStep',
       'showError',
       'showStep',
+      'showSkipConfirmationDialog',
     ];
   }
 
@@ -207,21 +266,11 @@ class EnterpriseEnrollmentElement extends EnterpriseEnrollmentElementBase {
       // Could be null in tests.
       if (e.target && e.target.contentWindow) {
         e.target.contentWindow.postMessage(
-            'initialMessage', this.authView_.src);
+            InjectedKeyboardUtils.INITIAL_MSG, this.authView_.src);
       }
     });
 
-    // When we get the advancing focus command message from injected content
-    // script, we can execute it on host script context.
-    window.addEventListener('message', function(e) {
-      if (e.data == 'forwardFocus') {
-        keyboard.onAdvanceFocus(false);
-      } else if (e.data == 'backwardFocus') {
-        keyboard.onAdvanceFocus(true);
-      }
-    });
-
-    this.$['step-ad-join'].addEventListener('authCompleted', (e) => {
+    this.$['step-ad-join'].addEventListener('authCompletedAd', (e) => {
       this.$['step-ad-join'].disabled = true;
       this.$['step-ad-join'].loading = true;
       chrome.send('oauthEnrollAdCompleteLogin', [
@@ -251,8 +300,8 @@ class EnterpriseEnrollmentElement extends EnterpriseEnrollmentElementBase {
 
   /**
    * Event handler that is invoked just before the frame is shown.
-   * @param {Object} data Screen init payload, contains the signin frame
-   * URL.
+   * @param {EnterpriseEnrollmentScreenData|undefined} data Screen init payload,
+   * contains the signin frame URL.
    */
   onBeforeShow(data) {
     if (data == undefined) {
@@ -260,6 +309,8 @@ class EnterpriseEnrollmentElement extends EnterpriseEnrollmentElementBase {
     }
 
     if (Oobe.getInstance().forceKeyboardFlow) {
+      assert(KEYBOARD_UTILS_FOR_INJECTION.DATA);
+      globalOobeKeyboard.enableHandlingOfInjectedKeyboardUtilsMessages();
       // We run the tab remapping logic inside of the webview so that the
       // simulated tab events will use the webview tab-stops. Simulated tab
       // events created from the webui treat the entire webview as one tab
@@ -267,25 +318,26 @@ class EnterpriseEnrollmentElement extends EnterpriseEnrollmentElementBase {
       this.authView_.addContentScripts([{
         name: 'injectedTabHandler',
         matches: ['http://*/*', 'https://*/*'],
-        js: {code: KEYBOARD_UTILS_FOR_INJECTION},
+        js: {code: KEYBOARD_UTILS_FOR_INJECTION.DATA},
         run_at: 'document_start',
       }]);
     }
 
-    this.isManualEnrollment_ = 'enrollment_mode' in data ?
-        data.enrollment_mode === 'manual' :
-        undefined;
-    this.isForced_ = 'is_enrollment_enforced' in data ?
-        data.is_enrollment_enforced :
-        undefined;
-    this.isAutoEnroll_ =
-        'attestationBased' in data ? data.attestationBased : undefined;
+    this.isManualEnrollment_ = (data.enrollment_mode === 'manual');
+    this.isForced_ = data.is_enrollment_enforced;
+    this.isAutoEnroll_ = data.attestationBased;
     this.hasAccountCheck_ =
-        'flow' in data ? (data.flow === 'enterpriseLicense') : false;
+        ((data.flow === 'enterpriseLicense') ||
+         (data.flow === 'educationLicense'));
+
+    this.licenseType_ = ('license' in data) ?
+        this.convertLicenseType(data.license) :
+        OobeTypes.LicenseType.ENTERPRISE;
 
     if (!this.isAutoEnroll_) {
       const gaiaParams = {};
       gaiaParams.gaiaUrl = data.gaiaUrl;
+      gaiaParams.gaiaPath = data.gaiaPath;
       gaiaParams.clientId = data.clientId;
       gaiaParams.needPassword = false;
       gaiaParams.hl = data.hl;
@@ -295,12 +347,17 @@ class EnterpriseEnrollmentElement extends EnterpriseEnrollmentElementBase {
       }
       gaiaParams.flow = data.flow;
       gaiaParams.enableGaiaActionButtons = true;
+      if (data.email) {
+        // TODO(b/292087570): we have to set `readOnlyEmail` even though email
+        // will in fact be modifiable.
+        gaiaParams.readOnlyEmail = true;
+        gaiaParams.email = data.email;
+      }
 
       this.authenticator_.setWebviewPartition(
           'webviewPartitionName' in data ? data.webviewPartitionName : '');
 
-      this.authenticator_.load(
-          cr.login.Authenticator.AuthMode.DEFAULT, gaiaParams);
+      this.authenticator_.load(AuthMode.DEFAULT, gaiaParams);
 
       if (data.gaia_buttons_type) {
         this.gaiaDialogButtonsType_ = data.gaia_buttons_type;
@@ -311,17 +368,19 @@ class EnterpriseEnrollmentElement extends EnterpriseEnrollmentElementBase {
       }
     }
 
-    cr.ui.login.invokePolymerMethod(this.$['step-ad-join'], 'onBeforeShow');
-    this.showStep(
-        this.isAutoEnroll_ ? OobeTypes.EnrollmentStep.WORKING :
-                             OobeTypes.EnrollmentStep.LOADING);
+    invokePolymerMethod(this.$['step-ad-join'], 'onBeforeShow');
+    if (!this.uiStep) {
+      this.showStep(
+          this.isAutoEnroll_ ? OobeTypes.EnrollmentStep.WORKING :
+                               OobeTypes.EnrollmentStep.LOADING);
+    }
   }
 
   /**
    * Initial UI State for screen
    */
   getOobeUIInitialState() {
-    return OOBE_UI_STATE.ENROLLMENT;
+    return OOBE_UI_STATE.ENROLLMENT_CANCEL_DISABLED;
   }
 
   /**
@@ -393,8 +452,10 @@ class EnterpriseEnrollmentElement extends EnterpriseEnrollmentElementBase {
     // TODO(b/238175743) Do not set `ENROLLMENT_CANCEL_ENABLED` if enrollment is
     // forced. Keep setting `isCancelDisabled` to false if enrollment is forced,
     // otherwise the manual fallback button does nothing.
-    if (this.isCancelDisabled) {
-      Oobe.getInstance().setOobeUIState(OOBE_UI_STATE.ENROLLMENT);
+    if (this.isCancelDisabled ||
+        step === OobeTypes.EnrollmentStep.ATTRIBUTE_PROMPT) {
+      Oobe.getInstance().setOobeUIState(
+          OOBE_UI_STATE.ENROLLMENT_CANCEL_DISABLED);
     } else {
       Oobe.getInstance().setOobeUIState(
           step === OobeTypes.EnrollmentStep.SUCCESS ?
@@ -499,7 +560,7 @@ class EnterpriseEnrollmentElement extends EnterpriseEnrollmentElementBase {
   }
 
   onAuthCompleted_(e) {
-    var detail = e.detail;
+    const detail = e.detail;
     if (!detail.email) {
       this.showError(loadTimeData.getString('fatalEnrollmentError'), false);
       return;
@@ -508,6 +569,10 @@ class EnterpriseEnrollmentElement extends EnterpriseEnrollmentElementBase {
       chrome.send(
           'oauthEnrollCompleteLogin',
           [detail.email, OobeTypes.LicenseType.ENTERPRISE]);
+    } else if (this.licenseType_ == OobeTypes.LicenseType.EDUCATION) {
+      chrome.send(
+          'oauthEnrollCompleteLogin',
+          [detail.email, OobeTypes.LicenseType.EDUCATION]);
     } else {
       this.email_ = detail.email;
       this.showStep(OobeTypes.EnrollmentStep.KIOSK_ENROLLMENT);
@@ -522,7 +587,24 @@ class EnterpriseEnrollmentElement extends EnterpriseEnrollmentElementBase {
       return;
     }
     this.isCancelDisabled = false;
+
+    if (this.openedFromDebugOverlay()) {
+      return;
+    }
     chrome.send('frameLoadingCompleted');
+  }
+
+  /** @suppress {missingProperties} */
+  openedFromDebugOverlay() {
+    if (OobeDebugger.DebuggerUI &&
+        OobeDebugger.DebuggerUI.getInstance().currentScreenId ===
+            'enterprise-enrollment') {
+      console.warn(
+          'Enrollment screen was opened using debug overlay: ' +
+          'omit chrome.send() to prevent calls on C++ side.');
+      return true;
+    }
+    return false;
   }
 
   onLicenseTypeSelected(e) {
@@ -573,6 +655,20 @@ class EnterpriseEnrollmentElement extends EnterpriseEnrollmentElementBase {
     }
   }
 
+
+  convertLicenseType(license) {
+    switch (license) {
+      case 'enterprise':
+        return OobeTypes.LicenseType.ENTERPRISE;
+      case 'education':
+        return OobeTypes.LicenseType.EDUCATION;
+      case 'terminal':
+        return OobeTypes.LicenseType.KIOSK;
+      default:
+        return OobeTypes.LicenseType.NONE;
+    }
+  }
+
   /**
    *  Provides the label for the generic cancel button (Skip / Enroll Manually)
    *
@@ -598,6 +694,9 @@ class EnterpriseEnrollmentElement extends EnterpriseEnrollmentElementBase {
     if (licenseType == OobeTypes.LicenseType.ENTERPRISE) {
       return 'oauthEnrollScreenTitle';
     }
+    if (licenseType == OobeTypes.LicenseType.EDUCATION) {
+      return 'oauthEducationEnrollScreenTitle';
+    }
     return 'oauthEnrollKioskEnrollmentWorkingTitle';
   }
 
@@ -609,6 +708,9 @@ class EnterpriseEnrollmentElement extends EnterpriseEnrollmentElementBase {
    */
   getIcon_(licenseType) {
     if (licenseType == OobeTypes.LicenseType.ENTERPRISE) {
+      return 'oobe-32:enterprise';
+    }
+    if (licenseType == OobeTypes.LicenseType.EDUCATION) {
       return 'oobe-32:enterprise';
     }
     return 'oobe-32:kiosk';
@@ -624,7 +726,38 @@ class EnterpriseEnrollmentElement extends EnterpriseEnrollmentElementBase {
     if (licenseType == OobeTypes.LicenseType.ENTERPRISE) {
       return this.i18n('oauthEnrollSuccessTitle');
     }
+    if (licenseType == OobeTypes.LicenseType.EDUCATION) {
+      return this.i18n('oauthEnrollEducationSuccessTitle');
+    }
     return this.i18n('oauthEnrollKioskEnrollmentSuccessTitle');
+  }
+
+
+  /**
+   * Return title for error enrollment screen.
+   * @param {string} licenseType
+   * @returns {string}
+   * @private
+   */
+  getErrorTitle_(locale, licenseType) {
+    if (licenseType == OobeTypes.LicenseType.EDUCATION) {
+      return this.i18n('oauthEducationEnrollErrorTitle');
+    }
+    return this.i18n('oauthEnrollErrorTitle');
+  }
+
+
+  /**
+   * Return title for error enrollment screen.
+   * @param {string} licenseType
+   * @returns {string}
+   * @private
+   */
+  getAttributePromptTitle_(locale, licenseType) {
+    if (licenseType == OobeTypes.LicenseType.EDUCATION) {
+      return this.i18n('oauthEnrollEducationSuccessTitle');
+    }
+    return this.i18n('oauthEnrollScreenTitle');
   }
 
   /**
@@ -662,7 +795,7 @@ class EnterpriseEnrollmentElement extends EnterpriseEnrollmentElementBase {
    * Whether authFlow is the SAML.
    */
   isSaml_(authFlow) {
-    return authFlow === cr.login.Authenticator.AuthFlow.SAML;
+    return authFlow === AuthFlow.SAML;
   }
 
   /*
@@ -670,6 +803,53 @@ class EnterpriseEnrollmentElement extends EnterpriseEnrollmentElementBase {
    */
   onTPMCheckCanceled_() {
     this.userActed('cancel-tpm-check');
+  }
+
+  // Skip enrollment dialogue section.
+
+  /**
+   * Return title for skip enrollment dialogue.
+   * @param {string} licenseType
+   * @returns {string}
+   * @private
+   */
+  getSkipConfirmationTitle_(locale, licenseType) {
+    if (licenseType == OobeTypes.LicenseType.EDUCATION) {
+      return this.i18n('skipConfirmationDialogEducationTitle');
+    }
+    return this.i18n('skipConfirmationDialogTitle');
+  }
+
+  /**
+   * Return text for skip enrollment dialogue.
+   * @param {string} licenseType
+   * @returns {string}
+   * @private
+   */
+  getSkipConfirmationText_(locale, licenseType) {
+    if (licenseType == OobeTypes.LicenseType.EDUCATION) {
+      return this.i18n('skipConfirmationDialogEducationText');
+    }
+    return this.i18n('skipConfirmationDialogText');
+  }
+
+  /*
+   * Called when we click go back button.
+   */
+  onDialogClosed_() {
+    this.$.skipConfirmationDialog.hideDialog();
+  }
+
+  /*
+   * Called when we click skip button.
+   */
+  onDialogSkip_() {
+    this.$.skipConfirmationDialog.hideDialog();
+    this.userActed('skip-confirmation');
+  }
+
+  showSkipConfirmationDialog() {
+    this.$.skipConfirmationDialog.showDialog();
   }
 }
 

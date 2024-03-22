@@ -1,4 +1,4 @@
-// Copyright 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,14 +10,15 @@
 #include <memory>
 #include <string>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/command_line.h"
 #include "base/compiler_specific.h"
 #include "base/files/file_path.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/location.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
+#include "base/ranges/algorithm.h"
 #include "base/run_loop.h"
 #include "base/strings/string_split.h"
 #include "base/strings/utf_string_conversions.h"
@@ -26,7 +27,7 @@
 #include "base/test/bind.h"
 #include "base/test/metrics/histogram_tester.h"
 #include "base/test/metrics/user_action_tester.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/test/test_future.h"
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
 #include "chrome/app/chrome_command_ids.h"
@@ -67,16 +68,18 @@
 #include "chrome/browser/ui/startup/startup_browser_creator.h"
 #include "chrome/browser/ui/startup/startup_browser_creator_impl.h"
 #include "chrome/browser/ui/startup/startup_types.h"
+#include "chrome/browser/ui/startup/web_app_startup_utils.h"
 #include "chrome/browser/ui/tabs/pinned_tab_codec.h"
 #include "chrome/browser/ui/tabs/tab_strip_model.h"
 #include "chrome/browser/ui/ui_features.h"
+#include "chrome/browser/web_applications/test/web_app_install_test_utils.h"
 #include "chrome/common/buildflags.h"
 #include "chrome/common/chrome_paths.h"
 #include "chrome/common/chrome_switches.h"
 #include "chrome/common/extensions/manifest_handlers/app_launch_info.h"
 #include "chrome/common/pref_names.h"
 #include "chrome/common/url_constants.h"
-#include "chrome/grit/chromium_strings.h"
+#include "chrome/grit/branded_strings.h"
 #include "chrome/grit/generated_resources.h"
 #include "chrome/test/base/in_process_browser_test.h"
 #include "chrome/test/base/ui_test_utils.h"
@@ -88,11 +91,14 @@
 #include "components/javascript_dialogs/app_modal_dialog_view.h"
 #include "components/javascript_dialogs/tab_modal_dialog_manager.h"
 #include "components/omnibox/common/omnibox_focus_state.h"
+#include "components/policy/core/common/policy_pref_names.h"
 #include "components/prefs/pref_service.h"
 #include "components/services/app_service/public/cpp/app_launch_util.h"
 #include "components/sessions/core/command_storage_manager_test_helper.h"
+#include "components/strings/grit/components_strings.h"
 #include "components/translate/core/browser/language_state.h"
 #include "components/translate/core/common/language_detection_details.h"
+#include "components/webapps/common/web_app_id.h"
 #include "content/public/browser/browser_context.h"
 #include "content/public/browser/favicon_status.h"
 #include "content/public/browser/host_zoom_map.h"
@@ -130,7 +136,7 @@
 #include "ui/base/ui_base_features.h"
 
 #if BUILDFLAG(IS_MAC)
-#include "base/mac/scoped_nsautorelease_pool.h"
+#include "base/apple/scoped_nsautorelease_pool.h"
 #include "chrome/browser/ui/cocoa/test/run_loop_testing.h"
 #include "ui/accelerated_widget_mac/ca_transaction_observer.h"
 #include "ui/base/test/scoped_fake_nswindow_fullscreen.h"
@@ -138,7 +144,6 @@
 
 #if BUILDFLAG(IS_WIN)
 #include "base/i18n/rtl.h"
-#include "chrome/browser/browser_process.h"
 #endif
 
 using base::ASCIIToUTF16;
@@ -172,6 +177,13 @@ std::u16string WindowCaptionFromPageTitle(const std::u16string& page_title) {
   // On Mac, we don't want to suffix the page title with the application name.
   if (page_title.empty())
     return l10n_util::GetStringUTF16(IDS_BROWSER_WINDOW_MAC_TAB_UNTITLED);
+  return page_title;
+#elif BUILDFLAG(IS_CHROMEOS_LACROS)
+  // On Lacros, we don't want to suffix the page title with the application
+  // name. Note that the default title for empty title is different from Mac.
+  if (page_title.empty()) {
+    return l10n_util::GetStringUTF16(IDS_DEFAULT_TAB_TITLE);
+  }
   return page_title;
 #else
   if (page_title.empty())
@@ -218,11 +230,49 @@ class TabClosingObserver : public TabStripModelObserver {
   int closing_count_ = 0;
 };
 
+class FullscreenOperationComplete {
+ public:
+  explicit FullscreenOperationComplete(Browser* browser)
+      : browser_(browser), last_state_(IsFullscreened(browser)) {}
+
+  FullscreenOperationComplete(const FullscreenOperationComplete&) = delete;
+  FullscreenOperationComplete& operator=(const FullscreenOperationComplete&) =
+      delete;
+  ~FullscreenOperationComplete() = default;
+
+  void Wait() {
+    base::RunLoop outer_loop;
+    auto wait_for_state = base::BindRepeating(
+        [](base::RunLoop* outer_loop, Browser* browser, bool* last_state) {
+          if (IsFullscreened(browser) != *last_state) {
+            outer_loop->Quit();
+            *last_state = !(*last_state);
+          }
+        },
+        &outer_loop, browser_, &last_state_);
+
+    base::RepeatingTimer timer;
+    timer.Start(FROM_HERE, base::Milliseconds(1), std::move(wait_for_state));
+    outer_loop.Run();
+  }
+
+ private:
+  static bool IsFullscreened(Browser* browser) {
+    FullscreenController* controller =
+        browser->exclusive_access_manager()->fullscreen_controller();
+    return controller->IsFullscreenForBrowser() ||
+           controller->IsTabFullscreen();
+  }
+
+  raw_ptr<Browser> browser_;
+  bool last_state_;
+};
+
 // Used by CloseWithAppMenuOpen. Posts a CloseWindowCallback and shows the app
 // menu.
 void RunCloseWithAppMenuCallback(Browser* browser) {
   // ShowAppMenu is modal under views. Schedule a task that closes the window.
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE, base::BindOnce(&chrome::CloseWindow, browser));
   chrome::ShowAppMenu(browser);
 }
@@ -290,7 +340,7 @@ class RenderViewSizeObserver : public content::WebContentsObserver {
 
   // Cache the sizes of RenderWidgetHostView and WebContentsView when the
   // navigation entry is committed, which is before
-  // WebContentsDelegate::DidNavigatePrimaryMainFramePostCommit is called.
+  // WebContentsObserver::DidFinishNavigation is called.
   void NavigationEntryCommitted(
       const content::LoadCommittedDetails& details) override {
     content::RenderViewHost* rvh =
@@ -358,7 +408,7 @@ class BrowserTest : public extensions::ExtensionBrowserTest {
         return extension.get();
     }
     NOTREACHED();
-    return NULL;
+    return nullptr;
   }
 };
 
@@ -450,7 +500,7 @@ IN_PROC_BROWSER_TEST_F(BrowserTest, CaptivePortalWindowTitle) {
   captive_portal_params.is_captive_portal_popup = true;
   ui_test_utils::NavigateToURL(&captive_portal_params);
   std::u16string captive_portal_window_title =
-      chrome::FindBrowserWithWebContents(
+      chrome::FindBrowserWithTab(
           captive_portal_params.navigated_or_inserted_contents)
           ->GetWindowTitleForCurrentTab(true /* include_app_name */);
 
@@ -458,8 +508,7 @@ IN_PROC_BROWSER_TEST_F(BrowserTest, CaptivePortalWindowTitle) {
   normal_params.disposition = WindowOpenDisposition::NEW_POPUP;
   ui_test_utils::NavigateToURL(&normal_params);
   std::u16string normal_window_title =
-      chrome::FindBrowserWithWebContents(
-          normal_params.navigated_or_inserted_contents)
+      chrome::FindBrowserWithTab(normal_params.navigated_or_inserted_contents)
           ->GetWindowTitleForCurrentTab(true /* include_app_name */);
 
   ASSERT_NE(captive_portal_window_title, normal_window_title);
@@ -486,7 +535,7 @@ IN_PROC_BROWSER_TEST_F(BrowserTest, NoJavaScriptDialogsActivateTab) {
     confirm_observer.SetPattern("*confirm*suppressed*");
     second_tab->GetPrimaryMainFrame()->ExecuteJavaScriptForTests(
         u"confirm('Activate!');", base::NullCallback());
-    confirm_observer.Wait();
+    ASSERT_TRUE(confirm_observer.Wait());
   }
   EXPECT_EQ(2, browser()->tab_strip_model()->count());
   EXPECT_EQ(0, browser()->tab_strip_model()->active_index());
@@ -498,7 +547,7 @@ IN_PROC_BROWSER_TEST_F(BrowserTest, NoJavaScriptDialogsActivateTab) {
     prompt_observer.SetPattern("*prompt*suppressed*");
     second_tab->GetPrimaryMainFrame()->ExecuteJavaScriptForTests(
         u"prompt('Activate!');", base::NullCallback());
-    prompt_observer.Wait();
+    ASSERT_TRUE(prompt_observer.Wait());
   }
   EXPECT_EQ(2, browser()->tab_strip_model()->count());
   EXPECT_EQ(0, browser()->tab_strip_model()->active_index());
@@ -655,7 +704,7 @@ IN_PROC_BROWSER_TEST_F(BrowserTest, DialogDefersNavigationCommit) {
     EXPECT_TRUE(handle->IsWaitingToCommit());
   }
 
-  manager.WaitForNavigationFinished();
+  ASSERT_TRUE(manager.WaitForNavigationFinished());
 }
 
 // Test for crbug.com/297289.  Ensure that modal dialogs are closed when a
@@ -714,7 +763,7 @@ IN_PROC_BROWSER_TEST_F(BrowserTest, RendererCrossProcessNavCancelsDialogs) {
   EXPECT_TRUE(js_dialog_manager->IsShowingDialogForTesting());
 
   // Let the navigation to url2 finish and dismiss the dialog.
-  manager.WaitForNavigationFinished();
+  ASSERT_TRUE(manager.WaitForNavigationFinished());
   EXPECT_FALSE(js_dialog_manager->IsShowingDialogForTesting());
 
   // Make sure input events still work in the renderer process.
@@ -756,7 +805,7 @@ IN_PROC_BROWSER_TEST_F(BrowserTest, DownloadDoesntDismissDialog) {
 
   // Let the url2 response finish and become a download, without dismissing the
   // dialog.
-  manager.WaitForNavigationFinished();
+  ASSERT_TRUE(manager.WaitForNavigationFinished());
   EXPECT_TRUE(js_dialog_manager->IsShowingDialogForTesting());
   download_waiter->WaitForFinished();
 
@@ -939,8 +988,8 @@ IN_PROC_BROWSER_TEST_F(BrowserTest, TargetBlankLinkOpensInGroup) {
   // Click a target=_blank link.
   WebContents* const contents =
       browser()->tab_strip_model()->GetActiveWebContents();
-  ASSERT_TRUE(ExecuteScript(
-      contents, "simulateClick(\"test-anchor-with-blank-target\", {})"));
+  ASSERT_TRUE(
+      ExecJs(contents, "simulateClick(\"test-anchor-with-blank-target\", {})"));
 
   // The new tab should have inherited the tab group from the first tab.
   EXPECT_EQ(group_id, browser()->tab_strip_model()->GetTabGroupForTab(1));
@@ -986,7 +1035,7 @@ class BeforeUnloadAtQuitWithTwoWindows : public InProcessBrowserTest {
 
     // Run the application event loop to completion, which will cycle the
     // native MessagePump on all platforms.
-    base::ThreadTaskRunnerHandle::Get()->PostTask(
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE, base::RunLoop::QuitCurrentWhenIdleClosureDeprecated());
     base::RunLoop().Run();
 
@@ -1167,7 +1216,7 @@ IN_PROC_BROWSER_TEST_F(BrowserTest, TabClosingWhenRemovingExtension) {
   extensions_tab_helper->SetExtensionApp(extension_app);
 
   model->AddWebContents(std::move(app_contents), 0,
-                        ui::PageTransitionFromInt(0), TabStripModel::ADD_NONE);
+                        ui::PageTransitionFromInt(0), AddTabTypes::ADD_NONE);
   model->SetTabPinned(0, true);
   ASSERT_TRUE(ui_test_utils::NavigateToURL(browser(), url));
 
@@ -1178,8 +1227,8 @@ IN_PROC_BROWSER_TEST_F(BrowserTest, TabClosingWhenRemovingExtension) {
   extensions::ExtensionService* service =
       extensions::ExtensionSystem::Get(browser()->profile())
           ->extension_service();
-  service->UninstallExtension(GetExtension()->id(),
-                              extensions::UNINSTALL_REASON_FOR_TESTING, NULL);
+  service->UninstallExtension(
+      GetExtension()->id(), extensions::UNINSTALL_REASON_FOR_TESTING, nullptr);
   EXPECT_EQ(1, observer.closing_count());
 
   model->RemoveObserver(&observer);
@@ -1188,45 +1237,47 @@ IN_PROC_BROWSER_TEST_F(BrowserTest, TabClosingWhenRemovingExtension) {
   ASSERT_EQ(1, browser()->tab_strip_model()->count());
 }
 
-// Open with --app-id=<id>, and see that an application tab opens by default.
+// Open with --app-id=<id>, and see that an application window opens by default.
+#if !BUILDFLAG(IS_CHROMEOS_ASH)
 IN_PROC_BROWSER_TEST_F(BrowserTest, AppIdSwitch) {
   base::HistogramTester tester;
   ASSERT_TRUE(embedded_test_server()->Start());
 
-  // There should be one tab to start with.
+  // There should be one browser and one tab to start with.
+  EXPECT_EQ(1u, chrome::GetBrowserCount(browser()->profile()));
   ASSERT_EQ(1, browser()->tab_strip_model()->count());
 
-  ui_test_utils::TabAddedWaiter tab_waiter(browser());
-
   // Load an app.
-  ASSERT_TRUE(LoadExtension(test_data_dir_.AppendASCII("app/")));
-  const Extension* extension_app = GetExtension();
-
+  webapps::AppId app_id = web_app::test::InstallDummyWebApp(
+      browser()->profile(), "testapp", GURL("https://testapp.com"));
   base::CommandLine command_line(base::CommandLine::NO_PROGRAM);
-  command_line.AppendSwitchASCII(switches::kAppId, extension_app->id());
+  command_line.AppendSwitchASCII(switches::kAppId, app_id);
 
+  ui_test_utils::BrowserChangeObserver browser_change(
+      nullptr, ui_test_utils::BrowserChangeObserver::ChangeType::kAdded);
+  base::test::TestFuture<void> launch_done;
+  web_app::startup::SetStartupDoneCallbackForTesting(launch_done.GetCallback());
   EXPECT_TRUE(StartupBrowserCreator().ProcessCmdLineImpl(
       command_line, base::FilePath(), chrome::startup::IsProcessStartup::kNo,
       {browser()->profile(), StartupProfileMode::kBrowserWindow}, {}));
 
-  tab_waiter.Wait();
-
+  ASSERT_TRUE(launch_done.Wait());
+  Browser* app_browser = browser_change.Wait();
+  EXPECT_TRUE(app_browser->is_type_app());
   {
     // From launch_mode_recorder.cc:
     constexpr char kLaunchModesHistogram[] = "Launch.Modes";
-    const base::HistogramBase::Sample LM_AS_WEBAPP_IN_TAB = 21;
+    const base::HistogramBase::Sample LM_AS_WEBAPP_IN_WINDOW_BY_APP_ID = 24;
 
-    tester.ExpectUniqueSample(kLaunchModesHistogram, LM_AS_WEBAPP_IN_TAB, 1);
+    tester.ExpectUniqueSample(kLaunchModesHistogram,
+                              LM_AS_WEBAPP_IN_WINDOW_BY_APP_ID, 1);
   }
 
   // Check that the number of browsers and tabs is correct.
-  const unsigned int expected_browsers = 1;
-  int expected_tabs = 1;
-  expected_tabs++;
-
-  EXPECT_EQ(expected_browsers, chrome::GetBrowserCount(browser()->profile()));
-  EXPECT_EQ(expected_tabs, browser()->tab_strip_model()->count());
+  EXPECT_EQ(2u, chrome::GetBrowserCount(browser()->profile()));
+  EXPECT_EQ(1, browser()->tab_strip_model()->count());
 }
+#endif  // !BUILDFLAG(IS_CHROMEOS_ASH)
 
 // Overscroll is only enabled on Aura platforms currently, and even then only
 // when a specific feature (OverscrollHistoryNavigation) is enabled.
@@ -1278,8 +1329,8 @@ IN_PROC_BROWSER_TEST_F(BrowserTest, ShouldShowLocationBar) {
   ASSERT_EQ(3u, chrome::GetBrowserCount(browser()->profile()));
 
   // Find the new browsers.
-  Browser* app_browser = NULL;
-  Browser* dev_tools_browser = NULL;
+  Browser* app_browser = nullptr;
+  Browser* dev_tools_browser = nullptr;
   for (auto* b : *BrowserList::GetInstance()) {
     if (b == browser()) {
       continue;
@@ -1306,10 +1357,15 @@ IN_PROC_BROWSER_TEST_F(BrowserTest, ShouldShowLocationBar) {
 // Regression test for crbug.com/702505.
 IN_PROC_BROWSER_TEST_F(BrowserTest, ReattachDevToolsWindow) {
   ASSERT_TRUE(embedded_test_server()->Start());
+  net::EmbeddedTestServer https_test_server(
+      net::EmbeddedTestServer::TYPE_HTTPS);
+  https_test_server.ServeFilesFromSourceDirectory(GetChromeTestDataDir());
+  ASSERT_TRUE(https_test_server.Start());
+  GURL http_url(embedded_test_server()->GetURL("/title1.html"));
   WebContents* web_contents =
       browser()->tab_strip_model()->GetActiveWebContents();
-  ASSERT_TRUE(ui_test_utils::NavigateToURL(browser(),
-                                           GURL(chrome::kChromeUINewTabURL)));
+
+  ASSERT_TRUE(ui_test_utils::NavigateToURL(browser(), http_url));
 
   // Open a devtools window.
   DevToolsWindow* devtools_window =
@@ -1350,7 +1406,7 @@ IN_PROC_BROWSER_TEST_F(BrowserTest, ReattachDevToolsWindow) {
 
 // Chromeos defaults to restoring the last session, so this test isn't
 // applicable.
-#if !BUILDFLAG(IS_CHROMEOS_ASH)
+#if !BUILDFLAG(IS_CHROMEOS)
 // Makes sure pinned tabs are restored correctly on start.
 IN_PROC_BROWSER_TEST_F(BrowserTest, RestorePinnedTabs) {
   ASSERT_TRUE(embedded_test_server()->Start());
@@ -1396,9 +1452,8 @@ IN_PROC_BROWSER_TEST_F(BrowserTest, RestorePinnedTabs) {
 
   // Find the new browser.
   BrowserList* browsers = BrowserList::GetInstance();
-  auto new_browser_iter =
-      std::find_if(browsers->begin(), browsers->end(),
-                   [this](Browser* b) { return b != browser(); });
+  auto new_browser_iter = base::ranges::find_if_not(
+      *browsers, [this](Browser* b) { return b == browser(); });
   ASSERT_NE(browsers->end(), new_browser_iter);
 
   Browser* new_browser = *new_browser_iter;
@@ -1413,7 +1468,7 @@ IN_PROC_BROWSER_TEST_F(BrowserTest, RestorePinnedTabs) {
   EXPECT_TRUE(new_model->IsTabPinned(1));
   EXPECT_FALSE(new_model->IsTabPinned(2));
 }
-#endif  // !BUILDFLAG(IS_CHROMEOS_ASH)
+#endif  // !BUILDFLAG(IS_CHROMEOS)
 
 // TODO(1126339): fix the way how exo creates accelerated widgets. At the
 // moment, they are created only after the client attaches a buffer to a surface,
@@ -1431,7 +1486,7 @@ IN_PROC_BROWSER_TEST_F(BrowserTest, MAYBE_CloseWithAppMenuOpen) {
     return;
 
   // We need a message loop running for menus on windows.
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE, base::BindOnce(&RunCloseWithAppMenuCallback, browser()));
 }
 
@@ -1466,7 +1521,7 @@ IN_PROC_BROWSER_TEST_F(BrowserTest, OpenAppWindowLikeNtp) {
   ASSERT_EQ(2u, chrome::GetBrowserCount(browser()->profile()));
 
   // Find the new browser.
-  Browser* new_browser = NULL;
+  Browser* new_browser = nullptr;
   for (auto* b : *BrowserList::GetInstance()) {
     if (b != browser())
       new_browser = b;
@@ -1487,19 +1542,15 @@ IN_PROC_BROWSER_TEST_F(BrowserTest, OpenAppWindowLikeNtp) {
 // set_show_state(ui::SHOW_STATE_MAXIMIZED) has been invoked.
 IN_PROC_BROWSER_TEST_F(BrowserTest, StartMaximized) {
   Browser::CreateParams params[] = {
-    Browser::CreateParams(Browser::TYPE_NORMAL, browser()->profile(), true),
-    Browser::CreateParams(Browser::TYPE_POPUP, browser()->profile(), true),
-    Browser::CreateParams::CreateForApp("app_name", true, gfx::Rect(),
-                                        browser()->profile(), true),
-    Browser::CreateParams::CreateForDevTools(browser()->profile()),
-    Browser::CreateParams::CreateForAppPopup("app_name", true, gfx::Rect(),
-                                             browser()->profile(), true),
-#if !BUILDFLAG(IS_CHROMEOS_LACROS)
-    // Picture in picture v2 is not supported yet.
-    // See crbug.com/1320453 .
-    Browser::CreateParams(Browser::TYPE_PICTURE_IN_PICTURE,
-                          browser()->profile(), true),
-#endif
+      Browser::CreateParams(Browser::TYPE_NORMAL, browser()->profile(), true),
+      Browser::CreateParams(Browser::TYPE_POPUP, browser()->profile(), true),
+      Browser::CreateParams::CreateForApp("app_name", true, gfx::Rect(),
+                                          browser()->profile(), true),
+      Browser::CreateParams::CreateForDevTools(browser()->profile()),
+      Browser::CreateParams::CreateForAppPopup("app_name", true, gfx::Rect(),
+                                               browser()->profile(), true),
+      Browser::CreateParams(Browser::TYPE_PICTURE_IN_PICTURE,
+                            browser()->profile(), true),
   };
   for (size_t i = 0; i < std::size(params); ++i) {
     params[i].initial_show_state = ui::SHOW_STATE_MAXIMIZED;
@@ -1507,22 +1558,25 @@ IN_PROC_BROWSER_TEST_F(BrowserTest, StartMaximized) {
   }
 }
 
+// TODO(crbug.com/1394195) This test is flaky on asan lacros and may crash ash.
+#if BUILDFLAG(IS_CHROMEOS_LACROS) && defined(ADDRESS_SANITIZER)
+#define MAYBE_StartMinimized DISABLED_StartMinimized
+#else
+#define MAYBE_StartMinimized StartMinimized
+#endif
 // Makes sure the browser doesn't crash when
 // set_show_state(ui::SHOW_STATE_MINIMIZED) has been invoked.
-IN_PROC_BROWSER_TEST_F(BrowserTest, StartMinimized) {
+IN_PROC_BROWSER_TEST_F(BrowserTest, MAYBE_StartMinimized) {
   Browser::CreateParams params[] = {
-    Browser::CreateParams(Browser::TYPE_NORMAL, browser()->profile(), true),
-    Browser::CreateParams(Browser::TYPE_POPUP, browser()->profile(), true),
-    Browser::CreateParams::CreateForApp("app_name", true, gfx::Rect(),
-                                        browser()->profile(), true),
-    Browser::CreateParams::CreateForDevTools(browser()->profile()),
-    Browser::CreateParams::CreateForAppPopup("app_name", true, gfx::Rect(),
-                                             browser()->profile(), true),
-#if !BUILDFLAG(IS_CHROMEOS_LACROS)
-    // Picture in picture v2 is not supported yet.
-    Browser::CreateParams(Browser::TYPE_PICTURE_IN_PICTURE,
-                          browser()->profile(), true),
-#endif  // !IS_CHROMEOS_LACROS
+      Browser::CreateParams(Browser::TYPE_NORMAL, browser()->profile(), true),
+      Browser::CreateParams(Browser::TYPE_POPUP, browser()->profile(), true),
+      Browser::CreateParams::CreateForApp("app_name", true, gfx::Rect(),
+                                          browser()->profile(), true),
+      Browser::CreateParams::CreateForDevTools(browser()->profile()),
+      Browser::CreateParams::CreateForAppPopup("app_name", true, gfx::Rect(),
+                                               browser()->profile(), true),
+      Browser::CreateParams(Browser::TYPE_PICTURE_IN_PICTURE,
+                            browser()->profile(), true),
   };
   for (size_t i = 0; i < std::size(params); ++i) {
     params[i].initial_show_state = ui::SHOW_STATE_MINIMIZED;
@@ -1571,7 +1625,7 @@ IN_PROC_BROWSER_TEST_F(BrowserTest, DisableMenuItemsWhenIncognitoIsForced) {
   // Set Incognito to FORCED.
   IncognitoModePrefs::SetAvailability(
       browser()->profile()->GetPrefs(),
-      IncognitoModePrefs::Availability::kForced);
+      policy::IncognitoModeAvailability::kForced);
   // Bookmarks & Settings commands should get disabled.
   EXPECT_FALSE(command_updater->IsCommandEnabled(IDC_NEW_WINDOW));
   EXPECT_FALSE(command_updater->IsCommandEnabled(IDC_SHOW_BOOKMARK_MANAGER));
@@ -1627,7 +1681,7 @@ IN_PROC_BROWSER_TEST_F(BrowserTest,
   // Set Incognito to DISABLED.
   IncognitoModePrefs::SetAvailability(
       browser()->profile()->GetPrefs(),
-      IncognitoModePrefs::Availability::kDisabled);
+      policy::IncognitoModeAvailability::kDisabled);
   // Make sure New Incognito Window command is disabled. All remaining commands
   // should be enabled.
   EXPECT_FALSE(command_updater->IsCommandEnabled(IDC_NEW_INCOGNITO_WINDOW));
@@ -1676,7 +1730,7 @@ IN_PROC_BROWSER_TEST_F(BrowserTestWithExtensionsDisabled,
   // Set Incognito to DISABLED.
   IncognitoModePrefs::SetAvailability(
       browser()->profile()->GetPrefs(),
-      IncognitoModePrefs::Availability::kDisabled);
+      policy::IncognitoModeAvailability::kDisabled);
   // Make sure Manage Extensions command is disabled.
   EXPECT_FALSE(command_updater->IsCommandEnabled(IDC_MANAGE_EXTENSIONS));
   EXPECT_TRUE(command_updater->IsCommandEnabled(IDC_NEW_WINDOW));
@@ -1711,14 +1765,14 @@ IN_PROC_BROWSER_TEST_F(BrowserTest,
   // Set Incognito to FORCED.
   IncognitoModePrefs::SetAvailability(
       popup_browser->profile()->GetPrefs(),
-      IncognitoModePrefs::Availability::kForced);
+      policy::IncognitoModeAvailability::kForced);
   // OPTIONS and IMPORT_SETTINGS are disabled when Incognito is forced.
   EXPECT_FALSE(command_updater->IsCommandEnabled(IDC_OPTIONS));
   EXPECT_FALSE(command_updater->IsCommandEnabled(IDC_IMPORT_SETTINGS));
   // Set Incognito to AVAILABLE.
   IncognitoModePrefs::SetAvailability(
       popup_browser->profile()->GetPrefs(),
-      IncognitoModePrefs::Availability::kEnabled);
+      policy::IncognitoModeAvailability::kEnabled);
   // OPTIONS and IMPORT_SETTINGS are still disabled since it is a non-normal UI.
   EXPECT_FALSE(command_updater->IsCommandEnabled(IDC_OPTIONS));
   EXPECT_FALSE(command_updater->IsCommandEnabled(IDC_IMPORT_SETTINGS));
@@ -2189,11 +2243,14 @@ IN_PROC_BROWSER_TEST_F(BrowserTest, AboutVersion) {
   ASSERT_TRUE(ui_test_utils::NavigateToURL(browser(),
                                            GURL(chrome::kChromeUIVersionURL)));
   WebContents* tab = browser()->tab_strip_model()->GetActiveWebContents();
-  ASSERT_GT(ui_test_utils::FindInPage(tab, u"WebKit", true, true, NULL, NULL),
-            0);
-  ASSERT_GT(ui_test_utils::FindInPage(tab, u"OS", true, true, NULL, NULL), 0);
   ASSERT_GT(
-      ui_test_utils::FindInPage(tab, u"JavaScript", true, true, NULL, NULL), 0);
+      ui_test_utils::FindInPage(tab, u"WebKit", true, true, nullptr, nullptr),
+      0);
+  ASSERT_GT(ui_test_utils::FindInPage(tab, u"OS", true, true, nullptr, nullptr),
+            0);
+  ASSERT_GT(ui_test_utils::FindInPage(tab, u"JavaScript", true, true, nullptr,
+                                      nullptr),
+            0);
 }
 
 static const base::FilePath::CharType* kTestDir =
@@ -2433,8 +2490,7 @@ IN_PROC_BROWSER_TEST_F(BrowserTest, GetSizeForNewRenderView) {
   // should be the same as when it was first created.
   EXPECT_EQ(rwhv_create_size0, rwhv_commit_size0);
   // Sizes of the current RenderWidgetHostView and WebContentsView should not
-  // change before and after
-  // WebContentsDelegate::DidNavigatePrimaryMainFramePostCommit
+  // change before and after WebContentsObserver::DidFinishNavigation
   // (implemented by Browser); we obtain the sizes before PostCommit via
   // WebContentsObserver::NavigationEntryCommitted (implemented by
   // RenderViewSizeObserver).
@@ -2528,37 +2584,6 @@ IN_PROC_BROWSER_TEST_F(BrowserTest, CanDuplicateTab) {
   EXPECT_TRUE(chrome::CanDuplicateTab(browser()));
   EXPECT_TRUE(chrome::CanDuplicateTabAt(browser(), 0));
   EXPECT_TRUE(chrome::CanDuplicateTabAt(browser(), 1));
-}
-
-IN_PROC_BROWSER_TEST_F(BrowserTest, DefaultMediaDevices) {
-  const std::string kDefaultAudioCapture1 = "test_default_audio_capture";
-  const std::string kDefaultVideoCapture1 = "test_default_video_capture";
-  auto SetString = [this](const std::string& path, const std::string& value) {
-    browser()->profile()->GetPrefs()->SetString(path, value);
-  };
-  SetString(prefs::kDefaultAudioCaptureDevice, kDefaultAudioCapture1);
-  SetString(prefs::kDefaultVideoCaptureDevice, kDefaultVideoCapture1);
-
-  ASSERT_TRUE(ui_test_utils::NavigateToURL(browser(), GURL("chrome://newtab")));
-  WebContents* web_contents =
-      browser()->tab_strip_model()->GetActiveWebContents();
-  auto GetDeviceID = [web_contents](blink::mojom::MediaStreamType type) {
-    return web_contents->GetDelegate()->GetDefaultMediaDeviceID(web_contents,
-                                                                type);
-  };
-  EXPECT_EQ(kDefaultAudioCapture1,
-            GetDeviceID(blink::mojom::MediaStreamType::DEVICE_AUDIO_CAPTURE));
-  EXPECT_EQ(kDefaultVideoCapture1,
-            GetDeviceID(blink::mojom::MediaStreamType::DEVICE_VIDEO_CAPTURE));
-
-  const std::string kDefaultAudioCapture2 = "test_default_audio_capture_2";
-  const std::string kDefaultVideoCapture2 = "test_default_video_capture_2";
-  SetString(prefs::kDefaultAudioCaptureDevice, kDefaultAudioCapture2);
-  SetString(prefs::kDefaultVideoCaptureDevice, kDefaultVideoCapture2);
-  EXPECT_EQ(kDefaultAudioCapture2,
-            GetDeviceID(blink::mojom::MediaStreamType::DEVICE_AUDIO_CAPTURE));
-  EXPECT_EQ(kDefaultVideoCapture2,
-            GetDeviceID(blink::mojom::MediaStreamType::DEVICE_VIDEO_CAPTURE));
 }
 
 namespace {
@@ -2710,13 +2735,16 @@ IN_PROC_BROWSER_TEST_F(BrowserTest, DialogsDropFullscreen) {
   web_modal::WebContentsModalDialogManagerDelegate* browser_as_dialog_delegate =
       static_cast<web_modal::WebContentsModalDialogManagerDelegate*>(browser());
 
+  FullscreenOperationComplete full_screen_complete_observer(browser());
   // Simulate the tab requesting fullscreen.
   browser_as_wc_delegate->EnterFullscreenModeForTab(tab->GetPrimaryMainFrame(),
                                                     {});
+  full_screen_complete_observer.Wait();
   EXPECT_TRUE(browser_as_wc_delegate->IsFullscreenForTabOrPending(tab));
 
   // The tab gets a modal dialog.
   browser_as_dialog_delegate->SetWebContentsBlocked(tab, true);
+  full_screen_complete_observer.Wait();
 
   // The dialog should drop fullscreen.
   EXPECT_FALSE(browser_as_wc_delegate->IsFullscreenForTabOrPending(tab));

@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,7 +10,7 @@ MediaStreamRequest::MediaStreamRequest(
     int render_process_id,
     int render_frame_id,
     int page_request_id,
-    const GURL& security_origin,
+    const url::Origin& url_origin,
     bool user_gesture,
     blink::MediaStreamRequestType request_type,
     const std::string& requested_audio_device_id,
@@ -22,7 +22,8 @@ MediaStreamRequest::MediaStreamRequest(
     : render_process_id(render_process_id),
       render_frame_id(render_frame_id),
       page_request_id(page_request_id),
-      security_origin(security_origin),
+      security_origin(url_origin.GetURL()),
+      url_origin(url_origin),
       user_gesture(user_gesture),
       request_type(request_type),
       requested_audio_device_id(requested_audio_device_id),

@@ -1,14 +1,14 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "components/mirroring/service/udp_socket_client.h"
 
-#include <algorithm>
 #include <string>
 
-#include "base/bind.h"
-#include "base/callback.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
+#include "base/ranges/algorithm.h"
 #include "base/run_loop.h"
 #include "base/test/mock_callback.h"
 #include "base/test/task_environment.h"
@@ -18,6 +18,7 @@
 #include "media/cast/test/utility/net_utility.h"
 #include "mojo/public/cpp/bindings/remote.h"
 #include "net/base/ip_endpoint.h"
+#include "services/network/public/mojom/clear_data_filter.mojom.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
@@ -100,8 +101,7 @@ TEST_F(UdpSocketClientTest, SendAndReceive) {
   }
 
   // The packet is expected to be received.
-  EXPECT_TRUE(
-      std::equal(packet2.begin(), packet2.end(), received_packet_->begin()));
+  EXPECT_TRUE(base::ranges::equal(packet2, *received_packet_));
 
   udp_transport_client_->StopReceiving();
 }

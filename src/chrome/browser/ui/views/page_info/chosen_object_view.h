@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -18,7 +18,7 @@ class ImageButton;
 }
 
 class ChosenObjectViewObserver;
-class PageInfoRowView;
+class RichControlsContainerView;
 
 // A ChosenObjectView is a row in the Page Info bubble that shows an individual
 // object (e.g. a Bluetooth device, a USB device) that the current site has
@@ -44,7 +44,7 @@ class ChosenObjectView : public views::View {
   void ExecuteDeleteCommand();
 
   raw_ptr<views::ImageButton> delete_button_ = nullptr;
-  raw_ptr<PageInfoRowView> row_view_ = nullptr;
+  raw_ptr<RichControlsContainerView> row_view_ = nullptr;
 
   base::ObserverList<ChosenObjectViewObserver>::Unchecked observer_list_;
   std::unique_ptr<PageInfoUI::ChosenObjectInfo> info_;

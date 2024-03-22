@@ -1,4 +1,4 @@
-// Copyright (c) 2011 The Chromium Authors. All rights reserved.
+// Copyright 2011 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,6 +10,10 @@
 #include <sys/types.h>
 #include <sys/user.h>
 #include <unistd.h>
+
+#include "base/files/file_path.h"
+#include "base/posix/sysctl.h"
+#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace base {
 
@@ -25,18 +29,10 @@ ProcessId GetParentProcessId(ProcessHandle process) {
 }
 
 FilePath GetProcessExecutablePath(ProcessHandle process) {
-  char pathname[PATH_MAX];
-  size_t length;
-  int mib[] = { CTL_KERN, KERN_PROC, KERN_PROC_PATHNAME, process };
+  absl::optional<std::string> pathname =
+      base::StringSysctl({CTL_KERN, KERN_PROC, KERN_PROC_PATHNAME, process});
 
-  length = sizeof(pathname);
-
-  if (sysctl(mib, std::size(mib), pathname, &length, NULL, 0) < 0 ||
-      length == 0) {
-    return FilePath();
-  }
-
-  return FilePath(std::string(pathname));
+  return FilePath(pathname.value_or(std::string{}));
 }
 
 }  // namespace base

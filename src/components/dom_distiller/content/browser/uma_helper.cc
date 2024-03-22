@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -45,10 +45,6 @@ void UMAHelper::DistillabilityDriverTimer::Reset() {
 bool UMAHelper::DistillabilityDriverTimer::HasStarted() {
   return active_time_start_ != base::Time() ||
          total_active_time_ != base::TimeDelta();
-}
-
-bool UMAHelper::DistillabilityDriverTimer::IsTimingDistilledPage() {
-  return HasStarted() && is_distilled_page_;
 }
 
 base::TimeDelta UMAHelper::DistillabilityDriverTimer::GetElapsedTime() {
@@ -136,35 +132,8 @@ void UMAHelper::UpdateTimersOnNavigation(content::WebContents* web_contents,
   if (!driver->GetTimer().HasStarted())
     return;
 
-  // Stop timing distilled pages when a user navigates away. (Note that
-  // distillable pages are logged only when reader mode is triggered, so there
-  // is no need to log time on a distillable page at navigation.
-  if (driver->GetTimer().IsTimingDistilledPage())
-    LogTimeOnDistilledPage(driver->GetTimer().GetElapsedTime());
+  // Stop timing distilled pages when a user navigates away.
   driver->GetTimer().Reset();
-}
-
-// static
-void UMAHelper::LogTimeOnDistillablePage(content::WebContents* web_contents) {
-  CHECK(web_contents);
-  DistillabilityDriver::CreateForWebContents(web_contents);
-  DistillabilityDriver* driver =
-      DistillabilityDriver::FromWebContents(web_contents);
-  CHECK(driver);
-  DCHECK(driver->GetTimer().HasStarted());
-
-  // We shouldn't log time on a distillable page if this is a distilled page.
-  DCHECK(!driver->GetTimer().IsTimingDistilledPage());
-
-  base::UmaHistogramLongTimes(
-      "DomDistiller.Time.ActivelyViewingArticleBeforeDistilling",
-      driver->GetTimer().GetElapsedTime());
-  driver->GetTimer().Reset();
-}
-
-void UMAHelper::LogTimeOnDistilledPage(base::TimeDelta time) {
-  base::UmaHistogramLongTimes("DomDistiller.Time.ActivelyViewingReaderModePage",
-                              time);
 }
 
 }  // namespace dom_distiller

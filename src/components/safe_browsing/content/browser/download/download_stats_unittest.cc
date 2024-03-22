@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -91,14 +91,14 @@ TEST(SafeBrowsingDownloadStatsTest, RecordDownloadOpened) {
   download::DownloadContent fake_content =
       download::DownloadContent::SPREADSHEET;
   // Not logged for dangerous downloads.
-  RecordDownloadOpened(
+  RecordDownloadOpenedLatency(
       download::DownloadDangerType::DOWNLOAD_DANGER_TYPE_DANGEROUS_CONTENT,
       fake_content, download_end_time + base::Days(1), download_end_time,
       /*show_download_in_folder=*/false);
   histogram_tester.ExpectTotalCount(
       "SBClientDownload.SafeDownloadOpenedLatency2.OpenDirectly", 0);
 
-  RecordDownloadOpened(
+  RecordDownloadOpenedLatency(
       download::DownloadDangerType::DOWNLOAD_DANGER_TYPE_NOT_DANGEROUS,
       fake_content, download_end_time + base::Days(1), download_end_time,
       /*show_download_in_folder=*/false);
@@ -107,43 +107,13 @@ TEST(SafeBrowsingDownloadStatsTest, RecordDownloadOpened) {
       /*sample=*/base::Days(1),
       /*count=*/1);
 
-  RecordDownloadOpened(
+  RecordDownloadOpenedLatency(
       download::DownloadDangerType::DOWNLOAD_DANGER_TYPE_NOT_DANGEROUS,
       fake_content, download_end_time + base::Hours(5), download_end_time,
       /*show_download_in_folder=*/true);
   histogram_tester.ExpectTimeBucketCount(
       "SBClientDownload.SafeDownloadOpenedLatency2.ShowInFolder",
       /*sample=*/base::Hours(5),
-      /*count=*/1);
-}
-
-TEST(SafeBrowsingDownloadStatsTest, RecordDownloadOpenedFileType) {
-  base::HistogramTester histogram_tester;
-
-  base::Time download_end_time = base::Time::Now();
-
-  RecordDownloadOpenedFileType(download::DownloadContent::SPREADSHEET,
-                               download_end_time + base::Days(1),
-                               download_end_time);
-  histogram_tester.ExpectTimeBucketCount(
-      "SBClientDownload.SafeDownloadOpenedLatencyByContentType.SPREADSHEET",
-      /*sample=*/base::Days(1),
-      /*count=*/1);
-
-  RecordDownloadOpenedFileType(download::DownloadContent::PRESENTATION,
-                               download_end_time + base::Hours(5),
-                               download_end_time);
-  histogram_tester.ExpectTimeBucketCount(
-      "SBClientDownload.SafeDownloadOpenedLatencyByContentType.PRESENTATION",
-      /*sample=*/base::Hours(5),
-      /*count=*/1);
-
-  RecordDownloadOpenedFileType(download::DownloadContent::ARCHIVE,
-                               download_end_time + base::Days(1),
-                               download_end_time);
-  histogram_tester.ExpectTimeBucketCount(
-      "SBClientDownload.SafeDownloadOpenedLatencyByContentType.ARCHIVE",
-      /*sample=*/base::Days(1),
       /*count=*/1);
 }
 
@@ -158,9 +128,6 @@ TEST(SafeBrowsingDownloadStatsTest, RecordDownloadFileTypeAttributes) {
         "SBClientDownload.UserGestureFileType.Attributes",
         /*sample=*/UserGestureFileTypeAttributes::TOTAL_TYPE_CHECKED,
         /*expected_bucket_count=*/1);
-    histogram_tester.ExpectTotalCount(
-        "SBClientDownload.UserGestureFileType.LastBypassDownloadInterval",
-        /*count=*/0);
   }
   {
     base::HistogramTester histogram_tester;
@@ -186,10 +153,6 @@ TEST(SafeBrowsingDownloadStatsTest, RecordDownloadFileTypeAttributes) {
         /*sample=*/
         UserGestureFileTypeAttributes::HAS_BOTH_USER_GESTURE_AND_REFERRER_VISIT,
         /*expected_count=*/1);
-    histogram_tester.ExpectUniqueTimeSample(
-        "SBClientDownload.UserGestureFileType.LastBypassDownloadInterval",
-        /*sample=*/base::Hours(1),
-        /*expected_bucket_count=*/1);
   }
 }
 

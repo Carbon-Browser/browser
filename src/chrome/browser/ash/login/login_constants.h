@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -29,9 +29,9 @@ constexpr int kDefaultGaiaOfflineSigninTimeLimitDays =
 constexpr int kDefaultSAMLOfflineSigninTimeLimit = base::Days(14).InSeconds();
 
 constexpr int kDefaultGaiaLockScreenOfflineSigninTimeLimitDays =
-    kLockScreenOfflineSigninTimeLimitDaysMatchLogin;
+    kOfflineSigninTimeLimitNotSet;
 constexpr int kDefaultSamlLockScreenOfflineSigninTimeLimitDays =
-    kLockScreenOfflineSigninTimeLimitDaysMatchLogin;
+    kOfflineSigninTimeLimitNotSet;
 
 // In-session password-change feature (includes password expiry notifications).
 const bool kDefaultSamlInSessionPasswordChangeEnabled = false;

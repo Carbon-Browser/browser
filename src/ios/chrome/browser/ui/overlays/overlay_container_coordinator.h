@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,8 +7,8 @@
 
 #import <UIKit/UIKit.h>
 
-#include "ios/chrome/browser/overlays/public/overlay_modality.h"
-#import "ios/chrome/browser/ui/coordinators/chrome_coordinator.h"
+#include "ios/chrome/browser/overlays/model/public/overlay_modality.h"
+#import "ios/chrome/browser/shared/coordinator/chrome_coordinator/chrome_coordinator.h"
 
 // Coordinator that manages the container view in which overlay UI is displayed.
 // The coordinator's view controller should be used to display overlay UI

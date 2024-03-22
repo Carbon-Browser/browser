@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,7 +6,7 @@
 
 #include <memory>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/memory/ref_counted.h"
 #include "base/task/single_thread_task_runner.h"
 #include "base/task/thread_pool.h"
@@ -16,7 +16,7 @@
 #include "services/network/public/cpp/weak_wrapper_shared_url_loader_factory.h"
 #include "services/network/test/test_network_connection_tracker.h"
 
-#if BUILDFLAG(IS_MAC)
+#if BUILDFLAG(IS_APPLE)
 #include "services/device/public/cpp/test/fake_geolocation_manager.h"
 #endif
 
@@ -63,7 +63,7 @@ DeviceServiceTestBase::~DeviceServiceTestBase() = default;
 
 void DeviceServiceTestBase::SetUp() {
   GeolocationManager* geolocation_manager = nullptr;
-#if BUILDFLAG(IS_MAC)
+#if BUILDFLAG(IS_APPLE)
   fake_geolocation_manager_ = std::make_unique<FakeGeolocationManager>();
   geolocation_manager = fake_geolocation_manager_.get();
 #endif

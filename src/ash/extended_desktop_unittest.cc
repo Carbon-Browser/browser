@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,6 +14,7 @@
 #include "ash/wm/desks/desks_util.h"
 #include "ash/wm/window_properties.h"
 #include "ash/wm/window_util.h"
+#include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
 #include "base/strings/string_util.h"
 #include "base/strings/utf_string_conversions.h"
@@ -71,7 +72,7 @@ class MoveWindowByClickEventHandler : public ui::EventHandler {
     }
   }
 
-  aura::Window* target_;
+  raw_ptr<aura::Window, ExperimentalAsh> target_;
 };
 
 // An event handler which records the event's locations.

@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,6 +12,7 @@
 //    anti-DDoS throttling for various different actual downtimes is what
 //    we expect it to be.
 
+#include <stdarg.h>
 #include <stddef.h>
 
 #include <cmath>
@@ -21,6 +22,7 @@
 
 #include "base/environment.h"
 #include "base/memory/ptr_util.h"
+#include "base/memory/raw_ptr.h"
 #include "base/rand_util.h"
 #include "base/test/task_environment.h"
 #include "base/time/time.h"
@@ -397,10 +399,12 @@ class Requester : public DiscreteTimeSimulation::Actor {
   }
 
   void PerformAction() override {
-    const base::TimeDelta current_jitter = request_jitter_ * base::RandDouble();
+    const auto current_jitter =
+        request_jitter_.is_zero()
+            ? base::TimeDelta()
+            : base::RandTimeDelta(-request_jitter_, request_jitter_);
     const base::TimeDelta effective_delay =
-        time_between_requests_ +
-        (base::RandInt(0, 1) ? -current_jitter : current_jitter);
+        time_between_requests_ + current_jitter;
 
     if (throttler_entry_->ImplGetTimeNow() - time_of_last_attempt_ >
         effective_delay) {
@@ -437,9 +441,8 @@ class Requester : public DiscreteTimeSimulation::Actor {
   // Adds a delay until the first request, equal to a uniformly distributed
   // value between now and now + max_delay.
   void SetStartupJitter(const base::TimeDelta& max_delay) {
-    int delay_ms = base::RandInt(0, max_delay.InMilliseconds());
-    time_of_last_attempt_ =
-        TimeTicks() + base::Milliseconds(delay_ms) - time_between_requests_;
+    time_of_last_attempt_ = TimeTicks() + base::RandTimeDeltaUpTo(max_delay) -
+                            time_between_requests_;
   }
 
   void SetRequestJitter(const base::TimeDelta& request_jitter) {
@@ -458,8 +461,9 @@ class Requester : public DiscreteTimeSimulation::Actor {
   TimeTicks time_of_last_success_;
   bool last_attempt_was_failure_;
   base::TimeDelta last_downtime_duration_;
-  Server* const server_;
-  RequesterResults* const results_;  // May be nullptr.
+  const raw_ptr<Server, ExperimentalRenderer> server_;
+  const raw_ptr<RequesterResults, ExperimentalRenderer>
+      results_;  // May be nullptr.
 };
 
 void SimulateAttack(Server* server,

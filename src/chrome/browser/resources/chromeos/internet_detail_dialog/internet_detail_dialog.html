@@ -1,5 +1,5 @@
 <style include="cr-page-host-style cr-shared-style network-shared
-    iron-flex">
+    iron-flex cros-color-overrides">
   cr-policy-network-indicator-mojo {
     margin-inline-end: 10px;
   }
@@ -17,6 +17,53 @@
   #networkState[connected] {
     color: var(--cros-text-color-positive);
   }
+
+  #networkState[warning] {
+    color: var(--cros-text-color-warning);
+  }
+
+  .signin-button {
+    margin-inline-end: 8px;
+    padding: 8px 16px 8px 8px;
+  }
+
+  .signin-icon {
+    background-color: var(--text-color);
+    margin-inline-end: 4px;
+    margin-inline-start: 0;
+  }
+
+  #apnRow {
+    height: var(--cr-section-two-line-min-height);
+  }
+
+  #apnRowSublabel:not([warning]) {
+    color: var(--cros-text-color-positive);
+  }
+
+  #createCustomApnButton {
+    margin-bottom: 10px;
+    margin-inline-start: 20px;
+  }
+
+  #createCustomApnButton iron-icon {
+    --iron-icon-fill-color: var(--text-color);
+    margin-inline-end: 8px;
+  }
+
+  #createCustomApnButton[disabled] iron-icon {
+    --iron-icon-fill-color: var(--disabled);
+  }
+
+  #apnTooltip {
+    --paper-tooltip-background: var(--cros-tooltip-background-color);
+    --paper-tooltip-text-color: var(--cros-tooltip-label-color);
+    text-align: center;
+  }
+
+  #apnButtonTitle {
+    display: inline-block;
+  }
 </style>
 
 <!-- Title section: Icon + name + connection state. -->
@@ -29,9 +76,16 @@
     [[getNameText_(managedProperties_)]]
   </div>
   <div id="networkState" class="title flex"
-      connected$="[[isConnectedState_(managedProperties_)]]">
+      connected$="[[showConnectedState_(managedProperties_)]]"
+      warning$="[[showRestrictedConnectivity_(managedProperties_)]]">
     [[getStateText_(managedProperties_)]]
   </div>
+  <cr-button class="signin-button" id="signinButton" on-click="onSigninTap_"
+      hidden$="[[!showSignin_(managedProperties_)]]"
+      disabled="[[disableSignin_(managedProperties_, disabled_)]]">
+    <div class="signin-icon cr-icon icon-external"></div>
+    $i18n{networkButtonSignin}
+  </cr-button>
   <cr-button on-click="onForgetTap_"
       hidden$="[[!showForget_(managedProperties_)]]"
       disabled="[[disabled_]]">
@@ -71,13 +125,56 @@
   </template>
 
   <!-- APN (Cellular only) -->
-  <template is="dom-if" if="[[isCellular_(managedProperties_)]]">
+  <template is="dom-if"
+      if="[[shouldShowApnList_(managedProperties_,
+          isApnRevampEnabled_)]]">
     <div class="cr-row">
       <network-apnlist class="flex" editable on-apn-change="onApnChange_"
           managed-properties="[[managedProperties_]]"
           disabled="[[disabled_]]">
       </network-apnlist>
     </div>
+  </template>
+  <template is="dom-if"
+      if="[[shouldShowApnSection_(managedProperties_,
+          isApnRevampEnabled_)]]">
+    <cr-expand-button id="apnRow" class="settings-box cr-row"
+        expanded="{{apnExpanded_}}">
+      <div id="apnRowTitle">$i18n{internetApnPageTitle}</div>
+      <div id="apnRowSublabel"
+          class="cr-secondary-text"
+          warning$="[[showRestrictedConnectivity_(managedProperties_)]]">
+        [[getApnRowSublabel_(managedProperties_, apnExpanded_)]]
+      </div>
+    </cr-expand-button>
+    <iron-collapse opened="[[apnExpanded_]]">
+      <apn-list
+          id="apnList"
+          managed-cellular-properties="[[managedProperties_.typeProperties.cellular]]"
+          guid="[[guid]]"
+          error-state="[[managedProperties_.errorState]]"
+          portal-state="[[managedProperties_.portalState]]"
+          should-omit-links>
+      </apn-list>
+      <div id="apnButtonTitle">
+        <cr-button id="createCustomApnButton"
+            on-click="onCreateCustomApnClicked_"
+            class="cancel-button"
+            disabled="[[isNumCustomApnsLimitReached_]]">
+          <iron-icon icon="cr:add"></iron-icon>
+          $i18n{apnPageAddNewApn}
+        </cr-button>
+      </div>
+      <!-- TODO(b/162365553) Add a11y support-->
+      <template is="dom-if" if="[[isNumCustomApnsLimitReached_]]" restamp>
+        <paper-tooltip
+            id="apnTooltip"
+            for="apnButtonTitle"
+            position="right">
+          $i18n{customApnLimitReached}
+        </paper-tooltip>
+      </template>
+    </iron-collapse>
   </template>
 
   <!-- Proxy -->
@@ -123,7 +220,8 @@
   <div class="cr-row">
     <!-- MAC Address. -->
     <div class="property-box single-column two-line"
-        hidden$="[[!deviceState_.macAddress]]">
+        id="macAddress"
+        hidden$="[[!shouldShowMacAddress_(deviceState_.macAddress)]]">
       <div>$i18n{OncMacAddress}</div>
       <div class="secondary">[[deviceState_.macAddress]]</div>
     </div>
@@ -139,4 +237,10 @@
       </network-property-list-mojo>
     </div>
   </template>
+</template>
+
+<template is="dom-if" if="[[isApnRevampEnabled_]]" restamp>
+  <cr-toast id="errorToast" duration="5000">
+    <span id="errorToastMessage">[[errorToastMessage_]]</span>
+  </cr-toast>
 </template>

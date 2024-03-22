@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,9 +8,9 @@
 #include "ash/components/arc/arc_util.h"
 #include "ash/components/arc/session/arc_session_runner.h"
 #include "ash/components/arc/test/fake_arc_session.h"
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/command_line.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/run_loop.h"
 #include "base/task/single_thread_task_runner.h"
 #include "base/test/metrics/histogram_tester.h"
@@ -111,14 +111,14 @@ class ArcSessionRunnerTest : public testing::Test,
   static std::unique_ptr<ArcSession> CreateSuspendedArcSession() {
     auto arc_session = std::make_unique<FakeArcSession>();
     arc_session->SuspendBoot();
-    return std::move(arc_session);
+    return arc_session;
   }
 
   static std::unique_ptr<ArcSession> CreateBootFailureArcSession(
       ArcStopReason reason) {
     auto arc_session = std::make_unique<FakeArcSession>();
     arc_session->EnableBootFailureEmulation(reason);
-    return std::move(arc_session);
+    return arc_session;
   }
 
  private:

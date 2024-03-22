@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,6 +6,7 @@
  * @fileoverview Provides phonetic disambiguation functionality across multiple
  * languages for ChromeVox.
  */
+import {PhoneticDictionaries} from './phonetic_dictionaries.js';
 
 export class PhoneticData {
   /**
@@ -22,10 +23,6 @@ export class PhoneticData {
 
     if (locale === 'ja') {
       return JaPhoneticData.forCharacter(char);
-    }
-
-    if (!PhoneticDictionaries || !PhoneticDictionaries.phoneticMap_) {
-      throw Error('PhoneticDictionaries map must be defined.');
     }
 
     char = char.toLowerCase();

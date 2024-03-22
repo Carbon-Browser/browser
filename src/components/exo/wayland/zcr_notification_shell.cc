@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,7 +11,8 @@
 #include <string>
 
 #include "base/atomic_sequence_num.h"
-#include "base/bind.h"
+#include "base/functional/bind.h"
+#include "base/memory/raw_ptr.h"
 #include "base/strings/stringprintf.h"
 #include "components/exo/notification.h"
 #include "components/exo/notification_surface.h"
@@ -73,7 +74,7 @@ class WaylandNotificationShellNotification {
     wl_client_flush(wl_resource_get_client(resource_));
   }
 
-  wl_resource* const resource_;
+  const raw_ptr<wl_resource, ExperimentalAsh> resource_;
   std::unique_ptr<Notification> notification_;
 
   base::WeakPtrFactory<WaylandNotificationShellNotification> weak_ptr_factory_{

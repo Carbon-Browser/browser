@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,8 @@
 
 #import <CoreBluetooth/CoreBluetooth.h>
 
-#include "base/memory/ref_counted.h"
+#include <memory>
+
 #include "build/build_config.h"
 
 #if !BUILDFLAG(IS_IOS)

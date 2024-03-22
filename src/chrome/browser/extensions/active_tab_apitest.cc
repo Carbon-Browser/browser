@@ -1,17 +1,16 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include <memory>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/strings/stringprintf.h"
 #include "base/strings/utf_string_conversions.h"
 #include "build/chromeos_buildflags.h"
 #include "chrome/browser/extensions/extension_action_runner.h"
 #include "chrome/browser/extensions/extension_apitest.h"
 #include "chrome/browser/extensions/extension_service.h"
-#include "chrome/browser/extensions/extension_tab_util.h"
 #include "chrome/browser/extensions/extension_util.h"
 #include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/tabs/tab_strip_model.h"
@@ -21,6 +20,7 @@
 #include "content/public/test/browser_test_utils.h"
 #include "content/public/test/test_utils.h"
 #include "extensions/browser/extension_registry.h"
+#include "extensions/browser/extension_util.h"
 #include "extensions/browser/test_extension_registry_observer.h"
 #include "extensions/common/constants.h"
 #include "extensions/common/extension.h"
@@ -29,11 +29,6 @@
 #include "net/base/filename_util.h"
 #include "net/dns/mock_host_resolver.h"
 #include "net/test/embedded_test_server/embedded_test_server.h"
-
-#if BUILDFLAG(IS_CHROMEOS_ASH)
-#include "chrome/browser/chromeos/extensions/extension_tab_util_delegate_chromeos.h"
-#include "chromeos/login/login_state/scoped_test_public_session_login_state.h"
-#endif
 
 namespace extensions {
 namespace {
@@ -54,7 +49,8 @@ class ExtensionActiveTabTest : public ExtensionApiTest {
   }
 };
 
-IN_PROC_BROWSER_TEST_F(ExtensionActiveTabTest, ActiveTab) {
+// TODO(crbug.com/1380627): Flaky on all platforms.
+IN_PROC_BROWSER_TEST_F(ExtensionActiveTabTest, DISABLED_ActiveTab) {
   ASSERT_TRUE(StartEmbeddedTestServer());
 
   ExtensionTestMessageListener background_page_ready("ready");
@@ -93,29 +89,6 @@ IN_PROC_BROWSER_TEST_F(ExtensionActiveTabTest, ActiveTab) {
         ->RunAction(extension, true);
     EXPECT_TRUE(catcher.GetNextResult()) << message_;
   }
-
-#if BUILDFLAG(IS_CHROMEOS_ASH)
-  // For the third pass grant the activeTab permission and do it in a public
-  // session. URL should be scrubbed down to origin.
-  {
-    // Setup state.
-    chromeos::ScopedTestPublicSessionLoginState login_state;
-    ExtensionTabUtil::SetPlatformDelegate(
-        std::make_unique<ExtensionTabUtilDelegateChromeOS>());
-
-    ExtensionTestMessageListener listener;
-    ResultCatcher catcher;
-    ExtensionActionRunner::GetForWebContents(
-        browser()->tab_strip_model()->GetActiveWebContents())
-        ->RunAction(extension, true);
-    EXPECT_TRUE(catcher.GetNextResult()) << message_;
-    EXPECT_EQ(GURL(listener.message()).DeprecatedGetOriginAsURL().spec(),
-              listener.message());
-
-    // Clean up.
-    ExtensionTabUtil::SetPlatformDelegate(nullptr);
-  }
-#endif
 
   // Navigating to a different page on the same origin should revoke extension's
   // access to the tab, unless the runtime host permissions feature is enabled.
@@ -191,13 +164,13 @@ IN_PROC_BROWSER_TEST_F(ExtensionApiTest, FileURLs) {
   EXPECT_TRUE(background_page_ready.WaitUntilSatisfied());
 
   auto can_xhr_file_urls = [this, &extension_id]() {
-    constexpr char script[] = R"(
+    static constexpr char script[] = R"(
       var req = new XMLHttpRequest();
       var url = '%s';
       req.open('GET', url, true);
       req.onload = function() {
         if (req.responseText === 'Hello!')
-          window.domAutomationController.send('true');
+          chrome.test.sendScriptResult('true');
 
         // Even for a successful request, the status code might be 0. Ensure
         // that onloadend is not subsequently called if the request is
@@ -210,20 +183,20 @@ IN_PROC_BROWSER_TEST_F(ExtensionApiTest, FileURLs) {
       // 'error' event).
       req.onloadend = function() {
         if (req.status === 0)
-          window.domAutomationController.send('false');
+          chrome.test.sendScriptResult('false');
       };
       req.send();
     )";
 
     base::FilePath test_file =
         test_data_dir_.DirName().AppendASCII("test_file.txt");
-    std::string result = ExecuteScriptInBackgroundPage(
+    base::Value result = ExecuteScriptInBackgroundPage(
         extension_id,
         base::StringPrintf(script,
                            net::FilePathToFileURL(test_file).spec().c_str()));
 
-    EXPECT_TRUE(result == "true" || result == "false");
-    return result == "true";
+    EXPECT_TRUE(result.is_string() && (result == "true" || result == "false"));
+    return result.is_string() && result == "true";
   };
 
   auto can_load_file_iframe = [this, &extension_id]() {
@@ -257,7 +230,7 @@ IN_PROC_BROWSER_TEST_F(ExtensionApiTest, FileURLs) {
   };
 
   auto can_script_tab = [this, &extension_id](int tab_id) {
-    constexpr char script[] = R"(
+    static constexpr char script[] = R"(
       var tabID = %d;
       chrome.tabs.executeScript(
           tabID, {code: 'console.log("injected");'}, function() {
@@ -267,19 +240,20 @@ IN_PROC_BROWSER_TEST_F(ExtensionApiTest, FileURLs) {
 
             if (chrome.runtime.lastError &&
                 expectedError != chrome.runtime.lastError.message) {
-              window.domAutomationController.send(
+              chrome.test.sendScriptResult(
                   'unexpected error: ' + chrome.runtime.lastError.message);
             } else {
-              window.domAutomationController.send(
+              chrome.test.sendScriptResult(
                   chrome.runtime.lastError ? 'false' : 'true');
             }
           });
     )";
 
-    std::string result = ExecuteScriptInBackgroundPage(
+    base::Value result = ExecuteScriptInBackgroundPage(
         extension_id, base::StringPrintf(script, tab_id));
-    EXPECT_TRUE(result == "true" || result == "false") << result;
-    return result == "true";
+    EXPECT_TRUE(result.is_string());
+    EXPECT_TRUE(result == "true" || result == "false");
+    return result.is_string() && result == "true";
   };
 
   auto get_active_tab_id = [this]() {

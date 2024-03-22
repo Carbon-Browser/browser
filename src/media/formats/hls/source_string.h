@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -15,51 +15,20 @@ namespace media::hls {
 
 struct SourceLineIterator;
 class VariableDictionary;
+class ResolvedSourceString;
 
-// Type representing the resolution state for a `SourceString`.
-// As there is only one state here (unresolved), this struct is empty.
-struct SourceStringState {};
-
-// Type containing the resolution state for a `ResolvedSourceString`.
-struct ResolvedSourceStringState {
-  // Whether this string has undergone variable substitution and has
-  // substitutions applied to the original source.
-  bool contains_substitutions;
-};
-
-template <typename T>
-class GenericSourceString;
-
-// A `SourceString` is a slice of the original manifest string that may contain
-// unresolved variable references.
-using SourceString = GenericSourceString<SourceStringState>;
-
-// A `ResolvedSourceString` is a string slice that has either undergone or
-// skipped variable substitution, and may differ from the original source.
-using ResolvedSourceString = GenericSourceString<ResolvedSourceStringState>;
+namespace subtle {
 
 // This structure represents contents of a single line in an HLS manifest, not
 // including the line ending. This may be the entire line, or a substring of the
 // line (clipped at either/both ends).
-template <typename ResolutionState>
-class MEDIA_EXPORT GenericSourceString {
+template <typename Self>
+class MEDIA_EXPORT SourceStringBase {
  public:
-  static GenericSourceString Create(base::PassKey<SourceLineIterator>,
-                                    size_t line,
-                                    base::StringPiece str);
-  static GenericSourceString Create(base::PassKey<VariableDictionary>,
-                                    size_t line,
-                                    size_t column,
-                                    base::StringPiece str,
-                                    ResolutionState resolution_state);
-  static GenericSourceString CreateForTesting(base::StringPiece str);
-  static GenericSourceString CreateForTesting(size_t line,
-                                              size_t column,
-                                              base::StringPiece str);
-  static GenericSourceString CreateForTesting(size_t line,
-                                              size_t column,
-                                              base::StringPiece str,
-                                              ResolutionState resolution_state);
+  static Self CreateForTesting(base::StringPiece str);
+  static Self CreateForTesting(size_t line,
+                               size_t column,
+                               base::StringPiece str);
 
   // Returns the 1-based line index of this SourceString within the manifest.
   size_t Line() const { return line_; }
@@ -76,18 +45,50 @@ class MEDIA_EXPORT GenericSourceString {
 
   size_t Size() const { return str_.size(); }
 
-  GenericSourceString Substr(size_t pos = 0,
-                             size_t count = base::StringPiece::npos) const;
+  Self Substr(size_t pos = 0, size_t count = base::StringPiece::npos) const;
 
   // Consumes this string up to the given count, which may be longer than this
   // string. Returns the substring that was consumed.
-  GenericSourceString Consume(size_t count = base::StringPiece::npos);
+  Self Consume(size_t count = base::StringPiece::npos);
 
   // Finds the first occurrence of the given character, and returns the
   // substring prefixing that character. The prefix and character are consumed
   // from this string. If the given character does not appear anywhere in this
   // string, the entire string is consumed and returned.
-  GenericSourceString ConsumeDelimiter(char c);
+  Self ConsumeDelimiter(char c);
+
+  // Trims whitespace from the start of this SourceString. The only tolerated
+  // "whitespace" characters are space (' ') and tab ('\t'). Page break ('\f')
+  // is not tolerated, and carriage return ('\r') and line-feed ('\n') should
+  // never appear in `SourceString`.
+  void TrimStart();
+
+  // Returns whether this string contains variable substitutions, i.e. is
+  // different from the original source.
+  bool ContainsSubstitutions() const;
+
+ protected:
+  SourceStringBase(size_t line, size_t column, base::StringPiece str);
+
+ private:
+  size_t line_;
+  size_t column_;
+  base::StringPiece str_;
+};
+
+}  // namespace subtle
+
+// A `SourceString` is a slice of the original manifest string that may contain
+// unresolved variable references.
+class MEDIA_EXPORT SourceString final
+    : public subtle::SourceStringBase<SourceString> {
+ public:
+  // Only `SourceLineIterator` may create `SourceString`s.
+  static SourceString Create(base::PassKey<SourceLineIterator>,
+                             size_t line,
+                             base::StringPiece str) {
+    return SourceString(line, 1, str);
+  }
 
   // Produces a `ResolvedSourceString` by bypassing variable substitution.
   // This is useful for passing strings that must not contain variables to
@@ -95,44 +96,54 @@ class MEDIA_EXPORT GenericSourceString {
   // references.
   ResolvedSourceString SkipVariableSubstitution() const;
 
-  // Returns whether this string contains variable substitutions, i.e. is
-  // different from the original source.
-  bool ContainsSubstitutions() const;
+  bool ContainsSubstitutions() const { return false; }
 
  private:
-  template <typename>
-  friend class GenericSourceString;
-
-  GenericSourceString(size_t line,
-                      size_t column,
-                      base::StringPiece str,
-                      ResolutionState resolution_state);
-
-  size_t line_;
-  size_t column_;
-  base::StringPiece str_;
-  ResolutionState resolution_state_;
+  friend SourceStringBase;
+  SourceString(size_t line, size_t column, base::StringPiece str);
 };
 
-// `SourceLineIterator` may not create resolved source strings
-template <>
-ResolvedSourceString ResolvedSourceString::Create(
-    base::PassKey<SourceLineIterator>,
-    size_t line,
-    base::StringPiece str) = delete;
+// A `ResolvedSourceString` is a string slice that has either undergone or
+// skipped variable substitution, and may differ from the original source.
+class MEDIA_EXPORT ResolvedSourceString final
+    : public subtle::SourceStringBase<ResolvedSourceString> {
+ public:
+  enum class SubstitutionState {
+    kNoSubstitutions,
+    kContainsSubstitutions,
+  };
 
-// `VariableDictionary` may not create unresolved source strings
-template <>
-SourceString SourceString::Create(base::PassKey<VariableDictionary>,
-                                  size_t line,
-                                  size_t column,
-                                  base::StringPiece str,
-                                  SourceStringState resolution_state) = delete;
+  // Only `VariableDictionary` or `SourceString` may create
+  // `ResolvedSourceString`s.
+  static ResolvedSourceString Create(base::PassKey<VariableDictionary>,
+                                     size_t line,
+                                     size_t column,
+                                     base::StringPiece str,
+                                     SubstitutionState substitution_state) {
+    return ResolvedSourceString(line, column, str, substitution_state);
+  }
+  static ResolvedSourceString Create(base::PassKey<SourceString>,
+                                     size_t line,
+                                     size_t column,
+                                     base::StringPiece str) {
+    return ResolvedSourceString(line, column, str,
+                                SubstitutionState::kNoSubstitutions);
+  }
 
-// Resolved source strings may not skip variable substitution
-template <>
-ResolvedSourceString ResolvedSourceString::SkipVariableSubstitution() const =
-    delete;
+  bool ContainsSubstitutions() const {
+    return substitution_state_ == SubstitutionState::kContainsSubstitutions;
+  }
+
+ private:
+  friend SourceStringBase;
+  ResolvedSourceString(size_t line,
+                       size_t column,
+                       base::StringPiece str,
+                       SubstitutionState substitution_state =
+                           SubstitutionState::kNoSubstitutions);
+
+  SubstitutionState substitution_state_;
+};
 
 // Exposes a line-based iteration API over the source text of an HLS manifest.
 struct MEDIA_EXPORT SourceLineIterator {

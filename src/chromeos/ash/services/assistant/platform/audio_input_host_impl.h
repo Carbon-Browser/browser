@@ -1,10 +1,11 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CHROMEOS_ASH_SERVICES_ASSISTANT_PLATFORM_AUDIO_INPUT_HOST_IMPL_H_
 #define CHROMEOS_ASH_SERVICES_ASSISTANT_PLATFORM_AUDIO_INPUT_HOST_IMPL_H_
 
+#include "base/memory/raw_ptr.h"
 #include "chromeos/ash/services/assistant/platform/audio_input_host.h"
 
 #include <string>
@@ -14,13 +15,12 @@
 #include "base/scoped_observation.h"
 #include "base/time/time.h"
 #include "chromeos/ash/services/assistant/platform/audio_devices.h"
+#include "chromeos/ash/services/libassistant/public/mojom/audio_input_controller.mojom.h"
 #include "chromeos/dbus/power/power_manager_client.h"
-#include "chromeos/services/libassistant/public/mojom/audio_input_controller.mojom.h"
 #include "mojo/public/cpp/bindings/remote.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 
-namespace chromeos {
-namespace assistant {
+namespace ash::assistant {
 
 // Class that provides the bridge between the ChromeOS Browser thread and the
 // Libassistant audio input mojom service.
@@ -30,7 +30,7 @@ class COMPONENT_EXPORT(ASSISTANT_SERVICE) AudioInputHostImpl
       private AudioDevices::Observer {
  public:
   AudioInputHostImpl(
-      mojo::PendingRemote<chromeos::libassistant::mojom::AudioInputController>
+      mojo::PendingRemote<libassistant::mojom::AudioInputController>
           pending_remote,
       CrasAudioHandler* cras_audio_handler,
       chromeos::PowerManagerClient* power_manager_client,
@@ -57,8 +57,9 @@ class COMPONENT_EXPORT(ASSISTANT_SERVICE) AudioInputHostImpl
   void OnInitialLidStateReceived(
       absl::optional<chromeos::PowerManagerClient::SwitchStates> switch_states);
 
-  mojo::Remote<chromeos::libassistant::mojom::AudioInputController> remote_;
-  chromeos::PowerManagerClient* const power_manager_client_;
+  mojo::Remote<libassistant::mojom::AudioInputController> remote_;
+  const raw_ptr<chromeos::PowerManagerClient, ExperimentalAsh>
+      power_manager_client_;
   base::ScopedObservation<chromeos::PowerManagerClient,
                           chromeos::PowerManagerClient::Observer>
       power_manager_client_observer_;
@@ -66,12 +67,12 @@ class COMPONENT_EXPORT(ASSISTANT_SERVICE) AudioInputHostImpl
   // Observes available audio devices and will set device-id/hotword-device-id
   // accordingly.
   AudioDevices audio_devices_;
-  AudioDevices::ScopedObservation audio_devices_observation_{this};
+  base::ScopedObservation<AudioDevices, AudioDevices::Observer>
+      audio_devices_observation_{this};
 
   base::WeakPtrFactory<AudioInputHostImpl> weak_factory_{this};
 };
 
-}  // namespace assistant
-}  // namespace chromeos
+}  // namespace ash::assistant
 
 #endif  // CHROMEOS_ASH_SERVICES_ASSISTANT_PLATFORM_AUDIO_INPUT_HOST_IMPL_H_

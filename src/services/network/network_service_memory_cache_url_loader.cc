@@ -1,38 +1,51 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "services/network/network_service_memory_cache_url_loader.h"
 
 #include "base/bit_cast.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/trace_event/common/trace_event_common.h"
 #include "base/trace_event/trace_event.h"
 #include "net/http/http_log_util.h"
 #include "services/network/network_service_memory_cache.h"
 #include "services/network/public/cpp/resource_request.h"
+#include "services/network/public/mojom/http_raw_headers.mojom.h"
+#include "services/network/public/mojom/ip_address_space.mojom.h"
 
 namespace network {
 
 NetworkServiceMemoryCacheURLLoader::NetworkServiceMemoryCacheURLLoader(
     NetworkServiceMemoryCache* memory_cache,
     uint64_t trace_id,
-    const GURL& url,
+    const ResourceRequest& resource_request,
     const net::NetLogWithSource& net_log,
     mojo::PendingReceiver<mojom::URLLoader> receiver,
     mojo::PendingRemote<mojom::URLLoaderClient> client,
     scoped_refptr<base::RefCountedBytes> content,
-    int64_t encoded_body_length)
+    int64_t encoded_body_length,
+    const absl::optional<net::CookiePartitionKey> cookie_partition_key)
     : memory_cache_(memory_cache),
       trace_id_(trace_id),
       net_log_(net_log),
       receiver_(this, std::move(receiver)),
       client_(std::move(client)),
+      devtools_request_id_(resource_request.devtools_request_id),
       content_(std::move(content)),
-      encoded_body_length_(encoded_body_length) {
+      encoded_body_length_(encoded_body_length),
+      cookie_partition_key_(std::move(cookie_partition_key)) {
   DCHECK(memory_cache_);
   TRACE_EVENT_NESTABLE_ASYNC_BEGIN1(
       "loading", "NetworkServiceMemoryCacheURLLoader",
-      TRACE_ID_LOCAL(trace_id_), "url", url.spec());
+      TRACE_ID_LOCAL(trace_id_), "url", resource_request.url.spec());
+
+  if (resource_request.trusted_params &&
+      resource_request.trusted_params->devtools_observer) {
+    devtools_observer_.Bind(
+        std::move(const_cast<mojo::PendingRemote<mojom::DevToolsObserver>&>(
+            resource_request.trusted_params->devtools_observer)));
+  }
 
   client_.set_disconnect_handler(
       base::BindOnce(&NetworkServiceMemoryCacheURLLoader::OnClientDisconnected,
@@ -49,6 +62,8 @@ void NetworkServiceMemoryCacheURLLoader::Start(
     const ResourceRequest& resource_request,
     mojom::URLResponseHeadPtr response_head) {
   UpdateResponseHead(resource_request, response_head);
+
+  MaybeNotifyRawResponse(*response_head);
 
   // Create a data pipe.
   MojoCreateDataPipeOptions options;
@@ -74,12 +89,12 @@ void NetworkServiceMemoryCacheURLLoader::Start(
 
   // Start sending the response.
   client_->OnReceiveResponse(std::move(response_head),
-                             std::move(consumer_handle));
+                             std::move(consumer_handle), absl::nullopt);
 
   // Set up data pipe producer.
   producer_handle_watcher_ = std::make_unique<mojo::SimpleWatcher>(
       FROM_HERE, mojo::SimpleWatcher::ArmingPolicy::MANUAL,
-      base::SequencedTaskRunnerHandle::Get());
+      base::SequencedTaskRunner::GetCurrentDefault());
   producer_handle_watcher_->Watch(
       producer_handle_.get(), MOJO_HANDLE_SIGNAL_WRITABLE,
       MOJO_WATCH_CONDITION_SATISFIED,
@@ -114,6 +129,29 @@ void NetworkServiceMemoryCacheURLLoader::UpdateResponseHead(
     load_timing.receive_headers_end = now_ticks;
   }
   response_head->load_timing = load_timing;
+}
+
+void NetworkServiceMemoryCacheURLLoader::MaybeNotifyRawResponse(
+    const mojom::URLResponseHead& response_head) {
+  if (!devtools_observer_ || !devtools_request_id_)
+    return;
+
+  std::vector<network::mojom::HttpRawHeaderPairPtr> header_array;
+  size_t iter = 0;
+  std::string name, value;
+  while (response_head.headers->EnumerateHeaderLines(&iter, &name, &value)) {
+    network::mojom::HttpRawHeaderPairPtr pair =
+        network::mojom::HttpRawHeaderPair::New();
+    pair->key = name;
+    pair->value = value;
+    header_array.push_back(std::move(pair));
+  }
+
+  devtools_observer_->OnRawResponse(
+      *devtools_request_id_, /*cookies_with_access_result=*/{},
+      std::move(header_array), /*raw_response_headers=*/absl::nullopt,
+      mojom::IPAddressSpace::kUnknown, response_head.headers->response_code(),
+      cookie_partition_key_);
 }
 
 void NetworkServiceMemoryCacheURLLoader::WriteMore() {

@@ -25,6 +25,8 @@
 
 #include "third_party/blink/renderer/modules/webaudio/media_stream_audio_source_node.h"
 
+#include <inttypes.h>
+
 #include "third_party/blink/public/platform/modules/webrtc/webrtc_logging.h"
 #include "third_party/blink/renderer/bindings/modules/v8/v8_media_stream_audio_source_options.h"
 #include "third_party/blink/renderer/modules/webaudio/audio_context.h"
@@ -39,6 +41,7 @@ MediaStreamAudioSourceNode::MediaStreamAudioSourceNode(
     MediaStreamTrack* audio_track,
     std::unique_ptr<AudioSourceProvider> audio_source_provider)
     : AudioNode(context),
+      ActiveScriptWrappable<MediaStreamAudioSourceNode>({}),
       audio_track_(audio_track),
       media_stream_(media_stream) {
   SetHandler(MediaStreamAudioSourceHandler::Create(
@@ -73,7 +76,7 @@ MediaStreamAudioSourceNode* MediaStreamAudioSourceNode::Create(
 
   // 1.24.1. Step 1 & 2.
   MediaStreamTrackVector audio_tracks = media_stream.getAudioTracks();
-  if (audio_tracks.IsEmpty()) {
+  if (audio_tracks.empty()) {
     exception_state.ThrowDOMException(DOMExceptionCode::kInvalidStateError,
                                       "MediaStream has no audio track");
     return nullptr;

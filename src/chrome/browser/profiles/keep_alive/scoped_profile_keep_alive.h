@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -40,9 +40,7 @@ class ScopedProfileKeepAlive {
   static void RemoveKeepAliveOnUIThread(const Profile* profile,
                                         ProfileKeepAliveOrigin origin);
 
-  // TODO(crbug.com/1298696): unit_tests breaks with MTECheckedPtr
-  // enabled. Triage.
-  const raw_ptr<const Profile, DegradeToNoOpWhenMTE> profile_;
+  const raw_ptr<const Profile, DanglingUntriaged> profile_;
   const ProfileKeepAliveOrigin origin_;
 };
 

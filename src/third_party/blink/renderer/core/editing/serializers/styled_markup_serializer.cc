@@ -248,12 +248,12 @@ String StyledMarkupSerializer<Strategy>::CreateMarkup() {
                  CSSPropertyID::kBackgroundImage)) &&
             fully_selected_root->FastHasAttribute(
                 html_names::kBackgroundAttr)) {
-          fully_selected_root_style->Style()->SetProperty(
+          fully_selected_root_style->Style()->ParseAndSetProperty(
               CSSPropertyID::kBackgroundImage,
-              "url('" +
-                  fully_selected_root->getAttribute(
-                      html_names::kBackgroundAttr) +
-                  "')",
+              String("url('" +
+                     fully_selected_root->getAttribute(
+                         html_names::kBackgroundAttr) +
+                     "')"),
               /* important */ false,
               fully_selected_root->GetExecutionContext()
                   ->GetSecureContextMode());
@@ -266,13 +266,13 @@ String StyledMarkupSerializer<Strategy>::CreateMarkup() {
           // "inherit", and copy it.
           if (!PropertyMissingOrEqualToNone(fully_selected_root_style->Style(),
                                             CSSPropertyID::kTextDecoration)) {
-            fully_selected_root_style->Style()->SetProperty(
+            fully_selected_root_style->Style()->SetLonghandProperty(
                 CSSPropertyID::kTextDecoration, CSSValueID::kNone);
           }
           if (!PropertyMissingOrEqualToNone(
                   fully_selected_root_style->Style(),
                   CSSPropertyID::kWebkitTextDecorationsInEffect)) {
-            fully_selected_root_style->Style()->SetProperty(
+            fully_selected_root_style->Style()->SetLonghandProperty(
                 CSSPropertyID::kWebkitTextDecorationsInEffect,
                 CSSValueID::kNone);
           }
@@ -325,7 +325,7 @@ StyledMarkupTraverser<Strategy>::StyledMarkupTraverser(
   }
   if (!last_closed_)
     return;
-  ContainerNode* parent = Strategy::Parent(*last_closed_);
+  Element* parent = DynamicTo<Element>(Strategy::Parent(*last_closed_));
   if (!parent)
     return;
   if (ShouldAnnotate()) {
@@ -396,7 +396,7 @@ Node* StyledMarkupTraverser<Strategy>::Traverse(Node* start_node,
       continue;
 
     // Close up the ancestors.
-    while (!ancestors_to_close.IsEmpty()) {
+    while (!ancestors_to_close.empty()) {
       ContainerNode* ancestor = ancestors_to_close.back();
       DCHECK(ancestor);
       if (next && next != past_end &&
@@ -506,8 +506,8 @@ void StyledMarkupTraverser<Strategy>::AppendStartMarkup(Node& node) {
         // block }.
         inline_style->ForceInline();
         // FIXME: Should this be included in forceInline?
-        inline_style->Style()->SetProperty(CSSPropertyID::kFloat,
-                                           CSSValueID::kNone);
+        inline_style->Style()->SetLonghandProperty(CSSPropertyID::kFloat,
+                                                   CSSValueID::kNone);
 
         if (IsForMarkupSanitization()) {
           EditingStyleUtilities::StripUAStyleRulesForMarkupSanitization(

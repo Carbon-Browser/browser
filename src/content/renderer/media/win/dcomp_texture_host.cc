@@ -1,10 +1,11 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "content/renderer/media/win/dcomp_texture_host.h"
 
 #include "base/task/bind_post_task.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/unguessable_token.h"
 #include "gpu/ipc/client/gpu_channel_host.h"
 #include "gpu/ipc/common/command_buffer_id.h"
@@ -18,12 +19,12 @@ namespace content {
 DCOMPTextureHost::DCOMPTextureHost(
     scoped_refptr<gpu::GpuChannelHost> channel,
     int32_t route_id,
-    scoped_refptr<base::SingleThreadTaskRunner> media_task_runner,
+    scoped_refptr<base::SequencedTaskRunner> media_task_runner,
     mojo::PendingAssociatedRemote<gpu::mojom::DCOMPTexture> texture,
     Listener* listener)
     : channel_(std::move(channel)), route_id_(route_id), listener_(listener) {
   DVLOG_FUNC(1);
-  DCHECK(media_task_runner->BelongsToCurrentThread());
+  DCHECK(media_task_runner->RunsTasksInCurrentSequence());
   DCHECK(channel_);
   DCHECK(route_id_);
   DCHECK(listener_);

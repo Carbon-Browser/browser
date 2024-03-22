@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,9 +11,7 @@ import android.content.Intent;
 import org.chromium.base.task.PostTask;
 import org.chromium.base.task.TaskTraits;
 
-/**
- * Triggered when Android's locale changes.
- */
+/** Triggered when Android's locale changes. */
 public class LocaleChangedBroadcastReceiver extends BroadcastReceiver {
     @Override
     public void onReceive(Context context, Intent intent) {
@@ -21,14 +19,14 @@ public class LocaleChangedBroadcastReceiver extends BroadcastReceiver {
         updateChannels();
     }
 
-    /**
-     * Updates notification channels to reflect the new locale.
-     */
+    /** Updates notification channels to reflect the new locale. */
     private void updateChannels() {
         final PendingResult result = goAsync();
-        PostTask.postTask(TaskTraits.BEST_EFFORT_MAY_BLOCK, () -> {
-            ChannelsUpdater.getInstance().updateLocale();
-            result.finish();
-        });
+        PostTask.postTask(
+                TaskTraits.BEST_EFFORT_MAY_BLOCK,
+                () -> {
+                    ChannelsUpdater.getInstance().updateLocale();
+                    result.finish();
+                });
     }
 }

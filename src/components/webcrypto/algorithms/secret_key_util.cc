@@ -1,9 +1,10 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "components/webcrypto/algorithms/secret_key_util.h"
 
+#include "base/strings/string_piece.h"
 #include "components/webcrypto/algorithms/util.h"
 #include "components/webcrypto/blink_key_handle.h"
 #include "components/webcrypto/generate_key_result.h"
@@ -49,7 +50,7 @@ Status CreateWebCryptoSecretKey(base::span<const uint8_t> key_data,
 }
 
 void WriteSecretKeyJwk(base::span<const uint8_t> raw_key_data,
-                       const std::string& algorithm,
+                       base::StringPiece algorithm,
                        bool extractable,
                        blink::WebCryptoKeyUsageMask usages,
                        std::vector<uint8_t>* jwk_key_data) {

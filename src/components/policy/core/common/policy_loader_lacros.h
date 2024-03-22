@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -32,9 +32,8 @@ class POLICY_EXPORT PolicyLoaderLacros
   // task_runner is used to have in sequence the process of policy parsing and
   // validation. The |per_profile| parameter specifies which policy should be
   // installed.
-  explicit PolicyLoaderLacros(
-      scoped_refptr<base::SequencedTaskRunner> task_runner,
-      PolicyPerProfileFilter per_profile);
+  PolicyLoaderLacros(scoped_refptr<base::SequencedTaskRunner> task_runner,
+                     PolicyPerProfileFilter per_profile);
   // Not copyable or movable
   PolicyLoaderLacros(const PolicyLoaderLacros&) = delete;
   PolicyLoaderLacros& operator=(const PolicyLoaderLacros&) = delete;
@@ -47,7 +46,7 @@ class POLICY_EXPORT PolicyLoaderLacros
   void InitOnBackgroundThread() override;
   // Loads the policy data from LacrosInitParams and populates it in the bundle
   // that is returned.
-  std::unique_ptr<PolicyBundle> Load() override;
+  PolicyBundle Load() override;
 
   // Return the policy data object as received from Ash. Returns nullptr if
   // initial load was not done yet.
@@ -87,6 +86,9 @@ class POLICY_EXPORT PolicyLoaderLacros
   static const enterprise_management::PolicyData* main_user_policy_data();
   static void set_main_user_policy_data_for_testing(
       const enterprise_management::PolicyData& policy_data);
+
+  static const std::vector<std::string> device_affiliation_ids();
+  static const std::string device_dm_token();
 
   base::Time last_fetch_timestamp() { return last_fetch_timestamp_; }
 

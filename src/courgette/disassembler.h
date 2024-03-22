@@ -1,4 +1,4 @@
-// Copyright (c) 2011 The Chromium Authors. All rights reserved.
+// Copyright 2011 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,6 +10,7 @@
 #include <memory>
 #include <vector>
 
+#include "base/memory/raw_ref.h"
 #include "courgette/courgette.h"
 #include "courgette/image_utils.h"
 #include "courgette/instruction_utils.h"
@@ -36,7 +37,7 @@ class Disassembler : public AddressTranslator {
     RVA Get() const override;
 
    private:
-    const AddressTranslator& translator_;
+    const raw_ref<const AddressTranslator> translator_;
   };
 
   // Visitor/adaptor to translate RVA to target RVA for rel32.
@@ -54,7 +55,7 @@ class Disassembler : public AddressTranslator {
     RVA Get() const override;
 
    private:
-    const AddressTranslator& translator_;
+    const raw_ref<const AddressTranslator> translator_;
   };
 
   Disassembler(const Disassembler&) = delete;

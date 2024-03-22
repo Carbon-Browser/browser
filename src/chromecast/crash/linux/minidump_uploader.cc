@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -15,14 +15,13 @@
 #include <sstream>
 #include <vector>
 
-#include "base/bind.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
 #include "base/path_service.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/string_split.h"
 #include "base/task/single_thread_task_runner.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "chromecast/base/cast_paths.h"
 #include "chromecast/base/pref_names.h"
 #include "chromecast/base/version.h"
@@ -62,7 +61,7 @@ std::unique_ptr<PrefService> CreatePrefService() {
 
   PrefServiceFactory prefServiceFactory;
   prefServiceFactory.SetUserPrefsFile(
-      prefs_path, base::ThreadTaskRunnerHandle::Get().get());
+      prefs_path, base::SingleThreadTaskRunner::GetCurrentDefault().get());
   return prefServiceFactory.Create(registry);
 }
 
@@ -216,7 +215,8 @@ bool MinidumpUploader::DoWork() {
     LOG(INFO) << "Uploading crash to " << upload_location_;
     CastCrashdumpData crashdump_data;
     crashdump_data.product = kProductName;
-    crashdump_data.version = GetVersionString();
+    crashdump_data.version = GetVersionString(
+        dump.params().cast_release_version, dump.params().cast_build_number);
     crashdump_data.guid = client_id;
     crashdump_data.ptime = uptime_stream.str();
     crashdump_data.comments = comment.str();

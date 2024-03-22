@@ -1,8 +1,10 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "ui/accessibility/test_ax_tree_update_json_reader.h"
+
+#include <algorithm>
 
 #include "base/containers/contains.h"
 #include "base/containers/flat_set.h"
@@ -164,6 +166,9 @@ void ParseAxNodeRole(ui::AXNodeData& node_data,
 void ParseAxNode(ui::AXNodeData& node_data,
                  const base::Value& ax_node,
                  RoleConversions* role_conversions) {
+  // Store the name and set it at the end because |AXNodeData::SetName|
+  // expects a valid role to have already been set prior to calling it.
+  base::Value name_value;
   for (const auto item : ax_node.GetDict()) {
     if (item.first == "backendDOMNodeId") {
       node_data.AddIntAttribute(ax::mojom::IntAttribute::kDOMNodeId,
@@ -177,7 +182,7 @@ void ParseAxNode(ui::AXNodeData& node_data,
       if (item.second.GetBool())
         node_data.AddState(ax::mojom::State::kIgnored);
     } else if (item.first == "name") {
-      ParseAxNodeName(node_data, item.second);
+      name_value = item.second.Clone();
     } else if (item.first == "nodeId") {
       node_data.id = GetAsInt(item.second);
     } else if (item.first == "properties") {
@@ -188,6 +193,8 @@ void ParseAxNode(ui::AXNodeData& node_data,
       DCHECK(base::Contains(kUnusedAxNodeItems, item.first)) << item.first;
     }
   }
+  if (!name_value.is_none())
+    ParseAxNodeName(node_data, name_value);
 }
 
 void ParseChildren(ui::AXTreeUpdate& tree_update,
@@ -282,6 +289,10 @@ ui::AXNodeID AddNode(ui::AXTreeUpdate& tree_update,
                      RoleConversions* role_conversions) {
   ui::AXNodeData node_data;
 
+  // Store the string and set it at the end because |AXNodeData::SetName|
+  // expects a valid role to have already been set prior to calling it.
+  std::string name_string;
+
   for (const auto item : node.GetDict()) {
     if (item.first == "axNode") {
       ParseAxNode(node_data, item.second, role_conversions);
@@ -297,7 +308,7 @@ ui::AXNodeID AddNode(ui::AXTreeUpdate& tree_update,
     } else if (item.first == "interesting") {
       // Not used yet, boolean.
     } else if (item.first == "name") {
-      node_data.SetName(item.second.GetString());
+      name_string = item.second.GetString();
     } else if (item.first == "role") {
       node_data.role =
           RoleFromString(item.second.GetString(), role_conversions);
@@ -305,6 +316,8 @@ ui::AXNodeID AddNode(ui::AXTreeUpdate& tree_update,
       NOTREACHED() << "Unexpected: " << item.first;
     }
   }
+
+  node_data.SetName(name_string);
 
   tree_update.nodes.push_back(node_data);
 
@@ -324,6 +337,10 @@ AXTreeUpdate AXTreeUpdateFromJSON(const base::Value& json,
 
   tree_update.root_id =
       AddNode(tree_update, json.GetList().front(), role_conversions);
+
+  // |AddNode| adds child nodes before parent nodes, while AXTree deserializer
+  // expects parents first.
+  std::reverse(tree_update.nodes.begin(), tree_update.nodes.end());
 
   return tree_update;
 }

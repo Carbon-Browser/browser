@@ -1,15 +1,13 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 package org.chromium.android_webview.test.util;
 
-import org.chromium.base.annotations.JNINamespace;
-import org.chromium.base.annotations.NativeMethods;
+import org.jni_zero.JNINamespace;
+import org.jni_zero.NativeMethods;
 
-/**
- * Utilities for force recording memory metrics.
- */
+/** Utilities for force recording memory metrics. */
 @JNINamespace("android_webview")
 public class MemoryMetricsLoggerUtils {
     @NativeMethods

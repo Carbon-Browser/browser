@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,10 +8,6 @@
 #import <Foundation/Foundation.h>
 
 namespace first_run {
-
-// The accessibility identifier for the UMA collection checkbox shown in first
-// run.
-extern NSString* const kUMAMetricsButtonAccessibilityIdentifier;
 
 // The accessibility identifier for the Welcome screen shown in first run.
 extern NSString* const kFirstRunWelcomeScreenAccessibilityIdentifier;
@@ -26,15 +22,26 @@ extern NSString* const kFirstRunLegacySignInScreenAccessibilityIdentifier;
 // The accessibility identifier for the Sync screen shown in first run.
 extern NSString* const kFirstRunSyncScreenAccessibilityIdentifier;
 
+// The accessibility identifier for the Choice screen title;
+extern NSString* const kSearchEngineChoiceTitleAccessibilityIdentifier;
+
 // The accessibility identifier for the Default browser screen shown in first
 // run.
 extern NSString* const kFirstRunDefaultBrowserScreenAccessibilityIdentifier;
+
+// The accessibility identifier for the Omnibox position choice screen shown in
+// first run.
+extern NSString* const
+    kFirstRunOmniboxPositionChoiceScreenAccessibilityIdentifier;
 
 // URL for the terms of service text.
 extern NSString* const kTermsOfServiceURL;
 
 // URL for the metric reporting text.
 extern NSString* const kMetricReportingURL;
+
+// Accessibility identifier of the enterprise loading screen.
+extern NSString* const kLaunchScreenAccessibilityIdentifier;
 
 // Accessibility identifier of the enterprise loading screen.
 extern NSString* const kEnterpriseLoadingScreenAccessibilityIdentifier;

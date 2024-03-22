@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -24,13 +24,4 @@ void InvokeWebPushCallback(WebPushCallback callback,
   DCHECK(message_id || result != SendWebPushMessageResult::kSuccessful);
   base::UmaHistogramEnumeration("GCM.SendWebPushMessageResult", result);
   std::move(callback).Run(result, std::move(message_id));
-}
-
-void LogSendWebPushMessagePayloadSize(int size) {
-  // Note: The maximum size accepted by FCM is 4096.
-  base::UmaHistogramCounts10000("GCM.SendWebPushMessagePayloadSize", size);
-}
-
-void LogSendWebPushMessageStatusCode(int status_code) {
-  base::UmaHistogramSparse("GCM.SendWebPushMessageStatusCode", status_code);
 }

@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,7 @@
 #include <string>
 
 #include "base/base64.h"
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/metrics/histogram_macros.h"
@@ -109,7 +109,7 @@ bool MeasureAppBoundEncryptionStatus(PrefService* local_state) {
   auto com_runner = base::ThreadPool::CreateCOMSTATaskRunner(
       {base::MayBlock(), base::TaskPriority::USER_BLOCKING,
        base::TaskShutdownBehavior::CONTINUE_ON_SHUTDOWN},
-      base::SingleThreadTaskRunnerThreadMode::SHARED);
+      base::SingleThreadTaskRunnerThreadMode::DEDICATED);
 
   if (local_state->HasPrefPath(prefs::kOsCryptAppBoundFixedDataPrefName)) {
     const std::string base64_encrypted_data =

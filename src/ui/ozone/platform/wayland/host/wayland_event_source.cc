@@ -1,20 +1,22 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "ui/ozone/platform/wayland/host/wayland_event_source.h"
 
-#include <algorithm>
+#include <functional>
 #include <memory>
 
-#include "base/bind.h"
 #include "base/check.h"
 #include "base/containers/cxx20_erase.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
 #include "base/memory/raw_ptr.h"
+#include "base/ranges/algorithm.h"
 #include "base/time/time.h"
 #include "build/chromeos_buildflags.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
+#include "ui/base/dragdrop/mojom/drag_drop_types.mojom.h"
 #include "ui/events/base_event_utils.h"
 #include "ui/events/event_utils.h"
 #include "ui/events/keycodes/dom/dom_code.h"
@@ -22,22 +24,52 @@
 #include "ui/events/keycodes/dom/keycode_converter.h"
 #include "ui/events/keycodes/keyboard_code_conversion.h"
 #include "ui/events/keycodes/keyboard_codes.h"
+#include "ui/events/ozone/events_ozone.h"
 #include "ui/events/ozone/layout/keyboard_layout_engine.h"
 #include "ui/events/ozone/layout/keyboard_layout_engine_manager.h"
+#include "ui/events/platform/wayland/wayland_event_watcher.h"
 #include "ui/events/pointer_details.h"
 #include "ui/events/types/event_type.h"
 #include "ui/gfx/geometry/point_f.h"
 #include "ui/gfx/geometry/vector2d_f.h"
+#include "ui/ozone/platform/wayland/host/dump_util.h"
 #include "ui/ozone/platform/wayland/host/wayland_connection.h"
 #include "ui/ozone/platform/wayland/host/wayland_cursor_position.h"
-#include "ui/ozone/platform/wayland/host/wayland_event_watcher.h"
 #include "ui/ozone/platform/wayland/host/wayland_keyboard.h"
 #include "ui/ozone/platform/wayland/host/wayland_window.h"
+#include "ui/ozone/platform/wayland/host/wayland_window_drag_controller.h"
 #include "ui/ozone/platform/wayland/host/wayland_window_manager.h"
 
 namespace ui {
 
 namespace {
+
+constexpr auto kPointerToStringMap = base::MakeFixedFlatMap<int, const char*>({
+    {EF_LEFT_MOUSE_BUTTON, "Left"},
+    {EF_MIDDLE_MOUSE_BUTTON, "Middle"},
+    {EF_RIGHT_MOUSE_BUTTON, "Right"},
+    {EF_BACK_MOUSE_BUTTON, "Back"},
+    {EF_FORWARD_MOUSE_BUTTON, "Forward"},
+});
+
+constexpr auto kModifierToStringMap = base::MakeFixedFlatMap<int, const char*>({
+    {ui::EF_SHIFT_DOWN, "Shift"},
+    {ui::EF_CONTROL_DOWN, "Control"},
+    {ui::EF_ALT_DOWN, "Alt"},
+    {ui::EF_COMMAND_DOWN, "Command"},
+    {ui::EF_ALTGR_DOWN, "AltGr"},
+    {ui::EF_MOD3_DOWN, "Mod3"},
+    {ui::EF_CAPS_LOCK_ON, "CapsLock"},
+    {ui::EF_NUM_LOCK_ON, "NumLock"},
+});
+
+std::string ToPointerFlagsString(int flags) {
+  return ToMatchingKeyMaskString(flags, kPointerToStringMap);
+}
+
+std::string ToKeyboardModifierStrings(int modifiers) {
+  return ToMatchingKeyMaskString(modifiers, kModifierToStringMap);
+}
 
 bool HasAnyPointerButtonFlag(int flags) {
   return (flags & (EF_LEFT_MOUSE_BUTTON | EF_MIDDLE_MOUSE_BUTTON |
@@ -56,9 +88,12 @@ EventTarget* GetRootTarget(EventTarget* target) {
 }
 
 gfx::Point GetOriginInScreen(WaylandWindow* target) {
-  gfx::Point origin = target->GetBoundsInDIP().origin();
-  WaylandWindow* parent =
-      static_cast<WaylandWindow*>(target->GetParentTarget());
+  // The origin for located events and positions of popup windows is the window
+  // geometry.
+  // See https://crbug.com/1292486
+  gfx::Point origin = target->GetBoundsInDIP().origin() -
+                      target->GetWindowGeometryOffsetInDIP();
+  auto* parent = static_cast<WaylandWindow*>(target->GetParentTarget());
   while (parent) {
     origin += parent->GetBoundsInDIP().origin().OffsetFromOrigin();
     parent = static_cast<WaylandWindow*>(parent->GetParentTarget());
@@ -67,7 +102,7 @@ gfx::Point GetOriginInScreen(WaylandWindow* target) {
 }
 
 gfx::Point GetLocationInScreen(LocatedEvent* event) {
-  WaylandWindow* root_window =
+  auto* root_window =
       static_cast<WaylandWindow*>(GetRootTarget(event->target()));
   return event->root_location() +
          root_window->GetBoundsInDIP().origin().OffsetFromOrigin();
@@ -75,7 +110,7 @@ gfx::Point GetLocationInScreen(LocatedEvent* event) {
 
 void SetRootLocation(LocatedEvent* event) {
   gfx::PointF location = event->location_f();
-  WaylandWindow* target = static_cast<WaylandWindow*>(event->target());
+  auto* target = static_cast<WaylandWindow*>(event->target());
 
   while (target->GetParentTarget()) {
     location += target->GetBoundsInDIP().origin().OffsetFromOrigin();
@@ -87,8 +122,11 @@ void SetRootLocation(LocatedEvent* event) {
 // Number of fingers for scroll gestures.
 constexpr int kGestureScrollFingerCount = 2;
 
-// Maximum size of the stored recent pointer frame information.
-constexpr int kRecentPointerFrameMaxSize = 20;
+// Maximum size of the latest pointer scroll data set to be stored.
+constexpr int kPointerScrollDataSetMaxSize = 3;
+
+// Maximum time delta between last scroll event and lifting of fingers.
+constexpr int kFlingStartTimeoutMs = 200;
 
 }  // namespace
 
@@ -96,7 +134,7 @@ struct WaylandEventSource::TouchPoint {
   TouchPoint(gfx::PointF location, WaylandWindow* current_window);
   ~TouchPoint() = default;
 
-  raw_ptr<WaylandWindow> window;
+  raw_ptr<WaylandWindow, DanglingUntriaged> window;
   gfx::PointF last_known_location;
 };
 
@@ -106,28 +144,51 @@ WaylandEventSource::TouchPoint::TouchPoint(gfx::PointF location,
   DCHECK(window);
 }
 
-WaylandEventSource::PointerFrame::PointerFrame() = default;
-WaylandEventSource::PointerFrame::PointerFrame(const PointerFrame&) = default;
-WaylandEventSource::PointerFrame::PointerFrame(PointerFrame&&) = default;
-WaylandEventSource::PointerFrame::~PointerFrame() = default;
+// WaylandEventSource::PointerScrollData implementation
+WaylandEventSource::PointerScrollData::PointerScrollData() = default;
+WaylandEventSource::PointerScrollData::PointerScrollData(
+    const PointerScrollData&) = default;
+WaylandEventSource::PointerScrollData::PointerScrollData(PointerScrollData&&) =
+    default;
+WaylandEventSource::PointerScrollData::~PointerScrollData() = default;
 
-WaylandEventSource::PointerFrame& WaylandEventSource::PointerFrame::operator=(
-    const PointerFrame&) = default;
-WaylandEventSource::PointerFrame& WaylandEventSource::PointerFrame::operator=(
-    PointerFrame&&) = default;
+WaylandEventSource::PointerScrollData&
+WaylandEventSource::PointerScrollData::operator=(const PointerScrollData&) =
+    default;
+WaylandEventSource::PointerScrollData&
+WaylandEventSource::PointerScrollData::operator=(PointerScrollData&&) = default;
 
-WaylandEventSource::TouchFrame::TouchFrame(const TouchEvent& e,
-                                           base::OnceCallback<void()> cb)
-    : event(e), completion_cb(std::move(cb)) {}
+void WaylandEventSource::PointerScrollData::DumpState(std::ostream& out) const {
+  if (axis_source) {
+    out << "axis_source=" << *axis_source;
+  }
+  if (timestamp) {
+    out << ", timestamp=" << *timestamp;
+  } else {
+    out << ", no timestamp";
+  }
+  out << ", d=(" << dx << ", " << dy << "), dt=" << dt
+      << ", is_axis_stop=" << ToBoolString(is_axis_stop);
+}
 
-WaylandEventSource::TouchFrame::~TouchFrame() = default;
+// WaylandEventSource::FrameData implementation
+WaylandEventSource::FrameData::FrameData(const Event& e,
+                                         base::OnceCallback<void()> cb)
+    : event(e.Clone()), completion_cb(std::move(cb)) {}
+
+WaylandEventSource::FrameData::~FrameData() = default;
+
+void WaylandEventSource::FrameData::DumpState(std::ostream& out) const {
+  out << "event=" << (event ? event->ToString() : "none")
+      << ", callback=" << !!completion_cb;
+}
 
 // WaylandEventSource implementation
 
 // static
 void WaylandEventSource::ConvertEventToTarget(const EventTarget* new_target,
                                               LocatedEvent* event) {
-  WaylandWindow* current_target = static_cast<WaylandWindow*>(event->target());
+  auto* current_target = static_cast<WaylandWindow*>(event->target());
   gfx::Vector2d diff = GetOriginInScreen(current_target) -
                        GetOriginInScreen(static_cast<WaylandWindow*>(
                            const_cast<EventTarget*>(new_target)));
@@ -137,12 +198,14 @@ void WaylandEventSource::ConvertEventToTarget(const EventTarget* new_target,
 WaylandEventSource::WaylandEventSource(wl_display* display,
                                        wl_event_queue* event_queue,
                                        WaylandWindowManager* window_manager,
-                                       WaylandConnection* connection)
+                                       WaylandConnection* connection,
+                                       bool use_threaded_polling)
     : window_manager_(window_manager),
       connection_(connection),
-      event_watcher_(
-          WaylandEventWatcher::CreateWaylandEventWatcher(display,
-                                                         event_queue)) {
+      event_watcher_(WaylandEventWatcher::CreateWaylandEventWatcher(
+          display,
+          event_queue,
+          use_threaded_polling)) {
   DCHECK(window_manager_);
 
   // Observes remove changes to know when touch points can be removed.
@@ -199,11 +262,6 @@ uint32_t WaylandEventSource::OnKeyboardKeyEvent(
   int state_before_event = keyboard_modifiers_;
 #endif
 
-  if (!repeat) {
-    int flag = ModifierDomKeyToEventFlag(dom_key);
-    UpdateKeyboardModifiers(flag, type == ET_KEY_PRESSED);
-  }
-
   KeyEvent event(type, key_code, dom_code,
                  keyboard_modifiers_ | (repeat ? EF_IS_REPEAT : 0), dom_key,
                  timestamp);
@@ -237,84 +295,147 @@ uint32_t WaylandEventSource::OnKeyboardKeyEvent(
 
   if (kind == WaylandKeyboard::KeyEventKind::kKey) {
     // Mark that this is the key event which IME did not consume.
-    properties.emplace(kPropertyKeyboardImeFlag,
-                       std::vector<uint8_t>{kPropertyKeyboardImeIgnoredFlag});
+    SetKeyboardImeFlagProperty(&properties, kPropertyKeyboardImeIgnoredFlag);
   }
   event.SetProperties(properties);
   return DispatchEvent(&event);
 }
 
-void WaylandEventSource::OnPointerFocusChanged(WaylandWindow* window,
-                                               const gfx::PointF& location) {
+void WaylandEventSource::OnPointerFocusChanged(
+    WaylandWindow* window,
+    const gfx::PointF& location,
+    base::TimeTicks timestamp,
+    wl::EventDispatchPolicy dispatch_policy) {
   bool focused = !!window;
   if (focused) {
     // Save new pointer location.
     pointer_location_ = location;
     window_manager_->SetPointerFocusedWindow(window);
-    current_pointer_frame_.target = window;
   }
+
+  auto closure = focused ? base::NullCallback()
+                         : base::BindOnce(
+                               [](WaylandWindowManager* wwm) {
+                                 wwm->SetPointerFocusedWindow(nullptr);
+                               },
+                               window_manager_);
 
   auto* target = window_manager_->GetCurrentPointerFocusedWindow();
   if (target) {
     EventType type = focused ? ET_MOUSE_ENTERED : ET_MOUSE_EXITED;
-    MouseEvent event(type, pointer_location_, pointer_location_,
-                     EventTimeForNow(), pointer_flags_, 0);
-    SetTargetAndDispatchEvent(&event, target);
+    MouseEvent event(type, pointer_location_, pointer_location_, timestamp,
+                     pointer_flags_, 0);
+    if (dispatch_policy == wl::EventDispatchPolicy::kImmediate) {
+      SetTargetAndDispatchEvent(&event, target);
+    } else {
+      pointer_frames_.push_back(
+          std::make_unique<FrameData>(event, std::move(closure)));
+      return;
+    }
   }
 
-  if (!focused) {
-    window_manager_->SetPointerFocusedWindow(nullptr);
-    current_pointer_frame_.target = nullptr;
-  }
+  if (!closure.is_null())
+    std::move(closure).Run();
 }
 
-void WaylandEventSource::OnPointerButtonEvent(EventType type,
-                                              int changed_button,
-                                              WaylandWindow* window) {
+void WaylandEventSource::OnPointerButtonEvent(
+    EventType type,
+    int changed_button,
+    base::TimeTicks timestamp,
+    WaylandWindow* window,
+    wl::EventDispatchPolicy dispatch_policy) {
+  OnPointerButtonEvent(type, changed_button, timestamp, window, dispatch_policy,
+                       false);
+}
+
+void WaylandEventSource::OnPointerButtonEvent(
+    EventType type,
+    int changed_button,
+    base::TimeTicks timestamp,
+    WaylandWindow* window,
+    wl::EventDispatchPolicy dispatch_policy,
+    bool allow_release_of_unpressed_button) {
   DCHECK(type == ET_MOUSE_PRESSED || type == ET_MOUSE_RELEASED);
   DCHECK(HasAnyPointerButtonFlag(changed_button));
+
+  // Ignore release events for buttons that aren't currently pressed. Such
+  // events should never happen, but there have been compositor bugs before
+  // (e.g. crbug.com/1376393).
+  if (!allow_release_of_unpressed_button && type == ET_MOUSE_RELEASED &&
+      (pointer_flags_ & changed_button) == 0)
+    return;
 
   WaylandWindow* prev_focused_window =
       window_manager_->GetCurrentPointerFocusedWindow();
   if (window)
     window_manager_->SetPointerFocusedWindow(window);
 
+  auto closure = base::BindOnce(
+      &WaylandEventSource::OnPointerButtonEventInternal, base::Unretained(this),
+      (window ? prev_focused_window : nullptr), type);
+
   pointer_flags_ = type == ET_MOUSE_PRESSED
                        ? (pointer_flags_ | changed_button)
                        : (pointer_flags_ & ~changed_button);
   last_pointer_button_pressed_ = changed_button;
-  // MouseEvent's flags should contain the button that was released too.
-  int flags = pointer_flags_ | keyboard_modifiers_ | changed_button;
-  MouseEvent event(type, pointer_location_, pointer_location_,
-                   EventTimeForNow(), flags, changed_button,
-                   PointerDetailsForDispatching());
 
   auto* target = window_manager_->GetCurrentPointerFocusedWindow();
   // A window may be deleted when the event arrived from the server.
-  if (target)
-    SetTargetAndDispatchEvent(&event, target);
+  if (target) {
+    // MouseEvent's flags should contain the button that was released too.
+    int flags = pointer_flags_ | keyboard_modifiers_ | changed_button;
+    MouseEvent event(type, pointer_location_, pointer_location_, timestamp,
+                     flags, changed_button);
+    if (dispatch_policy == wl::EventDispatchPolicy::kImmediate) {
+      SetTargetAndDispatchEvent(&event, target);
+    } else {
+      pointer_frames_.push_back(
+          std::make_unique<FrameData>(event, std::move(closure)));
+      return;
+    }
+  }
 
-  if (window)
-    window_manager_->SetPointerFocusedWindow(prev_focused_window);
+  if (!closure.is_null())
+    std::move(closure).Run();
 }
 
-void WaylandEventSource::OnPointerMotionEvent(const gfx::PointF& location) {
+void WaylandEventSource::OnPointerButtonEventInternal(WaylandWindow* window,
+                                                      EventType type) {
+  if (window)
+    window_manager_->SetPointerFocusedWindow(window);
+
+  if (type == ET_MOUSE_RELEASED)
+    last_pointer_stylus_data_.reset();
+}
+
+void WaylandEventSource::OnPointerMotionEvent(
+    const gfx::PointF& location,
+    base::TimeTicks timestamp,
+    wl::EventDispatchPolicy dispatch_policy) {
   pointer_location_ = location;
 
   int flags = pointer_flags_ | keyboard_modifiers_;
   MouseEvent event(ET_MOUSE_MOVED, pointer_location_, pointer_location_,
-                   EventTimeForNow(), flags, 0, PointerDetailsForDispatching());
+                   timestamp, flags, 0);
   auto* target = window_manager_->GetCurrentPointerFocusedWindow();
 
   // A window may be deleted when the event arrived from the server.
   if (!target)
     return;
-  SetTargetAndDispatchEvent(&event, target);
+
+  if (dispatch_policy == wl::EventDispatchPolicy::kImmediate) {
+    SetTargetAndDispatchEvent(&event, target);
+  } else {
+    pointer_frames_.push_back(
+        std::make_unique<FrameData>(event, base::NullCallback()));
+  }
 }
 
-void WaylandEventSource::OnPointerAxisEvent(const gfx::Vector2dF& offset) {
-  current_pointer_frame_.dx += offset.x();
-  current_pointer_frame_.dy += offset.y();
+void WaylandEventSource::OnPointerAxisEvent(const gfx::Vector2dF& offset,
+                                            base::TimeTicks timestamp) {
+  EnsurePointerScrollData(timestamp);
+  pointer_scroll_data_->dx += offset.x();
+  pointer_scroll_data_->dy += offset.y();
 }
 
 void WaylandEventSource::OnResetPointerFlags() {
@@ -325,83 +446,94 @@ void WaylandEventSource::RoundTripQueue() {
   event_watcher_->RoundTripQueue();
 }
 
+void WaylandEventSource::DumpState(std::ostream& out) const {
+  out << "WaylandEventSource: " << std::endl;
+  out << "  pointer_location=" << pointer_location_.ToString()
+      << ", flags=" << ToPointerFlagsString(pointer_flags_)
+      << ", last button pressed=" << last_pointer_button_pressed_
+      << ", keyboard modifiers="
+      << ToKeyboardModifierStrings(keyboard_modifiers_) << std::endl;
+  if (relative_pointer_location_) {
+    out << "  relative_poniter_location="
+        << relative_pointer_location_->ToString() << std::endl;
+  }
+
+  size_t i = 0;
+  for (const auto& frame_data : pointer_frames_) {
+    out << "  pointer_frame[" << i++ << "]=";
+    frame_data->DumpState(out);
+    out << std::endl;
+  }
+  i = 0;
+  for (const auto& frame_data : touch_frames_) {
+    out << "  touch_frame[" << i++ << "]=";
+    frame_data->DumpState(out);
+    out << std::endl;
+  }
+  i = 0;
+  for (const auto& scroll_data : pointer_scroll_data_set_) {
+    out << "  point_scroll_data[" << i++ << "]=";
+    scroll_data.DumpState(out);
+    out << std::endl;
+  }
+}
+
 const gfx::PointF& WaylandEventSource::GetPointerLocation() const {
   return pointer_location_;
 }
 
 void WaylandEventSource::OnPointerFrameEvent() {
   base::TimeTicks now = EventTimeForNow();
-  current_pointer_frame_.dt = now - last_pointer_frame_time_;
-  last_pointer_frame_time_ = now;
-
-  int flags = pointer_flags_ | keyboard_modifiers_;
-
-  static constexpr bool supports_trackpad_kinetic_scrolling =
-#if BUILDFLAG(IS_CHROMEOS_LACROS)
-      true;
-#else
-      false;
-#endif
-  auto* target = current_pointer_frame_.target;
-  if (!window_manager_->IsWindowValid(target))
-    return;
-
-  // Dispatch Fling event if pointer.axis_stop is notified and the recent
-  // pointer.axis events meets the criteria to start fling scroll.
-  if (current_pointer_frame_.dx == 0 && current_pointer_frame_.dy == 0 &&
-      current_pointer_frame_.is_axis_stop &&
-      supports_trackpad_kinetic_scrolling) {
-    gfx::Vector2dF initial_velocity = ComputeFlingVelocity();
-    float vx = initial_velocity.x();
-    float vy = initial_velocity.y();
-    ScrollEvent event(
-        vx == 0 && vy == 0 ? ET_SCROLL_FLING_CANCEL : ET_SCROLL_FLING_START,
-        pointer_location_, pointer_location_, now, flags, vx, vy, vx, vy,
-        kGestureScrollFingerCount);
-    SetTargetAndDispatchEvent(&event, target);
-    recent_pointer_frames_.clear();
-  } else if (current_pointer_frame_.axis_source) {
-    if (*current_pointer_frame_.axis_source == WL_POINTER_AXIS_SOURCE_WHEEL ||
-        *current_pointer_frame_.axis_source ==
-            WL_POINTER_AXIS_SOURCE_WHEEL_TILT) {
-      MouseWheelEvent event(
-          gfx::Vector2d(current_pointer_frame_.dx, current_pointer_frame_.dy),
-          pointer_location_, pointer_location_, EventTimeForNow(), flags, 0);
-      SetTargetAndDispatchEvent(&event, target);
-    } else if (*current_pointer_frame_.axis_source ==
-                   WL_POINTER_AXIS_SOURCE_FINGER ||
-               *current_pointer_frame_.axis_source ==
-                   WL_POINTER_AXIS_SOURCE_CONTINUOUS) {
-      ScrollEvent event(ET_SCROLL, pointer_location_, pointer_location_,
-                        EventTimeForNow(), flags, current_pointer_frame_.dx,
-                        current_pointer_frame_.dy, current_pointer_frame_.dx,
-                        current_pointer_frame_.dy, kGestureScrollFingerCount);
-      SetTargetAndDispatchEvent(&event, target);
-    }
-
-    if (recent_pointer_frames_.size() + 1 > kRecentPointerFrameMaxSize)
-      recent_pointer_frames_.pop_back();
-    recent_pointer_frames_.push_front(current_pointer_frame_);
+  if (pointer_scroll_data_) {
+    pointer_scroll_data_->dt = now - last_pointer_frame_time_;
+    ProcessPointerScrollData();
   }
 
-  // Reset |current_pointer_frame_|.
-  current_pointer_frame_.dx = 0;
-  current_pointer_frame_.dy = 0;
-  current_pointer_frame_.is_axis_stop = false;
-  current_pointer_frame_.axis_source.reset();
+  last_pointer_frame_time_ = now;
+
+  auto* target = window_manager_->GetCurrentPointerFocusedWindow();
+  if (!target)
+    return;
+
+  while (!pointer_frames_.empty()) {
+    // It is safe to pop the first queued event for processing.
+    auto pointer_frame = std::move(pointer_frames_.front());
+    pointer_frames_.pop_front();
+
+    // In case there are pointer stylus information, override the current
+    // 'event' instance, given that PointerDetails is 'const'.
+    auto pointer_details_with_stylus_data = AmendStylusData();
+    if (pointer_details_with_stylus_data &&
+        pointer_frame->event->IsMouseEvent() &&
+        pointer_frame->event->AsMouseEvent()->IsOnlyLeftMouseButton()) {
+      auto old_event = std::move(pointer_frame->event);
+      pointer_frame->event = std::make_unique<MouseEvent>(
+          old_event->type(), old_event->AsMouseEvent()->location(),
+          old_event->AsMouseEvent()->root_location(), old_event->time_stamp(),
+          old_event->flags(), old_event->AsMouseEvent()->changed_button_flags(),
+          pointer_details_with_stylus_data.value());
+    }
+
+    SetTargetAndDispatchEvent(pointer_frame->event.get(), target);
+    if (!pointer_frame->completion_cb.is_null())
+      std::move(pointer_frame->completion_cb).Run();
+  }
 }
 
 void WaylandEventSource::OnPointerAxisSourceEvent(uint32_t axis_source) {
-  current_pointer_frame_.axis_source = axis_source;
+  EnsurePointerScrollData(/*timestamp*/ absl::nullopt);
+  pointer_scroll_data_->axis_source = axis_source;
 }
 
-void WaylandEventSource::OnPointerAxisStopEvent(uint32_t axis) {
+void WaylandEventSource::OnPointerAxisStopEvent(uint32_t axis,
+                                                base::TimeTicks timestamp) {
+  EnsurePointerScrollData(timestamp);
   if (axis == WL_POINTER_AXIS_VERTICAL_SCROLL) {
-    current_pointer_frame_.dy = 0;
+    pointer_scroll_data_->dy = 0;
   } else if (axis == WL_POINTER_AXIS_HORIZONTAL_SCROLL) {
-    current_pointer_frame_.dx = 0;
+    pointer_scroll_data_->dx = 0;
   }
-  current_pointer_frame_.is_axis_stop = true;
+  pointer_scroll_data_->is_axis_stop = true;
 }
 
 void WaylandEventSource::OnTouchPressEvent(
@@ -409,7 +541,7 @@ void WaylandEventSource::OnTouchPressEvent(
     const gfx::PointF& location,
     base::TimeTicks timestamp,
     PointerId id,
-    EventDispatchPolicy dispatch_policy) {
+    wl::EventDispatchPolicy dispatch_policy) {
   DCHECK(window);
   HandleTouchFocusChange(window, true);
 
@@ -424,15 +556,14 @@ void WaylandEventSource::OnTouchPressEvent(
   PointerDetails details(EventPointerType::kTouch, id);
   TouchEvent event(ET_TOUCH_PRESSED, location, location, timestamp, details,
                    keyboard_modifiers_);
-  DCHECK_EQ(dispatch_policy, DispatchPolicy::kOnFrame);
-  touch_frames_.push_front(
-      std::make_unique<TouchFrame>(event, base::NullCallback()));
+  touch_frames_.push_back(
+      std::make_unique<FrameData>(event, base::NullCallback()));
 }
 
 void WaylandEventSource::OnTouchReleaseEvent(
     base::TimeTicks timestamp,
     PointerId id,
-    EventDispatchPolicy dispatch_policy) {
+    wl::EventDispatchPolicy dispatch_policy) {
   // Make sure this touch point was present before.
   const auto it = touch_points_.find(id);
   if (it == touch_points_.end()) {
@@ -446,11 +577,11 @@ void WaylandEventSource::OnTouchReleaseEvent(
 
   TouchEvent event(ET_TOUCH_RELEASED, location, location, timestamp, details,
                    keyboard_modifiers_);
-  if (dispatch_policy == EventDispatchPolicy::kImmediate) {
+  if (dispatch_policy == wl::EventDispatchPolicy::kImmediate) {
     SetTouchTargetAndDispatchTouchEvent(&event);
     OnTouchReleaseInternal(id);
   } else {
-    touch_frames_.push_front(std::make_unique<TouchFrame>(
+    touch_frames_.push_back(std::make_unique<FrameData>(
         event, base::BindOnce(&WaylandEventSource::OnTouchReleaseInternal,
                               base::Unretained(this), id)));
   }
@@ -487,7 +618,14 @@ void WaylandEventSource::SetTargetAndDispatchEvent(Event* event,
   if (event->IsLocatedEvent()) {
     SetRootLocation(event->AsLocatedEvent());
     auto* cursor_position = connection_->wayland_cursor_position();
-    if (cursor_position) {
+#if BUILDFLAG(IS_CHROMEOS_LACROS)
+    bool update_cursor_position = cursor_position && event->IsMouseEvent();
+#else
+    // TODO(crbug.com/1488644): Touch event should not update the cursor
+    // position.
+    bool update_cursor_position = cursor_position;
+#endif
+    if (update_cursor_position) {
       cursor_position->OnCursorPositionChanged(
           GetLocationInScreen(event->AsLocatedEvent()));
     }
@@ -509,7 +647,7 @@ void WaylandEventSource::OnTouchMotionEvent(
     const gfx::PointF& location,
     base::TimeTicks timestamp,
     PointerId id,
-    EventDispatchPolicy dispatch_policy) {
+    wl::EventDispatchPolicy dispatch_policy) {
   const auto it = touch_points_.find(id);
   // Make sure this touch point was present before.
   if (it == touch_points_.end()) {
@@ -520,11 +658,11 @@ void WaylandEventSource::OnTouchMotionEvent(
   PointerDetails details(EventPointerType::kTouch, id);
   TouchEvent event(ET_TOUCH_MOVED, location, location, timestamp, details,
                    keyboard_modifiers_);
-  if (dispatch_policy == DispatchPolicy::kImmediate) {
+  if (dispatch_policy == wl::EventDispatchPolicy::kImmediate) {
     SetTouchTargetAndDispatchTouchEvent(&event);
   } else {
-    touch_frames_.push_front(
-        std::make_unique<TouchFrame>(event, base::NullCallback()));
+    touch_frames_.push_back(
+        std::make_unique<FrameData>(event, base::NullCallback()));
   }
 }
 
@@ -557,22 +695,32 @@ void WaylandEventSource::OnTouchFrame() {
 
     // In case there are touch stylus information, override the current 'event'
     // instance, given that PointerDetails is 'const'.
-    auto pointer_details_with_stylus_data =
-        AmendStylusData(touch_frame->event.pointer_details().id);
+    auto pointer_details_with_stylus_data = AmendStylusData(
+        touch_frame->event->AsTouchEvent()->pointer_details().id);
     if (pointer_details_with_stylus_data) {
-      auto old_event = touch_frame->event;
-      touch_frame->event = TouchEvent(
-          old_event.type(), old_event.location_f(), old_event.root_location_f(),
-          old_event.time_stamp(), pointer_details_with_stylus_data.value(),
-          old_event.flags());
+      auto old_event = std::move(touch_frame->event);
+      touch_frame->event = std::make_unique<TouchEvent>(
+          old_event->type(), old_event->AsTouchEvent()->location_f(),
+          old_event->AsTouchEvent()->root_location_f(), old_event->time_stamp(),
+          pointer_details_with_stylus_data.value(), old_event->flags());
     }
-    SetTouchTargetAndDispatchTouchEvent(&(touch_frame->event));
+    SetTouchTargetAndDispatchTouchEvent(touch_frame->event->AsTouchEvent());
     if (!touch_frame->completion_cb.is_null())
       std::move(touch_frame->completion_cb).Run();
   }
 }
 
 void WaylandEventSource::OnTouchFocusChanged(WaylandWindow* window) {
+  // If a window dragging session is active (and touch-based), transfer the
+  // touch points to it.
+  auto drag_source = connection_->window_drag_controller()->drag_source();
+  if (drag_source && window) {
+    DCHECK_EQ(*drag_source, mojom::DragEventSource::kTouch);
+    for (auto& touch_point : touch_points_) {
+      touch_point.second->window = window;
+    }
+  }
+
   window_manager_->SetTouchFocusedWindow(window);
 }
 
@@ -625,7 +773,53 @@ void WaylandEventSource::OnPinchEvent(EventType event_type,
   GestureEvent event(location.x(), location.y(), 0 /* flags */, timestamp,
                      details);
   event.set_source_device_id(device_id);
-  DispatchEvent(&event);
+
+  auto* target = window_manager_->GetCurrentPointerFocusedWindow();
+  // A window may be deleted when the event arrived from the server.
+  if (!target)
+    return;
+
+  SetTargetAndDispatchEvent(&event, target);
+}
+
+void WaylandEventSource::OnHoldEvent(EventType event_type,
+                                     uint32_t finger_count,
+                                     base::TimeTicks timestamp,
+                                     int device_id,
+                                     wl::EventDispatchPolicy dispatch_policy) {
+  // Lifting the finger from the touchpad will be ignored.
+  if (event_type != ET_TOUCH_PRESSED) {
+    return;
+  }
+
+#if !BUILDFLAG(IS_CHROMEOS_LACROS)
+  // Prevent generating any scroll events if pointer has just been moved.
+  if (!is_fling_active_) {
+    return;
+  }
+  is_fling_active_ = false;
+#endif
+
+  // Prevent fling start if axis stop arrives after hold gesture.
+  if (pointer_scroll_data_) {
+    pointer_scroll_data_->dx = 0;
+    pointer_scroll_data_->dy = 0;
+  }
+
+  pointer_scroll_data_set_.clear();
+
+  ScrollEvent event(ET_SCROLL_FLING_CANCEL, pointer_location_,
+                    pointer_location_, timestamp, pointer_flags_, 0, 0, 0, 0,
+                    finger_count);
+
+  auto* target = window_manager_->GetCurrentPointerFocusedWindow();
+
+  if (dispatch_policy == wl::EventDispatchPolicy::kImmediate) {
+    SetTargetAndDispatchEvent(&event, target);
+  } else {
+    pointer_frames_.push_back(
+        std::make_unique<FrameData>(event, base::NullCallback()));
+  }
 }
 
 void WaylandEventSource::SetRelativePointerMotionEnabled(bool enabled) {
@@ -635,12 +829,14 @@ void WaylandEventSource::SetRelativePointerMotionEnabled(bool enabled) {
     relative_pointer_location_.reset();
 }
 
-void WaylandEventSource::OnRelativePointerMotion(const gfx::Vector2dF& delta) {
+void WaylandEventSource::OnRelativePointerMotion(const gfx::Vector2dF& delta,
+                                                 base::TimeTicks timestamp) {
   DCHECK(relative_pointer_location_.has_value());
   // TODO(oshima): Investigate if we need to scale the delta
   // when surface_submission_in_pixel_coordinates is on.
   relative_pointer_location_ = *relative_pointer_location_ + delta;
-  OnPointerMotionEvent(*relative_pointer_location_);
+  OnPointerMotionEvent(*relative_pointer_location_, timestamp,
+                       wl::EventDispatchPolicy::kImmediate);
 }
 
 bool WaylandEventSource::IsPointerButtonPressed(EventFlags button) const {
@@ -650,7 +846,44 @@ bool WaylandEventSource::IsPointerButtonPressed(EventFlags button) const {
 
 void WaylandEventSource::OnPointerStylusToolChanged(
     EventPointerType pointer_type) {
-  last_pointer_stylus_tool_ = pointer_type;
+  // When the reported pointer stylus type is `mouse`, handle it as a regular
+  // pointer event.
+  //
+  // TODO(https://crbug.com/1298504): Better handle the `touch` type, which
+  // seems mis-specified in
+  // //t_p/wayland-protocols/unstable/stylus/stylus-unstable-v2.xml.
+  if (pointer_type == ui::EventPointerType::kMouse) {
+    last_pointer_stylus_data_.reset();
+    return;
+  }
+
+  last_pointer_stylus_data_ = {
+      .type = pointer_type,
+      .tilt = gfx::Vector2dF(),
+      .force = std::numeric_limits<float>::quiet_NaN()};
+}
+
+void WaylandEventSource::OnPointerStylusForceChanged(float force) {
+  if (!last_pointer_stylus_data_.has_value()) {
+    // This is a stray force event that the default tool cannot accept.
+    LOG(WARNING) << "Cannot handle force for the default tool!  (the value is "
+                 << force << ")";
+    return;
+  }
+
+  last_pointer_stylus_data_->force = force;
+}
+
+void WaylandEventSource::OnPointerStylusTiltChanged(
+    const gfx::Vector2dF& tilt) {
+  if (!last_pointer_stylus_data_.has_value()) {
+    // This is a stray tilt event that the default tool cannot accept.
+    LOG(WARNING) << "Cannot handle tilt for the default tool!  (the value is ["
+                 << tilt.x() << "," << tilt.y() << "])";
+    return;
+  }
+
+  last_pointer_stylus_data_->tilt = tilt;
 }
 
 const WaylandWindow* WaylandEventSource::GetPointerTarget() const {
@@ -666,36 +899,24 @@ void WaylandEventSource::OnDispatcherListChanged() {
 }
 
 void WaylandEventSource::OnWindowRemoved(WaylandWindow* window) {
-  if (connection_->IsDragInProgress()) {
-    auto* target_window = window_manager_->GetCurrentTouchFocusedWindow();
-    for (auto& touch_point : touch_points_)
-      touch_point.second->window = target_window;
-    return;
+  // A window can be `swallowed` by another window during tab-dragging, which
+  // results in OnWindowRemoved() being called.
+  //
+  // If a window dragging session is active and is touch-based, verify if there
+  // is a valid target window to transfer the touch points to.
+  if (auto* target_window = window_manager_->GetCurrentTouchFocusedWindow()) {
+    auto drag_source = connection_->window_drag_controller()->drag_source();
+    if (drag_source && *drag_source == mojom::DragEventSource::kTouch) {
+      for (auto& touch_point : touch_points_)
+        touch_point.second->window = target_window;
+      return;
+    }
   }
 
   // Clear touch-related data.
   base::EraseIf(touch_points_, [window](const auto& point) {
     return point.second->window == window;
   });
-}
-
-// Currently EF_MOD3_DOWN means that the CapsLock key is currently down, and
-// EF_CAPS_LOCK_ON means the caps lock state is enabled (and the key may or
-// may not be down, but usually isn't). There does need to be two different
-// flags, since the physical CapsLock key is subject to remapping, but the
-// caps lock state (which can be triggered in a variety of ways) is not.
-//
-// TODO(crbug.com/1076661): This is likely caused by some CrOS-specific code.
-// Get rid of this function once it is properly guarded under OS_CHROMEOS.
-void WaylandEventSource::UpdateKeyboardModifiers(int modifier, bool down) {
-  if (modifier == EF_NONE)
-    return;
-
-  if (modifier == EF_CAPS_LOCK_ON) {
-    modifier = (modifier & ~EF_CAPS_LOCK_ON) | EF_MOD3_DOWN;
-  }
-  keyboard_modifiers_ = down ? (keyboard_modifiers_ | modifier)
-                             : (keyboard_modifiers_ & ~modifier);
 }
 
 void WaylandEventSource::HandleTouchFocusChange(WaylandWindow* window,
@@ -709,48 +930,94 @@ void WaylandEventSource::HandleTouchFocusChange(WaylandWindow* window,
 // Focus must not be unset if there is another touch point within |window|.
 bool WaylandEventSource::ShouldUnsetTouchFocus(WaylandWindow* win,
                                                PointerId id) {
-  auto result = std::find_if(
-      touch_points_.begin(), touch_points_.end(),
-      [win, id](auto& p) { return p.second->window == win && p.first != id; });
-  return result == touch_points_.end();
+  return base::ranges::none_of(touch_points_, [win, id](auto& p) {
+    return p.second->window == win && p.first != id;
+  });
 }
 
 gfx::Vector2dF WaylandEventSource::ComputeFlingVelocity() {
-  // Return average velocity in the last 200ms.
-  // TODO(fukino): Make the formula similar to libgestures's
-  // RegressScrollVelocity(). crbug.com/1129263.
-  base::TimeDelta dt;
-  float dx = 0.0f;
-  float dy = 0.0f;
-  for (auto& frame : recent_pointer_frames_) {
+  struct RegressionSums {
+    float tt_;  // Cumulative sum of t^2.
+    float t_;   // Cumulative sum of t.
+    float tx_;  // Cumulative sum of t * x.
+    float ty_;  // Cumulative sum of t * y.
+    float x_;   // Cumulative sum of x.
+    float y_;   // Cumulative sum of y.
+  };
+
+  const size_t count = pointer_scroll_data_set_.size();
+
+  if (count == 0) {
+    return gfx::Vector2dF();
+  }
+
+  // Prevents small jumps if someone scrolls fast, immediately stops scrolling
+  // and then waits a little before lifting fingers from touchpad.
+  if (pointer_scroll_data_->dt > base::Milliseconds(kFlingStartTimeoutMs)) {
+    return gfx::Vector2dF();
+  }
+
+  if (count == 1) {
+    const auto& pointer_frame = pointer_scroll_data_set_.front();
+    const float dt =
+        pointer_frame.dt.InSecondsF() + pointer_scroll_data_->dt.InSecondsF();
+    return gfx::Vector2dF(pointer_frame.dx * dt, pointer_frame.dy * dt);
+  }
+
+  RegressionSums sums = {0, 0, 0, 0, 0, 0};
+
+  float time = pointer_scroll_data_->dt.InSecondsF();
+  float x_coord = 0;
+  float y_coord = 0;
+
+  // Formula matches libgestures's RegressScrollVelocity()
+  // from src/platform/gestures/src/immediate_interpreter.cc
+  for (const auto& frame : pointer_scroll_data_set_) {
     if (frame.axis_source &&
         *frame.axis_source != WL_POINTER_AXIS_SOURCE_FINGER) {
       break;
     }
-    if (frame.dx == 0 && frame.dy == 0)
-      break;
-    if (dt + frame.dt > base::Milliseconds(200))
-      break;
+    time += frame.dt.InSecondsF();
+    x_coord += frame.dx;
+    y_coord += frame.dy;
 
-    dx += frame.dx;
-    dy += frame.dy;
-    dt += frame.dt;
+    sums.tt_ += time * time;
+    sums.t_ += time;
+    sums.tx_ += time * x_coord;
+    sums.ty_ += time * y_coord;
+    sums.x_ += x_coord;
+    sums.y_ += y_coord;
   }
-  float dt_inv = 1.0f / dt.InSecondsF();
-  return dt.is_zero() ? gfx::Vector2dF()
-                      : gfx::Vector2dF(dx * dt_inv, dy * dt_inv);
+  pointer_scroll_data_set_.clear();
+
+  // Note the regression determinant only depends on the values of t, and should
+  // never be zero so long as (1) count > 1, and (2) dt[0] != d[1]. The
+  // condition of (1) was already caught at the beginning of the method.
+  const float det = count * sums.tt_ - sums.t_ * sums.t_;
+  if (!det) {
+    // This will return the average scroll value if dt values are
+    // non-zero.
+    if (sums.t_) {
+      return gfx::Vector2dF(x_coord / sums.t_, y_coord / sums.t_);
+    }
+    return gfx::Vector2dF();
+  }
+
+  const float det_inv = 1.0 / det;
+  return gfx::Vector2dF((count * sums.tx_ - sums.t_ * sums.x_) * det_inv,
+                        (count * sums.ty_ - sums.t_ * sums.y_) * det_inv);
 }
 
-bool WaylandEventSource::SurfaceSubmissionInPixelCoordinates() const {
-  return connection_->surface_submission_in_pixel_coordinates();
-}
+absl::optional<PointerDetails> WaylandEventSource::AmendStylusData() const {
+  if (!last_pointer_stylus_data_)
+    return absl::nullopt;
 
-PointerDetails WaylandEventSource::PointerDetailsForDispatching() const {
-  if (!last_pointer_stylus_tool_)
-    return PointerDetails(EventPointerType::kMouse);
-
-  DCHECK_NE(*last_pointer_stylus_tool_, EventPointerType::kUnknown);
-  return PointerDetails(*last_pointer_stylus_tool_);
+  DCHECK_NE(last_pointer_stylus_data_->type, EventPointerType::kUnknown);
+  return PointerDetails(last_pointer_stylus_data_->type, /*pointer_id=*/0,
+                        /*radius_x=*/1.0f,
+                        /*radius_y=*/1.0f, last_pointer_stylus_data_->force,
+                        /*twist=*/0.0f, last_pointer_stylus_data_->tilt.x(),
+                        last_pointer_stylus_data_->tilt.y());
 }
 
 absl::optional<PointerDetails> WaylandEventSource::AmendStylusData(
@@ -767,6 +1034,101 @@ absl::optional<PointerDetails> WaylandEventSource::AmendStylusData(
                         /*radius_y=*/1.0f, it->second->force,
                         /*twist=*/0.0f, it->second->tilt.x(),
                         it->second->tilt.y());
+}
+
+void WaylandEventSource::EnsurePointerScrollData(
+    const absl::optional<base::TimeTicks>& timestamp) {
+  if (!pointer_scroll_data_)
+    pointer_scroll_data_ = PointerScrollData();
+  if (!pointer_scroll_data_->timestamp && timestamp) {
+    pointer_scroll_data_->timestamp = *timestamp;
+  }
+}
+
+// This method behaves differently in Exo than in other window managers.
+// If you place a finger on the touchpad, Exo dispatches axis events with an
+// offset of 0 to indicate that a fling should be aborted. This event does not
+// exist in Linux window managers. Instead, some window managers implement
+// zwp_pointer_gesture_hold_v1 for this. However, for those who don't implement
+// that, it needs to be ensured that flings are aborted when new axis events
+// arrive.
+void WaylandEventSource::ProcessPointerScrollData() {
+  DCHECK(pointer_scroll_data_);
+  // While it does not make sense for a server to send axis source only,
+  // the protocol does not explicitly specify it's illegal. Just skip if
+  // that happens.
+  if (!pointer_scroll_data_->timestamp) {
+    pointer_scroll_data_.reset();
+    return;
+  }
+  base::TimeTicks& timestamp = *pointer_scroll_data_->timestamp;
+
+  int flags = pointer_flags_ | keyboard_modifiers_;
+  // Dispatch Fling event if pointer.axis_stop is notified and the recent
+  // pointer.axis events meets the criteria to start fling scroll.
+  if (pointer_scroll_data_->dx == 0 && pointer_scroll_data_->dy == 0
+#if !BUILDFLAG(IS_CHROMEOS_LACROS)
+      && pointer_scroll_data_->is_axis_stop
+#endif
+  ) {
+    gfx::Vector2dF initial_velocity = ComputeFlingVelocity();
+    float vx = initial_velocity.x();
+    float vy = initial_velocity.y();
+#if BUILDFLAG(IS_CHROMEOS_LACROS)
+    ScrollEvent event(pointer_scroll_data_->is_axis_stop
+                          ? ET_SCROLL_FLING_START
+                          : ET_SCROLL_FLING_CANCEL,
+                      pointer_location_, pointer_location_, timestamp, flags,
+                      vx, vy, vx, vy, kGestureScrollFingerCount);
+#else
+    // In Linux there is no axis event with 0 delta when start scrolling.
+    // A fling is therefore always started at this point.
+    ScrollEvent event(ET_SCROLL_FLING_START, pointer_location_,
+                      pointer_location_, timestamp, flags, vx, vy, vx, vy,
+                      kGestureScrollFingerCount);
+    is_fling_active_ = true;
+#endif
+    pointer_frames_.push_back(
+        std::make_unique<FrameData>(event, base::NullCallback()));
+  } else if (pointer_scroll_data_->axis_source) {
+    if (*pointer_scroll_data_->axis_source == WL_POINTER_AXIS_SOURCE_WHEEL ||
+        *pointer_scroll_data_->axis_source ==
+            WL_POINTER_AXIS_SOURCE_WHEEL_TILT) {
+      MouseWheelEvent event(
+          gfx::Vector2d(pointer_scroll_data_->dx, pointer_scroll_data_->dy),
+          pointer_location_, pointer_location_, timestamp, flags, 0);
+      pointer_frames_.push_back(
+          std::make_unique<FrameData>(event, base::NullCallback()));
+    } else if (*pointer_scroll_data_->axis_source ==
+                   WL_POINTER_AXIS_SOURCE_FINGER ||
+               *pointer_scroll_data_->axis_source ==
+                   WL_POINTER_AXIS_SOURCE_CONTINUOUS) {
+#if !BUILDFLAG(IS_CHROMEOS_LACROS)
+      // Fling has to be stopped if a new scroll event is received.
+      // From Wayland 1.23 this will be done through hold event.
+      if (is_fling_active_) {
+        is_fling_active_ = false;
+        ScrollEvent stop_fling_event(ET_SCROLL_FLING_CANCEL, pointer_location_,
+                                     pointer_location_, timestamp, flags, 0, 0,
+                                     0, 0, kGestureScrollFingerCount);
+        pointer_frames_.push_back(std::make_unique<FrameData>(
+            stop_fling_event, base::NullCallback()));
+      }
+#endif
+      ScrollEvent event(ET_SCROLL, pointer_location_, pointer_location_,
+                        timestamp, flags, pointer_scroll_data_->dx,
+                        pointer_scroll_data_->dy, pointer_scroll_data_->dx,
+                        pointer_scroll_data_->dy, kGestureScrollFingerCount);
+      pointer_frames_.push_back(
+          std::make_unique<FrameData>(event, base::NullCallback()));
+    }
+
+    if (pointer_scroll_data_set_.size() + 1 > kPointerScrollDataSetMaxSize)
+      pointer_scroll_data_set_.pop_back();
+    pointer_scroll_data_set_.push_front(*pointer_scroll_data_);
+  }
+
+  pointer_scroll_data_.reset();
 }
 
 }  // namespace ui

@@ -21,7 +21,7 @@
 #include <string>
 #include <vector>
 
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
 #include "components/adblock/core/common/content_type.h"
 #include "components/adblock/core/common/sitekey.h"
 #include "components/keyed_service/core/keyed_service.h"

@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -29,6 +29,9 @@ class TestObserver : public PowerManagerClient::Observer {
 
   const power_manager::PowerSupplyProperties& props() const { return props_; }
   int num_power_changed() const { return num_power_changed_; }
+  const power_manager::BatterySaverModeState& battery_saver_state() const {
+    return battery_saver_state_;
+  }
 
   void ClearProps() { props_.Clear(); }
 
@@ -38,9 +41,15 @@ class TestObserver : public PowerManagerClient::Observer {
     ++num_power_changed_;
   }
 
+  void BatterySaverModeStateChanged(
+      const power_manager::BatterySaverModeState& proto) override {
+    battery_saver_state_ = proto;
+  }
+
  private:
   int num_power_changed_;
   power_manager::PowerSupplyProperties props_;
+  power_manager::BatterySaverModeState battery_saver_state_;
 };
 
 void SetTestProperties(power_manager::PowerSupplyProperties* props) {
@@ -135,13 +144,141 @@ TEST(FakePowerManagerClientTest, NotifyObserversTest) {
   EXPECT_FALSE(client.HasObserver(&test_observer));
 }
 
-TEST(FakePowerManagerClientTest, AmbientColorSupport) {
+TEST(FakePowerManagerClientTest, UpdatePowerPropertiesWithNullTest) {
+  // Checking to verify when UpdatePowerProperties is called,
+  // |props_| values are updated.
   FakePowerManagerClient client;
-  EXPECT_FALSE(client.SupportsAmbientColor());
-  client.set_supports_ambient_color(true);
-  EXPECT_TRUE(client.SupportsAmbientColor());
-  client.set_supports_ambient_color(false);
-  EXPECT_FALSE(client.SupportsAmbientColor());
+  power_manager::PowerSupplyProperties props;
+
+  SetTestProperties(&props);
+  client.UpdatePowerProperties(props);
+
+  ASSERT_TRUE(client.GetLastStatus().has_value());
+  EXPECT_EQ(kInitialBatteryPercent, client.GetLastStatus()->battery_percent());
+  EXPECT_TRUE(client.GetLastStatus()->is_calculating_battery_time());
+  EXPECT_EQ(kInitialBatteryState, client.GetLastStatus()->battery_state());
+  EXPECT_EQ(kInitialExternalPower, client.GetLastStatus()->external_power());
+
+  client.UpdatePowerProperties(absl::nullopt);
+
+  EXPECT_FALSE(client.GetLastStatus().has_value());
+}
+
+TEST(FakePowerManagerClientTest,
+     UpdatePowerPropertiesWithNullWillNotNotifyObserversTest) {
+  FakePowerManagerClient client;
+  TestObserver test_observer;
+
+  // Test adding observer.
+  client.AddObserver(&test_observer);
+  EXPECT_TRUE(client.HasObserver(&test_observer));
+
+  // Test if NotifyObservers() sends the correct values to |observer|.
+  // Check number of times NotifyObservers() is called.
+  power_manager::PowerSupplyProperties props;
+  SetTestProperties(&props);
+  client.UpdatePowerProperties(props);
+
+  EXPECT_EQ(1, test_observer.num_power_changed());
+  EXPECT_EQ(kInitialBatteryPercent, test_observer.props().battery_percent());
+  EXPECT_TRUE(test_observer.props().is_calculating_battery_time());
+  EXPECT_EQ(kInitialBatteryState, test_observer.props().battery_state());
+  EXPECT_EQ(kInitialExternalPower, test_observer.props().external_power());
+
+  // Check when update power properties with null,
+  // the observer isn't notified and the props from observer doesn't change.
+  client.UpdatePowerProperties(absl::nullopt);
+
+  EXPECT_EQ(1, test_observer.num_power_changed());
+  EXPECT_EQ(kInitialBatteryPercent, test_observer.props().battery_percent());
+  EXPECT_TRUE(test_observer.props().is_calculating_battery_time());
+  EXPECT_EQ(kInitialBatteryState, test_observer.props().battery_state());
+  EXPECT_EQ(kInitialExternalPower, test_observer.props().external_power());
+}
+
+// Test that observers are notified asynchronously of battery saver state
+// updates.
+TEST(FakePowerManagerClientTest, BatterySaverState) {
+  base::test::SingleThreadTaskEnvironment task_environment(
+      base::test::SingleThreadTaskEnvironment::MainThreadType::UI);
+  FakePowerManagerClient client;
+  TestObserver test_observer;
+
+  client.AddObserver(&test_observer);
+  EXPECT_FALSE(test_observer.battery_saver_state().has_enabled());
+
+  // Turn battery saver on, and check that observers are notified
+  // asynchronously.
+  {
+    power_manager::SetBatterySaverModeStateRequest request;
+    request.set_enabled(true);
+    client.SetBatterySaverModeState(request);
+
+    // Battery saver should not be enabled synchronously, since the real client
+    // waits for a response from Power Manager.
+    EXPECT_FALSE(test_observer.battery_saver_state().has_enabled());
+    base::RunLoop().RunUntilIdle();
+
+    // Should be on now.
+    EXPECT_TRUE(test_observer.battery_saver_state().has_enabled());
+    EXPECT_TRUE(test_observer.battery_saver_state().enabled());
+  }
+
+  // Verify GetBatterySaverModeState is on and asynchronous.
+  {
+    bool called = false;
+    client.GetBatterySaverModeState(base::BindOnce(
+        [](std::reference_wrapper<bool> called_ref,
+           absl::optional<power_manager::BatterySaverModeState> state) {
+          EXPECT_TRUE(state.has_value());
+          EXPECT_TRUE(state->has_enabled());
+          EXPECT_TRUE(state->enabled());
+          called_ref.get() = true;
+        },
+        std::ref(called)));
+
+    // Result should be asynchronous.
+    EXPECT_FALSE(called);
+    base::RunLoop().RunUntilIdle();
+    EXPECT_TRUE(called);
+  }
+
+  // Turn battery saver off, and check that observers are notified
+  // asynchronously.
+  {
+    power_manager::SetBatterySaverModeStateRequest request;
+    request.set_enabled(false);
+    client.SetBatterySaverModeState(request);
+
+    // Again, make sure response is async by checking for stale values.
+    EXPECT_TRUE(test_observer.battery_saver_state().has_enabled());
+    EXPECT_TRUE(test_observer.battery_saver_state().enabled());
+
+    base::RunLoop().RunUntilIdle();
+
+    // Should be off now.
+    EXPECT_TRUE(test_observer.battery_saver_state().has_enabled());
+    EXPECT_FALSE(test_observer.battery_saver_state().enabled());
+  }
+
+  // Verify GetBatterySaverModeState is off and asynchronous.
+  {
+    bool called = false;
+    client.GetBatterySaverModeState(base::BindOnce(
+        [](std::reference_wrapper<bool> called_ref,
+           absl::optional<power_manager::BatterySaverModeState> state) {
+          EXPECT_TRUE(state.has_value());
+          EXPECT_TRUE(state->has_enabled());
+          EXPECT_FALSE(state->enabled());
+          called_ref.get() = true;
+        },
+        std::ref(called)));
+
+    // Result should be asynchronous.
+    EXPECT_FALSE(called);
+    base::RunLoop().RunUntilIdle();
+    EXPECT_TRUE(called);
+  }
 }
 
 }  // namespace chromeos

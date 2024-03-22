@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -17,31 +17,32 @@ class BookmarkModel;
 namespace feature_engagement {
 class Tracker;
 }
-@protocol BrowserCommands;
+class BrowserPolicyConnectorIOS;
+class FollowBrowserAgent;
+@protocol LensCommands;
 class OverlayPresenter;
 @protocol PopupMenuConsumer;
 class PrefService;
+class ReadingListBrowserAgent;
 class ReadingListModel;
 class TemplateURLService;
 class UrlLoadingBrowserAgent;
 class WebStateList;
-class BrowserPolicyConnectorIOS;
-@class FeedMetricsRecorder;
 
 // Mediator for the popup menu. This object is in charge of creating and
 // updating the items of the popup menu.
 @interface PopupMenuMediator
     : NSObject <BrowserContainerConsumer, PopupMenuActionHandlerDelegate>
 
-// Initializes the mediator with a `type` of popup menu, whether it
-// `isIncognito`, a `readingListModel` used to display the badge for the reading
-// list entry, whether the mediator should `triggerNewIncognitoTabTip`, and a
-// `browserPolicyConnector` used to check if the browser is managed by policy.
-- (instancetype)initWithType:(PopupMenuType)type
-                  isIncognito:(BOOL)isIncognito
-             readingListModel:(ReadingListModel*)readingListModel
-    triggerNewIncognitoTabTip:(BOOL)triggerNewIncognitoTabTip
-       browserPolicyConnector:(BrowserPolicyConnectorIOS*)browserPolicyConnector
+// Initializes the mediator with whether it `isIncognito`, a `readingListModel`
+// used to display the badge for the reading list entry, whether the mediator
+// should `triggerNewIncognitoTabTip`, and a `browserPolicyConnector` used to
+// check if the browser is managed by policy.
+- (instancetype)initWithIsIncognito:(BOOL)isIncognito
+                   readingListModel:(ReadingListModel*)readingListModel
+          triggerNewIncognitoTabTip:(BOOL)triggerNewIncognitoTabTip
+             browserPolicyConnector:
+                 (BrowserPolicyConnectorIOS*)browserPolicyConnector
     NS_DESIGNATED_INITIALIZER;
 - (instancetype)init NS_UNAVAILABLE;
 
@@ -54,8 +55,8 @@ class BrowserPolicyConnectorIOS;
 @property(nonatomic, assign) OverlayPresenter* webContentAreaOverlayPresenter;
 // The consumer to be configured with this mediator.
 @property(nonatomic, strong) id<PopupMenuConsumer> popupMenu;
-// Dispatcher.
-@property(nonatomic, weak) id<BrowserCommands> dispatcher;
+// Handler for Lens commands.
+@property(nonatomic, weak) id<LensCommands> lensCommandsHandler;
 // Records events for the use of in-product help. The mediator does not take
 // ownership of tracker. Tracker must not be destroyed during lifetime of the
 // object.
@@ -69,8 +70,10 @@ class BrowserPolicyConnectorIOS;
 @property(nonatomic, assign) TemplateURLService* templateURLService;
 // The URL loading service, used to load the reverse image search.
 @property(nonatomic, assign) UrlLoadingBrowserAgent* URLLoadingBrowserAgent;
-// The metrics recorder to record follow related metrics.
-@property(nonatomic, assign) FeedMetricsRecorder* feedMetricsRecorder;
+// The FollowBrowserAgent used to manage web channels subscriptions.
+@property(nonatomic, assign) FollowBrowserAgent* followBrowserAgent;
+// The ReadingListBrowserAgent used to add urls to reading list.
+@property(nonatomic, assign) ReadingListBrowserAgent* readingListBrowserAgent;
 
 // Disconnect the mediator.
 - (void)disconnect;

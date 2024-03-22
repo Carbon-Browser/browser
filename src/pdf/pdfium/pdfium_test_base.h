@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -22,7 +22,7 @@ class PDFiumPage;
 class TestClient;
 class TestDocumentLoader;
 
-class PDFiumTestBase : public testing::Test {
+class PDFiumTestBase : public testing::TestWithParam<bool> {
  public:
   PDFiumTestBase();
   PDFiumTestBase(const PDFiumTestBase&) = delete;

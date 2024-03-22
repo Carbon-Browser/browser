@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,9 +8,7 @@ import java.io.Closeable;
 import java.io.IOException;
 import java.util.zip.ZipFile;
 
-/**
- * Helper methods to deal with stream related tasks.
- */
+/** Helper methods to deal with stream related tasks. */
 public class StreamUtil {
     /**
      * Handle closing a {@link java.io.Closeable} via {@link java.io.Closeable#close()} and catch

@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -20,6 +20,13 @@ enum DisplaySource {
   DISPLAY_SOURCE_MESSAGE_CENTER = 0,
   // Displayed as a popup.
   DISPLAY_SOURCE_POPUP,
+};
+
+// Enumeration of quiet mode set by user or focus mode.
+enum class QuietModeSourceType {
+  kUserAction,
+  kFocusMode,
+  kMaxValue = kFocusMode,
 };
 
 }  // namespace message_center

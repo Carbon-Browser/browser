@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,8 +8,8 @@
 #include <memory>
 #include <string>
 
-#include "base/callback.h"
 #include "base/compiler_specific.h"
+#include "base/functional/callback.h"
 #include "base/test/metrics/histogram_tester.h"
 #include "base/test/test_simple_task_runner.h"
 #include "base/time/time.h"
@@ -39,12 +39,14 @@ const char* kTestPolicy3 = key::kDefaultSearchProviderEncodings;
 
 const char kEnrollmentTokenPolicy[] = "CloudManagementEnrollmentToken";
 const char kEnrollmentOptionPolicy[] = "CloudManagementEnrollmentMandatory";
+const char kBrowserSigninPolicy[] = "BrowserSignin";
 
 const int kTestPolicy1Id = 42;
 const int kTestPolicy2Id = 123;
 const int kTestPolicy3Id = 32;
 const int kEnrollmentTokenPolicyId = 510;
 const int kEnrollmentOptionPolicyId = 505;
+const int kBrowserSigninPolicyId = 487;
 
 const char kTestChromeSchema[] = R"(
     {
@@ -55,6 +57,7 @@ const char kTestChromeSchema[] = R"(
         "DefaultSearchProviderEncodings": { "type": "boolean" },
         "CloudManagementEnrollmentToken": { "type": "boolean" },
         "CloudManagementEnrollmentMandatory": { "type": "boolean" },
+        "BrowserSigninPolicy": { "type": "integer" },
       }
     })";
 
@@ -65,6 +68,7 @@ const PolicyDetails kTestPolicyDetails[] = {
     {false, false, false, kTestPolicy3Id, 0},
     {false, false, false, kEnrollmentTokenPolicyId, 0},
     {false, false, false, kEnrollmentOptionPolicyId, 0},
+    {false, false, false, kBrowserSigninPolicyId, 0},
 };
 
 }  // namespace
@@ -84,6 +88,7 @@ class PolicyStatisticsCollectorTest : public testing::Test {
     policy_details_.SetDetails(kTestPolicy3, &kTestPolicyDetails[2]);
     policy_details_.SetDetails(kEnrollmentTokenPolicy, &kTestPolicyDetails[3]);
     policy_details_.SetDetails(kEnrollmentOptionPolicy, &kTestPolicyDetails[4]);
+    policy_details_.SetDetails(kBrowserSigninPolicy, &kTestPolicyDetails[5]);
 
     prefs_.registry()->RegisterInt64Pref(
         policy_prefs::kLastPolicyStatisticsUpdate, 0);
@@ -116,6 +121,13 @@ class PolicyStatisticsCollectorTest : public testing::Test {
     policy->SetIgnoredByPolicyAtomicGroup();
   }
 
+  void SetBrowserSigninPolicy(const int& policyValue) {
+    policy_map_.Set(kBrowserSigninPolicy, POLICY_LEVEL_MANDATORY,
+                    POLICY_SCOPE_MACHINE, POLICY_SOURCE_CLOUD,
+                    base::Value(policyValue),
+                    /*external_data_fetcher=*/nullptr);
+  }
+
   base::TimeDelta GetFirstDelay() const {
     if (!task_runner_->HasPendingTask()) {
       ADD_FAILURE();
@@ -143,6 +155,7 @@ TEST_F(PolicyStatisticsCollectorTest, NoPolicy) {
   histogram_tester_.ExpectTotalCount("Enterprise.Policies.Recommended", 0);
   histogram_tester_.ExpectTotalCount("Enterprise.Policies", 0);
   histogram_tester_.ExpectTotalCount("Enterprise.Policies.Sources", 0);
+  histogram_tester_.ExpectTotalCount("Enterprise.BrowserSigninPolicy", 0);
 }
 
 TEST_F(PolicyStatisticsCollectorTest, CollectPending) {
@@ -158,9 +171,9 @@ TEST_F(PolicyStatisticsCollectorTest, CollectPending) {
 TEST_F(PolicyStatisticsCollectorTest, CollectPendingVeryOld) {
   SetPolicy(kTestPolicy1, POLICY_LEVEL_MANDATORY);
 
-  // Must not be 0.0 (read comment for Time::FromDoubleT).
+  // Must not be 0.0 (read comment for Time::FromSecondsSinceUnixEpoch).
   prefs_.SetTime(policy_prefs::kLastPolicyStatisticsUpdate,
-                 base::Time::FromDoubleT(1.0));
+                 base::Time::FromSecondsSinceUnixEpoch(1.0));
 
   policy_statistics_collector_->Initialize();
 
@@ -192,25 +205,6 @@ TEST_F(PolicyStatisticsCollectorTest, MultiplePolicies) {
   histogram_tester_.ExpectBucketCount("Enterprise.Policies", kTestPolicy1Id, 1);
   histogram_tester_.ExpectBucketCount("Enterprise.Policies", kTestPolicy2Id, 1);
   histogram_tester_.ExpectTotalCount("Enterprise.Policies", 2);
-}
-
-TEST_F(PolicyStatisticsCollectorTest, PolicyIgnoredByAtomicGroup) {
-  SetPolicyIgnoredByAtomicGroup(kTestPolicy3);
-  const AtomicGroup* extensions = nullptr;
-
-  for (size_t i = 0; i < kPolicyAtomicGroupMappingsLength; ++i) {
-    if (kPolicyAtomicGroupMappings[i].policy_group == group::kExtensions) {
-      extensions = &kPolicyAtomicGroupMappings[i];
-      break;
-    }
-  }
-
-  DCHECK(extensions);
-
-  policy_statistics_collector_->Initialize();
-
-  histogram_tester_.ExpectUniqueSample(
-      "Enterprise.Policies.IgnoredByPolicyGroup", kTestPolicy3Id, 1);
 }
 
 TEST_F(PolicyStatisticsCollectorTest, MandatoryPolicy) {
@@ -285,5 +279,25 @@ TEST_F(PolicyStatisticsCollectorTest, EnrollmentOnly) {
   histogram_tester_.ExpectUniqueSample("Enterprise.Policies.Sources",
                                        PoliciesSources::kEnrollmentOnly, 1);
 }
+
+#if !BUILDFLAG(IS_CHROMEOS)
+TEST_F(PolicyStatisticsCollectorTest, BrowserSigninValid) {
+  SetBrowserSigninPolicy(static_cast<int>(BrowserSigninMode::kDisabled));
+
+  policy_statistics_collector_->Initialize();
+
+  histogram_tester_.ExpectUniqueSample("Enterprise.BrowserSigninPolicy",
+                                       BrowserSigninMode::kDisabled, 1);
+}
+
+TEST_F(PolicyStatisticsCollectorTest, BrowserSigninInValid) {
+  // 3 is an invalid value for BrowserSigninMode
+  SetBrowserSigninPolicy(3);
+
+  policy_statistics_collector_->Initialize();
+
+  histogram_tester_.ExpectTotalCount("Enterprise.BrowserSigninPolicy", 0);
+}
+#endif
 
 }  // namespace policy

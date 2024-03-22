@@ -45,7 +45,9 @@
 
 namespace blink {
 
-static UCPTrie* CreateTrie() {
+namespace {
+
+UCPTrie* CreateTrie() {
   // Create a Trie from the value array.
   ICUError error;
   UCPTrie* trie = ucptrie_openFromBinary(
@@ -55,11 +57,13 @@ static UCPTrie* CreateTrie() {
   return trie;
 }
 
-static bool HasProperty(UChar32 c, CharacterProperty property) {
+unsigned GetProperty(UChar32 c, CharacterProperty property) {
   static const UCPTrie* trie = CreateTrie();
   return UCPTRIE_FAST_GET(trie, UCPTRIE_16, c) &
          static_cast<CharacterPropertyType>(property);
 }
+
+}  // namespace
 
 bool Character::IsUprightInMixedVertical(UChar32 character) {
   return u_getIntPropertyValue(character,
@@ -68,32 +72,32 @@ bool Character::IsUprightInMixedVertical(UChar32 character) {
 }
 
 bool Character::IsCJKIdeographOrSymbolSlow(UChar32 c) {
-  return HasProperty(c, CharacterProperty::kIsCJKIdeographOrSymbol);
+  return GetProperty(c, CharacterProperty::kIsCJKIdeographOrSymbol);
 }
 
 bool Character::IsPotentialCustomElementNameChar(UChar32 character) {
-  return HasProperty(character,
+  return GetProperty(character,
                      CharacterProperty::kIsPotentialCustomElementNameChar);
 }
 
 bool Character::IsBidiControl(UChar32 character) {
-  return HasProperty(character, CharacterProperty::kIsBidiControl);
+  return GetProperty(character, CharacterProperty::kIsBidiControl);
 }
 
 bool Character::IsHangulSlow(UChar32 character) {
-  return HasProperty(character, CharacterProperty::kIsHangul);
+  return GetProperty(character, CharacterProperty::kIsHangul);
+}
+
+HanKerningCharType Character::GetHanKerningCharType(UChar32 character) {
+  return static_cast<HanKerningCharType>(
+      GetProperty(character, CharacterProperty::kHanKerningShiftedMask) >>
+      static_cast<unsigned>(CharacterProperty::kHanKerningShift));
 }
 
 unsigned Character::ExpansionOpportunityCount(
     base::span<const LChar> characters,
     TextDirection direction,
-    bool& is_after_expansion,
-    const TextJustify text_justify) {
-  if (text_justify == TextJustify::kDistribute) {
-    is_after_expansion = true;
-    return base::checked_cast<unsigned>(characters.size());
-  }
-
+    bool& is_after_expansion) {
   unsigned count = 0;
   if (direction == TextDirection::kLtr) {
     for (size_t i = 0; i < characters.size(); ++i) {
@@ -121,8 +125,7 @@ unsigned Character::ExpansionOpportunityCount(
 unsigned Character::ExpansionOpportunityCount(
     base::span<const UChar> characters,
     TextDirection direction,
-    bool& is_after_expansion,
-    const TextJustify text_justify) {
+    bool& is_after_expansion) {
   unsigned count = 0;
   if (direction == TextDirection::kLtr) {
     for (size_t i = 0; i < characters.size(); ++i) {
@@ -137,8 +140,7 @@ unsigned Character::ExpansionOpportunityCount(
         character = U16_GET_SUPPLEMENTARY(character, characters[i + 1]);
         i++;
       }
-      if (text_justify == TextJustify::kAuto &&
-          IsCJKIdeographOrSymbol(character)) {
+      if (IsCJKIdeographOrSymbol(character)) {
         if (!is_after_expansion)
           count++;
         count++;
@@ -159,8 +161,7 @@ unsigned Character::ExpansionOpportunityCount(
         character = U16_GET_SUPPLEMENTARY(characters[i - 2], character);
         i--;
       }
-      if (text_justify == TextJustify::kAuto &&
-          IsCJKIdeographOrSymbol(character)) {
+      if (IsCJKIdeographOrSymbol(character)) {
         if (!is_after_expansion)
           count++;
         count++;

@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -78,9 +78,9 @@ const char* TypeToString(SocketPermissionRequest::OperationType type) {
 
 namespace extensions {
 
-SocketPermissionData::SocketPermissionData() {}
+SocketPermissionData::SocketPermissionData() = default;
 
-SocketPermissionData::~SocketPermissionData() {}
+SocketPermissionData::~SocketPermissionData() = default;
 
 bool SocketPermissionData::operator<(const SocketPermissionData& rhs) const {
   return entry_ < rhs.entry_;

@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -19,7 +19,6 @@ struct TestQueueTraits {
 
 using TestQueue = SequencedQueue<std::string>;
 using TestQueueWithSize = SequencedQueue<std::string, TestQueueTraits>;
-
 using SequencedQueueTest = testing::Test;
 
 TEST(SequencedQueueTest, Empty) {
@@ -69,6 +68,33 @@ TEST(SequencedQueueTest, SetFinalSequenceLength) {
   EXPECT_FALSE(q.HasNextElement());
 }
 
+TEST(SequencedQueueTest, ForceTerminateSequence) {
+  TestQueue q;
+  q.SetFinalSequenceLength(SequenceNumber(3));
+  EXPECT_TRUE(q.ExpectsMoreElements());
+  EXPECT_FALSE(q.HasNextElement());
+
+  // Push elements 0 and 2, leaving the current sequence length at 1, due to the
+  // gap in element 1.
+  EXPECT_TRUE(q.Push(SequenceNumber(0), "woot."));
+  EXPECT_TRUE(q.Push(SequenceNumber(2), "woot!"));
+  EXPECT_TRUE(q.ExpectsMoreElements());
+  EXPECT_TRUE(q.HasNextElement());
+  EXPECT_EQ(SequenceNumber(1), q.GetCurrentSequenceLength());
+
+  // We can't normally change the final sequence length once set.
+  EXPECT_FALSE(q.SetFinalSequenceLength(SequenceNumber(4)));
+  EXPECT_FALSE(q.SetFinalSequenceLength(SequenceNumber(0)));
+  EXPECT_FALSE(q.SetFinalSequenceLength(SequenceNumber(1)));
+
+  // But we can still force it to terminate at its current length. Now the gap
+  // at element 1 is irrelevant, and element 0 alone is the complete sequence.
+  q.ForceTerminateSequence();
+  EXPECT_FALSE(q.ExpectsMoreElements());
+  EXPECT_TRUE(q.HasNextElement());
+  EXPECT_FALSE(q.Push(SequenceNumber(1), "woot?"));
+}
+
 TEST(SequencedQueueTest, SequenceTooLow) {
   TestQueue q;
 
@@ -88,6 +114,7 @@ TEST(SequencedQueueTest, SequenceTooLow) {
 
   EXPECT_TRUE(q.Pop(s));
   EXPECT_EQ(kEntries[1], s);
+
   EXPECT_TRUE(q.Pop(s));
   EXPECT_EQ(kEntries[2], s);
 
@@ -154,35 +181,52 @@ TEST(SequencedQueueTest, FullyConsumed) {
   EXPECT_TRUE(q.IsSequenceFullyConsumed());
 }
 
-TEST(SequencedQueueTest, MaybeSkipSequenceNumber) {
-  TestQueue q;
+TEST(SequencedQueueTest, SkipElement) {
+  TestQueueWithSize q;
   const std::string kEntry = "woot";
-  EXPECT_TRUE(q.MaybeSkipSequenceNumber(SequenceNumber(0)));
-  EXPECT_FALSE(q.MaybeSkipSequenceNumber(SequenceNumber(0)));
+
+  // Skipping an element should update accounting appropriately.
+  EXPECT_TRUE(q.SkipElement(SequenceNumber(0)));
+  EXPECT_EQ(0u, q.GetTotalAvailableElementSize());
+
+  // We can't skip or push an element that's already been skipped.
+  EXPECT_FALSE(q.SkipElement(SequenceNumber(0)));
   EXPECT_FALSE(q.Push(SequenceNumber(0), kEntry));
+
+  // And we can't skip an element that's already been pushed.
   EXPECT_TRUE(q.Push(SequenceNumber(1), kEntry));
-  EXPECT_FALSE(q.MaybeSkipSequenceNumber(SequenceNumber(1)));
+  EXPECT_FALSE(q.SkipElement(SequenceNumber(1)));
+  EXPECT_EQ(kEntry.size(), q.GetTotalAvailableElementSize());
 
   std::string s;
   EXPECT_TRUE(q.Pop(s));
+  EXPECT_EQ(0u, q.GetTotalAvailableElementSize());
 
-  // Skip ahead to SequenceNumber 4.
-  EXPECT_TRUE(q.MaybeSkipSequenceNumber(SequenceNumber(2)));
-  EXPECT_TRUE(q.MaybeSkipSequenceNumber(SequenceNumber(3)));
+  // Skip ahead past SequenceNumber 2 and 3.
+  EXPECT_TRUE(q.SkipElement(SequenceNumber(2)));
+  EXPECT_EQ(0u, q.GetTotalAvailableElementSize());
+  EXPECT_TRUE(q.SkipElement(SequenceNumber(3)));
+  EXPECT_EQ(0u, q.GetTotalAvailableElementSize());
+
+  // SequenceNumber 4 can now be pushed while 2 and 3 cannot.
   EXPECT_FALSE(q.Push(SequenceNumber(2), kEntry));
   EXPECT_FALSE(q.Push(SequenceNumber(3), kEntry));
   EXPECT_TRUE(q.Push(SequenceNumber(4), kEntry));
-  EXPECT_FALSE(q.MaybeSkipSequenceNumber(SequenceNumber(4)));
+  EXPECT_FALSE(q.SkipElement(SequenceNumber(4)));
+  EXPECT_EQ(kEntry.size(), q.GetTotalAvailableElementSize());
 
+  // Cap the sequence at 6 elements and verify that accounting remains intact
+  // when we skip the last element.
   EXPECT_TRUE(q.SetFinalSequenceLength(SequenceNumber(6)));
   EXPECT_FALSE(q.IsSequenceFullyConsumed());
   EXPECT_TRUE(q.Pop(s));
   EXPECT_FALSE(q.IsSequenceFullyConsumed());
-  EXPECT_TRUE(q.MaybeSkipSequenceNumber(SequenceNumber(5)));
+  EXPECT_TRUE(q.SkipElement(SequenceNumber(5)));
+  EXPECT_EQ(0u, q.GetTotalAvailableElementSize());
   EXPECT_TRUE(q.IsSequenceFullyConsumed());
 
   // Fully consumed queue: skipping must fail.
-  EXPECT_FALSE(q.MaybeSkipSequenceNumber(SequenceNumber(6)));
+  EXPECT_FALSE(q.SkipElement(SequenceNumber(6)));
 }
 
 TEST(SequencedQueueTest, Accounting) {

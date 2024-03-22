@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -15,7 +15,6 @@
 #include "base/containers/unique_ptr_adapters.h"
 #include "base/gtest_prod_util.h"
 #include "base/memory/raw_ptr.h"
-#include "base/memory/ref_counted.h"
 #include "net/base/host_port_pair.h"
 #include "net/base/load_states.h"
 #include "net/base/net_export.h"
@@ -72,7 +71,7 @@ class NET_EXPORT HttpStreamFactory {
 
   void ProcessAlternativeServices(
       HttpNetworkSession* session,
-      const net::NetworkIsolationKey& network_isolation_key,
+      const net::NetworkAnonymizationKey& network_anonymization_key,
       const HttpResponseHeaders* headers,
       const url::SchemeHostPort& http_server);
 
@@ -82,7 +81,6 @@ class NET_EXPORT HttpStreamFactory {
       const HttpRequestInfo& info,
       RequestPriority priority,
       const SSLConfig& server_ssl_config,
-      const SSLConfig& proxy_ssl_config,
       HttpStreamRequest::Delegate* delegate,
       bool enable_ip_based_pooling,
       bool enable_alternative_services,
@@ -95,7 +93,6 @@ class NET_EXPORT HttpStreamFactory {
       const HttpRequestInfo& info,
       RequestPriority priority,
       const SSLConfig& server_ssl_config,
-      const SSLConfig& proxy_ssl_config,
       HttpStreamRequest::Delegate* delegate,
       WebSocketHandshakeStreamBase::CreateHelper* create_helper,
       bool enable_ip_based_pooling,
@@ -111,14 +108,13 @@ class NET_EXPORT HttpStreamFactory {
       const HttpRequestInfo& info,
       RequestPriority priority,
       const SSLConfig& server_ssl_config,
-      const SSLConfig& proxy_ssl_config,
       HttpStreamRequest::Delegate* delegate,
       bool enable_ip_based_pooling,
       bool enable_alternative_services,
       const NetLogWithSource& net_log);
 
   // Requests that enough connections for |num_streams| be opened.
-  void PreconnectStreams(int num_streams, const HttpRequestInfo& info);
+  void PreconnectStreams(int num_streams, HttpRequestInfo& info);
 
   const HostMappingRules* GetHostMappingRules() const;
 
@@ -147,7 +143,6 @@ class NET_EXPORT HttpStreamFactory {
       const HttpRequestInfo& info,
       RequestPriority priority,
       const SSLConfig& server_ssl_config,
-      const SSLConfig& proxy_ssl_config,
       HttpStreamRequest::Delegate* delegate,
       WebSocketHandshakeStreamBase::CreateHelper* create_helper,
       HttpStreamRequest::StreamType stream_type,
@@ -155,11 +150,6 @@ class NET_EXPORT HttpStreamFactory {
       bool enable_ip_based_pooling,
       bool enable_alternative_services,
       const NetLogWithSource& net_log);
-
-  // Called when the Job detects that the endpoint indicated by the
-  // Alternate-Protocol does not work. Lets the factory update
-  // HttpAlternateProtocols with the failure and resets the SPDY session key.
-  void OnBrokenAlternateProtocol(const Job*, const HostPortPair& origin);
 
   // Called when the Preconnect completes. Used for testing.
   virtual void OnPreconnectsCompleteInternal() {}

@@ -1,18 +1,19 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "ui/accessibility/platform/test_ax_node_wrapper.h"
 
+#include <algorithm>
 #include <map>
 #include <utility>
 
 #include "base/containers/cxx20_erase.h"
-#include "base/cxx17_backports.h"
 #include "base/strings/utf_string_conversions.h"
 #include "build/build_config.h"
 #include "ui/accessibility/ax_action_data.h"
 #include "ui/accessibility/ax_role_properties.h"
+#include "ui/accessibility/ax_selection.h"
 #include "ui/accessibility/ax_table_info.h"
 #include "ui/accessibility/ax_tree_observer.h"
 #include "ui/gfx/geometry/rect_conversions.h"
@@ -134,7 +135,7 @@ void TestAXNodeWrapper::ResetGlobalState() {
 }
 
 TestAXNodeWrapper::~TestAXNodeWrapper() {
-  platform_node_->Destroy();
+  platform_node_.ExtractAsDangling()->Destroy();
 }
 
 const AXNodeData& TestAXNodeWrapper::GetData() const {
@@ -145,7 +146,7 @@ const AXTreeData& TestAXNodeWrapper::GetTreeData() const {
   return tree_->data();
 }
 
-const AXTree::Selection TestAXNodeWrapper::GetUnignoredSelection() const {
+const AXSelection TestAXNodeWrapper::GetUnignoredSelection() const {
   return tree_->GetUnignoredSelection();
 }
 
@@ -153,18 +154,15 @@ AXNodePosition::AXPositionInstance TestAXNodeWrapper::CreatePositionAt(
     int offset,
     ax::mojom::TextAffinity affinity) const {
   if (node_->IsLeaf()) {
-    return ui::AXNodePosition::CreateTextPosition(
-        GetTreeData().tree_id, node_->id(), offset, affinity);
+    return AXNodePosition::CreateTextPosition(*node_, offset, affinity);
   }
-  return ui::AXNodePosition::CreateTreePosition(GetTreeData().tree_id,
-                                                node_->id(), offset);
+  return AXNodePosition::CreateTreePosition(*node_, offset);
 }
 
 AXNodePosition::AXPositionInstance TestAXNodeWrapper::CreateTextPositionAt(
     int offset,
     ax::mojom::TextAffinity affinity) const {
-  return ui::AXNodePosition::CreateTextPosition(GetTreeData().tree_id,
-                                                node_->id(), offset, affinity);
+  return AXNodePosition::CreateTextPosition(*node_, offset, affinity);
 }
 
 gfx::NativeViewAccessible TestAXNodeWrapper::GetNativeViewAccessible() {
@@ -183,7 +181,7 @@ size_t TestAXNodeWrapper::GetChildCount() const {
   return InternalChildCount();
 }
 
-gfx::NativeViewAccessible TestAXNodeWrapper::ChildAtIndex(size_t index) {
+gfx::NativeViewAccessible TestAXNodeWrapper::ChildAtIndex(size_t index) const {
   TestAXNodeWrapper* child_wrapper = InternalGetChild(index);
   return child_wrapper ?
       child_wrapper->ax_platform_node()->GetNativeViewAccessible() :
@@ -354,6 +352,7 @@ bool TestAXNodeWrapper::IsReadOnlyOrDisabled() const {
 
 // Walk the AXTree and ensure that all wrappers are created
 void TestAXNodeWrapper::BuildAllWrappers(AXTree* tree, AXNode* node) {
+  TestAXNodeWrapper::GetOrCreate(tree, node);
   for (auto* child : node->children()) {
     TestAXNodeWrapper::GetOrCreate(tree, child);
     BuildAllWrappers(tree, child);
@@ -366,7 +365,7 @@ void TestAXNodeWrapper::ResetNativeEventTarget() {
 
 AXPlatformNode* TestAXNodeWrapper::GetFromNodeID(int32_t id) {
   // Force creating all of the wrappers for this tree.
-  BuildAllWrappers(tree_, node_);
+  BuildAllWrappers(tree_, tree_->root());
 
   const auto iter = g_node_id_to_wrapper_map.find(id);
   if (iter != g_node_id_to_wrapper_map.end())
@@ -384,7 +383,7 @@ AXPlatformNode* TestAXNodeWrapper::GetFromTreeIDAndNodeID(
   return GetFromNodeID(id);
 }
 
-absl::optional<size_t> TestAXNodeWrapper::GetIndexInParent() {
+absl::optional<size_t> TestAXNodeWrapper::GetIndexInParent() const {
   return node_ ? absl::make_optional(node_->GetUnignoredIndexInParent())
                : absl::nullopt;
 }
@@ -468,10 +467,6 @@ void TestAXNodeWrapper::ReplaceTreeDataTextSelection(int32_t anchor_node_id,
   tree_->UpdateDataForTesting(new_tree_data);
 }
 
-bool TestAXNodeWrapper::IsTable() const {
-  return node_->IsTable();
-}
-
 absl::optional<int> TestAXNodeWrapper::GetTableRowCount() const {
   return node_->GetTableRowCount();
 }
@@ -490,11 +485,6 @@ absl::optional<int> TestAXNodeWrapper::GetTableAriaColCount() const {
 
 absl::optional<int> TestAXNodeWrapper::GetTableCellCount() const {
   return node_->GetTableCellCount();
-}
-
-absl::optional<bool> TestAXNodeWrapper::GetTableHasColumnOrRowHeaderNode()
-    const {
-  return node_->GetTableHasColumnOrRowHeaderNode();
 }
 
 std::vector<AXNodeID> TestAXNodeWrapper::GetColHeaderNodeIds() const {
@@ -591,9 +581,9 @@ bool TestAXNodeWrapper::AccessibilityPerformAction(
       int scroll_y_min = GetIntAttribute(ax::mojom::IntAttribute::kScrollYMin);
       int scroll_y_max = GetIntAttribute(ax::mojom::IntAttribute::kScrollYMax);
       int scroll_x =
-          base::clamp(data.target_point.x(), scroll_x_min, scroll_x_max);
+          std::clamp(data.target_point.x(), scroll_x_min, scroll_x_max);
       int scroll_y =
-          base::clamp(data.target_point.y(), scroll_y_min, scroll_y_max);
+          std::clamp(data.target_point.y(), scroll_y_min, scroll_y_max);
 
       ReplaceIntAttribute(node_->id(), ax::mojom::IntAttribute::kScrollX,
                           scroll_x);
@@ -867,36 +857,23 @@ bool TestAXNodeWrapper::ShouldIgnoreHoveredStateForTesting() {
 }
 
 bool TestAXNodeWrapper::HasVisibleCaretOrSelection() const {
-  ui::AXTree::Selection unignored_selection = GetUnignoredSelection();
-  int32_t focus_id = unignored_selection.focus_object_id;
-  AXNode* focus_object = tree_->GetFromId(focus_id);
-  if (!focus_object)
-    return false;
-
-  // Selection or caret will be visible in a focused editable area.
-  if (HasState(ax::mojom::State::kEditable)) {
-    return GetData().IsAtomicTextField() ? focus_object == node_
-                                         : focus_object->IsDescendantOf(node_);
-  }
-
-  // The selection will be visible in non-editable content only if it is not
-  // collapsed into a caret.
-  return (focus_id != unignored_selection.anchor_object_id ||
-          unignored_selection.focus_offset !=
-              unignored_selection.anchor_offset) &&
-         focus_object->IsDescendantOf(node_);
+  return node_->HasVisibleCaretOrSelection();
 }
 
-std::set<AXPlatformNode*> TestAXNodeWrapper::GetReverseRelations(
+std::vector<AXPlatformNode*>
+TestAXNodeWrapper::GetSourceNodesForReverseRelations(
     ax::mojom::IntAttribute attr) {
   DCHECK(IsNodeIdIntAttribute(attr));
-  return GetNodesForNodeIds(tree_->GetReverseRelations(attr, GetData().id));
+  return GetNodesFromRelationIdSet(
+      tree_->GetReverseRelations(attr, GetData().id));
 }
 
-std::set<AXPlatformNode*> TestAXNodeWrapper::GetReverseRelations(
+std::vector<AXPlatformNode*>
+TestAXNodeWrapper::GetSourceNodesForReverseRelations(
     ax::mojom::IntListAttribute attr) {
   DCHECK(IsNodeIdIntListAttribute(attr));
-  return GetNodesForNodeIds(tree_->GetReverseRelations(attr, GetData().id));
+  return GetNodesFromRelationIdSet(
+      tree_->GetReverseRelations(attr, GetData().id));
 }
 
 const ui::AXUniqueId& TestAXNodeWrapper::GetUniqueId() const {

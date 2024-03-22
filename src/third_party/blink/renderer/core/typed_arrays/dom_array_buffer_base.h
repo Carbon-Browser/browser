@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -32,6 +32,10 @@ class CORE_EXPORT DOMArrayBufferBase : public ScriptWrappable {
   void Detach() { is_detached_ = true; }
 
   bool IsShared() const { return contents_.IsShared(); }
+
+  bool IsResizableByUserJavaScript() const {
+    return contents_.IsResizableByUserJavaScript();
+  }
 
   // ScriptWrappable overrides:
   v8::MaybeLocal<v8::Value> Wrap(ScriptState*) override {

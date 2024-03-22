@@ -1,9 +1,10 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/ash/input_method/ui/assistive_accessibility_view.h"
 
+#include "base/memory/raw_ptr.h"
 #include "chrome/test/views/chrome_views_test_base.h"
 #include "content/public/test/browser_task_environment.h"
 #include "testing/gtest/include/gtest/gtest.h"
@@ -32,7 +33,8 @@ class AssistiveAccessiblityViewTest : public ChromeViewsTestBase {
     ChromeViewsTestBase::TearDown();
   }
 
-  AssistiveAccessibilityView* assistive_accessibility_view_;
+  raw_ptr<AssistiveAccessibilityView, DanglingUntriaged | ExperimentalAsh>
+      assistive_accessibility_view_;
 };
 
 TEST_F(AssistiveAccessiblityViewTest, MakesAnnouncement) {

@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,10 +12,6 @@
 #include "components/signin/public/identity_manager/access_token_info.h"
 #include "google_apis/gaia/google_service_auth_error.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
-
-namespace metrics {
-class ChromeUserMetricsExtension;
-}  // namespace metrics
 
 namespace signin {
 class PrimaryAccountAccessTokenFetcher;
@@ -55,8 +51,7 @@ class ChromeOSFamilyLinkUserMetricsProvider
   ~ChromeOSFamilyLinkUserMetricsProvider() override;
 
   // metrics::MetricsProvider:
-  void ProvideCurrentSessionData(
-      metrics::ChromeUserMetricsExtension* uma_proto_unused) override;
+  bool ProvideHistograms() override;
 
   // session_manager::SessionManagerObserver:
   void OnUserSessionStarted(bool is_primary_user) override;

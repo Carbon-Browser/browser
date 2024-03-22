@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,6 +11,8 @@
 #include <utility>
 
 #include "ash/accelerators/accelerator_controller_impl.h"
+#include "ash/accessibility/a11y_feature_type.h"
+#include "ash/accessibility/accessibility_notification_controller.h"
 #include "ash/accessibility/accessibility_observer.h"
 #include "ash/accessibility/autoclick/autoclick_controller.h"
 #include "ash/accessibility/dictation_nudge_controller.h"
@@ -18,23 +20,26 @@
 #include "ash/accessibility/switch_access/point_scan_controller.h"
 #include "ash/accessibility/ui/accessibility_highlight_controller.h"
 #include "ash/accessibility/ui/accessibility_panel_layout_manager.h"
-#include "ash/components/audio/cras_audio_handler.h"
-#include "ash/components/audio/sounds.h"
+#include "ash/color_enhancement/color_enhancement_controller.h"
 #include "ash/constants/ash_constants.h"
+#include "ash/constants/ash_features.h"
 #include "ash/constants/ash_pref_names.h"
 #include "ash/constants/notifier_catalogs.h"
 #include "ash/events/accessibility_event_rewriter.h"
 #include "ash/events/select_to_speak_event_handler.h"
-#include "ash/high_contrast/high_contrast_controller.h"
 #include "ash/keyboard/keyboard_controller_impl.h"
 #include "ash/keyboard/ui/keyboard_util.h"
 #include "ash/login_status.h"
 #include "ash/policy/policy_recommendation_restorer.h"
+#include "ash/public/cpp/accessibility_controller.h"
 #include "ash/public/cpp/accessibility_controller_client.h"
 #include "ash/public/cpp/ash_constants.h"
 #include "ash/public/cpp/notification_utils.h"
 #include "ash/public/cpp/session/session_observer.h"
 #include "ash/public/cpp/shell_window_ids.h"
+#include "ash/public/cpp/system/anchored_nudge_data.h"
+#include "ash/public/cpp/system/anchored_nudge_manager.h"
+#include "ash/public/cpp/system_tray_client.h"
 #include "ash/resources/vector_icons/vector_icons.h"
 #include "ash/root_window_controller.h"
 #include "ash/session/session_controller_impl.h"
@@ -46,16 +51,20 @@
 #include "ash/system/accessibility/floating_accessibility_controller.h"
 #include "ash/system/accessibility/select_to_speak/select_to_speak_menu_bubble_controller.h"
 #include "ash/system/accessibility/switch_access/switch_access_menu_bubble_controller.h"
+#include "ash/system/model/system_tray_model.h"
 #include "ash/system/power/backlights_forced_off_setter.h"
 #include "ash/system/power/power_status.h"
 #include "ash/system/power/scoped_backlights_forced_off.h"
-#include "ash/wm/tablet_mode/tablet_mode_controller.h"
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/feature_list.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
+#include "base/memory/raw_ptr_exclusion.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/metrics/user_metrics.h"
 #include "base/strings/string_number_conversions.h"
+#include "chromeos/ash/components/audio/cras_audio_handler.h"
+#include "chromeos/ash/components/audio/sounds.h"
 #include "components/live_caption/caption_util.h"
 #include "components/live_caption/pref_names.h"
 #include "components/pref_registry/pref_registry_syncable.h"
@@ -65,13 +74,15 @@
 #include "components/vector_icons/vector_icons.h"
 #include "media/base/media_switches.h"
 #include "ui/accessibility/accessibility_features.h"
-#include "ui/accessibility/accessibility_switches.h"
 #include "ui/accessibility/aura/aura_window_properties.h"
 #include "ui/aura/window.h"
 #include "ui/base/cursor/cursor_size.h"
 #include "ui/base/l10n/l10n_util.h"
+#include "ui/display/screen.h"
+#include "ui/display/tablet_state.h"
 #include "ui/message_center/message_center.h"
 #include "ui/message_center/public/cpp/notifier_id.h"
+#include "ui/strings/grit/ui_strings.h"
 #include "ui/wm/core/cursor_manager.h"
 
 using session_manager::SessionState;
@@ -79,18 +90,22 @@ using session_manager::SessionState;
 namespace ash {
 namespace {
 
-using FeatureType = AccessibilityControllerImpl::FeatureType;
+using FeatureType = A11yFeatureType;
 
 // These classes are used to store the static configuration for a11y features.
 struct FeatureData {
   FeatureType type;
   const char* pref;
-  const gfx::VectorIcon* icon;
+  // This field is not a raw_ptr<> because it was filtered by the rewriter
+  // for: #global-scope
+  RAW_PTR_EXCLUSION const gfx::VectorIcon* icon;
+  const int name_resource_id;
+  bool toggleable_in_quicksettings = true;
   FeatureType conflicting_feature = FeatureType::kNoConflictingFeature;
 };
 
 struct FeatureDialogData {
-  AccessibilityControllerImpl::FeatureType type;
+  FeatureType type;
   const char* pref;
   int title;
   int body;
@@ -100,40 +115,60 @@ struct FeatureDialogData {
 // A static array describing each feature.
 const FeatureData kFeatures[] = {
     {FeatureType::kAutoclick, prefs::kAccessibilityAutoclickEnabled,
-     &kSystemMenuAccessibilityAutoClickIcon},
+     &kSystemMenuAccessibilityAutoClickIcon,
+     IDS_ASH_STATUS_TRAY_ACCESSIBILITY_AUTOCLICK},
     {FeatureType::kCaretHighlight, prefs::kAccessibilityCaretHighlightEnabled,
-     nullptr},
+     nullptr, IDS_ASH_STATUS_TRAY_ACCESSIBILITY_CARET_HIGHLIGHT},
     {FeatureType::kCursorHighlight, prefs::kAccessibilityCursorHighlightEnabled,
-     nullptr},
+     nullptr, IDS_ASH_STATUS_TRAY_ACCESSIBILITY_HIGHLIGHT_MOUSE_CURSOR},
     {FeatureType::kCursorColor, prefs::kAccessibilityCursorColorEnabled,
-     nullptr},
+     nullptr, 0, /*toggleable_in_quicksettings=*/false},
     {FeatureType::kDictation, prefs::kAccessibilityDictationEnabled,
-     &kDictationMenuIcon},
+     &kDictationMenuIcon, IDS_ASH_STATUS_TRAY_ACCESSIBILITY_DICTATION},
+    {FeatureType::kColorCorrection, prefs::kAccessibilityColorCorrectionEnabled,
+     &kColorCorrectionIcon, IDS_ASH_STATUS_TRAY_ACCESSIBILITY_COLOR_CORRECTION},
     {FeatureType::kFocusHighlight, prefs::kAccessibilityFocusHighlightEnabled,
-     nullptr, /* conflicting_feature= */ FeatureType::kSpokenFeedback},
+     nullptr, IDS_ASH_STATUS_TRAY_ACCESSIBILITY_HIGHLIGHT_KEYBOARD_FOCUS,
+     /*toggleable_in_quicksettings=*/true,
+     /* conflicting_feature= */ FeatureType::kSpokenFeedback},
     {FeatureType::kFloatingMenu, prefs::kAccessibilityFloatingMenuEnabled,
-     nullptr},
+     nullptr, IDS_ASH_FLOATING_ACCESSIBILITY_MAIN_MENU,
+     /*toggleable_in_quicksettings=*/false},
     {FeatureType::kFullscreenMagnifier,
      prefs::kAccessibilityScreenMagnifierEnabled,
-     &kSystemMenuAccessibilityFullscreenMagnifierIcon},
+     &kSystemMenuAccessibilityFullscreenMagnifierIcon,
+     IDS_ASH_STATUS_TRAY_ACCESSIBILITY_SCREEN_MAGNIFIER},
     {FeatureType::kDockedMagnifier, prefs::kDockedMagnifierEnabled,
-     &kSystemMenuAccessibilityDockedMagnifierIcon},
+     &kSystemMenuAccessibilityDockedMagnifierIcon,
+     IDS_ASH_STATUS_TRAY_ACCESSIBILITY_DOCKED_MAGNIFIER},
     {FeatureType::kHighContrast, prefs::kAccessibilityHighContrastEnabled,
-     &kSystemMenuAccessibilityContrastIcon},
+     &kSystemMenuAccessibilityContrastIcon,
+     IDS_ASH_STATUS_TRAY_ACCESSIBILITY_HIGH_CONTRAST_MODE},
     {FeatureType::kLargeCursor, prefs::kAccessibilityLargeCursorEnabled,
-     nullptr},
+     nullptr, IDS_ASH_STATUS_TRAY_ACCESSIBILITY_LARGE_CURSOR},
     {FeatureType::kLiveCaption, ::prefs::kLiveCaptionEnabled,
-     &vector_icons::kLiveCaptionOnIcon},
-    {FeatureType::kMonoAudio, prefs::kAccessibilityMonoAudioEnabled, nullptr},
+     &vector_icons::kLiveCaptionOnIcon, IDS_ASH_STATUS_TRAY_LIVE_CAPTION},
+    {FeatureType::kMonoAudio, prefs::kAccessibilityMonoAudioEnabled, nullptr,
+     IDS_ASH_STATUS_TRAY_ACCESSIBILITY_MONO_AUDIO},
     {FeatureType::kSpokenFeedback, prefs::kAccessibilitySpokenFeedbackEnabled,
-     &kSystemMenuAccessibilityChromevoxIcon},
+     &kSystemMenuAccessibilityChromevoxIcon,
+     IDS_ASH_STATUS_TRAY_ACCESSIBILITY_SPOKEN_FEEDBACK},
     {FeatureType::kSelectToSpeak, prefs::kAccessibilitySelectToSpeakEnabled,
-     &kSystemMenuAccessibilitySelectToSpeakIcon},
-    {FeatureType::kStickyKeys, prefs::kAccessibilityStickyKeysEnabled, nullptr},
+     &kSystemMenuAccessibilitySelectToSpeakIcon,
+     IDS_ASH_STATUS_TRAY_ACCESSIBILITY_SELECT_TO_SPEAK},
+    {FeatureType::kStickyKeys, prefs::kAccessibilityStickyKeysEnabled, nullptr,
+     IDS_ASH_STATUS_TRAY_ACCESSIBILITY_STICKY_KEYS,
+     /*toggleable_in_quicksettings=*/true,
+     /*conflicting_feature=*/FeatureType::kSpokenFeedback},
     {FeatureType::kSwitchAccess, prefs::kAccessibilitySwitchAccessEnabled,
-     &kSwitchAccessIcon},
+     &kSwitchAccessIcon, IDS_ASH_STATUS_TRAY_ACCESSIBILITY_SWITCH_ACCESS},
     {FeatureType::kVirtualKeyboard, prefs::kAccessibilityVirtualKeyboardEnabled,
-     &kSystemMenuKeyboardLegacyIcon}};
+     &kSystemMenuKeyboardLegacyIcon,
+     IDS_ASH_STATUS_TRAY_ACCESSIBILITY_VIRTUAL_KEYBOARD},
+    {FeatureType::kFaceGaze, prefs::kAccessibilityFaceGazeEnabled, nullptr,
+     IDS_ASH_STATUS_TRAY_ACCESSIBILITY_FACEGAZE,
+     /*toggleable_in_quicksettings=*/true},
+};
 
 // An array describing the confirmation dialogs for the features which have
 // them.
@@ -150,6 +185,8 @@ const FeatureDialogData kFeatureDialogs[] = {
 
 constexpr char kNotificationId[] = "chrome://settings/accessibility";
 constexpr char kNotifierAccessibility[] = "ash.accessibility";
+constexpr char kDictationLanguageUpgradedNudgeId[] =
+    "dictation_language_upgraded.nudge_id";
 
 // TODO(warx): Signin screen has more controllable accessibility prefs. We may
 // want to expand this to a complete list. If so, merge this with
@@ -168,6 +205,36 @@ constexpr const char* const kCopiedOnSigninAccessibilityPrefs[]{
     prefs::kAccessibilityAutoclickDelayMs,
     prefs::kAccessibilityAutoclickEnabled,
     prefs::kAccessibilityCaretHighlightEnabled,
+    prefs::kAccessibilityChromeVoxAutoRead,
+    prefs::kAccessibilityChromeVoxAnnounceDownloadNotifications,
+    prefs::kAccessibilityChromeVoxAnnounceRichTextAttributes,
+    prefs::kAccessibilityChromeVoxAudioStrategy,
+    prefs::kAccessibilityChromeVoxBrailleSideBySide,
+    prefs::kAccessibilityChromeVoxBrailleTable,
+    prefs::kAccessibilityChromeVoxBrailleTable6,
+    prefs::kAccessibilityChromeVoxBrailleTable8,
+    prefs::kAccessibilityChromeVoxBrailleTableType,
+    prefs::kAccessibilityChromeVoxBrailleWordWrap,
+    prefs::kAccessibilityChromeVoxCapitalStrategy,
+    prefs::kAccessibilityChromeVoxCapitalStrategyBackup,
+    prefs::kAccessibilityChromeVoxEnableBrailleLogging,
+    prefs::kAccessibilityChromeVoxEnableEarconLogging,
+    prefs::kAccessibilityChromeVoxEnableEventStreamLogging,
+    prefs::kAccessibilityChromeVoxEnableSpeechLogging,
+    prefs::kAccessibilityChromeVoxEventStreamFilters,
+    prefs::kAccessibilityChromeVoxLanguageSwitching,
+    prefs::kAccessibilityChromeVoxMenuBrailleCommands,
+    prefs::kAccessibilityChromeVoxNumberReadingStyle,
+    prefs::kAccessibilityChromeVoxPreferredBrailleDisplayAddress,
+    prefs::kAccessibilityChromeVoxPunctuationEcho,
+    prefs::kAccessibilityChromeVoxSmartStickyMode,
+    prefs::kAccessibilityChromeVoxSpeakTextUnderMouse,
+    prefs::kAccessibilityChromeVoxUsePitchChanges,
+    prefs::kAccessibilityChromeVoxUseVerboseMode,
+    prefs::kAccessibilityChromeVoxVirtualBrailleColumns,
+    prefs::kAccessibilityChromeVoxVirtualBrailleRows,
+    prefs::kAccessibilityChromeVoxVoiceName,
+    prefs::kAccessibilityColorCorrectionEnabled,
     prefs::kAccessibilityCursorHighlightEnabled,
     prefs::kAccessibilityCursorColorEnabled,
     prefs::kAccessibilityCursorColor,
@@ -177,6 +244,7 @@ constexpr const char* const kCopiedOnSigninAccessibilityPrefs[]{
     prefs::kAccessibilityFocusHighlightEnabled,
     prefs::kAccessibilityHighContrastEnabled,
     prefs::kAccessibilityLargeCursorEnabled,
+    prefs::kAccessibilityFaceGazeEnabled,
     prefs::kAccessibilityMonoAudioEnabled,
     prefs::kAccessibilityScreenMagnifierEnabled,
     prefs::kAccessibilityScreenMagnifierFocusFollowingEnabled,
@@ -195,6 +263,10 @@ constexpr const char* const kCopiedOnSigninAccessibilityPrefs[]{
     prefs::kScreenMagnifierAcceleratorDialogHasBeenAccepted,
     prefs::kDockedMagnifierAcceleratorDialogHasBeenAccepted,
     prefs::kDictationAcceleratorDialogHasBeenAccepted,
+    prefs::kDictationDlcSuccessNotificationHasBeenShown,
+    prefs::kDictationDlcOnlyPumpkinDownloadedNotificationHasBeenShown,
+    prefs::kDictationDlcOnlySodaDownloadedNotificationHasBeenShown,
+    prefs::kDictationNoDlcsDownloadedNotificationHasBeenShown,
     prefs::kDisplayRotationAcceleratorDialogHasBeenAccepted2,
 };
 
@@ -218,13 +290,13 @@ bool VerifyFeaturesData() {
   // All feature prefs must be unique.
   std::set<const char*> feature_prefs;
   for (auto feature_data : kFeatures) {
-    if (feature_prefs.find(feature_data.pref) != feature_prefs.end())
+    if (base::Contains(feature_prefs, feature_data.pref))
       return false;
     feature_prefs.insert(feature_data.pref);
   }
 
   for (auto dialog_data : kFeatureDialogs) {
-    if (feature_prefs.find(dialog_data.pref) != feature_prefs.end())
+    if (base::Contains(feature_prefs, dialog_data.pref))
       return false;
     feature_prefs.insert(dialog_data.pref);
   }
@@ -242,7 +314,7 @@ bool IsSigninPrefService(PrefService* pref_service) {
 
 // Returns true if the current session is the guest session.
 bool IsCurrentSessionGuest() {
-  const absl::optional<user_manager::UserType> user_type =
+  const std::optional<user_manager::UserType> user_type =
       Shell::Get()->session_controller()->GetUserType();
   return user_type && *user_type == user_manager::USER_TYPE_GUEST;
 }
@@ -309,8 +381,10 @@ const gfx::VectorIcon& GetNotificationIcon(A11yNotificationType type) {
       return kNotificationAccessibilityBrailleIcon;
     case A11yNotificationType::kSwitchAccessEnabled:
       return kSwitchAccessIcon;
-    case A11yNotificationType::kSpeechRecognitionFilesDownloaded:
-    case A11yNotificationType::kSpeechRecognitionFilesFailed:
+    case A11yNotificationType::kDictationAllDlcsDownloaded:
+    case A11yNotificationType::kDictationNoDlcsDownloaded:
+    case A11yNotificationType::kDicationOnlyPumpkinDownloaded:
+    case A11yNotificationType::kDictationOnlySodaDownloaded:
       return kDictationMenuIcon;
     default:
       return kNotificationChromevoxIcon;
@@ -340,35 +414,61 @@ void ShowAccessibilityNotification(
     text = l10n_util::GetStringUTF16(
         IDS_ASH_STATUS_TRAY_BRAILLE_DISPLAY_CONNECTED);
     catalog_name = NotificationCatalogName::kBrailleDisplayConnected;
+  } else if (type == A11yNotificationType::kDictationAllDlcsDownloaded) {
+    display_source =
+        l10n_util::GetStringUTF16(IDS_ASH_STATUS_TRAY_ACCESSIBILITY_DICTATION);
+    title = l10n_util::GetStringFUTF16(
+        IDS_ASH_A11Y_DICTATION_NOTIFICATION_ALL_DLCS_DOWNLOADED_TITLE,
+        replacements, nullptr);
+    text = l10n_util::GetStringUTF16(
+        IDS_ASH_A11Y_DICTATION_NOTIFICATION_ALL_DLCS_DOWNLOADED_DESC);
+    catalog_name = NotificationCatalogName::kDictationAllDlcsDownloaded;
+    pinned = false;
+  } else if (type == A11yNotificationType::kDictationNoDlcsDownloaded) {
+    display_source =
+        l10n_util::GetStringUTF16(IDS_ASH_STATUS_TRAY_ACCESSIBILITY_DICTATION);
+    title = l10n_util::GetStringFUTF16(
+        IDS_ASH_A11Y_DICTATION_NOTIFICATION_NO_DLCS_DOWNLOADED_TITLE,
+        replacements, nullptr);
+    text = l10n_util::GetStringUTF16(
+        IDS_ASH_A11Y_DICTATION_NOTIFICATION_NO_DLCS_DOWNLOADED_DESC);
+    catalog_name = NotificationCatalogName::kDictationNoDlcsDownloaded;
+    pinned = false;
+    // Use CRITICAL_WARNING to force the notification color to red.
+    warning = message_center::SystemNotificationWarningLevel::CRITICAL_WARNING;
+  } else if (type == A11yNotificationType::kDicationOnlyPumpkinDownloaded) {
+    display_source =
+        l10n_util::GetStringUTF16(IDS_ASH_STATUS_TRAY_ACCESSIBILITY_DICTATION);
+
+    title = l10n_util::GetStringFUTF16(
+        IDS_ASH_A11Y_DICTATION_NOTIFICATION_ONLY_PUMPKIN_DOWNLOADED_TITLE,
+        replacements, nullptr);
+    text = l10n_util::GetStringUTF16(
+        IDS_ASH_A11Y_DICTATION_NOTIFICATION_ONLY_PUMPKIN_DOWNLOADED_DESC);
+
+    catalog_name = NotificationCatalogName::kDicationOnlyPumpkinDownloaded;
+    pinned = false;
+    // Use CRITICAL_WARNING to force the notification color to red.
+    warning = message_center::SystemNotificationWarningLevel::CRITICAL_WARNING;
+  } else if (type == A11yNotificationType::kDictationOnlySodaDownloaded) {
+    display_source =
+        l10n_util::GetStringUTF16(IDS_ASH_STATUS_TRAY_ACCESSIBILITY_DICTATION);
+    title = l10n_util::GetStringFUTF16(
+        IDS_ASH_A11Y_DICTATION_NOTIFICATION_ONLY_SODA_DOWNLOADED_TITLE,
+        replacements, nullptr);
+    text = l10n_util::GetStringUTF16(
+        IDS_ASH_A11Y_DICTATION_NOTIFICATION_ONLY_SODA_DOWNLOADED_DESC);
+    catalog_name = NotificationCatalogName::kDictationOnlySodaDownloaded;
+    pinned = false;
+    // Use CRITICAL_WARNING to force the notification color to red.
+    warning = message_center::SystemNotificationWarningLevel::CRITICAL_WARNING;
   } else if (type == A11yNotificationType::kSwitchAccessEnabled) {
     title = l10n_util::GetStringUTF16(
         IDS_ASH_STATUS_TRAY_SWITCH_ACCESS_ENABLED_TITLE);
     text = l10n_util::GetStringUTF16(IDS_ASH_STATUS_TRAY_SWITCH_ACCESS_ENABLED);
     catalog_name = NotificationCatalogName::kSwitchAccessEnabled;
-  } else if (type == A11yNotificationType::kSpeechRecognitionFilesDownloaded) {
-    display_source =
-        l10n_util::GetStringUTF16(IDS_ASH_STATUS_TRAY_ACCESSIBILITY_DICTATION);
-    title = l10n_util::GetStringFUTF16(
-        IDS_ASH_A11Y_DICTATION_NOTIFICATION_SODA_DOWNLOAD_SUCCEEDED_TITLE,
-        replacements, nullptr);
-    text = l10n_util::GetStringUTF16(
-        IDS_ASH_A11Y_DICTATION_NOTIFICATION_SODA_DOWNLOAD_SUCCEEDED_DESC);
-    pinned = false;
-    catalog_name = NotificationCatalogName::kSpeechRecognitionFilesDownloaded;
-  } else if (type == A11yNotificationType::kSpeechRecognitionFilesFailed) {
-    display_source =
-        l10n_util::GetStringUTF16(IDS_ASH_STATUS_TRAY_ACCESSIBILITY_DICTATION);
-    title = l10n_util::GetStringFUTF16(
-        IDS_ASH_A11Y_DICTATION_NOTIFICATION_SODA_DOWNLOAD_FAILED_TITLE,
-        replacements, nullptr);
-    text = l10n_util::GetStringUTF16(
-        IDS_ASH_A11Y_DICTATION_NOTIFICATION_SODA_DOWNLOAD_FAILED_DESC);
-    // Use CRITICAL_WARNING to force the notification color to red.
-    warning = message_center::SystemNotificationWarningLevel::CRITICAL_WARNING;
-    pinned = false;
-    catalog_name = NotificationCatalogName::kSpeechRecognitionFilesFailed;
   } else {
-    bool is_tablet = Shell::Get()->tablet_mode_controller()->InTabletMode();
+    bool is_tablet = display::Screen::GetScreen()->InTabletMode();
 
     title = l10n_util::GetStringUTF16(
         type == A11yNotificationType::kSpokenFeedbackBrailleEnabled
@@ -381,10 +481,11 @@ void ShowAccessibilityNotification(
                        ? NotificationCatalogName::kSpokenFeedbackBrailleEnabled
                        : NotificationCatalogName::kSpokenFeedbackEnabled;
   }
+
   message_center::RichNotificationData options;
   options.should_make_spoken_feedback_for_popup_updates = false;
   std::unique_ptr<message_center::Notification> notification =
-      ash::CreateSystemNotification(
+      ash::CreateSystemNotificationPtr(
           message_center::NOTIFICATION_TYPE_SIMPLE, kNotificationId, title,
           text, display_source, GURL(),
           message_center::NotifierId(
@@ -710,8 +811,21 @@ AccessibilityControllerImpl::Feature::Feature(
     FeatureType type,
     const std::string& pref_name,
     const gfx::VectorIcon* icon,
+    const int name_resource_id,
+    const bool toggleable_in_quicksettings,
     AccessibilityControllerImpl* controller)
-    : type_(type), pref_name_(pref_name), icon_(icon), owner_(controller) {}
+    : type_(type),
+      pref_name_(pref_name),
+      icon_(icon),
+      name_resource_id_(name_resource_id),
+      toggleable_in_quicksettings_(toggleable_in_quicksettings),
+      owner_(controller) {
+  // If a feature is toggleable in quicksettings it must have a
+  // `name_resource_id` so it's name can be looked up.
+  if (toggleable_in_quicksettings_) {
+    CHECK(name_resource_id);
+  }
+}
 
 AccessibilityControllerImpl::Feature::~Feature() = default;
 
@@ -724,7 +838,7 @@ void AccessibilityControllerImpl::Feature::SetEnabled(bool enabled) {
 }
 
 bool AccessibilityControllerImpl::Feature::IsVisibleInTray() const {
-  return (conflicting_feature_ == kNoConflictingFeature ||
+  return (conflicting_feature_ == FeatureType::kNoConflictingFeature ||
           !owner_->GetFeature(conflicting_feature_).enabled()) &&
          owner_->IsAccessibilityFeatureVisibleInTrayMenu(pref_name_);
 }
@@ -759,18 +873,45 @@ void AccessibilityControllerImpl::Feature::UpdateFromPref() {
 }
 
 void AccessibilityControllerImpl::Feature::SetConflictingFeature(
-    AccessibilityControllerImpl::FeatureType feature) {
+    FeatureType feature) {
   DCHECK_EQ(conflicting_feature_, FeatureType::kNoConflictingFeature);
   conflicting_feature_ = feature;
+}
+
+void AccessibilityControllerImpl::Feature::ObserveConflictingFeature() {
+  std::string conflicting_pref_name = "";
+  switch (conflicting_feature_) {
+    case A11yFeatureType::kSpokenFeedback:
+      conflicting_pref_name = prefs::kAccessibilitySpokenFeedbackEnabled;
+      break;
+    default:
+      // No other features are used as conflicting features at the moment,
+      // but this could be populated if needed in the future.
+      NOTREACHED() << "No pref name for conflicting feature "
+                   << static_cast<int>(conflicting_feature_);
+  }
+  pref_change_registrar_ = std::make_unique<PrefChangeRegistrar>();
+  pref_change_registrar_->Init(owner_->active_user_prefs_);
+  pref_change_registrar_->Add(
+      conflicting_pref_name,
+      base::BindRepeating(&AccessibilityControllerImpl::Feature::UpdateFromPref,
+                          base::Unretained(this)));
 }
 
 AccessibilityControllerImpl::FeatureWithDialog::FeatureWithDialog(
     FeatureType type,
     const std::string& pref_name,
     const gfx::VectorIcon* icon,
+    const int name_resource_id,
+    const bool toggleable_in_quicksettings,
     const Dialog& dialog,
     AccessibilityControllerImpl* controller)
-    : AccessibilityControllerImpl::Feature(type, pref_name, icon, controller),
+    : AccessibilityControllerImpl::Feature(type,
+                                           pref_name,
+                                           icon,
+                                           name_resource_id,
+                                           toggleable_in_quicksettings,
+                                           controller),
       dialog_(dialog) {}
 AccessibilityControllerImpl::FeatureWithDialog::~FeatureWithDialog() = default;
 
@@ -796,8 +937,10 @@ void AccessibilityControllerImpl::FeatureWithDialog::SetEnabledWithDialog(
     return;
   // We should not show the dialog when the feature is already enabled.
   if (enabled && !this->enabled() && !WasDialogAccepted()) {
-    Shell::Get()->accelerator_controller()->MaybeShowConfirmationDialog(
-        dialog_.title_resource_id, dialog_.body_resource_id,
+    Shell::Get()->accessibility_controller()->ShowConfirmationDialog(
+        l10n_util::GetStringUTF16(dialog_.title_resource_id),
+        l10n_util::GetStringUTF16(dialog_.body_resource_id),
+        l10n_util::GetStringUTF16(IDS_APP_CANCEL),
         // Callback for if the user accepts the dialog
         base::BindOnce(
             [](base::WeakPtr<AccessibilityControllerImpl> owner,
@@ -813,7 +956,8 @@ void AccessibilityControllerImpl::FeatureWithDialog::SetEnabledWithDialog(
             },
             owner_->weak_ptr_factory_.GetWeakPtr(), type_,
             std::move(completion_callback)),
-        base::DoNothing());
+        /*on_cancel_callback=*/base::DoNothing(),
+        /*on_close_callback=*/base::DoNothing());
 
     return;
   }
@@ -831,12 +975,16 @@ void AccessibilityControllerImpl::FeatureWithDialog::SetEnabled(bool enabled) {
 AccessibilityControllerImpl::AccessibilityControllerImpl()
     : autoclick_delay_(AutoclickController::GetDefaultAutoclickDelay()) {
   Shell::Get()->session_controller()->AddObserver(this);
-  Shell::Get()->tablet_mode_controller()->AddObserver(this);
+  display::Screen::GetScreen()->AddObserver(this);
   CreateAccessibilityFeatures();
+
+  accessibility_notification_controller_ =
+      std::make_unique<AccessibilityNotificationController>();
 }
 
 AccessibilityControllerImpl::~AccessibilityControllerImpl() {
   floating_menu_controller_.reset();
+  accessibility_notification_controller_.reset();
 }
 
 void AccessibilityControllerImpl::CreateAccessibilityFeatures() {
@@ -848,15 +996,24 @@ void AccessibilityControllerImpl::CreateAccessibilityFeatures() {
                                  dialog_data.body, dialog_data.mandatory};
   }
   for (auto feature_data : kFeatures) {
-    DCHECK(!features_[feature_data.type]);
+    size_t feature_index = static_cast<size_t>(feature_data.type);
+    DCHECK(!features_[feature_index]);
     auto it = dialogs.find(feature_data.type);
     if (it == dialogs.end()) {
-      features_[feature_data.type] = std::make_unique<Feature>(
-          feature_data.type, feature_data.pref, feature_data.icon, this);
+      features_[feature_index] = std::make_unique<Feature>(
+          feature_data.type, feature_data.pref, feature_data.icon,
+          feature_data.name_resource_id,
+          feature_data.toggleable_in_quicksettings, this);
     } else {
-      features_[feature_data.type] = std::make_unique<FeatureWithDialog>(
-          feature_data.type, feature_data.pref, feature_data.icon, it->second,
-          this);
+      features_[feature_index] = std::make_unique<FeatureWithDialog>(
+          feature_data.type, feature_data.pref, feature_data.icon,
+          feature_data.name_resource_id,
+          feature_data.toggleable_in_quicksettings, it->second, this);
+    }
+    if (feature_data.conflicting_feature !=
+        FeatureType::kNoConflictingFeature) {
+      features_[feature_index]->SetConflictingFeature(
+          feature_data.conflicting_feature);
     }
   }
 }
@@ -898,6 +1055,7 @@ void AccessibilityControllerImpl::RegisterProfilePrefs(
                                 false);
   registry->RegisterBooleanPref(
       prefs::kAccessibilityTabletModeShelfNavigationButtonsEnabled, false);
+  registry->RegisterBooleanPref(prefs::kAccessibilityFaceGazeEnabled, false);
 
   // Not syncable because it might change depending on application locale,
   // user settings, and because different languages can cause speech recognition
@@ -918,9 +1076,87 @@ void AccessibilityControllerImpl::RegisterProfilePrefs(
   registry->RegisterBooleanPref(
       prefs::kDictationAcceleratorDialogHasBeenAccepted, false);
   registry->RegisterBooleanPref(
+      prefs::kDictationDlcSuccessNotificationHasBeenShown, false);
+  registry->RegisterBooleanPref(
+      prefs::kDictationDlcOnlyPumpkinDownloadedNotificationHasBeenShown, false);
+  registry->RegisterBooleanPref(
+      prefs::kDictationDlcOnlySodaDownloadedNotificationHasBeenShown, false);
+  registry->RegisterBooleanPref(
+      prefs::kDictationNoDlcsDownloadedNotificationHasBeenShown, false);
+  registry->RegisterBooleanPref(
       prefs::kDisplayRotationAcceleratorDialogHasBeenAccepted2, false);
   registry->RegisterBooleanPref(prefs::kShouldAlwaysShowAccessibilityMenu,
                                 false);
+
+  registry->RegisterBooleanPref(prefs::kAccessibilityColorCorrectionEnabled,
+                                false);
+    registry->RegisterBooleanPref(
+        prefs::kAccessibilityColorCorrectionHasBeenSetup, false);
+
+  // TODO(b/266816160): Make ChromeVox prefs are syncable, to so that ChromeOS
+  // backs up users' ChromeVox settings and reflects across their devices.
+  registry->RegisterBooleanPref(prefs::kAccessibilityChromeVoxAutoRead, false);
+  registry->RegisterBooleanPref(
+      prefs::kAccessibilityChromeVoxAnnounceDownloadNotifications, true);
+  registry->RegisterBooleanPref(
+      prefs::kAccessibilityChromeVoxAnnounceRichTextAttributes, true);
+  registry->RegisterStringPref(prefs::kAccessibilityChromeVoxAudioStrategy,
+                               kDefaultAccessibilityChromeVoxAudioStrategy);
+  registry->RegisterBooleanPref(prefs::kAccessibilityChromeVoxBrailleSideBySide,
+                                true);
+  registry->RegisterStringPref(prefs::kAccessibilityChromeVoxBrailleTable,
+                               kDefaultAccessibilityChromeVoxBrailleTable);
+  registry->RegisterStringPref(prefs::kAccessibilityChromeVoxBrailleTable6,
+                               kDefaultAccessibilityChromeVoxBrailleTable6);
+  registry->RegisterStringPref(prefs::kAccessibilityChromeVoxBrailleTable8,
+                               kDefaultAccessibilityChromeVoxBrailleTable8);
+  registry->RegisterStringPref(prefs::kAccessibilityChromeVoxBrailleTableType,
+                               kDefaultAccessibilityChromeVoxBrailleTableType);
+  registry->RegisterBooleanPref(prefs::kAccessibilityChromeVoxBrailleWordWrap,
+                                true);
+  registry->RegisterStringPref(prefs::kAccessibilityChromeVoxCapitalStrategy,
+                               kDefaultAccessibilityChromeVoxCapitalStrategy);
+  registry->RegisterStringPref(
+      prefs::kAccessibilityChromeVoxCapitalStrategyBackup,
+      kDefaultAccessibilityChromeVoxCapitalStrategyBackup);
+  registry->RegisterBooleanPref(
+      prefs::kAccessibilityChromeVoxEnableBrailleLogging, false);
+  registry->RegisterBooleanPref(
+      prefs::kAccessibilityChromeVoxEnableEarconLogging, false);
+  registry->RegisterBooleanPref(
+      prefs::kAccessibilityChromeVoxEnableEventStreamLogging, false);
+  registry->RegisterBooleanPref(
+      prefs::kAccessibilityChromeVoxEnableSpeechLogging, false);
+  registry->RegisterDictionaryPref(
+      prefs::kAccessibilityChromeVoxEventStreamFilters, base::Value::Dict());
+  registry->RegisterBooleanPref(prefs::kAccessibilityChromeVoxLanguageSwitching,
+                                false);
+  registry->RegisterBooleanPref(
+      prefs::kAccessibilityChromeVoxMenuBrailleCommands, false);
+  registry->RegisterStringPref(
+      prefs::kAccessibilityChromeVoxNumberReadingStyle,
+      kDefaultAccessibilityChromeVoxNumberReadingStyle);
+  registry->RegisterStringPref(
+      prefs::kAccessibilityChromeVoxPreferredBrailleDisplayAddress,
+      kDefaultAccessibilityChromeVoxPreferredBrailleDisplayAddress);
+  registry->RegisterIntegerPref(prefs::kAccessibilityChromeVoxPunctuationEcho,
+                                kDefaultAccessibilityChromeVoxPunctuationEcho);
+  registry->RegisterBooleanPref(prefs::kAccessibilityChromeVoxSmartStickyMode,
+                                true);
+  registry->RegisterBooleanPref(
+      prefs::kAccessibilityChromeVoxSpeakTextUnderMouse, false);
+  registry->RegisterBooleanPref(prefs::kAccessibilityChromeVoxUsePitchChanges,
+                                true);
+  registry->RegisterBooleanPref(prefs::kAccessibilityChromeVoxUseVerboseMode,
+                                true);
+  registry->RegisterIntegerPref(
+      prefs::kAccessibilityChromeVoxVirtualBrailleColumns,
+      kDefaultAccessibilityChromeVoxVirtualBrailleColumns);
+  registry->RegisterIntegerPref(
+      prefs::kAccessibilityChromeVoxVirtualBrailleRows,
+      kDefaultAccessibilityChromeVoxVirtualBrailleRows);
+  registry->RegisterStringPref(prefs::kAccessibilityChromeVoxVoiceName,
+                               kDefaultAccessibilityChromeVoxVoiceName);
 
   //
   // Syncable prefs.
@@ -975,15 +1211,12 @@ void AccessibilityControllerImpl::RegisterProfilePrefs(
                                std::numeric_limits<double>::min());
   registry->RegisterDictionaryPref(
       prefs::kAccessibilitySwitchAccessSelectDeviceKeyCodes,
-      base::Value(base::Value::Type::DICTIONARY),
       user_prefs::PrefRegistrySyncable::SYNCABLE_OS_PREF);
   registry->RegisterDictionaryPref(
       prefs::kAccessibilitySwitchAccessNextDeviceKeyCodes,
-      base::Value(base::Value::Type::DICTIONARY),
       user_prefs::PrefRegistrySyncable::SYNCABLE_OS_PREF);
   registry->RegisterDictionaryPref(
       prefs::kAccessibilitySwitchAccessPreviousDeviceKeyCodes,
-      base::Value(base::Value::Type::DICTIONARY),
       user_prefs::PrefRegistrySyncable::SYNCABLE_OS_PREF);
   registry->RegisterBooleanPref(
       prefs::kAccessibilitySwitchAccessAutoScanEnabled, false,
@@ -1001,12 +1234,56 @@ void AccessibilityControllerImpl::RegisterProfilePrefs(
       kDefaultSwitchAccessPointScanSpeedDipsPerSecond,
       user_prefs::PrefRegistrySyncable::SYNCABLE_OS_PREF);
   registry->RegisterBooleanPref(
-      prefs::kAccessibilityEnhancedNetworkVoicesInSelectToSpeakAllowed, true,
+      prefs::kAccessibilityEnhancedNetworkVoicesInSelectToSpeakAllowed,
+      kDefaultAccessibilityEnhancedNetworkVoicesInSelectToSpeakAllowed,
       user_prefs::PrefRegistrySyncable::SYNCABLE_OS_PREF);
+  registry->RegisterBooleanPref(
+      prefs::kAccessibilitySelectToSpeakBackgroundShading,
+      kDefaultAccessibilitySelectToSpeakBackgroundShading,
+      user_prefs::PrefRegistrySyncable::SYNCABLE_OS_PREF);
+  registry->RegisterBooleanPref(
+      prefs::kAccessibilitySelectToSpeakEnhancedNetworkVoices,
+      kDefaultAccessibilitySelectToSpeakEnhancedNetworkVoices,
+      user_prefs::PrefRegistrySyncable::SYNCABLE_OS_PREF);
+  registry->RegisterBooleanPref(
+      prefs::kAccessibilitySelectToSpeakEnhancedVoicesDialogShown,
+      kDefaultAccessibilitySelectToSpeakEnhancedVoicesDialogShown,
+      user_prefs::PrefRegistrySyncable::SYNCABLE_OS_PREF);
+  registry->RegisterBooleanPref(
+      prefs::kAccessibilitySelectToSpeakNavigationControls,
+      kDefaultAccessibilitySelectToSpeakNavigationControls,
+      user_prefs::PrefRegistrySyncable::SYNCABLE_OS_PREF);
+  registry->RegisterBooleanPref(
+      prefs::kAccessibilitySelectToSpeakVoiceSwitching,
+      kDefaultAccessibilitySelectToSpeakVoiceSwitching,
+      user_prefs::PrefRegistrySyncable::SYNCABLE_OS_PREF);
+  registry->RegisterBooleanPref(
+      prefs::kAccessibilitySelectToSpeakWordHighlight,
+      kDefaultAccessibilitySelectToSpeakWordHighlight,
+      user_prefs::PrefRegistrySyncable::SYNCABLE_OS_PREF);
+  registry->RegisterStringPref(
+      prefs::kAccessibilitySelectToSpeakEnhancedVoiceName,
+      kDefaultAccessibilitySelectToSpeakEnhancedVoiceName,
+      user_prefs::PrefRegistrySyncable::SYNCABLE_OS_PREF);
+  registry->RegisterStringPref(
+      prefs::kAccessibilitySelectToSpeakHighlightColor,
+      kDefaultAccessibilitySelectToSpeakHighlightColor,
+      user_prefs::PrefRegistrySyncable::SYNCABLE_OS_PREF);
+  registry->RegisterStringPref(
+      prefs::kAccessibilitySelectToSpeakVoiceName,
+      kDefaultAccessibilitySelectToSpeakVoiceName,
+      user_prefs::PrefRegistrySyncable::SYNCABLE_OS_PREF);
+    registry->RegisterIntegerPref(
+        prefs::kAccessibilityColorVisionCorrectionAmount, 100,
+        user_prefs::PrefRegistrySyncable::SYNCABLE_OS_PREF);
+    registry->RegisterIntegerPref(
+        prefs::kAccessibilityColorVisionCorrectionType,
+        ColorVisionCorrectionType::kDeuteranomaly,
+        user_prefs::PrefRegistrySyncable::SYNCABLE_OS_PREF);
 }
 
 void AccessibilityControllerImpl::Shutdown() {
-  Shell::Get()->tablet_mode_controller()->RemoveObserver(this);
+  display::Screen::GetScreen()->RemoveObserver(this);
   Shell::Get()->session_controller()->RemoveObserver(this);
 
   // Clean up any child windows and widgets that might be animating out.
@@ -1044,8 +1321,21 @@ void AccessibilityControllerImpl::RemoveObserver(
 
 AccessibilityControllerImpl::Feature& AccessibilityControllerImpl::GetFeature(
     FeatureType type) const {
-  DCHECK(features_[type].get());
-  return *features_[type].get();
+  size_t feature_index = static_cast<size_t>(type);
+  DCHECK(features_[feature_index].get());
+  return *features_[feature_index].get();
+}
+
+std::vector<AccessibilityControllerImpl::Feature*>
+AccessibilityControllerImpl::GetEnabledFeaturesInQuickSettings() const {
+  std::vector<Feature*> enabled_features;
+
+  for (auto& feature : features_) {
+    if (feature->enabled() && feature->toggleable_in_quicksettings()) {
+      enabled_features.push_back(feature.get());
+    }
+  }
+  return enabled_features;
 }
 
 base::WeakPtr<AccessibilityControllerImpl>
@@ -1076,6 +1366,16 @@ AccessibilityControllerImpl::cursor_color() const {
 AccessibilityControllerImpl::Feature& AccessibilityControllerImpl::dictation()
     const {
   return GetFeature(FeatureType::kDictation);
+}
+
+AccessibilityControllerImpl::Feature&
+AccessibilityControllerImpl::color_correction() const {
+  return GetFeature(FeatureType::kColorCorrection);
+}
+
+AccessibilityControllerImpl::Feature& AccessibilityControllerImpl::face_gaze()
+    const {
+  return GetFeature(FeatureType::kFaceGaze);
 }
 
 AccessibilityControllerImpl::Feature&
@@ -1158,6 +1458,8 @@ bool AccessibilityControllerImpl::IsPrimarySettingsViewVisibleInTray() {
   return (IsSpokenFeedbackSettingVisibleInTray() ||
           IsSelectToSpeakSettingVisibleInTray() ||
           IsDictationSettingVisibleInTray() ||
+          IsFaceGazeSettingVisibleInTray() ||
+          IsColorCorrectionSettingVisibleInTray() ||
           IsHighContrastSettingVisibleInTray() ||
           IsFullScreenMagnifierSettingVisibleInTray() ||
           IsDockedMagnifierSettingVisibleInTray() ||
@@ -1165,20 +1467,6 @@ bool AccessibilityControllerImpl::IsPrimarySettingsViewVisibleInTray() {
           IsVirtualKeyboardSettingVisibleInTray() ||
           IsSwitchAccessSettingVisibleInTray() ||
           IsLiveCaptionSettingVisibleInTray());
-}
-
-bool AccessibilityControllerImpl::IsAdditionalSettingsViewVisibleInTray() {
-  return (IsLargeCursorSettingVisibleInTray() ||
-          IsMonoAudioSettingVisibleInTray() ||
-          IsCaretHighlightSettingVisibleInTray() ||
-          IsCursorHighlightSettingVisibleInTray() ||
-          IsFocusHighlightSettingVisibleInTray() ||
-          IsStickyKeysSettingVisibleInTray());
-}
-
-bool AccessibilityControllerImpl::IsAdditionalSettingsSeparatorVisibleInTray() {
-  return IsPrimarySettingsViewVisibleInTray() &&
-         IsAdditionalSettingsViewVisibleInTray();
 }
 
 bool AccessibilityControllerImpl::IsCaretHighlightSettingVisibleInTray() {
@@ -1203,6 +1491,14 @@ bool AccessibilityControllerImpl::IsDictationSettingVisibleInTray() {
 
 bool AccessibilityControllerImpl::IsEnterpriseIconVisibleForDictation() {
   return dictation().IsEnterpriseIconVisible();
+}
+
+bool AccessibilityControllerImpl::IsFaceGazeSettingVisibleInTray() {
+  return face_gaze().IsVisibleInTray();
+}
+
+bool AccessibilityControllerImpl::IsEnterpriseIconVisibleForFaceGaze() {
+  return face_gaze().IsEnterpriseIconVisible();
 }
 
 bool AccessibilityControllerImpl::IsFocusHighlightSettingVisibleInTray() {
@@ -1236,6 +1532,21 @@ bool AccessibilityControllerImpl::IsHighContrastSettingVisibleInTray() {
 
 bool AccessibilityControllerImpl::IsEnterpriseIconVisibleForHighContrast() {
   return high_contrast().IsEnterpriseIconVisible();
+}
+
+bool AccessibilityControllerImpl::IsColorCorrectionSettingVisibleInTray() {
+  if (!color_correction().enabled() &&
+      Shell::Get()->session_controller()->login_status() ==
+          ash::LoginStatus::NOT_LOGGED_IN) {
+    // Don't allow users to enable this on not logged in profiles because it
+    // requires set-up in settings the first time it is run.
+    return false;
+  }
+  return color_correction().IsVisibleInTray();
+}
+
+bool AccessibilityControllerImpl::IsEnterpriseIconVisibleForColorCorrection() {
+  return color_correction().IsEnterpriseIconVisible();
 }
 
 bool AccessibilityControllerImpl::IsLargeCursorSettingVisibleInTray() {
@@ -1536,9 +1847,114 @@ void AccessibilityControllerImpl::ToggleDictationFromSource(
   ToggleDictation();
 }
 
+void AccessibilityControllerImpl::EnableOrToggleDictationFromSource(
+    DictationToggleSource source) {
+  if (::features::IsAccessibilityDictationKeyboardImprovementsEnabled()) {
+    if (dictation().enabled()) {
+      ToggleDictationFromSource(source);
+    } else if (source == DictationToggleSource::kKeyboard) {
+      // Only allow direct-enabling of Dictation from the keyboard. Show the
+      // confirmation dialog if it hasn't been accepted yet.
+      if (active_user_prefs_->GetBoolean(
+              prefs::kDictationAcceleratorDialogHasBeenAccepted)) {
+        OnDictationKeyboardDialogAccepted();
+      } else {
+        ShowDictationKeyboardDialog();
+      }
+    }
+    return;
+  }
+
+  if (dictation().enabled()) {
+    // If Dictation keyboard improvements aren't enabled, then only allow
+    // Dictation to be toggled if Dictation is already enabled.
+    ToggleDictationFromSource(source);
+  }
+}
+
+void AccessibilityControllerImpl::ShowDictationKeyboardDialog() {
+  if (!::features::IsAccessibilityDictationKeyboardImprovementsEnabled() ||
+      !client_) {
+    return;
+  }
+
+  dictation_keyboard_dialog_showing_for_testing_ = true;
+
+  std::string dictation_locale;
+  if (active_user_prefs_->GetString(prefs::kAccessibilityDictationLocale)
+          .empty()) {
+    dictation_locale = client_->GetDictationDefaultLocale(/*new_user=*/true);
+  } else {
+    dictation_locale =
+        active_user_prefs_->GetString(prefs::kAccessibilityDictationLocale);
+  }
+
+  std::u16string display_locale = l10n_util::GetDisplayNameForLocale(
+      /*locale=*/dictation_locale, /*display_locale=*/dictation_locale,
+      /*is_for_ui=*/true);
+  std::vector<std::u16string> replacements{display_locale};
+  std::u16string title =
+      l10n_util::GetStringUTF16(IDS_ASH_DICTATION_KEYBOARD_DIALOG_TITLE);
+  std::u16string description =
+      ::features::IsDictationOfflineAvailable()
+          ? l10n_util::GetStringFUTF16(
+                IDS_ASH_DICTATION_KEYBOARD_DIALOG_DESCRIPTION_SODA_AVAILABLE,
+                replacements, nullptr)
+          : l10n_util::GetStringFUTF16(
+                IDS_ASH_DICTATION_KEYBOARD_DIALOG_DESCRIPTION_SODA_NOT_AVAILABLE,
+                replacements, nullptr);
+  ShowConfirmationDialog(
+      title, description, l10n_util::GetStringUTF16(IDS_APP_CANCEL),
+      base::BindOnce(
+          &AccessibilityControllerImpl::OnDictationKeyboardDialogAccepted,
+          GetWeakPtr()),
+      base::BindOnce(
+          &AccessibilityControllerImpl::OnDictationKeyboardDialogDismissed,
+          GetWeakPtr()),
+      base::BindOnce(
+          &AccessibilityControllerImpl::OnDictationKeyboardDialogDismissed,
+          GetWeakPtr()));
+}
+
+void AccessibilityControllerImpl::OnDictationKeyboardDialogAccepted() {
+  if (!::features::IsAccessibilityDictationKeyboardImprovementsEnabled()) {
+    return;
+  }
+
+  dictation_keyboard_dialog_showing_for_testing_ = false;
+  active_user_prefs_->SetBoolean(
+      prefs::kDictationAcceleratorDialogHasBeenAccepted, true);
+  confirmation_dialog_.reset();
+  base::RecordAction(base::UserMetricsAction("Accel_Enable_Dictation"));
+  dictation().SetEnabled(true);
+}
+
+void AccessibilityControllerImpl::OnDictationKeyboardDialogDismissed() {
+  if (!::features::IsAccessibilityDictationKeyboardImprovementsEnabled()) {
+    return;
+  }
+
+  dictation_keyboard_dialog_showing_for_testing_ = false;
+}
+
 void AccessibilityControllerImpl::ShowDictationLanguageUpgradedNudge(
     const std::string& dictation_locale,
     const std::string& application_locale) {
+  if (features::IsSystemNudgeMigrationEnabled()) {
+    const std::u16string language_name = l10n_util::GetDisplayNameForLocale(
+        dictation_locale, application_locale, /*is_for_ui=*/true);
+    const std::u16string body_text = l10n_util::GetStringFUTF16(
+        IDS_ASH_DICTATION_LANGUAGE_SUPPORTED_OFFLINE_NUDGE, language_name);
+
+    AnchoredNudgeData nudge_data(kDictationLanguageUpgradedNudgeId,
+                                 NudgeCatalogName::kDictation, body_text);
+
+    AnchoredNudgeManager::Get()->Show(nudge_data);
+    return;
+  }
+
+  // TODO(b:259352600): Move dictation_nudge_controller_ into
+  // accessibility_notification_controller.
   dictation_nudge_controller_ = std::make_unique<DictationNudgeController>(
       dictation_locale, application_locale);
   dictation_nudge_controller_->ShowNudge();
@@ -1677,18 +2093,22 @@ void AccessibilityControllerImpl::
   no_switch_access_disable_confirmation_dialog_for_testing_ = true;
 }
 
-void AccessibilityControllerImpl::OnTabletModeStarted() {
-  if (spoken_feedback().enabled())
-    ShowAccessibilityNotification(
-        A11yNotificationWrapper(A11yNotificationType::kSpokenFeedbackEnabled,
-                                std::vector<std::u16string>()));
+void AccessibilityControllerImpl::
+    DisableSwitchAccessEnableNotificationTesting() {
+  skip_switch_access_notification_ = true;
 }
 
-void AccessibilityControllerImpl::OnTabletModeEnded() {
-  if (spoken_feedback().enabled())
-    ShowAccessibilityNotification(
-        A11yNotificationWrapper(A11yNotificationType::kSpokenFeedbackEnabled,
-                                std::vector<std::u16string>()));
+void AccessibilityControllerImpl::OnDisplayTabletStateChanged(
+    display::TabletState state) {
+  if (spoken_feedback().enabled()) {
+    // Show accessibility notification when tablet mode transition is completed.
+    if (state == display::TabletState::kInTabletMode ||
+        state == display::TabletState::kInClamshellMode) {
+      ShowAccessibilityNotification(
+          A11yNotificationWrapper(A11yNotificationType::kSpokenFeedbackEnabled,
+                                  std::vector<std::u16string>()));
+    }
+  }
 }
 
 void AccessibilityControllerImpl::ObservePrefs(PrefService* prefs) {
@@ -1701,15 +2121,16 @@ void AccessibilityControllerImpl::ObservePrefs(PrefService* prefs) {
   pref_change_registrar_->Init(prefs);
 
   // It is safe to use base::Unreatined since we own pref_change_registrar.
-  for (int feature_id = 0; feature_id < FeatureType::kFeatureCount;
-       feature_id++) {
-    Feature* feature = features_[feature_id].get();
+  for (const std::unique_ptr<Feature>& feature : features_) {
     DCHECK(feature);
     pref_change_registrar_->Add(
         feature->pref_name(),
         base::BindRepeating(
             &AccessibilityControllerImpl::Feature::UpdateFromPref,
-            base::Unretained(feature)));
+            base::Unretained(feature.get())));
+    if (feature->conflicting_feature() != FeatureType::kNoConflictingFeature) {
+      feature->ObserveConflictingFeature();
+    }
     feature->UpdateFromPref();
   }
 
@@ -1803,11 +2224,20 @@ void AccessibilityControllerImpl::ObservePrefs(PrefService* prefs) {
       base::BindRepeating(
           &AccessibilityControllerImpl::UpdateCursorColorFromPrefs,
           base::Unretained(this)));
+  pref_change_registrar_->Add(
+      prefs::kAccessibilityColorVisionCorrectionAmount,
+      base::BindRepeating(
+          &AccessibilityControllerImpl::UpdateColorCorrectionFromPrefs,
+          base::Unretained(this)));
+  pref_change_registrar_->Add(
+      prefs::kAccessibilityColorVisionCorrectionType,
+      base::BindRepeating(
+          &AccessibilityControllerImpl::UpdateColorCorrectionFromPrefs,
+          base::Unretained(this)));
 
   // Load current state.
-  for (int feature_id = 0; feature_id < FeatureType::kFeatureCount;
-       feature_id++) {
-    features_[feature_id]->UpdateFromPref();
+  for (const std::unique_ptr<Feature>& feature : features_) {
+    feature->UpdateFromPref();
   }
 
   UpdateAutoclickDelayFromPref();
@@ -1821,6 +2251,11 @@ void AccessibilityControllerImpl::ObservePrefs(PrefService* prefs) {
   UpdateCursorColorFromPrefs();
   UpdateShortcutsEnabledFromPref();
   UpdateTabletModeShelfNavigationButtonsFromPref();
+  UpdateColorCorrectionFromPrefs();
+
+  if (::features::IsAccessibilityFaceGazeEnabled()) {
+    UpdateFaceGazeFromPrefs();
+  }
 }
 
 void AccessibilityControllerImpl::UpdateAutoclickDelayFromPref() {
@@ -1905,7 +2340,7 @@ FloatingMenuPosition AccessibilityControllerImpl::GetAutoclickMenuPosition() {
 }
 
 void AccessibilityControllerImpl::RequestAutoclickScrollableBoundsForPoint(
-    gfx::Point& point_in_screen) {
+    const gfx::Point& point_in_screen) {
   if (client_)
     client_->RequestAutoclickScrollableBoundsForPoint(point_in_screen);
 }
@@ -1929,7 +2364,7 @@ void AccessibilityControllerImpl::UpdateAutoclickMenuBoundsIfNeeded() {
 }
 
 void AccessibilityControllerImpl::HandleAutoclickScrollableBoundsFound(
-    gfx::Rect& bounds_in_screen) {
+    const gfx::Rect& bounds_in_screen) {
   Shell::Get()->autoclick_controller()->HandleAutoclickScrollableBoundsFound(
       bounds_in_screen);
 }
@@ -1992,6 +2427,41 @@ void AccessibilityControllerImpl::UpdateCursorColorFromPrefs() {
   shell->UpdateCursorCompositingEnabled();
 }
 
+void AccessibilityControllerImpl::UpdateFaceGazeFromPrefs() {
+  if (!::features::IsAccessibilityFaceGazeEnabled()) {
+    return;
+  }
+  // TODO(b/309121742): Start getting camera data.
+}
+
+void AccessibilityControllerImpl::UpdateColorCorrectionFromPrefs() {
+  DCHECK(active_user_prefs_);
+
+  auto* color_enhancement_controller =
+      Shell::Get()->color_enhancement_controller();
+
+  if (!active_user_prefs_->GetBoolean(
+          prefs::kAccessibilityColorCorrectionEnabled)) {
+    color_enhancement_controller->SetColorCorrectionEnabledAndUpdateDisplays(
+        false);
+    return;
+  }
+
+  const float cvd_correction_amount =
+      active_user_prefs_->GetInteger(
+          prefs::kAccessibilityColorVisionCorrectionAmount) /
+      100.0f;
+  ColorVisionCorrectionType type =
+      static_cast<ColorVisionCorrectionType>(active_user_prefs_->GetInteger(
+          prefs::kAccessibilityColorVisionCorrectionType));
+  color_enhancement_controller->SetColorVisionCorrectionFilter(
+      type, cvd_correction_amount);
+
+  // Ensure displays get updated.
+  color_enhancement_controller->SetColorCorrectionEnabledAndUpdateDisplays(
+      true);
+}
+
 void AccessibilityControllerImpl::UpdateAccessibilityHighlightingFromPrefs() {
   if (!caret_highlight().enabled() && !cursor_highlight().enabled() &&
       !focus_highlight().enabled()) {
@@ -2041,7 +2511,7 @@ void AccessibilityControllerImpl::UpdateSwitchAccessKeyCodesFromPref(
 
   std::string pref_key = PrefKeyForSwitchAccessCommand(command);
   const base::Value::Dict& key_codes_pref =
-      active_user_prefs_->GetValueDict(pref_key);
+      active_user_prefs_->GetDict(pref_key);
   std::map<int, std::set<std::string>> key_codes;
   for (const auto v : key_codes_pref) {
     int key_code;
@@ -2052,7 +2522,7 @@ void AccessibilityControllerImpl::UpdateSwitchAccessKeyCodesFromPref(
 
     key_codes[key_code] = std::set<std::string>();
 
-    for (const base::Value& device_type : v.second.GetListDeprecated())
+    for (const base::Value& device_type : v.second.GetList())
       key_codes[key_code].insert(device_type.GetString());
 
     DCHECK(!key_codes[key_code].empty());
@@ -2258,6 +2728,7 @@ void AccessibilityControllerImpl::EnableChromeVoxVolumeSlideGesture() {
 void AccessibilityControllerImpl::ShowConfirmationDialog(
     const std::u16string& title,
     const std::u16string& description,
+    const std::u16string& cancel_name,
     base::OnceClosure on_accept_callback,
     base::OnceClosure on_cancel_callback,
     base::OnceClosure on_close_callback) {
@@ -2270,11 +2741,14 @@ void AccessibilityControllerImpl::ShowConfirmationDialog(
     return;
   }
   auto* dialog = new AccessibilityConfirmationDialog(
-      title, description, std::move(on_accept_callback),
+      title, description, cancel_name, std::move(on_accept_callback),
       std::move(on_cancel_callback), std::move(on_close_callback));
   // Save the dialog so it doesn't go out of scope before it is
   // used and closed.
   confirmation_dialog_ = dialog->GetWeakPtr();
+  if (show_confirmation_dialog_callback_for_testing_) {
+    show_confirmation_dialog_callback_for_testing_.Run();
+  }
 }
 
 void AccessibilityControllerImpl::
@@ -2288,15 +2762,27 @@ void AccessibilityControllerImpl::
       ->UpdateOnSpeechRecognitionDownloadChanged(download_progress);
 }
 
-void AccessibilityControllerImpl::
-    ShowSpeechRecognitionDownloadNotificationForDictation(
-        bool succeeded,
-        const std::u16string& display_language) {
-  A11yNotificationType type =
-      succeeded ? A11yNotificationType::kSpeechRecognitionFilesDownloaded
-                : A11yNotificationType::kSpeechRecognitionFilesFailed;
+void AccessibilityControllerImpl::ShowNotificationForDictation(
+    DictationNotificationType type,
+    const std::u16string& display_language) {
+  A11yNotificationType notification_type;
+  switch (type) {
+    case DictationNotificationType::kAllDlcsDownloaded:
+      notification_type = A11yNotificationType::kDictationAllDlcsDownloaded;
+      break;
+    case DictationNotificationType::kNoDlcsDownloaded:
+      notification_type = A11yNotificationType::kDictationNoDlcsDownloaded;
+      break;
+    case DictationNotificationType::kOnlySodaDownloaded:
+      notification_type = A11yNotificationType::kDictationOnlySodaDownloaded;
+      break;
+    case DictationNotificationType::kOnlyPumpkinDownloaded:
+      notification_type = A11yNotificationType::kDicationOnlyPumpkinDownloaded;
+      break;
+  }
+
   ShowAccessibilityNotification(A11yNotificationWrapper(
-      type, std::vector<std::u16string>{display_language}));
+      notification_type, std::vector<std::u16string>{display_language}));
 }
 
 AccessibilityControllerImpl::A11yNotificationWrapper::
@@ -2311,9 +2797,10 @@ AccessibilityControllerImpl::A11yNotificationWrapper::A11yNotificationWrapper(
     const A11yNotificationWrapper&) = default;
 
 void AccessibilityControllerImpl::UpdateFeatureFromPref(FeatureType feature) {
-  bool enabled = features_[feature]->enabled();
-  bool is_managed =
-      active_user_prefs_->IsManagedPreference(features_[feature]->pref_name());
+  size_t feature_index = static_cast<size_t>(feature);
+  bool enabled = features_[feature_index]->enabled();
+  bool is_managed = active_user_prefs_->IsManagedPreference(
+      features_[feature_index]->pref_name());
 
   switch (feature) {
     case FeatureType::kAutoclick:
@@ -2351,8 +2838,8 @@ void AccessibilityControllerImpl::UpdateFeatureFromPref(FeatureType feature) {
     case FeatureType::kDockedMagnifier:
       break;
     case FeatureType::kHighContrast:
-      Shell::Get()->high_contrast_controller()->SetEnabled(enabled);
-      Shell::Get()->UpdateCursorCompositingEnabled();
+      Shell::Get()->color_enhancement_controller()->SetHighContrastEnabled(
+          enabled);
       break;
     case FeatureType::kLargeCursor:
       if (!enabled)
@@ -2421,6 +2908,21 @@ void AccessibilityControllerImpl::UpdateFeatureFromPref(FeatureType feature) {
     case FeatureType::kCursorColor:
       UpdateCursorColorFromPrefs();
       break;
+    case FeatureType::kColorCorrection:
+      if (enabled && !active_user_prefs_->GetBoolean(
+                         prefs::kAccessibilityColorCorrectionHasBeenSetup)) {
+        Shell::Get()
+            ->system_tray_model()
+            ->client()
+            ->ShowColorCorrectionSettings();
+        active_user_prefs_->SetBoolean(
+            prefs::kAccessibilityColorCorrectionHasBeenSetup, true);
+      }
+      UpdateColorCorrectionFromPrefs();
+      break;
+    case FeatureType::kFaceGaze:
+      UpdateFaceGazeFromPrefs();
+      break;
     case FeatureType::kFeatureCount:
     case FeatureType::kNoConflictingFeature:
       NOTREACHED();
@@ -2431,8 +2933,8 @@ void AccessibilityControllerImpl::UpdateFeatureFromPref(FeatureType feature) {
 void AccessibilityControllerImpl::UpdateDictationBubble(
     bool visible,
     DictationBubbleIconType icon,
-    const absl::optional<std::u16string>& text,
-    const absl::optional<std::vector<DictationBubbleHintType>>& hints) {
+    const std::optional<std::u16string>& text,
+    const std::optional<std::vector<DictationBubbleHintType>>& hints) {
   DCHECK(dictation().enabled());
   DCHECK(dictation_bubble_controller_);
 
@@ -2447,6 +2949,21 @@ AccessibilityControllerImpl::GetDictationBubbleControllerForTest() {
   }
 
   return dictation_bubble_controller_.get();
+}
+
+void AccessibilityControllerImpl::ShowToast(AccessibilityToastType type) {
+  accessibility_notification_controller_->ShowToast(type);
+}
+
+void AccessibilityControllerImpl::AddShowToastCallbackForTesting(
+    base::RepeatingCallback<void(AccessibilityToastType)> callback) {
+  accessibility_notification_controller_->AddShowToastCallbackForTesting(
+      std::move(callback));
+}
+
+void AccessibilityControllerImpl::AddShowConfirmationDialogCallbackForTesting(
+    base::RepeatingCallback<void()> callback) {
+  show_confirmation_dialog_callback_for_testing_ = std::move(callback);
 }
 
 }  // namespace ash

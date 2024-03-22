@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -34,14 +34,12 @@ public class DownloadMessageUiDelegate implements DownloadMessageUiController.De
     }
 
     @Override
-    @Nullable
-    public Context getContext() {
+    public @Nullable Context getContext() {
         return mActivity.get();
     }
 
     @Override
-    @Nullable
-    public MessageDispatcher getMessageDispatcher() {
+    public @Nullable MessageDispatcher getMessageDispatcher() {
         ChromeActivity chromeActivity = mActivity.get();
         if (chromeActivity == null) return null;
 
@@ -52,8 +50,7 @@ public class DownloadMessageUiDelegate implements DownloadMessageUiController.De
     }
 
     @Override
-    @Nullable
-    public ModalDialogManager getModalDialogManager() {
+    public @Nullable ModalDialogManager getModalDialogManager() {
         ChromeActivity chromeActivity = mActivity.get();
         return chromeActivity == null ? null : chromeActivity.getModalDialogManager();
     }

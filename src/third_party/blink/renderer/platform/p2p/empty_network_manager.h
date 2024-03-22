@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -63,10 +63,6 @@ class EmptyNetworkManager : public rtc::NetworkManagerBase,
   void OnNetworksChanged();
 
   THREAD_CHECKER(thread_checker_);
-
-  // Whether we have fired the first SignalNetworksChanged.
-  // Used to ensure we only report metrics once.
-  bool sent_first_update_ = false;
 
   // SignalNetworksChanged will only be fired if there is any outstanding
   // StartUpdating.

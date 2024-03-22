@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,8 +8,9 @@
 #include <string>
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/observer_list.h"
 #include "chromeos/ash/components/dbus/media_analytics/fake_media_analytics_client.h"
@@ -45,7 +46,7 @@ class MediaAnalyticsClientImpl : public MediaAnalyticsClient {
     observer_list_.RemoveObserver(observer);
   }
 
-  void GetState(DBusMethodCallback<mri::State> callback) override {
+  void GetState(chromeos::DBusMethodCallback<mri::State> callback) override {
     dbus::MethodCall method_call(media_perception::kMediaPerceptionServiceName,
                                  media_perception::kStateFunction);
     dbus_proxy_->CallMethod(
@@ -55,7 +56,7 @@ class MediaAnalyticsClientImpl : public MediaAnalyticsClient {
   }
 
   void SetState(const mri::State& state,
-                DBusMethodCallback<mri::State> callback) override {
+                chromeos::DBusMethodCallback<mri::State> callback) override {
     DCHECK(state.has_status()) << "Attempting to SetState without status set.";
 
     dbus::MethodCall method_call(media_perception::kMediaPerceptionServiceName,
@@ -70,7 +71,8 @@ class MediaAnalyticsClientImpl : public MediaAnalyticsClient {
                        weak_ptr_factory_.GetWeakPtr(), std::move(callback)));
   }
 
-  void GetDiagnostics(DBusMethodCallback<mri::Diagnostics> callback) override {
+  void GetDiagnostics(
+      chromeos::DBusMethodCallback<mri::Diagnostics> callback) override {
     dbus::MethodCall method_call(media_perception::kMediaPerceptionServiceName,
                                  media_perception::kGetDiagnosticsFunction);
     // TODO(lasoren): Verify that this timeout setting is sufficient.
@@ -80,8 +82,9 @@ class MediaAnalyticsClientImpl : public MediaAnalyticsClient {
                        weak_ptr_factory_.GetWeakPtr(), std::move(callback)));
   }
 
-  void BootstrapMojoConnection(base::ScopedFD file_descriptor,
-                               VoidDBusMethodCallback callback) override {
+  void BootstrapMojoConnection(
+      base::ScopedFD file_descriptor,
+      chromeos::VoidDBusMethodCallback callback) override {
     dbus::MethodCall method_call(media_perception::kMediaPerceptionServiceName,
                                  media_perception::kBootstrapMojoConnection);
     dbus::MessageWriter writer(&method_call);
@@ -110,8 +113,9 @@ class MediaAnalyticsClientImpl : public MediaAnalyticsClient {
   }
 
  private:
-  void OnBootstrapMojoConnectionCallback(VoidDBusMethodCallback callback,
-                                         dbus::Response* response) {
+  void OnBootstrapMojoConnectionCallback(
+      chromeos::VoidDBusMethodCallback callback,
+      dbus::Response* response) {
     std::move(callback).Run(response != nullptr);
   }
 
@@ -136,7 +140,7 @@ class MediaAnalyticsClientImpl : public MediaAnalyticsClient {
       observer.OnDetectionSignal(media_perception);
   }
 
-  void OnState(DBusMethodCallback<mri::State> callback,
+  void OnState(chromeos::DBusMethodCallback<mri::State> callback,
                dbus::Response* response) {
     if (!response) {
       LOG(ERROR) << "Call to State failed to get response.";
@@ -155,7 +159,7 @@ class MediaAnalyticsClientImpl : public MediaAnalyticsClient {
     std::move(callback).Run(std::move(state));
   }
 
-  void OnGetDiagnostics(DBusMethodCallback<mri::Diagnostics> callback,
+  void OnGetDiagnostics(chromeos::DBusMethodCallback<mri::Diagnostics> callback,
                         dbus::Response* response) {
     if (!response) {
       LOG(ERROR) << "Call to GetDiagnostics failed to get response.";
@@ -174,7 +178,7 @@ class MediaAnalyticsClientImpl : public MediaAnalyticsClient {
     std::move(callback).Run(std::move(diagnostics));
   }
 
-  dbus::ObjectProxy* dbus_proxy_ = nullptr;
+  raw_ptr<dbus::ObjectProxy, ExperimentalAsh> dbus_proxy_ = nullptr;
   base::ObserverList<Observer>::Unchecked observer_list_;
   base::WeakPtrFactory<MediaAnalyticsClientImpl> weak_ptr_factory_{this};
 };

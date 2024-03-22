@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -47,7 +47,7 @@ void PasswordManagerMetricsRecorder::RecordProvisionalSaveFailure(
     const GURL& main_frame_url,
     const GURL& form_origin,
     BrowserSavePasswordProgressLogger* logger) {
-  UMA_HISTOGRAM_ENUMERATION("PasswordManager.ProvisionalSaveFailure", failure,
+  UMA_HISTOGRAM_ENUMERATION("PasswordManager.ProvisionalSaveFailure2", failure,
                             MAX_FAILURE_VALUE);
   ukm_entry_builder_->SetProvisionalSaveFailure(static_cast<int64_t>(failure));
 

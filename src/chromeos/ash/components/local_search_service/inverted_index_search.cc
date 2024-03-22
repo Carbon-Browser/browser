@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,26 +8,24 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/i18n/rtl.h"
 #include "base/strings/string_split.h"
 #include "base/strings/string_util.h"
-#include "base/task/task_runner_util.h"
 #include "base/task/task_traits.h"
 #include "base/task/thread_pool.h"
 #include "base/time/time.h"
 #include "chromeos/ash/components/local_search_service/content_extraction_utils.h"
 #include "chromeos/ash/components/local_search_service/inverted_index.h"
-#include "chromeos/components/string_matching/tokenized_string.h"
+#include "chromeos/ash/components/string_matching/tokenized_string.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 
-namespace chromeos {
-namespace local_search_service {
+namespace ash::local_search_service {
 
 namespace {
 
-using chromeos::string_matching::TokenizedString;
+using string_matching::TokenizedString;
 using ExtractedContent =
     std::vector<std::pair<std::string, std::vector<Token>>>;
 
@@ -100,9 +98,8 @@ void InvertedIndexSearch::AddOrUpdate(const std::vector<Data>& data,
                                       AddOrUpdateCallback callback) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   DCHECK(!data.empty());
-  base::PostTaskAndReplyWithResult(
-      blocking_task_runner_.get(), FROM_HERE,
-      base::BindOnce(&ExtractDocumentsContent, data),
+  blocking_task_runner_->PostTaskAndReplyWithResult(
+      FROM_HERE, base::BindOnce(&ExtractDocumentsContent, data),
       base::BindOnce(
           &InvertedIndexSearch::FinalizeAddOrUpdate,
           weak_ptr_factory_.GetWeakPtr(),
@@ -129,9 +126,8 @@ void InvertedIndexSearch::UpdateDocuments(const std::vector<Data>& data,
                                           UpdateDocumentsCallback callback) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   DCHECK(!data.empty());
-  base::PostTaskAndReplyWithResult(
-      blocking_task_runner_.get(), FROM_HERE,
-      base::BindOnce(&ExtractDocumentsContent, data),
+  blocking_task_runner_->PostTaskAndReplyWithResult(
+      FROM_HERE, base::BindOnce(&ExtractDocumentsContent, data),
       base::BindOnce(
           &InvertedIndexSearch::FinalizeUpdateDocuments,
           weak_ptr_factory_.GetWeakPtr(),
@@ -214,5 +210,4 @@ void InvertedIndexSearch::FinalizeUpdateDocuments(
   inverted_index_->UpdateDocuments(documents, std::move(callback));
 }
 
-}  // namespace local_search_service
-}  // namespace chromeos
+}  // namespace ash::local_search_service

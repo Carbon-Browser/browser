@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,13 +8,9 @@
 #include "base/metrics/user_metrics.h"
 #include "base/notreached.h"
 #include "build/build_config.h"
+#include "components/download/public/common/download_content.h"
 #include "components/profile_metrics/browser_profile_type.h"
 #include "components/safe_browsing/content/browser/download/download_stats.h"
-
-void RecordDownloadCount(ChromeDownloadCountTypes type) {
-  base::UmaHistogramEnumeration("Download.CountsChrome", type,
-                                CHROME_DOWNLOAD_COUNT_TYPES_LAST_ENTRY);
-}
 
 void RecordDownloadSource(ChromeDownloadSource source) {
   base::UmaHistogramEnumeration("Download.SourcesChrome", source,
@@ -32,17 +28,16 @@ void RecordDangerousDownloadWarningShown(
       danger_type, file_path, is_https, has_user_gesture);
 }
 
-void RecordOpenedDangerousConfirmDialog(
-    download::DownloadDangerType danger_type) {
-  base::UmaHistogramEnumeration(
-      "Download.ShowDangerousDownloadConfirmationPrompt", danger_type,
-      download::DOWNLOAD_DANGER_TYPE_MAX);
-}
-
-void RecordDownloadOpenMethod(ChromeDownloadOpenMethod open_method) {
+void RecordDownloadOpen(ChromeDownloadOpenMethod open_method,
+                        const std::string& mime_type_string) {
   base::RecordAction(base::UserMetricsAction("Download.Open"));
   base::UmaHistogramEnumeration("Download.OpenMethod", open_method,
                                 DOWNLOAD_OPEN_METHOD_LAST_ENTRY);
+  download::DownloadContent download_content =
+      download::DownloadContentFromMimeType(
+          mime_type_string, /*record_content_subcategory=*/false);
+  base::UmaHistogramEnumeration("Download.Open.ContentType", download_content,
+                                download::DownloadContent::MAX);
 }
 
 void RecordDatabaseAvailability(bool is_available) {
@@ -82,11 +77,6 @@ void RecordDownloadShelfDragInfo(DownloadDragInfo drag_info) {
                                 DownloadDragInfo::COUNT);
 }
 
-void RecordDownloadBubbleDragInfo(DownloadDragInfo drag_info) {
-  base::UmaHistogramEnumeration("Download.Bubble.DragInfo", drag_info,
-                                DownloadDragInfo::COUNT);
-}
-
 void RecordDownloadStartPerProfileType(Profile* profile) {
   base::UmaHistogramEnumeration(
       "Download.Start.PerProfileType",
@@ -101,19 +91,10 @@ void RecordDownloadPromptStatus(DownloadPromptStatus status) {
 }
 #endif  // BUILDFLAG(IS_ANDROID)
 
-#if BUILDFLAG(IS_CHROMEOS)
-void RecordDownloadNotificationSuppressed() {
-  base::UmaHistogramBoolean("Download.Notification.Suppressed", true);
-}
-#endif  // BUILDFLAG(IS_CHROMEOS)
-
 DownloadShelfContextMenuAction DownloadCommandToShelfAction(
     DownloadCommands::Command download_command,
     bool clicked) {
   switch (download_command) {
-    case DownloadCommands::Command::MAX:
-      NOTREACHED();
-      return DownloadShelfContextMenuAction::kMaxValue;
     case DownloadCommands::Command::SHOW_IN_FOLDER:
       return clicked ? DownloadShelfContextMenuAction::kShowInFolderClicked
                      : DownloadShelfContextMenuAction::kShowInFolderEnabled;
@@ -149,18 +130,18 @@ DownloadShelfContextMenuAction DownloadCommandToShelfAction(
       return clicked
                  ? DownloadShelfContextMenuAction::kLearnMoreInterruptedClicked
                  : DownloadShelfContextMenuAction::kLearnMoreInterruptedEnabled;
-    case DownloadCommands::Command::LEARN_MORE_MIXED_CONTENT:
-      return clicked
-                 ? DownloadShelfContextMenuAction::kLearnMoreMixedContentClicked
-                 : DownloadShelfContextMenuAction::
-                       kLearnMoreMixedContentEnabled;
+    case DownloadCommands::Command::LEARN_MORE_INSECURE_DOWNLOAD:
+      return clicked ? DownloadShelfContextMenuAction::
+                           kLearnMoreInsecureDownloadClicked
+                     : DownloadShelfContextMenuAction::
+                           kLearnMoreInsecureDownloadEnabled;
     case DownloadCommands::Command::COPY_TO_CLIPBOARD:
       return clicked ? DownloadShelfContextMenuAction::kCopyToClipboardClicked
                      : DownloadShelfContextMenuAction::kCopyToClipboardEnabled;
     case DownloadCommands::Command::DEEP_SCAN:
       return clicked ? DownloadShelfContextMenuAction::kDeepScanClicked
                      : DownloadShelfContextMenuAction::kDeepScanEnabled;
-    case DownloadCommands::Command::BYPASS_DEEP_SCANNING:
+    case DownloadCommands::BYPASS_DEEP_SCANNING_AND_OPEN:
       return clicked
                  ? DownloadShelfContextMenuAction::kBypassDeepScanningClicked
                  : DownloadShelfContextMenuAction::kBypassDeepScanningEnabled;
@@ -169,6 +150,10 @@ DownloadShelfContextMenuAction DownloadCommandToShelfAction(
     // never be logged.
     case DownloadCommands::Command::REVIEW:
     case DownloadCommands::Command::RETRY:
+    case DownloadCommands::Command::CANCEL_DEEP_SCAN:
+    case DownloadCommands::Command::LEARN_MORE_DOWNLOAD_BLOCKED:
+    case DownloadCommands::Command::OPEN_SAFE_BROWSING_SETTING:
+    case DownloadCommands::Command::BYPASS_DEEP_SCANNING:
       NOTREACHED();
       return DownloadShelfContextMenuAction::kNotReached;
   }

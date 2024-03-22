@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -70,7 +70,7 @@ chrome.test.runTests([
     chrome.test.assertEq('b.com', url2.hostname);
     // Verify the subframe has any non-main-frame ID. Note: specific frame IDs
     // are exercised more heavily below.
-    chrome.test.assertFalse(results[1].frameId == 0);
+    chrome.test.assertNe(0, results[1].frameId);
     chrome.test.succeed();
   },
 

@@ -38,7 +38,6 @@
 #include "cc/input/overscroll_behavior.h"
 #include "third_party/blink/public/mojom/input/focus_type.mojom-blink-forward.h"
 #include "third_party/blink/public/web/web_navigation_policy.h"
-#include "third_party/blink/public/web/web_window_features.h"
 #include "third_party/blink/renderer/core/core_export.h"
 #include "third_party/blink/renderer/core/page/chrome_client.h"
 #include "third_party/blink/renderer/platform/graphics/touch_action.h"
@@ -67,6 +66,7 @@ class CORE_EXPORT ChromeClientImpl final : public ChromeClient {
   WebViewImpl* GetWebView() const override;
   void ChromeDestroyed() override;
   void SetWindowRect(const gfx::Rect&, LocalFrame&) override;
+  void SetResizable(bool resizable, LocalFrame& frame) override;
   gfx::Rect RootWindowRect(LocalFrame&) override;
   void DidAccessInitialMainDocument() override;
   void FocusPage() override;
@@ -75,23 +75,23 @@ class CORE_EXPORT ChromeClientImpl final : public ChromeClient {
   void TakeFocus(mojom::blink::FocusType) override;
   void SetKeyboardFocusURL(Element* new_focus_element) override;
   void BeginLifecycleUpdates(LocalFrame& main_frame) override;
-  void RegisterForDeferredCommitObservation(DeferredCommitObserver*) override;
-  void UnregisterFromDeferredCommitObservation(
-      DeferredCommitObserver*) override;
-  void OnDeferCommitsChanged(
-      bool defer_status,
-      cc::PaintHoldingReason reason,
-      absl::optional<cc::PaintHoldingCommitTrigger> trigger) override;
+  void RegisterForCommitObservation(CommitObserver*) override;
+  void UnregisterFromCommitObservation(CommitObserver*) override;
+  void WillCommitCompositorFrame() override;
   bool StartDeferringCommits(LocalFrame& main_frame,
                              base::TimeDelta timeout,
                              cc::PaintHoldingReason reason) override;
   void StopDeferringCommits(LocalFrame& main_frame,
                             cc::PaintHoldingCommitTrigger) override;
+  std::unique_ptr<cc::ScopedPauseRendering> PauseRendering(
+      LocalFrame&) override;
+  absl::optional<int> GetMaxRenderBufferBounds(LocalFrame&) const override;
   void StartDragging(LocalFrame*,
                      const WebDragData&,
                      DragOperationsMask,
                      const SkBitmap& drag_image,
-                     const gfx::Point& drag_image_offset) override;
+                     const gfx::Vector2d& cursor_offset,
+                     const gfx::Rect& drag_obj_rect) override;
   bool AcceptsLoadDrops() const override;
   Page* CreateWindowDelegate(LocalFrame*,
                              const FrameLoadRequest&,
@@ -103,7 +103,6 @@ class CORE_EXPORT ChromeClientImpl final : public ChromeClient {
   void Show(LocalFrame& frame,
             LocalFrame& opener_frame,
             NavigationPolicy navigation_policy,
-            const gfx::Rect& initial_rect,
             bool user_gesture) override;
   void DidOverscroll(const gfx::Vector2dF& overscroll_delta,
                      const gfx::Vector2dF& accumulated_overscroll,
@@ -111,12 +110,12 @@ class CORE_EXPORT ChromeClientImpl final : public ChromeClient {
                      const gfx::Vector2dF& velocity_in_viewport) override;
   void SetOverscrollBehavior(LocalFrame& main_frame,
                              const cc::OverscrollBehavior&) override;
-  void InjectGestureScrollEvent(LocalFrame& local_frame,
-                                WebGestureDevice device,
-                                const gfx::Vector2dF& delta,
-                                ui::ScrollGranularity granularity,
-                                CompositorElementId scrollable_area_element_id,
-                                WebInputEvent::Type injected_type) override;
+  void InjectScrollbarGestureScroll(
+      LocalFrame& local_frame,
+      const gfx::Vector2dF& delta,
+      ui::ScrollGranularity granularity,
+      CompositorElementId scrollable_area_element_id,
+      WebInputEvent::Type injected_type) override;
   void FinishScrollFocusedEditableIntoView(
       const gfx::RectF& caret_rect_in_root_frame,
       mojom::blink::ScrollIntoViewParamsPtr params) override;
@@ -138,7 +137,7 @@ class CORE_EXPORT ChromeClientImpl final : public ChromeClient {
   // box. The value is cleared after being read.
   void SetBeforeUnloadConfirmPanelResultForTesting(bool result_success);
 
-  void CloseWindowSoon() override;
+  void CloseWindow() override;
   bool OpenJavaScriptAlertDelegate(LocalFrame*, const String&) override;
   bool OpenJavaScriptConfirmDelegate(LocalFrame*, const String&) override;
   bool OpenJavaScriptPromptDelegate(LocalFrame*,
@@ -148,8 +147,8 @@ class CORE_EXPORT ChromeClientImpl final : public ChromeClient {
   bool TabsToLinks() override;
   void InvalidateContainer() override;
   void ScheduleAnimation(const LocalFrameView*, base::TimeDelta delay) override;
-  gfx::Rect ViewportToScreen(const gfx::Rect&,
-                             const LocalFrameView*) const override;
+  gfx::Rect LocalRootToScreenDIPs(const gfx::Rect&,
+                                  const LocalFrameView*) const override;
   float WindowToViewportScalar(LocalFrame*, const float) const override;
   const display::ScreenInfo& GetScreenInfo(LocalFrame&) const override;
   const display::ScreenInfos& GetScreenInfos(LocalFrame&) const override;
@@ -254,7 +253,10 @@ class CORE_EXPORT ChromeClientImpl final : public ChromeClient {
       Document::PageDismissalType) const override;
 
   // AutofillClient pass throughs:
-  void DidAssociateFormControlsAfterLoad(LocalFrame*) override;
+  void DidChangeFormRelatedElementDynamically(
+      LocalFrame*,
+      HTMLElement*,
+      WebFormRelatedChangeType) override;
   void HandleKeyboardEventOnTextField(HTMLInputElement&,
                                       KeyboardEvent&) override;
   void DidChangeValueInTextField(HTMLFormControlElement&) override;
@@ -262,14 +264,14 @@ class CORE_EXPORT ChromeClientImpl final : public ChromeClient {
   void OpenTextDataListChooser(HTMLInputElement&) override;
   void TextFieldDataListChanged(HTMLInputElement&) override;
   void DidChangeSelectionInSelectControl(HTMLFormControlElement&) override;
-  void SelectFieldOptionsChanged(HTMLFormControlElement&) override;
+  void SelectOrSelectListFieldOptionsChanged(HTMLFormControlElement&) override;
   void AjaxSucceeded(LocalFrame*) override;
   void JavaScriptChangedAutofilledValue(HTMLFormControlElement&,
                                         const String& old_value) override;
 
   void ShowVirtualKeyboardOnElementFocus(LocalFrame&) override;
 
-  TransformationMatrix GetDeviceEmulationTransform() const override;
+  gfx::Transform GetDeviceEmulationTransform() const override;
 
   void OnMouseDown(Node&) override;
   void DidUpdateBrowserControls() const override;
@@ -305,6 +307,8 @@ class CORE_EXPORT ChromeClientImpl final : public ChromeClient {
 
   void PasswordFieldReset(HTMLInputElement& element) override;
 
+  float ZoomFactorForViewportLayout() override;
+
  private:
   bool IsChromeClientImpl() const override { return true; }
 
@@ -335,7 +339,7 @@ class CORE_EXPORT ChromeClientImpl final : public ChromeClient {
   Member<ExternalDateTimeChooser> external_date_time_chooser_;
   bool did_request_non_empty_tool_tip_;
   absl::optional<bool> before_unload_confirm_panel_result_for_testing_;
-  HeapHashSet<WeakMember<DeferredCommitObserver>> deferred_commit_observers_;
+  HeapHashSet<WeakMember<CommitObserver>> commit_observers_;
 
   FRIEND_TEST_ALL_PREFIXES(FileChooserQueueTest, DerefQueuedChooser);
 };

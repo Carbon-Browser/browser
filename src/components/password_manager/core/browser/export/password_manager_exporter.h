@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,11 +13,22 @@
 #include "base/memory/weak_ptr.h"
 #include "base/strings/string_piece.h"
 #include "base/task/sequenced_task_runner.h"
-#include "components/password_manager/core/browser/ui/export_progress_status.h"
+#include "components/password_manager/core/browser/export/export_progress_status.h"
 
 namespace password_manager {
 
 class SavedPasswordsPresenter;
+
+// Information about passwort export in progress.
+struct PasswordExportInfo {
+  ExportProgressStatus status;
+  // The full path to the file with exported passwords.
+  std::string file_path;
+  // The name of the folder containing the exported file.
+  std::string folder_name;
+};
+
+bool operator==(const PasswordExportInfo& lhs, const PasswordExportInfo& rhs);
 
 // Controls the exporting of passwords. One instance per export flow.
 // PasswordManagerExporter will perform the export asynchronously as soon as all
@@ -26,7 +37,7 @@ class SavedPasswordsPresenter;
 class PasswordManagerExporter {
  public:
   using ProgressCallback =
-      base::RepeatingCallback<void(ExportProgressStatus, const std::string&)>;
+      base::RepeatingCallback<void(const PasswordExportInfo&)>;
   using WriteCallback =
       base::RepeatingCallback<bool(const base::FilePath&, base::StringPiece)>;
   using DeleteCallback = base::RepeatingCallback<bool(const base::FilePath&)>;
@@ -34,7 +45,8 @@ class PasswordManagerExporter {
       base::RepeatingCallback<bool(const base::FilePath&, int)>;
 
   explicit PasswordManagerExporter(SavedPasswordsPresenter* presenter,
-                                   ProgressCallback on_progress);
+                                   ProgressCallback on_progress,
+                                   base::OnceClosure completion_callback);
 
   PasswordManagerExporter(const PasswordManagerExporter&) = delete;
   PasswordManagerExporter& operator=(const PasswordManagerExporter&) = delete;
@@ -88,7 +100,7 @@ class PasswordManagerExporter {
 
   // Wrapper for the |on_progress_| callback, which caches |status|, so that
   // it can be provided by GetProgressStatus.
-  void OnProgress(ExportProgressStatus status, const std::string& folder);
+  void OnProgress(const PasswordExportInfo& progress);
 
   // Export failed or was cancelled. Restore the state of the file system by
   // removing any partial or unwanted files from the filesystem.
@@ -119,6 +131,9 @@ class PasswordManagerExporter {
   // The function which does the actual deleting of a file. It should wrap
   // base::DeleteFile, unless it's changed for testing purposes.
   DeleteCallback delete_function_;
+
+  // Resets the unique pointer to the current object instance.
+  base::OnceClosure completion_callback_;
 
   // Set the file permissions on a file. It should wrap
   // base::SetPosixFilePermissions, unless this is not Posix or it's changed for

@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -15,11 +15,7 @@
 #include "base/win/registry.h"
 #include "base/win/win_util.h"
 
-// TODO(sorin): implement this in terms of
-// chrome/installer/util/google_update_settings (crbug.com/615187).
-
 namespace component_updater {
-
 namespace {
 
 // Google Update group policy settings.

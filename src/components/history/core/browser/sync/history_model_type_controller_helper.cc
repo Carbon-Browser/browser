@@ -1,13 +1,13 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "components/history/core/browser/sync/history_model_type_controller_helper.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "components/history/core/common/pref_names.h"
 #include "components/prefs/pref_service.h"
-#include "components/sync/driver/sync_service.h"
+#include "components/sync/service/sync_service.h"
 
 namespace history {
 

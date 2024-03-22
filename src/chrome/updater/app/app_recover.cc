@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,13 +9,15 @@
 #include <vector>
 
 #include "base/barrier_closure.h"
-#include "base/bind.h"
+#include "base/check.h"
 #include "base/command_line.h"
 #include "base/files/file_path.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/path_service.h"
 #include "base/process/launch.h"
+#include "base/strings/string_util.h"
 #include "base/task/task_traits.h"
 #include "base/task/thread_pool.h"
 #include "base/version.h"
@@ -34,16 +36,12 @@ namespace {
 class AppRecover : public App {
  public:
   AppRecover(const base::Version& browser_version,
-             const std::string& session_id,
              const std::string& browser_app_id)
-      : browser_version_(browser_version),
-        session_id_(session_id),
-        browser_app_id_(browser_app_id) {}
+      : browser_version_(browser_version), browser_app_id_(browser_app_id) {}
 
  private:
   ~AppRecover() override = default;
-  void Initialize() override;
-  void Uninitialize() override;
+  [[nodiscard]] int Initialize() override;
   void FirstTaskRun() override;
 
   std::vector<RegistrationRequest> RecordRegisteredApps() const;
@@ -53,20 +51,36 @@ class AppRecover : public App {
                     int reinstall_result);
 
   const base::Version browser_version_;
-  const std::string session_id_;  // TODO(crbug.com/1281971): Unused.
   const std::string browser_app_id_;
   scoped_refptr<GlobalPrefs> global_prefs_;
 };
 
-void AppRecover::Initialize() {
+int AppRecover::Initialize() {
   global_prefs_ = CreateGlobalPrefs(updater_scope());
-}
-
-void AppRecover::Uninitialize() {
-  global_prefs_ = nullptr;
+  return kErrorOk;
 }
 
 void AppRecover::FirstTaskRun() {
+  if (!global_prefs_) {
+    VLOG(0) << "Recovery task could not acquire global prefs.";
+
+    // If global prefs cannot be acquired, it's possible that an active updater
+    // is running but is stuck. Issuing a GetVersion RPC to the updater may
+    // unstick it, and won't do harm if it is actively working.
+    scoped_refptr<UpdateService> update_service =
+        CreateUpdateServiceProxy(updater_scope());
+    update_service->GetVersion(
+        base::BindOnce(
+            [](scoped_refptr<UpdateService> /*update_service*/,
+               const base::Version& version) {
+              VLOG(0) << "GetVersion returned " << version;
+            },
+            update_service)
+            .Then(base::BindOnce(&AppRecover::Shutdown, this,
+                                 kErrorFailedToLockPrefsMutex)));
+    return;
+  }
+
   const std::vector<RegistrationRequest> registrations = RecordRegisteredApps();
 
   // Release global prefs lock so that the updater may run concurrently.
@@ -79,12 +93,13 @@ void AppRecover::FirstTaskRun() {
 }
 
 std::vector<RegistrationRequest> AppRecover::RecordRegisteredApps() const {
-  scoped_refptr<PersistedData> data =
-      base::MakeRefCounted<PersistedData>(global_prefs_->GetPrefService());
+  CHECK(global_prefs_);
+  scoped_refptr<PersistedData> data = base::MakeRefCounted<PersistedData>(
+      updater_scope(), global_prefs_->GetPrefService());
   std::vector<RegistrationRequest> apps;
   bool found_browser_registration = false;
   for (const std::string& app : data->GetAppIds()) {
-    if (app == kUpdaterAppId) {
+    if (base::EqualsCaseInsensitiveASCII(app, kUpdaterAppId)) {
       continue;
     }
     RegistrationRequest registration;
@@ -107,7 +122,6 @@ std::vector<RegistrationRequest> AppRecover::RecordRegisteredApps() const {
     RegistrationRequest registration;
     registration.app_id = browser_app_id_;
     registration.version = browser_version_;
-    // TODO(crbug.com/1281971): registration.existence_checker_path must be set.
     apps.emplace_back(registration);
   }
   return apps;
@@ -125,7 +139,7 @@ int AppRecover::ReinstallUpdater() const {
   uninstall_command.AppendSwitch(kEnableLoggingSwitch);
   uninstall_command.AppendSwitchASCII(kLoggingModuleSwitch,
                                       kLoggingModuleSwitchValue);
-  if (updater_scope() == UpdaterScope::kSystem) {
+  if (IsSystemInstall(updater_scope())) {
     uninstall_command.AppendSwitch(kSystemSwitch);
   }
   if (!base::LaunchProcess(uninstall_command, {}).WaitForExit(&exit_code)) {
@@ -138,13 +152,13 @@ int AppRecover::ReinstallUpdater() const {
   }
   base::CommandLine install_command(setup_path);
   install_command.AppendSwitch(kInstallSwitch);
+  install_command.AppendSwitch(kSilentSwitch);
   install_command.AppendSwitch(kEnableLoggingSwitch);
   install_command.AppendSwitchASCII(kLoggingModuleSwitch,
                                     kLoggingModuleSwitchValue);
-  if (updater_scope() == UpdaterScope::kSystem) {
+  if (IsSystemInstall(updater_scope())) {
     install_command.AppendSwitch(kSystemSwitch);
   }
-  // TODO(crbug.com/1281971): suppress the installer's UI.
   if (!base::LaunchProcess(install_command, {}).WaitForExit(&exit_code)) {
     VLOG(0) << "Failed to wait for the installer to exit.";
     return kErrorWaitFailedInstall;
@@ -164,22 +178,17 @@ void AppRecover::RegisterApps(
       CreateUpdateServiceProxy(updater_scope());
   base::RepeatingClosure barrier = base::BarrierClosure(
       registrations.size(),
-      // The service is bound to keep it alive through all callbacks.
-      base::BindOnce(
-          [](scoped_refptr<UpdateService> /*service*/,
-             base::OnceClosure shutdown) { std::move(shutdown).Run(); },
-          service, base::BindOnce(&AppRecover::Shutdown, this, kErrorOk)));
+      base::BindOnce(&AppRecover::Shutdown, this, kErrorOk));
   for (const RegistrationRequest& registration : registrations) {
-    service->RegisterApp(
-        registration,
-        base::BindOnce(
-            [](const std::string& app, base::RepeatingClosure barrier,
-               const RegistrationResponse& response) {
-              VLOG(0) << "Registration for " << app
-                      << " result: " << response.status_code << ".";
-              barrier.Run();
-            },
-            registration.app_id, barrier));
+    service->RegisterApp(registration,
+                         base::BindOnce(
+                             [](const std::string& app,
+                                base::RepeatingClosure barrier, int result) {
+                               VLOG(0) << "Registration for " << app
+                                       << " result: " << result << ".";
+                               barrier.Run();
+                             },
+                             registration.app_id, barrier));
   }
 }
 
@@ -190,7 +199,6 @@ scoped_refptr<App> MakeAppRecover() {
       base::CommandLine::ForCurrentProcess();
   return base::MakeRefCounted<AppRecover>(
       base::Version(command_line->GetSwitchValueASCII(kBrowserVersionSwitch)),
-      command_line->GetSwitchValueASCII(kSessionIdSwitch),
       command_line->GetSwitchValueASCII(kAppGuidSwitch));
 }
 

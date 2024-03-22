@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -107,6 +107,7 @@ TEST(PaymentEventDataConversionTest, ToCanMakePaymentEventData) {
   ASSERT_TRUE(data->methodData().front()->hasData());
   ASSERT_TRUE(data->methodData().front()->data().IsObject());
   String stringified_data = ToBlinkString<String>(
+      scope.GetIsolate(),
       v8::JSON::Stringify(
           scope.GetContext(),
           data->methodData().front()->data().V8Value().As<v8::Object>())
@@ -139,6 +140,7 @@ TEST(PaymentEventDataConversionTest, ToPaymentRequestEventData) {
   ASSERT_TRUE(data->methodData().front()->hasData());
   ASSERT_TRUE(data->methodData().front()->data().IsObject());
   String stringified_data = ToBlinkString<String>(
+      scope.GetIsolate(),
       v8::JSON::Stringify(
           scope.GetContext(),
           data->methodData().front()->data().V8Value().As<v8::Object>())

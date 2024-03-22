@@ -1,17 +1,13 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #import "ios/chrome/browser/ui/infobars/presentation/infobar_banner_transition_driver.h"
 
-#include "base/check_op.h"
-#include "base/mac/foundation_util.h"
+#import "base/apple/foundation_util.h"
+#import "base/check_op.h"
 #import "ios/chrome/browser/ui/infobars/presentation/infobar_banner_animator.h"
 #import "ios/chrome/browser/ui/infobars/presentation/infobar_banner_presentation_controller.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 @interface InfobarBannerTransitionDriver ()
 // Object that handles the animation and interactivity for the Banner

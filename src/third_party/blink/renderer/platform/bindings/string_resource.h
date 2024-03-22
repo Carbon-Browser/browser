@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,7 +10,6 @@
 #include "third_party/blink/renderer/platform/platform_export.h"
 #include "third_party/blink/renderer/platform/wtf/allocator/allocator.h"
 #include "third_party/blink/renderer/platform/wtf/text/atomic_string.h"
-#include "third_party/blink/renderer/platform/wtf/threading.h"
 #include "v8/include/v8.h"
 
 namespace blink {
@@ -22,9 +21,6 @@ class StringResourceBase {
 
  public:
   explicit StringResourceBase(const String& string) : plain_string_(string) {
-#if DCHECK_IS_ON()
-    thread_id_ = WTF::CurrentThread();
-#endif
     DCHECK(!string.IsNull());
     v8::Isolate::GetCurrent()->AdjustAmountOfExternalAllocatedMemory(
         string.CharactersSizeInBytes());
@@ -32,9 +28,6 @@ class StringResourceBase {
 
   explicit StringResourceBase(const AtomicString& string)
       : atomic_string_(string) {
-#if DCHECK_IS_ON()
-    thread_id_ = WTF::CurrentThread();
-#endif
     DCHECK(!string.IsNull());
     v8::Isolate::GetCurrent()->AdjustAmountOfExternalAllocatedMemory(
         string.CharactersSizeInBytes());
@@ -42,9 +35,6 @@ class StringResourceBase {
 
   explicit StringResourceBase(const ParkableString& string)
       : parkable_string_(string) {
-#if DCHECK_IS_ON()
-    thread_id_ = WTF::CurrentThread();
-#endif
     // TODO(lizeb): This is only true without compression.
     DCHECK(!string.IsNull());
     v8::Isolate::GetCurrent()->AdjustAmountOfExternalAllocatedMemory(
@@ -55,9 +45,6 @@ class StringResourceBase {
   StringResourceBase& operator=(const StringResourceBase&) = delete;
 
   virtual ~StringResourceBase() {
-#if DCHECK_IS_ON()
-    DCHECK(thread_id_ == WTF::CurrentThread());
-#endif
     int64_t reduced_external_memory = plain_string_.CharactersSizeInBytes();
     if (plain_string_.Impl() != atomic_string_.Impl() &&
         !atomic_string_.IsNull())
@@ -76,9 +63,6 @@ class StringResourceBase {
   }
 
   AtomicString GetAtomicString() {
-#if DCHECK_IS_ON()
-    DCHECK(thread_id_ == WTF::CurrentThread());
-#endif
     if (!parkable_string_.IsNull()) {
       DCHECK(plain_string_.IsNull());
       DCHECK(atomic_string_.IsNull());
@@ -119,10 +103,6 @@ class StringResourceBase {
   // If this string is parkable, its value is held here, and the other
   // members above are null.
   ParkableString parkable_string_;
-
-#if DCHECK_IS_ON()
-  base::PlatformThreadId thread_id_;
-#endif
 };
 
 // Even though StringResource{8,16}Base are effectively empty in release mode,
@@ -254,29 +234,6 @@ class ParkableStringResource8 final : public StringResource8Base {
     return reinterpret_cast<const char*>(GetParkableString().Characters8());
   }
 };
-
-enum ExternalMode { kExternalize, kDoNotExternalize };
-
-template <typename StringType>
-PLATFORM_EXPORT StringType ToBlinkString(v8::Local<v8::String>, ExternalMode);
-
-// This method is similar to ToBlinkString() except when the underlying
-// v8::String cannot be externalized (often happens with short strings like "id"
-// on 64-bit platforms where V8 uses pointer compression) the v8::String is
-// copied into the given StringView::StackBackingStore which avoids creating an
-// AtomicString unnecessarily.
-PLATFORM_EXPORT StringView ToBlinkStringView(v8::Local<v8::String>,
-                                             StringView::StackBackingStore&,
-                                             ExternalMode);
-
-PLATFORM_EXPORT String ToBlinkString(int value);
-
-// The returned StringView is guaranteed to be valid as long as `backing_store`
-// and `v8_string` are alive.
-PLATFORM_EXPORT StringView
-ToBlinkStringView(v8::Local<v8::String> v8_string,
-                  StringView::StackBackingStore& backing_store,
-                  ExternalMode external);
 
 }  // namespace blink
 

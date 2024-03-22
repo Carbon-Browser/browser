@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -38,7 +38,11 @@ class LogBuffer;
   /* Whether or not card upload was offered to the user. */            \
   T(CardUploadDecision)                                                \
   /* The website modified a field */                                   \
-  T(WebsiteModifiedFieldValue)
+  T(WebsiteModifiedFieldValue)                                         \
+  /* Chrome Fast Checkout run. */                                      \
+  T(FastCheckout)                                                      \
+  /* Touch To Fill UI. */                                              \
+  T(TouchToFill)
 
 // Define a bunch of logging scopes: kContext, kParsing, ...
 #define AUTOFILL_TEMPLATE(NAME) k##NAME,

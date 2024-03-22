@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,6 +9,7 @@
 #include <set>
 #include <string>
 
+#include "base/memory/raw_ptr.h"
 #include "chrome/browser/ash/policy/reporting/arc_app_install_event_log.h"
 #include "chrome/browser/ash/policy/reporting/arc_app_install_event_log_uploader.h"
 #include "chrome/browser/ash/policy/reporting/arc_app_install_event_logger.h"
@@ -92,11 +93,11 @@ class ArcAppInstallEventLogManager
     void RequestUploadForUploader() override;
 
    private:
-    ArcAppInstallEventLogManager* owner_;
+    raw_ptr<ArcAppInstallEventLogManager, ExperimentalAsh> owner_;
   };
 
   // Uploads logs to the server.
-  ArcAppInstallEventLogUploader* const uploader_;
+  const raw_ptr<ArcAppInstallEventLogUploader, ExperimentalAsh> uploader_;
 
   // Helper that owns the log store. Once created, must only be accessed via
   // |log_task_runner_|. Outlives |this| and ensures the extension log is stored

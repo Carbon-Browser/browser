@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,17 +8,15 @@ namespace system_media_controls {
 
 // static
 std::unique_ptr<SystemMediaControls> SystemMediaControls::Create(
-    const std::string& product_name) {
-  // The required APIs for interacting with the Now Playing Info Center only
-  // exist on 10.13.1 or later.
-  if (@available(macOS 10.13.1, *))
-    return std::make_unique<internal::SystemMediaControlsMac>();
-  return nullptr;
+    const std::string& product_name,
+    int window) {
+  return std::make_unique<internal::SystemMediaControlsMac>();
 }
 
 namespace internal {
 
-SystemMediaControlsMac::SystemMediaControlsMac() = default;
+SystemMediaControlsMac::SystemMediaControlsMac()
+    : remote_command_center_delegate_(this) {}
 
 SystemMediaControlsMac::~SystemMediaControlsMac() = default;
 

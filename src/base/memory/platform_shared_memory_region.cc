@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,14 +14,6 @@
 
 namespace base {
 namespace subtle {
-
-namespace {
-
-void RecordMappingWasBlockedHistogram(bool blocked) {
-  UmaHistogramBoolean("SharedMemory.MapBlockedForSecurity", blocked);
-}
-
-}  // namespace
 
 // static
 PlatformSharedMemoryRegion PlatformSharedMemoryRegion::CreateWritable(
@@ -66,11 +58,8 @@ absl::optional<span<uint8_t>> PlatformSharedMemoryRegion::MapAt(
   // `SysInfo::VMAllocationGranularity()`. Should this accounting be done with
   // that in mind?
   if (!SharedMemorySecurityPolicy::AcquireReservationForMapping(size)) {
-    RecordMappingWasBlockedHistogram(/*blocked=*/true);
     return absl::nullopt;
   }
-
-  RecordMappingWasBlockedHistogram(/*blocked=*/false);
 
   if (!mapper)
     mapper = SharedMemoryMapper::GetDefaultInstance();
@@ -98,6 +87,17 @@ absl::optional<span<uint8_t>> PlatformSharedMemoryRegion::MapAt(
   }
 
   return result;
+}
+
+void PlatformSharedMemoryRegion::Unmap(span<uint8_t> mapping,
+                                       SharedMemoryMapper* mapper) {
+  if (!mapper) {
+    mapper = SharedMemoryMapper::GetDefaultInstance();
+  }
+
+  mapper->Unmap(mapping);
+
+  SharedMemorySecurityPolicy::ReleaseReservationForMapping(mapping.size());
 }
 
 }  // namespace subtle

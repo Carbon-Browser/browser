@@ -1,11 +1,9 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/ash/crostini/crostini_upgrader.h"
 
-#include "ash/constants/ash_features.h"
-#include "base/feature_list.h"
 #include "base/files/file_util.h"
 #include "base/location.h"
 #include "base/no_destructor.h"
@@ -16,9 +14,8 @@
 #include "chrome/browser/ash/crostini/crostini_manager_factory.h"
 #include "chrome/browser/ash/file_manager/path_util.h"
 #include "chrome/browser/profiles/profile.h"
-#include "chrome/browser/ui/webui/chromeos/crostini_upgrader/crostini_upgrader.mojom.h"
-#include "components/keyed_service/content/browser_context_dependency_manager.h"
-#include "components/keyed_service/content/browser_context_keyed_service_factory.h"
+#include "chrome/browser/profiles/profile_keyed_service_factory.h"
+#include "chrome/browser/ui/webui/ash/crostini_upgrader/crostini_upgrader.mojom.h"
 #include "components/keyed_service/core/keyed_service.h"
 #include "content/public/browser/browser_context.h"
 #include "content/public/browser/network_service_instance.h"
@@ -29,7 +26,7 @@ namespace crostini {
 
 namespace {
 
-class CrostiniUpgraderFactory : public BrowserContextKeyedServiceFactory {
+class CrostiniUpgraderFactory : public ProfileKeyedServiceFactory {
  public:
   static CrostiniUpgrader* GetForProfile(Profile* profile) {
     return static_cast<CrostiniUpgrader*>(
@@ -45,9 +42,14 @@ class CrostiniUpgraderFactory : public BrowserContextKeyedServiceFactory {
   friend class base::NoDestructor<CrostiniUpgraderFactory>;
 
   CrostiniUpgraderFactory()
-      : BrowserContextKeyedServiceFactory(
+      : ProfileKeyedServiceFactory(
             "CrostiniUpgraderService",
-            BrowserContextDependencyManager::GetInstance()) {
+            ProfileSelections::Builder()
+                .WithRegular(ProfileSelection::kOriginalOnly)
+                // TODO(crbug.com/1418376): Check if this service is needed in
+                // Guest mode.
+                .WithGuest(ProfileSelection::kOriginalOnly)
+                .Build()) {
     DependsOn(CrostiniManagerFactory::GetInstance());
   }
 
@@ -124,8 +126,9 @@ void CrostiniUpgrader::CreateNewLogFile() {
       base::BindOnce(
           [](base::WeakPtr<CrostiniUpgrader> weak_this,
              absl::optional<base::FilePath> path) {
-            if (!weak_this)
+            if (!weak_this) {
               return;
+            }
 
             weak_this->current_log_file_ = path;
             if (path) {
@@ -153,8 +156,9 @@ void CrostiniUpgrader::StatusTracker::SetStatusRunningUI(int progress_percent) {
   } else {
     upgrader_->OnRestoreProgress(progress_percent);
   }
-  if (has_notified_start_)
+  if (has_notified_start_) {
     return;
+  }
   for (auto& observer : upgrader_->upgrader_observers_) {
     observer.OnBackupMaybeStarted(/*did_start=*/true);
   }
@@ -290,15 +294,14 @@ void CrostiniUpgrader::PowerChanged(
 }
 
 void CrostiniUpgrader::DoPrechecks() {
-  chromeos::crostini_upgrader::mojom::UpgradePrecheckStatus status;
+  ash::crostini_upgrader::mojom::UpgradePrecheckStatus status;
   if (content::GetNetworkConnectionTracker()->IsOffline()) {
-    status = chromeos::crostini_upgrader::mojom::UpgradePrecheckStatus::
-        NETWORK_FAILURE;
-  } else if (!power_status_good_) {
     status =
-        chromeos::crostini_upgrader::mojom::UpgradePrecheckStatus::LOW_POWER;
+        ash::crostini_upgrader::mojom::UpgradePrecheckStatus::NETWORK_FAILURE;
+  } else if (!power_status_good_) {
+    status = ash::crostini_upgrader::mojom::UpgradePrecheckStatus::LOW_POWER;
   } else {
-    status = chromeos::crostini_upgrader::mojom::UpgradePrecheckStatus::OK;
+    status = ash::crostini_upgrader::mojom::UpgradePrecheckStatus::OK;
   }
 
   for (auto& observer : upgrader_observers_) {
@@ -331,13 +334,7 @@ void CrostiniUpgrader::Upgrade(const guest_os::GuestId& container_id) {
               return;
             }
 
-            ContainerVersion target_version;
-            if (base::FeatureList::IsEnabled(
-                    chromeos::features::kCrostiniBullseyeUpgrade)) {
-              target_version = ContainerVersion::BULLSEYE;
-            } else {
-              target_version = ContainerVersion::BUSTER;
-            }
+            auto target_version = ContainerVersion::BOOKWORM;
 
             CrostiniManager::GetForProfile(weak_this->profile_)
                 ->UpgradeContainer(
@@ -493,6 +490,11 @@ CrostiniExportImport::OnceTrackerFactory CrostiniUpgrader::MakeFactory() {
                                                std::move(path));
       },
       weak_ptr_factory_.GetWeakPtr());
+}
+
+// static
+void CrostiniUpgrader::EnsureFactoryBuilt() {
+  CrostiniUpgraderFactory::GetInstance();
 }
 
 }  // namespace crostini

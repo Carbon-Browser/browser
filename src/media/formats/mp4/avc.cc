@@ -1,14 +1,14 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "media/formats/mp4/avc.h"
 
-#include <algorithm>
 #include <memory>
 #include <utility>
 
 #include "base/logging.h"
+#include "base/ranges/algorithm.h"
 #include "media/base/decrypt_config.h"
 #include "media/formats/mp4/box_definitions.h"
 #include "media/formats/mp4/box_reader.h"
@@ -34,8 +34,7 @@ static bool ConvertAVCToAnnexBInPlaceForLengthSize4(std::vector<uint8_t>* buf) {
       return false;
     }
 
-    std::copy(kAnnexBStartCode, kAnnexBStartCode + kAnnexBStartCodeSize,
-              buf->begin() + pos);
+    base::ranges::copy(kAnnexBStartCode, buf->begin() + pos);
     pos += kLengthSize + nal_length;
   }
   return pos == buf->size();
@@ -56,8 +55,7 @@ int AVC::FindSubsampleIndex(const std::vector<uint8_t>& buffer,
     if (p > ptr)
       return i;
   }
-  NOTREACHED();
-  return 0;
+  NOTREACHED_NORETURN();
 }
 
 // static

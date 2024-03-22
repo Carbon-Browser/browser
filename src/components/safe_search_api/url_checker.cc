@@ -1,31 +1,24 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "components/safe_search_api/url_checker.h"
 
-#include <string>
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
-#include "base/callback.h"
-#include "base/feature_list.h"
-#include "base/json/json_reader.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/logging.h"
 #include "base/metrics/histogram_macros.h"
-#include "base/strings/string_piece.h"
-#include "base/strings/string_util.h"
 #include "base/time/time.h"
 #include "base/values.h"
 
 namespace safe_search_api {
 
 namespace {
-
 const size_t kDefaultCacheSize = 1000;
 const size_t kDefaultCacheTimeoutSeconds = 3600;
-
 }  // namespace
 
 struct URLChecker::Check {
@@ -109,10 +102,13 @@ void URLChecker::OnAsyncCheckComplete(CheckList::iterator it,
   std::vector<CheckCallback> callbacks = std::move(it->get()->callbacks);
   checks_in_progress_.erase(it);
 
-  cache_.Put(url, CheckResult(classification, uncertain));
+  if (!uncertain) {
+    cache_.Put(url, CheckResult(classification, uncertain));
+  }
 
-  for (size_t i = 0; i < callbacks.size(); i++)
-    std::move(callbacks[i]).Run(url, classification, uncertain);
+  for (CheckCallback& callback : callbacks) {
+    std::move(callback).Run(url, classification, uncertain);
+  }
 }
 
 }  // namespace safe_search_api

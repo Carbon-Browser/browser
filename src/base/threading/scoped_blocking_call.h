@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,7 +6,7 @@
 #define BASE_THREADING_SCOPED_BLOCKING_CALL_H_
 
 #include "base/base_export.h"
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
 #include "base/location.h"
 #include "base/strings/string_piece.h"
 #include "base/threading/scoped_blocking_call_internal.h"
@@ -89,7 +89,7 @@ enum class BlockingType {
 // When a ScopedBlockingCall is instantiated from a ThreadPool parallel or
 // sequenced task, the thread pool size is incremented to compensate for the
 // blocked thread (more or less aggressively depending on BlockingType).
-class BASE_EXPORT ScopedBlockingCall
+class BASE_EXPORT [[nodiscard]] ScopedBlockingCall
     : public internal::UncheckedScopedBlockingCall {
  public:
   ScopedBlockingCall(const Location& from_here, BlockingType blocking_type);
@@ -104,7 +104,7 @@ namespace internal {
 // asserts that sync primitives are allowed in its scope with a call to
 // internal::AssertBaseSyncPrimitivesAllowed(). The same guidelines as for
 // ScopedBlockingCall should be followed.
-class BASE_EXPORT ScopedBlockingCallWithBaseSyncPrimitives
+class BASE_EXPORT [[nodiscard]] ScopedBlockingCallWithBaseSyncPrimitives
     : public UncheckedScopedBlockingCall {
  public:
   ScopedBlockingCallWithBaseSyncPrimitives(const Location& from_here,

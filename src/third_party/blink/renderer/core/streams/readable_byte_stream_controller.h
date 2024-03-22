@@ -1,13 +1,13 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
-// Use of this source code is governed by a BSD-style license that can be found
-// in the LICENSE file.
+// Copyright 2020 The Chromium Authors
+// Use of this source code is governed by a BSD-style license that can be
+// found in the LICENSE file.
 
 #ifndef THIRD_PARTY_BLINK_RENDERER_CORE_STREAMS_READABLE_BYTE_STREAM_CONTROLLER_H_
 #define THIRD_PARTY_BLINK_RENDERER_CORE_STREAMS_READABLE_BYTE_STREAM_CONTROLLER_H_
 
 #include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/blink/renderer/bindings/core/v8/script_value.h"
-#include "third_party/blink/renderer/core/streams/readable_stream_byob_reader.h"
+#include "third_party/blink/renderer/core/core_export.h"
 #include "third_party/blink/renderer/core/streams/readable_stream_controller.h"
 #include "third_party/blink/renderer/core/typed_arrays/array_buffer_view_helpers.h"
 #include "third_party/blink/renderer/platform/bindings/script_wrappable.h"
@@ -22,13 +22,15 @@ class DOMArrayBufferView;
 class ExceptionState;
 class ReadableStream;
 class ReadableStreamBYOBRequest;
+class ReadIntoRequest;
+class ReadRequest;
 class ScriptState;
 class StreamAlgorithm;
 class StreamStartAlgorithm;
-class StreamPromiseResolver;
 class UnderlyingSource;
 
-class ReadableByteStreamController : public ReadableStreamController {
+class CORE_EXPORT ReadableByteStreamController
+    : public ReadableStreamController {
   DEFINE_WRAPPERTYPEINFO();
 
  public:
@@ -36,6 +38,10 @@ class ReadableByteStreamController : public ReadableStreamController {
 
   // https://streams.spec.whatwg.org/#rbs-controller-byob-request
   ReadableStreamBYOBRequest* byobRequest();
+
+  // https://streams.spec.whatwg.org/#abstract-opdef-readablebytestreamcontrollergetbyobrequest
+  static ReadableStreamBYOBRequest* GetBYOBRequest(
+      ReadableByteStreamController*);
 
   // https://streams.spec.whatwg.org/#rbs-controller-desired-size
   absl::optional<double> desiredSize();
@@ -61,6 +67,9 @@ class ReadableByteStreamController : public ReadableStreamController {
   void Trace(Visitor*) const override;
 
  private:
+  friend class BodyStreamBuffer;
+  friend class BodyStreamBufferUnderlyingByteSource;
+  friend class ByteStreamTeeEngine;
   friend class ReadableStream;
   friend class ReadableStreamBYOBReader;
   friend class ReadableStreamBYOBRequest;
@@ -149,7 +158,8 @@ class ReadableByteStreamController : public ReadableStreamController {
 
   // https://streams.spec.whatwg.org/#abstract-opdef-readablebytestreamcontrollerprocessreadrequestsusingqueue
   static void ProcessReadRequestsUsingQueue(ScriptState*,
-                                            ReadableByteStreamController*);
+                                            ReadableByteStreamController*,
+                                            ExceptionState&);
 
   // https://streams.spec.whatwg.org/#readable-byte-stream-controller-call-pull-if-needed
   static void CallPullIfNeeded(ScriptState*, ReadableByteStreamController*);
@@ -213,13 +223,14 @@ class ReadableByteStreamController : public ReadableStreamController {
   // https://streams.spec.whatwg.org/#abstract-opdef-readablebytestreamcontrollerfillreadrequestfromqueue
   static void FillReadRequestFromQueue(ScriptState*,
                                        ReadableByteStreamController*,
-                                       StreamPromiseResolver* read_request);
+                                       ReadRequest* read_request,
+                                       ExceptionState&);
 
   // https://streams.spec.whatwg.org/#readable-byte-stream-controller-pull-into
   static void PullInto(ScriptState*,
                        ReadableByteStreamController*,
                        NotShared<DOMArrayBufferView> view,
-                       ReadableStreamBYOBReader::ReadIntoRequest*,
+                       ReadIntoRequest*,
                        ExceptionState&);
 
   // https://streams.spec.whatwg.org/#readable-byte-stream-controller-handle-queue-drain
@@ -272,7 +283,7 @@ class ReadableByteStreamController : public ReadableStreamController {
                                      v8::Local<v8::Value> reason) override;
 
   // https://streams.spec.whatwg.org/#rbs-controller-private-pull
-  StreamPromiseResolver* PullSteps(ScriptState*) override;
+  void PullSteps(ScriptState*, ReadRequest*, ExceptionState&) override;
 
   // https://streams.spec.whatwg.org/#abstract-opdef-readablebytestreamcontroller-releasesteps
   void ReleaseSteps() override;

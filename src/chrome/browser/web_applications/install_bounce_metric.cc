@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -53,24 +53,22 @@ struct InstallMetrics {
 
 absl::optional<InstallMetrics> ParseInstallMetricsFromPrefs(
     const PrefService* pref_service,
-    const web_app::AppId& app_id) {
+    const webapps::AppId& app_id) {
   DCHECK_CURRENTLY_ON(content::BrowserThread::UI);
 
-  const base::Value* ids_to_metrics =
-      pref_service->GetDictionary(prefs::kWebAppInstallMetrics);
-  if (!ids_to_metrics)
-    return absl::nullopt;
+  const base::Value::Dict& ids_to_metrics =
+      pref_service->GetDict(prefs::kWebAppInstallMetrics);
 
-  const base::Value* metrics = ids_to_metrics->FindDictKey(app_id);
+  const base::Value::Dict* metrics = ids_to_metrics.FindDict(app_id);
   if (!metrics)
     return absl::nullopt;
 
   absl::optional<base::Time> timestamp =
-      ParseTime(metrics->FindKey(kInstallTimestamp));
+      ParseTime(metrics->Find(kInstallTimestamp));
   if (!timestamp)
     return absl::nullopt;
 
-  const base::Value* source = metrics->FindKey(kInstallSource);
+  const base::Value* source = metrics->Find(kInstallSource);
   if (!source || !source->is_int())
     return absl::nullopt;
 
@@ -80,15 +78,14 @@ absl::optional<InstallMetrics> ParseInstallMetricsFromPrefs(
 
 void WriteInstallMetricsToPrefs(const InstallMetrics& install_metrics,
                                 PrefService* pref_service,
-                                const web_app::AppId& app_id) {
+                                const webapps::AppId& app_id) {
   DCHECK_CURRENTLY_ON(content::BrowserThread::UI);
-  base::Value dict(base::Value::Type::DICTIONARY);
-  dict.SetKey(kInstallTimestamp, SerializeTime(install_metrics.timestamp));
-  dict.SetKey(kInstallSource,
-              base::Value(static_cast<int>(install_metrics.source)));
+  base::Value::Dict dict;
+  dict.Set(kInstallTimestamp, SerializeTime(install_metrics.timestamp));
+  dict.Set(kInstallSource, static_cast<int>(install_metrics.source));
 
-  DictionaryPrefUpdate update(pref_service, prefs::kWebAppInstallMetrics);
-  update->SetKey(app_id, std::move(dict));
+  ScopedDictPrefUpdate update(pref_service, prefs::kWebAppInstallMetrics);
+  update->Set(app_id, std::move(dict));
 }
 
 }  // namespace
@@ -105,14 +102,14 @@ void RegisterInstallBounceMetricProfilePrefs(PrefRegistrySimple* registry) {
 
 void RecordWebAppInstallationTimestamp(
     PrefService* pref_service,
-    const AppId& app_id,
+    const webapps::AppId& app_id,
     webapps::WebappInstallSource install_source) {
   WriteInstallMetricsToPrefs(InstallMetrics{GetTime(), install_source},
                              pref_service, app_id);
 }
 
 void RecordWebAppUninstallation(PrefService* pref_service,
-                                const AppId& app_id) {
+                                const webapps::AppId& app_id) {
   absl::optional<InstallMetrics> metrics =
       ParseInstallMetricsFromPrefs(pref_service, app_id);
   if (!metrics)

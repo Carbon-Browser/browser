@@ -1,5 +1,5 @@
 #!/usr/bin/env vpython3
-# Copyright 2018 The Chromium Authors. All rights reserved.
+# Copyright 2018 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -9,7 +9,9 @@ import logging
 import mock
 import os
 import unittest
+import sys
 
+import mac_util
 import iossim_util
 import result_sink_util
 import test_apps
@@ -17,8 +19,15 @@ from test_result_util import ResultCollection, TestResult, TestStatus
 import test_runner
 import test_runner_test
 import xcode_log_parser
+import xcode_util
 import xcodebuild_runner
 
+# if the current directory is in scripts, then we need to add plugin
+# path in order to import from that directory
+if os.path.split(os.path.dirname(__file__))[1] != 'plugin':
+  sys.path.append(
+      os.path.join(os.path.abspath(os.path.dirname(__file__)), 'plugin'))
+import test_plugin_service
 
 _ROOT_FOLDER_PATH = 'root/folder'
 _XCODE_BUILD_VERSION = '10B61'
@@ -35,8 +44,6 @@ class XCodebuildRunnerTest(test_runner_test.TestCase):
   def setUp(self):
     super(XCodebuildRunnerTest, self).setUp()
     self.mock(os.path, 'exists', lambda _: True)
-    self.mock(xcode_log_parser,
-              'get_parser', lambda: xcode_log_parser.Xcode11LogParser())
     self.mock(os, 'listdir', lambda _: ['any_egtests.xctest'])
     self.mock(iossim_util, 'is_device_with_udid_simulator', lambda _: False)
     self.mock(result_sink_util.ResultSinkClient,
@@ -59,7 +66,7 @@ class XCodebuildRunnerTest(test_runner_test.TestCase):
   def tearDown(self):
     super(XCodebuildRunnerTest, self).tearDown()
 
-  @mock.patch('xcode_log_parser.Xcode11LogParser.collect_test_results')
+  @mock.patch('xcode_log_parser.XcodeLogParser.collect_test_results')
   def testLaunchCommand_restartCrashed1stAttempt(self, mock_collect_results):
     egtests = test_apps.EgtestsApp(_EGTESTS_APP_PATH)
     crashed_collection = ResultCollection()
@@ -72,14 +79,14 @@ class XCodebuildRunnerTest(test_runner_test.TestCase):
         ])
     ]
     launch_command = xcodebuild_runner.LaunchCommand(
-        egtests, _DESTINATION, shards=1, retries=3, readline_timeout=180)
+        egtests, _DESTINATION, clones=1, retries=3, readline_timeout=180)
     overall_result = launch_command.launch()
     self.assertFalse(overall_result.crashed)
     self.assertEqual(len(overall_result.all_test_names()), 2)
     self.assertEqual(overall_result.expected_tests(),
                      set(['Class1/passedTest1', 'Class1/passedTest2']))
 
-  @mock.patch('xcode_log_parser.Xcode11LogParser.collect_test_results')
+  @mock.patch('xcode_log_parser.XcodeLogParser.collect_test_results')
   def testLaunchCommand_notRestartPassedTest(self, mock_collect_results):
     egtests = test_apps.EgtestsApp(_EGTESTS_APP_PATH)
     collection = ResultCollection(test_results=[
@@ -88,13 +95,13 @@ class XCodebuildRunnerTest(test_runner_test.TestCase):
     ])
     mock_collect_results.side_effect = [collection]
     launch_command = xcodebuild_runner.LaunchCommand(
-        egtests, _DESTINATION, shards=1, retries=3, readline_timeout=180)
+        egtests, _DESTINATION, clones=1, retries=3, readline_timeout=180)
     launch_command.launch()
     xcodebuild_runner.LaunchCommand(
-        egtests, _DESTINATION, shards=1, retries=3, readline_timeout=180)
+        egtests, _DESTINATION, clones=1, retries=3, readline_timeout=180)
     self.assertEqual(1, len(mock_collect_results.mock_calls))
 
-  @mock.patch('xcode_log_parser.Xcode11LogParser.collect_test_results')
+  @mock.patch('xcode_log_parser.XcodeLogParser.collect_test_results')
   def test_launch_command_restart_failed_attempt(self, mock_collect_results):
     egtests = test_apps.EgtestsApp(_EGTESTS_APP_PATH)
     mock_collect_results.side_effect = [
@@ -108,13 +115,13 @@ class XCodebuildRunnerTest(test_runner_test.TestCase):
         ])
     ]
     launch_command = xcodebuild_runner.LaunchCommand(
-        egtests, _DESTINATION, shards=1, retries=3, readline_timeout=180)
+        egtests, _DESTINATION, clones=1, retries=3, readline_timeout=180)
     overall_result = launch_command.launch()
     self.assertEqual(len(overall_result.all_test_names()), 2)
     self.assertEqual(overall_result.expected_tests(),
                      set(['Class1/passedTest1', 'Class1/passedTest2']))
 
-  @mock.patch('xcode_log_parser.Xcode11LogParser.collect_test_results')
+  @mock.patch('xcode_log_parser.XcodeLogParser.collect_test_results')
   def test_launch_command_not_restart_crashed_attempt(self,
                                                       mock_collect_results):
     """Crashed first attempt of runtime select test suite won't be retried."""
@@ -123,11 +130,34 @@ class XCodebuildRunnerTest(test_runner_test.TestCase):
     crashed_collection.crashed = True
     mock_collect_results.return_value = crashed_collection
     launch_command = xcodebuild_runner.LaunchCommand(
-        egtests, _DESTINATION, shards=1, retries=3, readline_timeout=180)
+        egtests, _DESTINATION, clones=1, retries=3, readline_timeout=180)
     overall_result = launch_command.launch()
     self.assertEqual(len(overall_result.all_test_names()), 0)
     self.assertEqual(overall_result.expected_tests(), set([]))
     self.assertTrue(overall_result.crashed)
+
+  @mock.patch('xcode_log_parser.XcodeLogParser.collect_test_results')
+  def test_launch_command_reset_video_plugin_before_attempt(
+      self, mock_collect_results):
+    egtests = test_apps.EgtestsApp(_EGTESTS_APP_PATH)
+    collection = ResultCollection(test_results=[
+        TestResult('Class1/passedTest1', TestStatus.PASS),
+        TestResult('Class1/passedTest2', TestStatus.PASS)
+    ])
+    mock_collect_results.side_effect = [collection]
+    mock_plugin_service = mock.MagicMock()
+    launch_command = xcodebuild_runner.LaunchCommand(
+        egtests,
+        _DESTINATION,
+        clones=1,
+        retries=3,
+        readline_timeout=180,
+        test_plugin_service=mock_plugin_service)
+    launch_command.launch()
+    xcodebuild_runner.LaunchCommand(
+        egtests, _DESTINATION, clones=1, retries=3, readline_timeout=180)
+    self.assertEqual(1, len(mock_collect_results.mock_calls))
+    mock_plugin_service.reset.assert_called_once_with()
 
 
 class DeviceXcodeTestRunnerTest(test_runner_test.TestCase):
@@ -158,16 +188,16 @@ class DeviceXcodeTestRunnerTest(test_runner_test.TestCase):
     self.mock(test_runner.DeviceTestRunner, 'wipe_derived_data', lambda _: None)
     self.mock(test_runner.TestRunner, 'retrieve_derived_data', lambda _: None)
     self.mock(test_runner.TestRunner, 'process_xcresult_dir', lambda _: None)
-    self.mock(xcode_log_parser,
-              'get_parser', lambda: xcode_log_parser.Xcode11LogParser())
     self.mock(test_apps.EgtestsApp,
               'fill_xctest_run', lambda _1, _2: 'xctestrun')
     self.mock(
         test_apps.GTestsApp,
         'get_all_tests', lambda _: ['Class1/passedTest1', 'Class1/passedTest2'])
     self.mock(iossim_util, 'is_device_with_udid_simulator', lambda _: False)
+    self.mock(xcode_util, 'using_xcode_15_or_higher', lambda: True)
+    self.mock(mac_util, 'stop_usbmuxd', lambda: None)
 
-  @mock.patch('xcode_log_parser.Xcode11LogParser.collect_test_results')
+  @mock.patch('xcode_log_parser.XcodeLogParser.collect_test_results')
   def test_launch(self, mock_result):
     """Tests launch method in DeviceXcodeTestRunner"""
     tr = xcodebuild_runner.DeviceXcodeTestRunner("fake-app-path",
@@ -180,7 +210,7 @@ class DeviceXcodeTestRunnerTest(test_runner_test.TestCase):
     self.assertTrue(tr.launch())
     self.assertEqual(len(tr.test_results['tests']), 2)
 
-  @mock.patch('xcode_log_parser.Xcode11LogParser.collect_test_results')
+  @mock.patch('xcode_log_parser.XcodeLogParser.collect_test_results')
   def test_unexpected_skipped_crash_reported(self, mock_result):
     """Tests launch method in DeviceXcodeTestRunner"""
     tr = xcodebuild_runner.DeviceXcodeTestRunner("fake-app-path",
@@ -197,7 +227,7 @@ class DeviceXcodeTestRunnerTest(test_runner_test.TestCase):
     self.assertEqual(tests['Class1/passedTest2']['actual'], 'SKIP')
     self.assertEqual(tests['Class1/passedTest2']['expected'], 'PASS')
 
-  @mock.patch('xcode_log_parser.Xcode11LogParser.collect_test_results')
+  @mock.patch('xcode_log_parser.XcodeLogParser.collect_test_results')
   def test_unexpected_skipped_not_reported(self, mock_result):
     """Unexpected skip not reported for these selecting tests at runtime."""
     crashed_collection = ResultCollection(
@@ -214,7 +244,7 @@ class DeviceXcodeTestRunnerTest(test_runner_test.TestCase):
     # Class1/passedTest2 doesn't appear in test results.
 
   @mock.patch('xcodebuild_runner.isinstance', return_value=True)
-  @mock.patch('xcode_log_parser.Xcode11LogParser.collect_test_results')
+  @mock.patch('xcode_log_parser.XcodeLogParser.collect_test_results')
   @mock.patch('test_apps.EgtestsApp', autospec=True)
   def test_disabled_reported(self, mock_test_app, mock_result, _):
     """Tests launch method in DeviceXcodeTestRunner"""
@@ -229,7 +259,10 @@ class DeviceXcodeTestRunnerTest(test_runner_test.TestCase):
         TestResult('Class1/passedTest2', TestStatus.PASS)
     ])
     tr = xcodebuild_runner.DeviceXcodeTestRunner(
-        "fake-app-path", "fake-host-app-path", "fake-out-dir")
+        "fake-app-path",
+        "fake-host-app-path",
+        "fake-out-dir",
+        output_disabled_tests=True)
     self.assertTrue(tr.launch())
     self.assertEqual(len(tr.test_results['tests']), 3)
     tests = tr.test_results['tests']
@@ -242,6 +275,91 @@ class DeviceXcodeTestRunnerTest(test_runner_test.TestCase):
     tr = xcodebuild_runner.DeviceXcodeTestRunner(
         "fake-app-path", "fake-host-app-path", "fake-out-dir")
     tr.tear_down()
+
+
+class SimulatorParallelTestRunnerTest(test_runner_test.TestCase):
+  """Test case to test xcodebuild_runner.SimulatorParallelTestRunner"""
+
+  def setUp(self):
+    super(SimulatorParallelTestRunnerTest, self).setUp()
+    self.mock(iossim_util, 'get_simulator', lambda _1, _2: 'sim-UUID')
+
+    def set_up(self):
+      return
+
+    self.mock(xcodebuild_runner.SimulatorParallelTestRunner, 'set_up', set_up)
+    self.mock(os.path, 'exists', lambda _: True)
+    self.mock(
+        test_runner, 'get_current_xcode_info', lambda: {
+            'version': 'test version',
+            'build': 'test build',
+            'path': 'test/path'
+        })
+    self.mock(os.path, 'abspath', lambda path: '/abs/path/to/%s' % path)
+
+    self.mock(result_sink_util.ResultSinkClient,
+              'post', lambda *args, **kwargs: None)
+    self.mock(test_runner.subprocess, 'check_output', lambda _: b'fake-output')
+    self.mock(test_runner.subprocess, 'check_call', lambda _: b'fake-out')
+    self.mock(test_runner.subprocess,
+              'Popen', lambda cmd, env, stdout, stderr: 'fake-out')
+    self.mock(test_runner.TestRunner,
+              'set_sigterm_handler', lambda self, handler: 0)
+    self.mock(os, 'listdir', lambda _: [])
+    self.mock(xcodebuild_runner.subprocess,
+              'Popen', lambda cmd, env, stdout, stderr: 'fake-out')
+    self.mock(test_runner, 'print_process_output', lambda _, timeout: [])
+    self.mock(test_runner.TestRunner, 'start_proc', lambda self, cmd: 0)
+    self.mock(test_runner.TestRunner, 'retrieve_derived_data', lambda _: None)
+    self.mock(test_runner.TestRunner, 'process_xcresult_dir', lambda _: None)
+    self.mock(test_apps.EgtestsApp,
+              'fill_xctest_run', lambda _1, _2: 'xctestrun')
+    self.mock(
+        test_apps.GTestsApp,
+        'get_all_tests', lambda _: ['Class1/passedTest1', 'Class1/passedTest2'])
+    self.mock(
+        test_apps.EgtestsApp,
+        'get_all_tests', lambda _: ['Class1/passedTest1', 'Class1/passedTest2'])
+    self.mock(iossim_util, 'is_device_with_udid_simulator', lambda _: False)
+
+  @mock.patch('xcode_log_parser.XcodeLogParser.collect_test_results')
+  def test_launch_egtest(self, mock_result):
+    """Tests launch method in SimulatorParallelTestRunner"""
+    tr = xcodebuild_runner.SimulatorParallelTestRunner(
+        "fake-app-path", "fake-host-app-path", "fake-iossim_path",
+        "fake-version", "fake-platform", "fake-out-dir")
+    mock_result.return_value = ResultCollection(test_results=[
+        TestResult('Class1/passedTest1', TestStatus.PASS),
+        TestResult('Class1/passedTest2', TestStatus.PASS)
+    ])
+    self.assertTrue(tr.launch())
+    self.assertEqual(len(tr.test_results['tests']), 2)
+
+  @mock.patch('xcode_log_parser.XcodeLogParser.collect_test_results')
+  @mock.patch('xcodebuild_runner.TestPluginServicerWrapper')
+  def test_launch_egtest_with_plugin_service(self, mock_plugin_service,
+                                             mock_result):
+    """ Tests launch method in SimulatorParallelTestRunner
+        with plugin service running """
+    tr = xcodebuild_runner.SimulatorParallelTestRunner(
+        "fake-app-path",
+        "fake-host-app-path",
+        "fake-iossim_path",
+        "fake-version",
+        "fake-platform",
+        "fake-out-dir",
+        video_plugin_option='failed_only')
+    self.assertTrue(tr.test_plugin_service != None)
+    tr.test_plugin_service = mock_plugin_service
+    mock_result.return_value = ResultCollection(test_results=[
+        TestResult('Class1/passedTest1', TestStatus.PASS),
+        TestResult('Class1/passedTest2', TestStatus.PASS)
+    ])
+    self.assertTrue(tr.launch())
+    self.assertEqual(len(tr.test_results['tests']), 2)
+    mock_plugin_service.start_server.assert_called_once_with()
+    mock_plugin_service.reset.assert_called_once_with()
+    mock_plugin_service.tear_down.assert_called_once_with()
 
 
 if __name__ == '__main__':

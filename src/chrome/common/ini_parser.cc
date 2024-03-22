@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,6 +9,7 @@
 #include "base/check.h"
 #include "base/strings/strcat.h"
 #include "base/strings/string_tokenizer.h"
+#include "base/values.h"
 
 INIParser::INIParser() : used_(false) {}
 
@@ -56,9 +57,9 @@ void DictionaryValueINIParser::HandleTriplet(base::StringPiece section,
                                              base::StringPiece key,
                                              base::StringPiece value) {
   // Checks whether the section and key contain a '.' character.
-  // Those sections and keys break DictionaryValue's path format when not
+  // Those sections and keys break `base::Value::Dict`'s path format when not
   // using the *WithoutPathExpansion methods.
   if (section.find('.') == std::string::npos &&
       key.find('.') == std::string::npos)
-    root_.SetString(base::StrCat({section, ".", key}), value);
+    root_.SetByDottedPath(base::StrCat({section, ".", key}), value);
 }

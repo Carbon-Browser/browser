@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -30,7 +30,7 @@
 
 #define IPCZ_MSG_BEGIN(name, id_decl, version_decl)     \
   case name::kId: {                                     \
-    name message;                                       \
+    name message(Message::kIncoming);                   \
     if (!message.Deserialize(raw_message, transport)) { \
       return false;                                     \
     }                                                   \

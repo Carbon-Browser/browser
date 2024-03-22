@@ -4,14 +4,15 @@
 
 ## Where does this style guide apply?
 
-This style guide targets Chromium frontend features implemented with JavaScript,
-CSS, and HTML.  Developers of these features should adhere to the following
+This style guide targets Chromium frontend features implemented with TypeScript,
+CSS, and HTML. Developers of these features should adhere to the following
 rules where possible, just like those using C++ conform to the [Chromium C++
 styleguide](../c++/c++.md).
 
 This guide follows and builds on:
 
 * [Google HTML/CSS Style Guide](https://google.github.io/styleguide/htmlcssguide.html)
+* [Google TypeScript Style Guide](https://google.github.io/styleguide/tsguide.html)
 * [Google JavaScript Style Guide](https://google.github.io/styleguide/jsguide.html)
 * [Google Polymer Style Guide](http://go/polymer-style)
 
@@ -27,7 +28,7 @@ When designing a feature with web technologies, separate the:
 * **content** you are presenting to the user (**HTML**)
 * **styling** of the data (**CSS**)
 * **logic** that controls the dynamic behavior of the content and presentation
-  (**JS**)
+  (**TS**)
 
 This highlights the concern of each part of the code and promotes looser
 coupling (which makes refactor easier down the road).
@@ -38,7 +39,7 @@ Another way to envision this principle is using the MVC pattern:
 |:-------------:|:-------------:|
 | Model         | HTML          |
 | View          | CSS           |
-| Controller    | JS            |
+| Controller    | TS            |
 
 It's also often appropriate to separate each implementation into separate files.
 
@@ -230,8 +231,12 @@ compatibility issues are less relevant for Chrome-only code).
 * Use scalable `font-size` units like `%` or `em` to respect users' default font
   size
 
-* Don't use CSS Mixins (`--mixin: {}` or `@apply --mixin;`) in new code. [We're
-  removing them.](https://crbug.com/973674)
+* Don't use CSS Mixins (`--mixin: {}` or `@apply --mixin;`).
+    * CSS Mixins are defunct after Oct 2022, see
+      [crrev.com/c/3953559](https://crrev.com/c/3953559)
+    * All CSS Mixins usages have been removed from Chromium, see
+      [crbug.com/973674](https://crbug.com/973674) and
+      [crbug.com/1320797](https://crbug.com/1320797)
     * Mixins were [dropped from CSS](https://www.xanthir.com/b4o00) in favor of
       [CSS Shadow Parts](https://drafts.csswg.org/css-shadow-parts/).
     * Instead, replace CSS mixin usage with one of these natively supported
@@ -290,15 +295,15 @@ Use RTL-friendly versions of things like `margin` or `padding` where possible:
 For properties that don't have an RTL-friendly alternatives, use
 `html[dir='rtl']` as a prefix in your selectors.
 
-## JavaScript/TypeScript
+## TypeScript
 
-New WebUI code (except for ChromeOS specific code) should be written in
-TypeScript.
+New WebUI code should be written in TypeScript. Some legacy code is still using
+JavaScript, but it is expected that all code should migrate to TS eventually.
 
 ### Style
 
-See the [Google JavaScript Style
-Guide](https://google.github.io/styleguide/jsguide.html) as well as
+See the [Google TypeScript Style
+Guide](https://google.github.io/styleguide/tsguide.html) as well as
 [ECMAScript Features in Chromium](es.md).
 
 * Use `$('element-id')` instead of `document.getElementById`. This function can
@@ -311,20 +316,37 @@ Guide](https://google.github.io/styleguide/jsguide.html) as well as
     * Use `@type` (instead of `@return` or `@param`) for JSDoc annotations on
       getters/setters
 
-* For legacy code using closure, see [Annotating JavaScript for the Closure
-  Compiler](https://developers.google.com/closure/compiler/docs/js-for-compiler)
-  for @ directives
-
 * Prefer `event.preventDefault()` to `return false` from event handlers
 
 * Prefer `this.addEventListener('foo-changed', this.onFooChanged_.bind(this));`
   instead of always using an arrow function wrapper, when it makes the code less
   verbose without compromising type safety (for example in TypeScript files).
 
-### Closure compiler
+* When using `?.` be aware that information about the original location of the
+  null/undefined value can be lost. You should avoid cases like this and instead
+  prefer explicit error checking:
+```js
+const enterKey = keyboards.getCurrentKeyboard()?.getKeys()?.getEnterKey();
+// ... Lots of code here.
+if (!enterKey) {
+  // Something has gone wrong here, but it is unclear what.
+}
+```
 
-* Closure compiler should only be used by legacy code that has not yet been
-  converted to use TypeScript.
+* Don't use `?.` as a way to silence TypeScript "object is possibly null"
+  errors. Instead use `assert()` statements. Only use the optional chaining
+  feature when the code needs to handle null/undefined gracefully.
+
+
+### Closure compiler (legacy ChromeOS Ash code only)
+
+* Closure compiler can only be used on legacy ChromeOS Ash code. All other
+  platforms and new ChromeOS code are required to use TypeScript to add type
+  checking.
+
+* For legacy code using closure, see [Annotating JavaScript for the Closure
+  Compiler](https://developers.google.com/closure/compiler/docs/js-for-compiler)
+  for @ directives
 
 * Use the [closure
   compiler](https://chromium.googlesource.com/chromium/src/+/main/docs/closure_compilation.md)
@@ -476,44 +498,76 @@ https://www.polymer-project.org/2.0/docs/devguide/templates#dom-if):
 
 Grit is a tool that runs at compile time to pack resources together into
 Chromium. Resources are packed from grd files. Most Chromium WebUI resources
-should be located in autogenerated grd files created by the generate_grd gn
-rule.
+should be located in autogenerated grd files created by the [`generate_grd`](
+https://chromium.googlesource.com/chromium/src/+/main/docs/webui_build_configuration.md#generate_grd)
+gn rule.
 
 ### Preprocessing
 
 Sometimes it is helpful to selectively include or exclude code at compile-time.
-This is done using the preprocess_if_expr gn rule, which makes use of a subset
-of grit that reads and processes files for `<if expr>` without running the
-entire grit resource packing process.  Files that require preprocessing are
-passed to the rule as in_files. Preprocessed versions with the same names will
-be written to the specified out_folder and are listed in out_manifest, which can
-be passed to the generate_grd rule to generate entries for them in a grd file.
+This is done using the [`preprocess_if_expr`][preprocess_if_expr_doc] gn rule,
+which processes files for `<if expr>` without running the entire grit resource
+packing process.
 
-### Example
+`<if expr>` tags allow conditional logic by evaluating an expression of grit
+variables in a compile-time environment.
 
-The following BUILD.gn example code uses preprocess_if_expr to preprocess any
-`<if expr>` in my_app.ts and in the my_app.html.ts file that is generated by
-the earlier html_to_wrapper example. It then runs the TypeScript compiler on
-the outputs of this operation and uses the manifest from this operation and the
-in_files option to place both the final, preprocessed file and a separate (not
-preprocessed) icon into a generated grd file using generate_grd:
+The grit variables are provided to grit through the `defines` argument of
+`preprocess_if_expr` ([sample search][defines_search]). For some widely
+available variables, see [//tools/grit/grit_args.gni][grit_args] and
+[//chrome/common/features.gni][chrome_features].
+
+These allow conditionally including or excluding code. For example:
+
+```ts
+function isWindows(): boolean {
+  // <if expr="is_win">
+  return true;
+  // </if>
+  // <if expr="not is_win">
+  return false;
+  // </if>
+}
+```
+
+***aside
+Note: Preprocessor statements can live in places that surprise linters or
+formatters (for example: a .ts file with an `<if>` in it will make PRESUBMIT
+ESLint checks fail). Putting these language-invalid features inside of comments
+helps alleviate problems with unexpected input.
+***
+
+[preprocess_if_expr_doc]: https://chromium.googlesource.com/chromium/src/+/main/docs/webui_build_configuration.md#preprocess_if_expr
+[defines_search]: https://source.chromium.org/search?q=preprocess_if_expr%20defines&ss=chromium
+[grit_args]: https://crsrc.org/c/tools/grit/grit_args.gni?q=_grit_defines
+[chrome_features]: https://crsrc.org/c/chrome/common/features.gni?q=chrome_grit_defines
+
+#### Example
+
+The following BUILD.gn example code uses `preprocess_if_expr` to preprocess any
+`<if expr>` in my_app.ts and in the my_app.html, exposing gn variables to Grit.
+It then wraps the html file (see the earlier `html_to_wrapper` example), runs
+the TypeScript compiler on the outputs of this operation and uses the manifest
+from this operation and the `in_files` option to place both the final,
+preprocessed file and a separate (not preprocessed) icon into a generated grd
+file using `generate_grd`:
 
 ```
 preprocess_folder = "preprocessed"
 preprocess_manifest = "preprocessed_manifest.json"
 
 preprocess_if_expr("preprocess") {
+  defines = ["is_win=$is_win"]
   in_folder = "."
-  in_files = [ "my_app.ts" ]
+  in_files = [ "my_app.ts", "my_app.html" ]
   out_folder = "$target_gen_dir/$preprocess_folder"
 }
 
-# Read file from target_gen_dir, where it will be pasted by html_to_wrapper.
-preprocess_if_expr("preprocess_generated") {
-  in_folder = target_gen_dir
-  in_files = [ "my_app.html.ts" ]
+html_to_wrapper("html_wrapper_files") {
+  in_folder = "$target_gen_dir/$preprocess_folder"
+  in_files = [ "my_app.html" ]
   out_folder = "$target_gen_dir/$preprocess_folder"
-  deps = [ ":html_wrapper_files" ]
+  deps = [":preprocess"]
 }
 
 # Run TS compiler on the two files:
@@ -527,11 +581,11 @@ ts_library("build_ts") {
   ]
   deps = [
     "//third_party/polymer/v3_0:library",
-    "//ui/webui/resources:library",
+    "//ui/webui/resources/js:build_ts",
   ]
   extra_deps = [
     ":preprocess",
-    ":preprocess_generated",
+    ":html_wrapper_files",
   ]
 }
 
@@ -547,35 +601,19 @@ generate_grd("build_grd") {
 ```
 
 *** aside
-Note #1:
+Note:
 In a few legacy resources, preprocessing is enabled by adding the
 `preprocess="true"` attribute inside of a `.grd` file on `<structure>` and
 `<include>` nodes.
-
-Note #2:
-These preprocessor statements can live in places that surprise linters or
-formatters (for example: running clang-format on a .ts file with an `<if>` in
-it).  Generally, putting these language-invalid features inside of comments
-helps alleviate problems with unexpected input.
 ***
 
-`<if>` tags allow conditional logic by evaluating an expression in a
-compile-time environment of grit variables.  These allow conditionally including
-or excluding code.
-
-Example:
-```js
-function isWindows(): boolean {
-  // <if expr="win">
-  return true;
-  // </if>
-  return false;
-}
-```
+### Inlining resources with Grit (deprecated, don't use)
 
 `<include src="[path]">` reads the file at `path` and replaces the `<include>`
-tag with the file contents of `[path]`. Don't use `<include>` in new JS code;
-[it is being removed.](https://docs.google.com/document/d/1Z18WTNv28z5FW3smNEm_GtsfVD2IL-CmmAikwjw3ryo/edit?usp=sharing#heading=h.66ycuu6hfi9n)
+tag with the file contents of `[path]`.
+
+Don't use `<include>` in new JS code;
+[it is being removed](https://docs.google.com/document/d/1Z18WTNv28z5FW3smNEm_GtsfVD2IL-CmmAikwjw3ryo/edit?usp=sharing#heading=h.66ycuu6hfi9n).
 Instead, use JS imports. If there is concern about importing a large number of
 JS files, the optimize_webui build rule supports bundling pages using Rollup.
 

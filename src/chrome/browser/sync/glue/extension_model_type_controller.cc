@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -16,11 +16,13 @@ ExtensionModelTypeController::ExtensionModelTypeController(
     syncer::OnceModelTypeStoreFactory store_factory,
     base::WeakPtr<syncer::SyncableService> syncable_service,
     const base::RepeatingClosure& dump_stack,
+    DelegateMode delegate_mode,
     Profile* profile)
     : SyncableServiceBasedModelTypeController(type,
                                               std::move(store_factory),
                                               syncable_service,
-                                              dump_stack),
+                                              dump_stack,
+                                              delegate_mode),
       profile_(profile) {
   DCHECK(type == syncer::EXTENSIONS || type == syncer::APPS ||
          type == syncer::THEMES);

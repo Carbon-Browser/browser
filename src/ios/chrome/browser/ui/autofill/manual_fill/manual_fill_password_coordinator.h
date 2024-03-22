@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,6 +11,9 @@ class GURL;
 
 // Delegate for the coordinator actions.
 @protocol PasswordCoordinatorDelegate <FallbackCoordinatorDelegate>
+
+// Opens the password manager.
+- (void)openPasswordManager;
 
 // Opens the passwords settings.
 - (void)openPasswordSettings;

@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,10 +14,12 @@
 #include <utility>
 #include <vector>
 
-#include "base/callback.h"
+#include <optional>
 #include "base/containers/flat_map.h"
 #include "base/containers/flat_set.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
+#include "base/memory/raw_ref.h"
 #include "base/memory/weak_ptr.h"
 #include "cc/base/synced_property.h"
 #include "cc/cc_export.h"
@@ -30,8 +32,7 @@
 #include "cc/trees/scroll_node.h"
 #include "cc/trees/sticky_position_constraint.h"
 #include "cc/trees/transform_node.h"
-#include "components/viz/common/shared_element_resource_id.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
+#include "components/viz/common/view_transition_element_resource_id.h"
 #include "ui/gfx/geometry/point_f.h"
 #include "ui/gfx/geometry/rect_f.h"
 #include "ui/gfx/geometry/transform.h"
@@ -157,6 +158,7 @@ class CC_EXPORT PropertyTree {
   base::flat_map<ElementId, int> element_id_to_node_index_;
 };
 
+struct AnchorPositionScrollersData;
 struct StickyPositionNodeData;
 
 class CC_EXPORT TransformTree final : public PropertyTree<TransformNode> {
@@ -202,13 +204,6 @@ class CC_EXPORT TransformTree final : public PropertyTree<TransformNode> {
   }
   float page_scale_factor() const { return page_scale_factor_; }
 
-  void set_fixed_elements_dont_overscroll(bool value) {
-    fixed_elements_dont_overscroll_ = value;
-  }
-  bool fixed_elements_dont_overscroll() const {
-    return fixed_elements_dont_overscroll_;
-  }
-
   void set_device_scale_factor(float device_scale_factor) {
     device_scale_factor_ = device_scale_factor;
   }
@@ -247,16 +242,18 @@ class CC_EXPORT TransformTree final : public PropertyTree<TransformNode> {
     return cached_data_;
   }
 
-  bool ShouldUndoOverscroll(const TransformNode* node) const;
-  void UpdateFixedNodeTransformAndClip(
-      const TransformNode* node,
-      gfx::Vector2dF& fixed_position_adjustment,
-      const ViewportPropertyIds* viewport_property_ids);
+  void UndoOverscroll(const TransformNode* node,
+                      gfx::Vector2dF& position_adjustment,
+                      const ViewportPropertyIds* viewport_property_ids);
 
   const StickyPositionNodeData* GetStickyPositionData(int node_id) const {
     return const_cast<TransformTree*>(this)->MutableStickyPositionData(node_id);
   }
   StickyPositionNodeData& EnsureStickyPositionData(int node_id);
+
+  const AnchorPositionScrollersData* GetAnchorPositionScrollersData(
+      int node_id) const;
+  AnchorPositionScrollersData& EnsureAnchorPositionScrollersData(int node_id);
 
   // Computes the combined transform between |source_id| and |dest_id|. These
   // two nodes must be on the same ancestor chain.
@@ -278,6 +275,7 @@ class CC_EXPORT TransformTree final : public PropertyTree<TransformNode> {
 
   StickyPositionNodeData* MutableStickyPositionData(int node_id);
   gfx::Vector2dF StickyPositionOffset(TransformNode* node);
+  gfx::Vector2dF AnchorPositionScrollOffset(TransformNode* node);
   void UpdateLocalTransform(TransformNode* node,
                             const ViewportPropertyIds* viewport_property_ids);
   void UpdateScreenSpaceTransform(TransformNode* node,
@@ -294,12 +292,26 @@ class CC_EXPORT TransformTree final : public PropertyTree<TransformNode> {
   // scale is calculated using page scale factor, device scale factor and the
   // scale factor of device transform. So we need to store them explicitly.
   float page_scale_factor_;
-  bool fixed_elements_dont_overscroll_;
   float device_scale_factor_;
   float device_transform_scale_factor_;
   std::vector<int> nodes_affected_by_outer_viewport_bounds_delta_;
   std::vector<TransformCachedNodeData> cached_data_;
   std::vector<StickyPositionNodeData> sticky_position_data_;
+  std::vector<AnchorPositionScrollersData> anchor_position_scrollers_data_;
+};
+
+struct CC_EXPORT AnchorPositionScrollersData {
+  AnchorPositionScrollersData();
+  ~AnchorPositionScrollersData();
+  AnchorPositionScrollersData(const AnchorPositionScrollersData&);
+
+  bool operator==(const AnchorPositionScrollersData&) const;
+  bool operator!=(const AnchorPositionScrollersData&) const;
+
+  std::vector<ElementId> scroll_container_ids;
+  gfx::Vector2d accumulated_scroll_origin;
+  bool needs_scroll_adjustment_in_x = false;
+  bool needs_scroll_adjustment_in_y = false;
 };
 
 struct StickyPositionNodeData {
@@ -455,7 +467,7 @@ class ScrollCallbacks {
   virtual void DidCompositorScroll(
       ElementId scroll_element_id,
       const gfx::PointF&,
-      const absl::optional<TargetSnapAreaElementIds>&) = 0;
+      const std::optional<TargetSnapAreaElementIds>&) = 0;
   // Called after the hidden status of composited scrollbars changed. Note that
   // |scroll_element_id| is the element id of the scroll not of the scrollbars.
   virtual void DidChangeScrollbarsHidden(ElementId scroll_element_id,
@@ -512,7 +524,7 @@ class CC_EXPORT ScrollTree final : public PropertyTree<ScrollNode> {
   // simple cases but we really should update the whole transform tree otherwise
   // we are ignoring any parent transform node that needs updating and thus our
   // snap amount can be incorrect.
-  const gfx::PointF GetPixelSnappedScrollOffset(int scroll_node_id) const;
+  gfx::PointF GetScrollOffsetForScrollTimeline(const ScrollNode&) const;
 
   // Collects deltas for scroll changes on the impl thread that need to be
   // reported to the main thread during the main frame. As such, should only be
@@ -522,11 +534,13 @@ class CC_EXPORT ScrollTree final : public PropertyTree<ScrollNode> {
       ElementId inner_viewport_scroll_element_id,
       bool use_fractional_deltas,
       const base::flat_map<ElementId, TargetSnapAreaElementIds>&
-          snapped_elements);
+          snapped_elements,
+      const MutatorHost* main_thread_mutator_host);
 
   // Applies deltas sent in the previous main frame onto the impl thread state.
   // Should only be called on the impl thread side PropertyTrees.
-  void ApplySentScrollDeltasFromAbortedCommit();
+  void ApplySentScrollDeltasFromAbortedCommit(bool next_bmf,
+                                              bool main_frame_applied_deltas);
 
   // Pushes scroll updates from the ScrollTree on the main thread onto the
   // impl thread associated state.
@@ -543,8 +557,11 @@ class CC_EXPORT ScrollTree final : public PropertyTree<ScrollNode> {
   // Returns true if the scroll offset is changed.
   bool SetScrollOffset(ElementId id, const gfx::PointF& scroll_offset);
   void SetScrollOffsetClobberActiveValue(ElementId id) {
-    GetOrCreateSyncedScrollOffset(id)->set_clobber_active_value();
+    if (auto* synced_offset = GetSyncedScrollOffset(id))
+      synced_offset->set_clobber_active_value();
   }
+
+  SyncedScrollOffset* GetOrCreateSyncedScrollOffsetForTesting(ElementId id);
   bool UpdateScrollOffsetBaseForTesting(ElementId id,
                                         const gfx::PointF& offset);
   bool SetScrollOffsetDeltaForTesting(ElementId id,
@@ -559,6 +576,7 @@ class CC_EXPORT ScrollTree final : public PropertyTree<ScrollNode> {
   gfx::PointF ClampScrollOffsetToLimits(gfx::PointF offset,
                                         const ScrollNode& scroll_node) const;
 
+  SyncedScrollOffset* GetSyncedScrollOffset(ElementId id);
   const SyncedScrollOffset* GetSyncedScrollOffset(ElementId id) const;
 
 #if DCHECK_IS_ON()
@@ -570,18 +588,18 @@ class CC_EXPORT ScrollTree final : public PropertyTree<ScrollNode> {
   void NotifyDidCompositorScroll(
       ElementId scroll_element_id,
       const gfx::PointF& scroll_offset,
-      const absl::optional<TargetSnapAreaElementIds>& snap_target_ids);
+      const std::optional<TargetSnapAreaElementIds>& snap_target_ids);
   void NotifyDidChangeScrollbarsHidden(ElementId scroll_element_id,
-                                       bool hidden);
-
-  // A composited scroll node is a scroll node that has an associated composited
-  // layer, otherwise the scroll node corresponds to a scroller that requires
-  // repainting.
-  bool IsComposited(const ScrollNode& node) const;
+                                       bool hidden) const;
 
   // Returns true iff the node is composited and does not have any non-transient
   // main-thread scrolling reasons (see main_thread_scrolling_reason.h).
   bool CanRealizeScrollsOnCompositor(const ScrollNode& node) const;
+
+  // Reports reasons for blocking scroll updates on main-thread repaint. For use
+  // only with scroll unification enabled. Returns bitfield of values from
+  // MainThreadScrollingReason.
+  uint32_t GetMainThreadRepaintReasons(const ScrollNode& node) const;
 
  private:
   // ScrollTree doesn't use the needs_update flag.
@@ -592,7 +610,7 @@ class CC_EXPORT ScrollTree final : public PropertyTree<ScrollNode> {
   using SyncedScrollOffsetMap =
       base::flat_map<ElementId, scoped_refptr<SyncedScrollOffset>>;
 
-  int currently_scrolling_node_id_;
+  int currently_scrolling_node_id_ = kInvalidPropertyNodeId;
 
   // On the main thread we store the scroll offsets directly since the main
   // thread only needs to keep track of the current main thread state. The impl
@@ -604,9 +622,9 @@ class CC_EXPORT ScrollTree final : public PropertyTree<ScrollNode> {
 
   base::WeakPtr<ScrollCallbacks> callbacks_;
 
-  SyncedScrollOffset* GetOrCreateSyncedScrollOffset(ElementId id);
   gfx::Vector2dF PullDeltaForMainThread(SyncedScrollOffset* scroll_offset,
-                                        bool use_fractional_deltas);
+                                        bool use_fractional_deltas,
+                                        bool next_bmf);
 };
 
 constexpr int kInvalidUpdateNumber = -1;
@@ -703,7 +721,7 @@ class CC_EXPORT PropertyTrees final {
 #endif
 
   const ProtectedSequenceSynchronizer& synchronizer() const {
-    return synchronizer_;
+    return *synchronizer_;
   }
 
   const ClipTree& clip_tree() const { return clip_tree_; }
@@ -808,7 +826,7 @@ class CC_EXPORT PropertyTrees final {
   bool HasElement(ElementId element_id) const;
 
  private:
-  const ProtectedSequenceSynchronizer& synchronizer_;
+  const raw_ref<const ProtectedSequenceSynchronizer> synchronizer_;
 
   TransformTree transform_tree_;
   EffectTree effect_tree_;

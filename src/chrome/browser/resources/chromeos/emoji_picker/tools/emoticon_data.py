@@ -1,18 +1,34 @@
-# Copyright 2021 The Chromium Authors. All rights reserved.
+# Copyright 2021 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
+import argparse
+import json
 import os
 import sys
 
 _SCRIPT_DIR = os.path.realpath(os.path.dirname(__file__))
 _CHROME_SOURCE = os.path.realpath(
     os.path.join(_SCRIPT_DIR, *[os.path.pardir] * 6))
-sys.path.append(os.path.join(_CHROME_SOURCE, 'build/android/gyp'))
+sys.path.append(os.path.join(_CHROME_SOURCE, 'build'))
 
-import argparse
-import json
-from util import build_utils
+import action_helpers
+
+
+# Set of unicode characters that do not render with fonts available on ChromeOS
+# TODO(b:267370102) add font(s) such that there are no more invalid characters
+INVALID_CHARACTERS = set([
+    '\u2688\u0325',
+    '\ufe52\ufe20',
+    '\u0644',
+])
+
+
+def isValidEmoticon(string):
+    for symbol in INVALID_CHARACTERS:
+        if symbol in string:
+            return False
+    return True
 
 
 def process_emoticon_data(metadata):
@@ -30,10 +46,9 @@ def process_emoticon_data(metadata):
             "base": {
                 "string": emoticon["value"],
                 "name": emoticon["description"],
-                "keywords": []
             },
-            "alternates": []
-        } for emoticon in group["emoticon"]]
+        } for emoticon in group["emoticon"]
+                  if isValidEmoticon(emoticon["value"])]
     } for group in metadata]
 
 
@@ -58,7 +73,7 @@ def main(args):
     emoticon_data = process_emoticon_data(metadata)
 
     # Write output file atomically in utf-8 format.
-    with build_utils.AtomicOutput(output_file) as tmp_file:
+    with action_helpers.atomic_output(output_file) as tmp_file:
         tmp_file.write(
             json.dumps(emoticon_data,
                        separators=(',', ':'),

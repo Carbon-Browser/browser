@@ -40,6 +40,7 @@
 #include "third_party/blink/renderer/core/dom/dom_exception.h"
 #include "third_party/blink/renderer/core/testing/null_execution_context.h"
 #include "third_party/blink/renderer/platform/heap/garbage_collected.h"
+#include "third_party/blink/renderer/platform/testing/task_environment.h"
 #include "v8/include/v8.h"
 
 namespace blink {
@@ -113,7 +114,8 @@ class CapturingCallable final : public ScriptFunction::Callable {
 };
 
 String ToString(v8::Local<v8::Context> context, const ScriptValue& value) {
-  return ToCoreString(value.V8Value()->ToString(context).ToLocalChecked());
+  return ToCoreString(context->GetIsolate(),
+                      value.V8Value()->ToString(context).ToLocalChecked());
 }
 
 Vector<String> ToStringArray(v8::Isolate* isolate, const ScriptValue& value) {
@@ -123,6 +125,7 @@ Vector<String> ToStringArray(v8::Isolate* isolate, const ScriptValue& value) {
 }
 
 TEST(ScriptPromiseTest, ConstructFromNonPromise) {
+  test::TaskEnvironment task_environment;
   V8TestingScope scope;
   v8::TryCatch try_catch(scope.GetIsolate());
   ScriptPromise promise(scope.GetScriptState(),
@@ -132,6 +135,7 @@ TEST(ScriptPromiseTest, ConstructFromNonPromise) {
 }
 
 TEST(ScriptPromiseTest, ThenResolve) {
+  test::TaskEnvironment task_environment;
   V8TestingScope scope;
   Resolver resolver(scope.GetScriptState());
   ScriptPromise promise = resolver.Promise();
@@ -145,19 +149,20 @@ TEST(ScriptPromiseTest, ThenResolve) {
   EXPECT_TRUE(on_fulfilled.IsEmpty());
   EXPECT_TRUE(on_rejected.IsEmpty());
 
-  v8::MicrotasksScope::PerformCheckpoint(scope.GetIsolate());
+  scope.PerformMicrotaskCheckpoint();
   resolver.Resolve(V8String(scope.GetIsolate(), "hello"));
 
   EXPECT_TRUE(on_fulfilled.IsEmpty());
   EXPECT_TRUE(on_rejected.IsEmpty());
 
-  v8::MicrotasksScope::PerformCheckpoint(scope.GetIsolate());
+  scope.PerformMicrotaskCheckpoint();
 
   EXPECT_EQ("hello", ToString(scope.GetContext(), on_fulfilled));
   EXPECT_TRUE(on_rejected.IsEmpty());
 }
 
 TEST(ScriptPromiseTest, ThenResolveScriptFunction) {
+  test::TaskEnvironment task_environment;
   V8TestingScope scope;
   Resolver resolver(scope.GetScriptState());
   ScriptPromise promise = resolver.Promise();
@@ -169,17 +174,18 @@ TEST(ScriptPromiseTest, ThenResolveScriptFunction) {
   ASSERT_FALSE(promise.IsEmpty());
   EXPECT_TRUE(on_fulfilled->Value().IsEmpty());
 
-  v8::MicrotasksScope::PerformCheckpoint(scope.GetIsolate());
+  scope.PerformMicrotaskCheckpoint();
   resolver.Resolve(V8String(scope.GetIsolate(), "hello"));
 
   EXPECT_TRUE(on_fulfilled->Value().IsEmpty());
 
-  v8::MicrotasksScope::PerformCheckpoint(scope.GetIsolate());
+  scope.PerformMicrotaskCheckpoint();
 
   EXPECT_EQ("hello", ToString(scope.GetContext(), on_fulfilled->Value()));
 }
 
 TEST(ScriptPromiseTest, ResolveThen) {
+  test::TaskEnvironment task_environment;
   V8TestingScope scope;
   Resolver resolver(scope.GetScriptState());
   ScriptPromise promise = resolver.Promise();
@@ -194,13 +200,14 @@ TEST(ScriptPromiseTest, ResolveThen) {
   EXPECT_TRUE(on_fulfilled.IsEmpty());
   EXPECT_TRUE(on_rejected.IsEmpty());
 
-  v8::MicrotasksScope::PerformCheckpoint(scope.GetIsolate());
+  scope.PerformMicrotaskCheckpoint();
 
   EXPECT_EQ("hello", ToString(scope.GetContext(), on_fulfilled));
   EXPECT_TRUE(on_rejected.IsEmpty());
 }
 
 TEST(ScriptPromiseTest, ResolveThenScriptFunction) {
+  test::TaskEnvironment task_environment;
   V8TestingScope scope;
   Resolver resolver(scope.GetScriptState());
   ScriptPromise promise = resolver.Promise();
@@ -213,12 +220,13 @@ TEST(ScriptPromiseTest, ResolveThenScriptFunction) {
   ASSERT_FALSE(promise.IsEmpty());
   EXPECT_TRUE(on_fulfilled->Value().IsEmpty());
 
-  v8::MicrotasksScope::PerformCheckpoint(scope.GetIsolate());
+  scope.PerformMicrotaskCheckpoint();
 
   EXPECT_EQ("hello", ToString(scope.GetContext(), on_fulfilled->Value()));
 }
 
 TEST(ScriptPromiseTest, ThenReject) {
+  test::TaskEnvironment task_environment;
   V8TestingScope scope;
   Resolver resolver(scope.GetScriptState());
   ScriptPromise promise = resolver.Promise();
@@ -232,19 +240,20 @@ TEST(ScriptPromiseTest, ThenReject) {
   EXPECT_TRUE(on_fulfilled.IsEmpty());
   EXPECT_TRUE(on_rejected.IsEmpty());
 
-  v8::MicrotasksScope::PerformCheckpoint(scope.GetIsolate());
+  scope.PerformMicrotaskCheckpoint();
   resolver.Reject(V8String(scope.GetIsolate(), "hello"));
 
   EXPECT_TRUE(on_fulfilled.IsEmpty());
   EXPECT_TRUE(on_rejected.IsEmpty());
 
-  v8::MicrotasksScope::PerformCheckpoint(scope.GetIsolate());
+  scope.PerformMicrotaskCheckpoint();
 
   EXPECT_TRUE(on_fulfilled.IsEmpty());
   EXPECT_EQ("hello", ToString(scope.GetContext(), on_rejected));
 }
 
 TEST(ScriptPromiseTest, ThenRejectScriptFunction) {
+  test::TaskEnvironment task_environment;
   V8TestingScope scope;
   Resolver resolver(scope.GetScriptState());
   ScriptPromise promise = resolver.Promise();
@@ -256,17 +265,18 @@ TEST(ScriptPromiseTest, ThenRejectScriptFunction) {
   ASSERT_FALSE(promise.IsEmpty());
   EXPECT_TRUE(on_rejected->Value().IsEmpty());
 
-  v8::MicrotasksScope::PerformCheckpoint(scope.GetIsolate());
+  scope.PerformMicrotaskCheckpoint();
   resolver.Reject(V8String(scope.GetIsolate(), "hello"));
 
   EXPECT_TRUE(on_rejected->Value().IsEmpty());
 
-  v8::MicrotasksScope::PerformCheckpoint(scope.GetIsolate());
+  scope.PerformMicrotaskCheckpoint();
 
   EXPECT_EQ("hello", ToString(scope.GetContext(), on_rejected->Value()));
 }
 
 TEST(ScriptPromiseTest, ThrowingOnFulfilled) {
+  test::TaskEnvironment task_environment;
   V8TestingScope scope;
   Resolver resolver(scope.GetScriptState());
   ScriptPromise promise = resolver.Promise();
@@ -286,14 +296,14 @@ TEST(ScriptPromiseTest, ThrowingOnFulfilled) {
   EXPECT_TRUE(on_fulfilled2.IsEmpty());
   EXPECT_TRUE(on_rejected2.IsEmpty());
 
-  v8::MicrotasksScope::PerformCheckpoint(scope.GetIsolate());
+  scope.PerformMicrotaskCheckpoint();
   resolver.Resolve(V8String(scope.GetIsolate(), "hello"));
 
   EXPECT_TRUE(on_rejected.IsEmpty());
   EXPECT_TRUE(on_fulfilled2.IsEmpty());
   EXPECT_TRUE(on_rejected2.IsEmpty());
 
-  v8::MicrotasksScope::PerformCheckpoint(scope.GetIsolate());
+  scope.PerformMicrotaskCheckpoint();
 
   EXPECT_TRUE(on_rejected.IsEmpty());
   EXPECT_TRUE(on_fulfilled2.IsEmpty());
@@ -301,6 +311,7 @@ TEST(ScriptPromiseTest, ThrowingOnFulfilled) {
 }
 
 TEST(ScriptPromiseTest, ThrowingOnFulfilledScriptFunction) {
+  test::TaskEnvironment task_environment;
   V8TestingScope scope;
   Resolver resolver(scope.GetScriptState());
   ScriptPromise promise = resolver.Promise();
@@ -316,17 +327,18 @@ TEST(ScriptPromiseTest, ThrowingOnFulfilledScriptFunction) {
   ASSERT_FALSE(promise.IsEmpty());
   EXPECT_TRUE(on_rejected->Value().IsEmpty());
 
-  v8::MicrotasksScope::PerformCheckpoint(scope.GetIsolate());
+  scope.PerformMicrotaskCheckpoint();
   resolver.Resolve(V8String(scope.GetIsolate(), "hello"));
 
   EXPECT_TRUE(on_rejected->Value().IsEmpty());
 
-  v8::MicrotasksScope::PerformCheckpoint(scope.GetIsolate());
+  scope.PerformMicrotaskCheckpoint();
 
   EXPECT_FALSE(on_rejected->Value().IsEmpty());
 }
 
 TEST(ScriptPromiseTest, ThrowingOnRejected) {
+  test::TaskEnvironment task_environment;
   V8TestingScope scope;
   Resolver resolver(scope.GetScriptState());
   ScriptPromise promise = resolver.Promise();
@@ -346,14 +358,14 @@ TEST(ScriptPromiseTest, ThrowingOnRejected) {
   EXPECT_TRUE(on_fulfilled2.IsEmpty());
   EXPECT_TRUE(on_rejected2.IsEmpty());
 
-  v8::MicrotasksScope::PerformCheckpoint(scope.GetIsolate());
+  scope.PerformMicrotaskCheckpoint();
   resolver.Reject(V8String(scope.GetIsolate(), "hello"));
 
   EXPECT_TRUE(on_fulfilled.IsEmpty());
   EXPECT_TRUE(on_fulfilled2.IsEmpty());
   EXPECT_TRUE(on_rejected2.IsEmpty());
 
-  v8::MicrotasksScope::PerformCheckpoint(scope.GetIsolate());
+  scope.PerformMicrotaskCheckpoint();
 
   EXPECT_TRUE(on_fulfilled.IsEmpty());
   EXPECT_TRUE(on_fulfilled2.IsEmpty());
@@ -361,6 +373,7 @@ TEST(ScriptPromiseTest, ThrowingOnRejected) {
 }
 
 TEST(ScriptPromiseTest, ThrowingOnRejectedScriptFunction) {
+  test::TaskEnvironment task_environment;
   V8TestingScope scope;
   Resolver resolver(scope.GetScriptState());
   ScriptPromise promise = resolver.Promise();
@@ -376,17 +389,18 @@ TEST(ScriptPromiseTest, ThrowingOnRejectedScriptFunction) {
   ASSERT_FALSE(promise.IsEmpty());
   EXPECT_TRUE(on_rejected->Value().IsEmpty());
 
-  v8::MicrotasksScope::PerformCheckpoint(scope.GetIsolate());
+  scope.PerformMicrotaskCheckpoint();
   resolver.Reject(V8String(scope.GetIsolate(), "hello"));
 
   EXPECT_TRUE(on_rejected->Value().IsEmpty());
 
-  v8::MicrotasksScope::PerformCheckpoint(scope.GetIsolate());
+  scope.PerformMicrotaskCheckpoint();
 
   EXPECT_FALSE(on_rejected->Value().IsEmpty());
 }
 
 TEST(ScriptPromiseTest, RejectThen) {
+  test::TaskEnvironment task_environment;
   V8TestingScope scope;
   Resolver resolver(scope.GetScriptState());
   ScriptPromise promise = resolver.Promise();
@@ -401,13 +415,14 @@ TEST(ScriptPromiseTest, RejectThen) {
   EXPECT_TRUE(on_fulfilled.IsEmpty());
   EXPECT_TRUE(on_rejected.IsEmpty());
 
-  v8::MicrotasksScope::PerformCheckpoint(scope.GetIsolate());
+  scope.PerformMicrotaskCheckpoint();
 
   EXPECT_TRUE(on_fulfilled.IsEmpty());
   EXPECT_EQ("hello", ToString(scope.GetContext(), on_rejected));
 }
 
 TEST(ScriptPromiseTest, RejectThenScriptFunction) {
+  test::TaskEnvironment task_environment;
   V8TestingScope scope;
   Resolver resolver(scope.GetScriptState());
   ScriptPromise promise = resolver.Promise();
@@ -420,12 +435,13 @@ TEST(ScriptPromiseTest, RejectThenScriptFunction) {
   ASSERT_FALSE(promise.IsEmpty());
   EXPECT_TRUE(on_rejected->Value().IsEmpty());
 
-  v8::MicrotasksScope::PerformCheckpoint(scope.GetIsolate());
+  scope.PerformMicrotaskCheckpoint();
 
   EXPECT_EQ("hello", ToString(scope.GetContext(), on_rejected->Value()));
 }
 
 TEST(ScriptPromiseTest, CastPromise) {
+  test::TaskEnvironment task_environment;
   V8TestingScope scope;
   ScriptPromise promise = Resolver(scope.GetScriptState()).Promise();
   ScriptPromise new_promise =
@@ -436,6 +452,7 @@ TEST(ScriptPromiseTest, CastPromise) {
 }
 
 TEST(ScriptPromiseTest, CastNonPromise) {
+  test::TaskEnvironment task_environment;
   V8TestingScope scope;
   ScriptValue on_fulfilled1, on_fulfilled2, on_rejected1, on_rejected2;
 
@@ -466,7 +483,7 @@ TEST(ScriptPromiseTest, CastNonPromise) {
   EXPECT_TRUE(on_rejected1.IsEmpty());
   EXPECT_TRUE(on_rejected2.IsEmpty());
 
-  v8::MicrotasksScope::PerformCheckpoint(scope.GetIsolate());
+  scope.PerformMicrotaskCheckpoint();
 
   EXPECT_EQ("hello", ToString(scope.GetContext(), on_fulfilled1));
   EXPECT_EQ("hello", ToString(scope.GetContext(), on_fulfilled2));
@@ -475,6 +492,7 @@ TEST(ScriptPromiseTest, CastNonPromise) {
 }
 
 TEST(ScriptPromiseTest, Reject) {
+  test::TaskEnvironment task_environment;
   V8TestingScope scope;
   ScriptValue on_fulfilled, on_rejected;
 
@@ -493,13 +511,14 @@ TEST(ScriptPromiseTest, Reject) {
   EXPECT_TRUE(on_fulfilled.IsEmpty());
   EXPECT_TRUE(on_rejected.IsEmpty());
 
-  v8::MicrotasksScope::PerformCheckpoint(scope.GetIsolate());
+  scope.PerformMicrotaskCheckpoint();
 
   EXPECT_TRUE(on_fulfilled.IsEmpty());
   EXPECT_EQ("hello", ToString(scope.GetContext(), on_rejected));
 }
 
 TEST(ScriptPromiseTest, RejectWithExceptionState) {
+  test::TaskEnvironment task_environment;
   V8TestingScope scope;
   ScriptValue on_fulfilled, on_rejected;
   ScriptPromise promise = ScriptPromise::RejectWithDOMException(
@@ -515,7 +534,7 @@ TEST(ScriptPromiseTest, RejectWithExceptionState) {
   EXPECT_TRUE(on_fulfilled.IsEmpty());
   EXPECT_TRUE(on_rejected.IsEmpty());
 
-  v8::MicrotasksScope::PerformCheckpoint(scope.GetIsolate());
+  scope.PerformMicrotaskCheckpoint();
 
   EXPECT_TRUE(on_fulfilled.IsEmpty());
   EXPECT_EQ("SyntaxError: some syntax error",
@@ -523,6 +542,7 @@ TEST(ScriptPromiseTest, RejectWithExceptionState) {
 }
 
 TEST(ScriptPromiseTest, AllWithEmptyPromises) {
+  test::TaskEnvironment task_environment;
   V8TestingScope scope;
   ScriptValue on_fulfilled, on_rejected;
 
@@ -538,14 +558,15 @@ TEST(ScriptPromiseTest, AllWithEmptyPromises) {
   EXPECT_TRUE(on_fulfilled.IsEmpty());
   EXPECT_TRUE(on_rejected.IsEmpty());
 
-  v8::MicrotasksScope::PerformCheckpoint(scope.GetIsolate());
+  scope.PerformMicrotaskCheckpoint();
 
   EXPECT_FALSE(on_fulfilled.IsEmpty());
-  EXPECT_TRUE(ToStringArray(scope.GetIsolate(), on_fulfilled).IsEmpty());
+  EXPECT_TRUE(ToStringArray(scope.GetIsolate(), on_fulfilled).empty());
   EXPECT_TRUE(on_rejected.IsEmpty());
 }
 
 TEST(ScriptPromiseTest, AllWithResolvedPromises) {
+  test::TaskEnvironment task_environment;
   V8TestingScope scope;
   ScriptValue on_fulfilled, on_rejected;
 
@@ -565,7 +586,7 @@ TEST(ScriptPromiseTest, AllWithResolvedPromises) {
   EXPECT_TRUE(on_fulfilled.IsEmpty());
   EXPECT_TRUE(on_rejected.IsEmpty());
 
-  v8::MicrotasksScope::PerformCheckpoint(scope.GetIsolate());
+  scope.PerformMicrotaskCheckpoint();
 
   EXPECT_FALSE(on_fulfilled.IsEmpty());
   Vector<String> values = ToStringArray(scope.GetIsolate(), on_fulfilled);
@@ -576,6 +597,7 @@ TEST(ScriptPromiseTest, AllWithResolvedPromises) {
 }
 
 TEST(ScriptPromiseTest, AllWithRejectedPromise) {
+  test::TaskEnvironment task_environment;
   V8TestingScope scope;
   ScriptValue on_fulfilled, on_rejected;
 
@@ -595,7 +617,7 @@ TEST(ScriptPromiseTest, AllWithRejectedPromise) {
   EXPECT_TRUE(on_fulfilled.IsEmpty());
   EXPECT_TRUE(on_rejected.IsEmpty());
 
-  v8::MicrotasksScope::PerformCheckpoint(scope.GetIsolate());
+  scope.PerformMicrotaskCheckpoint();
 
   EXPECT_TRUE(on_fulfilled.IsEmpty());
   EXPECT_FALSE(on_rejected.IsEmpty());

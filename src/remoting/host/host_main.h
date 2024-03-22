@@ -1,4 +1,4 @@
-// Copyright (c) 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,6 +14,6 @@ namespace remoting {
 // needs to run.
 HOST_EXPORT int HostMain(int argc, char** argv);
 
-} // namespace remoting
+}  // namespace remoting
 
 #endif  // REMOTING_HOST_HOST_MAIN_H_

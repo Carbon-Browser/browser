@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -31,17 +31,6 @@ struct StartParams {
     M16G,
   };
 
-  enum class UsapProfile {
-    // Default USAP profile suitable for all devices.
-    DEFAULT = 0,
-    // USAP profile suitable for 4G devices.
-    M4G,
-    // USAP profile suitable for 8G devices.
-    M8G,
-    // USAP profile suitable for 16G devices.
-    M16G,
-  };
-
   StartParams();
 
   StartParams(const StartParams&) = delete;
@@ -64,8 +53,6 @@ struct StartParams {
 
   DalvikMemoryProfile dalvik_memory_profile = DalvikMemoryProfile::DEFAULT;
 
-  UsapProfile usap_profile = UsapProfile::DEFAULT;
-
   // Experiment flag for ARC Custom Tabs.
   bool arc_custom_tabs_experiment = false;
 
@@ -78,7 +65,16 @@ struct StartParams {
   bool disable_download_provider = false;
 
   // Flag to disable ureadahead completely, including host and guest parts.
+  // TODO(b/264585671): Refactor this and |host_ureadahead_generation| to
+  // mode enum.
   bool disable_ureadahead = false;
+
+  // Flag to indicate host ureadahead generation.
+  // TODO(b/264585671): Refactor this and |disable_ureadahead| to mode enum.
+  bool host_ureadahead_generation = false;
+
+  // Flag to indicate whether to use dev caches.
+  bool use_dev_caches = false;
 
   // The number of logical CPU cores that are currently disabled on the host.
   uint32_t num_cores_disabled = 0;
@@ -97,6 +93,18 @@ struct StartParams {
 
   // Flag to enable disable consumer auto update toggle as part of EU new deal.
   bool enable_consumer_auto_update_toggle = false;
+
+  // Flag that indicates whether ARCVM uses virtio-blk for /data.
+  bool use_virtio_blk_data = false;
+
+  // Flag to enable Privacy Hub for chrome.
+  bool enable_privacy_hub_for_chrome = false;
+
+  // Flag to switch to KeyMint for T+.
+  bool arc_switch_to_keymint = false;
+
+  // Flag that indicates whether ARC is already signed in.
+  bool arc_signed_in = false;
 };
 
 }  // namespace arc

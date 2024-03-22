@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -45,7 +45,7 @@ class MESSAGE_CENTER_EXPORT DesktopMessagePopupCollection
 
  protected:
   // Overridden from MessagePopupCollection:
-  int GetToastOriginX(const gfx::Rect& toast_bounds) const override;
+  int GetPopupOriginX(const gfx::Rect& popup_bounds) const override;
   int GetBaseline() const override;
   gfx::Rect GetWorkArea() const override;
   bool IsTopDown() const override;

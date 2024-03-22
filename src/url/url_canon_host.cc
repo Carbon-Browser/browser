@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,11 +6,14 @@
 #include "base/cpu_reduction_experiment.h"
 #include "url/url_canon.h"
 #include "url/url_canon_internal.h"
+#include "url/url_features.h"
 
 namespace url {
 
 namespace {
 
+// clang-format off
+//
 // For reference, here's what IE supports:
 // Key: 0 (disallowed: failure if present in the input)
 //      + (allowed either escaped or unescaped, and unmodified)
@@ -37,19 +40,15 @@ namespace {
 // I also didn't test if characters affecting HTML parsing are allowed
 // unescaped, e.g. (") or (#), which would indicate the beginning of the path.
 // Surprisingly, space is accepted in the input and always escaped.
-
+//
+// TODO(https://crbug.com/1416013): Remove the above historical reference
+// information once we are 100% standard compliant to the URL Standard.
+//
 // This table lists the canonical version of all characters we allow in the
 // input, with 0 indicating it is disallowed. We use the magic kEscapedHostChar
 // value to indicate that this character should be escaped. We are a little more
 // restrictive than IE, but less restrictive than Firefox.
 //
-// Note that we disallow the % character. We will allow it when part of an
-// escape sequence, of course, but this disallows "%25". Even though IE allows
-// it, allowing it would put us in a funny state. If there was an invalid
-// escape sequence like "%zz", we'll add "%25zz" to the output and fail.
-// Allowing percents means we'll succeed a second time, so validity would change
-// based on how many times you run the canonicalizer. We prefer to always report
-// the same vailidity, so reject this.
 const unsigned char kEsc = 0xff;
 const unsigned char kHostCharLookup[0x80] = {
 // 00-1f: all are invalid
@@ -68,8 +67,29 @@ const unsigned char kHostCharLookup[0x80] = {
 //   p    q    r    s    t    u    v    w    x    y    z    {    |    }    ~
     'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z',kEsc,kEsc,kEsc,  0 ,  0 };
 
+// The following table is used when kStandardCompliantHostCharLookup feature is
+// enabled. See https://crbug.com/1416013 for details. At present, ' ' (SPACE)
+// and '*' (asterisk) are still non-compliant to the URL Standard.
+const unsigned char kStandardCompliantHostCharLookup[0x80] = {
+// 00-1f: all are invalid
+     0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,
+     0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,
+//  ' '   !    "    #    $    %    &    '    (    )    *    +    ,    -    .    /
+    kEsc,'!', '"',  0,  '$',  0,  '&', '\'','(', ')', kEsc, '+', ',', '-', '.',  0,
+//   0    1    2    3    4    5    6    7    8    9    :    ;    <    =    >    ?
+    '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', ':', ';' , 0,  '=',  0,   0,
+//   @    A    B    C    D    E    F    G    H    I    J    K    L    M    N    O
+     0,  'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o',
+//   P    Q    R    S    T    U    V    W    X    Y    Z    [    \    ]    ^    _
+    'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z', '[',  0,  ']',  0,  '_',
+//   `    a    b    c    d    e    f    g    h    i    j    k    l    m    n    o
+    '`', 'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o',
+//   p    q    r    s    t    u    v    w    x    y    z    {    |    }    ~
+    'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z', '{',  0, '}',  '~',  0 };
+// clang-format on
+
 // RFC1034 maximum FQDN length.
-constexpr int kMaxHostLength = 253;
+constexpr size_t kMaxHostLength = 253;
 
 // Generous padding to account for the fact that UTS#46 normalization can cause
 // a long string to actually shrink and fit within the 253 character RFC1034
@@ -77,11 +97,11 @@ constexpr int kMaxHostLength = 253;
 // cases: An arbitrary number of characters (e.g. U+00AD SOFT HYPHEN) can be
 // removed from the input by UTS#46 processing. However, this should be
 // sufficient for all normally-encountered, non-abusive hostname strings.
-constexpr int kMaxHostBufferLength = kMaxHostLength*5;
+constexpr size_t kMaxHostBufferLength = kMaxHostLength * 5;
 
-const int kTempHostBufferLen = 1024;
-typedef RawCanonOutputT<char, kTempHostBufferLen> StackBuffer;
-typedef RawCanonOutputT<char16_t, kTempHostBufferLen> StackBufferW;
+constexpr size_t kTempHostBufferLen = 1024;
+using StackBuffer = RawCanonOutputT<char, kTempHostBufferLen>;
+using StackBufferW = RawCanonOutputT<char16_t, kTempHostBufferLen>;
 
 // Scans a host name and fills in the output flags according to what we find.
 // |has_non_ascii| will be true if there are any non-7-bit characters, and
@@ -149,7 +169,12 @@ bool DoSimpleHost(const INCHAR* host,
 
     if (source < 0x80) {
       // We have ASCII input, we can use our lookup table.
-      unsigned char replacement = kHostCharLookup[source];
+      unsigned char replacement;
+      if (url::IsUsingStandardCompliantHostCharacters()) {
+        replacement = kStandardCompliantHostCharLookup[source];
+      } else {
+        replacement = kHostCharLookup[source];
+      }
       if (!replacement) {
         // Invalid character, add it as percent-escaped and mark as failed.
         AppendEscapedChar(source, output);
@@ -189,9 +214,7 @@ bool DoIDNHost(const char16_t* src, size_t src_len, CanonOutput* output) {
   }
 
   StackBufferW wide_output;
-  if (!IDNToASCII(url_escaped_host.data(),
-                  url_escaped_host.length(),
-                  &wide_output)) {
+  if (!IDNToASCII(url_escaped_host.view(), &wide_output)) {
     // Some error, give up. This will write some reasonable looking
     // representation of the string to the output.
     AppendInvalidNarrowString(src, 0, src_len, output);
@@ -201,8 +224,7 @@ bool DoIDNHost(const char16_t* src, size_t src_len, CanonOutput* output) {
   // Now we check the ASCII output like a normal host. It will also handle
   // unescaping. Although we unescaped everything before this function call, if
   // somebody does %00 as fullwidth, ICU will convert this to ASCII.
-  bool success = DoSimpleHost(wide_output.data(),
-                              static_cast<size_t>(wide_output.length()), output,
+  bool success = DoSimpleHost(wide_output.data(), wide_output.length(), output,
                               &has_non_ascii);
   if (has_non_ascii) {
     // ICU generated something that DoSimpleHost didn't think looked like
@@ -220,8 +242,7 @@ bool DoIDNHost(const char16_t* src, size_t src_len, CanonOutput* output) {
     // ASCII isn't strictly necessary, but DoSimpleHost handles this case
     // anyway so we handle it/
     output->set_length(original_output_len);
-    AppendInvalidNarrowString(wide_output.data(), 0,
-                              static_cast<size_t>(wide_output.length()),
+    AppendInvalidNarrowString(wide_output.data(), 0, wide_output.length(),
                               output);
     return false;
   }
@@ -238,7 +259,7 @@ bool DoComplexHost(const char* host,
                    CanonOutput* output) {
   // Save the current position in the output. We may write stuff and rewind it
   // below, so we need to know where to rewind to.
-  int begin_length = output->length();
+  size_t begin_length = output->length();
 
   // Points to the UTF-8 data we want to convert. This will either be the
   // input or the unescaped version written to |*output| if necessary.
@@ -268,7 +289,7 @@ bool DoComplexHost(const char* host,
     // Save the pointer into the data was just converted (it may be appended to
     // other data in the output buffer).
     utf8_source = &output->data()[begin_length];
-    utf8_source_len = static_cast<size_t>(output->length() - begin_length);
+    utf8_source_len = output->length() - begin_length;
   } else {
     // We don't need to unescape, use input for IDNization later. (We know the
     // input has non-ASCII, or the simple version would have been called
@@ -287,15 +308,14 @@ bool DoComplexHost(const char* host,
     for (size_t i = 0; i < utf8_source_len; i++)
       utf8.push_back(utf8_source[i]);
     output->set_length(begin_length);
-    AppendInvalidNarrowString(utf8.data(), 0,
-                              static_cast<size_t>(utf8.length()), output);
+    AppendInvalidNarrowString(utf8.data(), 0, utf8.length(), output);
     return false;
   }
   output->set_length(begin_length);
 
   // This will call DoSimpleHost which will do normal ASCII canonicalization
   // and also check for IP addresses in the outpt.
-  return DoIDNHost(utf16.data(), static_cast<size_t>(utf16.length()), output) &&
+  return DoIDNHost(utf16.data(), utf16.length(), output) &&
          are_all_escaped_valid;
 }
 
@@ -324,8 +344,8 @@ bool DoComplexHost(const char16_t* host,
 
     // Once we convert to UTF-8, we can use the 8-bit version of the complex
     // host handling code above.
-    return DoComplexHost(utf8.data(), static_cast<size_t>(utf8.length()),
-                         has_non_ascii, has_escaped, output);
+    return DoComplexHost(utf8.data(), utf8.length(), has_non_ascii, has_escaped,
+                         output);
   }
 
   // No unescaping necessary, we can safely pass the input to ICU. This
@@ -360,7 +380,7 @@ void DoHost(const CHAR* spec,
             const Component& host,
             CanonOutput* output,
             CanonHostInfo* host_info) {
-  if (!host.is_nonempty()) {
+  if (host.is_empty()) {
     // Empty hosts don't need anything.
     host_info->family = CanonHostInfo::NEUTRAL;
     host_info->out_host = Component();
@@ -384,7 +404,7 @@ void DoHost(const CHAR* spec,
     // we just leave it in place.
     if (host_info->IsIPAddress()) {
       output->set_length(output_begin);
-      output->Append(canon_ip.data(), canon_ip.length());
+      output->Append(canon_ip.view());
     }
   } else {
     // Canonicalization failed. Set BROKEN to notify the caller.

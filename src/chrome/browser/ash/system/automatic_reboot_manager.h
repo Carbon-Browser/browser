@@ -1,4 +1,4 @@
-// Copyright (c) 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,6 +8,7 @@
 #include <memory>
 
 #include "base/callback_list.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/observer_list.h"
 #include "base/scoped_observation.h"
@@ -72,7 +73,7 @@ struct SystemEventTimes;
 // applying an update is stored in /var/run/chrome/update_reboot_needed_uptime,
 // making it persist across browser restarts and crashes. Placing the file under
 // /var/run ensures that it gets cleared automatically on every boot.
-class AutomaticRebootManager : public PowerManagerClient::Observer,
+class AutomaticRebootManager : public chromeos::PowerManagerClient::Observer,
                                public UpdateEngineClient::Observer,
                                public ui::UserActivityObserver,
                                public session_manager::SessionManagerObserver {
@@ -143,8 +144,8 @@ class AutomaticRebootManager : public PowerManagerClient::Observer,
       base::WaitableEvent::InitialState::NOT_SIGNALED};
 
   // Clocks that can be mocked in tests to fast-forward time.
-  const base::Clock* const clock_;
-  const base::TickClock* const tick_clock_;
+  const raw_ptr<const base::Clock, ExperimentalAsh> clock_;
+  const raw_ptr<const base::TickClock, ExperimentalAsh> tick_clock_;
 
   PrefChangeRegistrar local_state_registrar_;
 

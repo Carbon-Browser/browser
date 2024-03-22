@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -64,17 +64,18 @@ public class MockLocationProvider implements LocationProvider {
 
         mHandlerThread = new HandlerThread("MockLocationProviderImpl");
         mHandlerThread.start();
-        mHandler = new Handler(mHandlerThread.getLooper()) {
-            @Override
-            public void handleMessage(Message msg) {
-                synchronized (mLock) {
-                    if (msg.what == UPDATE_LOCATION_MSG) {
-                        newLocation();
-                        sendEmptyMessageDelayed(UPDATE_LOCATION_MSG, 250);
+        mHandler =
+                new Handler(mHandlerThread.getLooper()) {
+                    @Override
+                    public void handleMessage(Message msg) {
+                        synchronized (mLock) {
+                            if (msg.what == UPDATE_LOCATION_MSG) {
+                                newLocation();
+                                sendEmptyMessageDelayed(UPDATE_LOCATION_MSG, 250);
+                            }
+                        }
                     }
-                }
-            }
-        };
+                };
     }
 
     private void newLocation() {
@@ -83,4 +84,5 @@ public class MockLocationProvider implements LocationProvider {
         location.setAccuracy(0.5f);
         LocationProviderAdapter.onNewLocationAvailable(location);
     }
-};
+}
+;

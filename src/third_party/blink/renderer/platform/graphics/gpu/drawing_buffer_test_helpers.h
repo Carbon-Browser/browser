@@ -1,10 +1,11 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef THIRD_PARTY_BLINK_RENDERER_PLATFORM_GRAPHICS_GPU_DRAWING_BUFFER_TEST_HELPERS_H_
 #define THIRD_PARTY_BLINK_RENDERER_PLATFORM_GRAPHICS_GPU_DRAWING_BUFFER_TEST_HELPERS_H_
 
+#include "base/memory/raw_ptr.h"
 #include "build/build_config.h"
 #include "cc/test/stub_decode_cache.h"
 #include "components/viz/test/test_context_provider.h"
@@ -50,7 +51,9 @@ class WebGraphicsContext3DProviderForTests
   gpu::webgpu::WebGPUInterface* WebGPUInterface() override {
     return webgpu_.get();
   }
-  bool BindToCurrentThread() override { return false; }
+  gpu::ContextSupport* ContextSupport() override { return nullptr; }
+
+  bool BindToCurrentSequence() override { return false; }
   const gpu::Capabilities& GetCapabilities() const override {
     return capabilities_;
   }
@@ -75,6 +78,10 @@ class WebGraphicsContext3DProviderForTests
                       cc::PaintCanvas* canvas) override {}
   viz::RasterContextProvider* RasterContextProvider() const override {
     return nullptr;
+  }
+  unsigned int GetGrGLTextureFormat(
+      viz::SharedImageFormat format) const override {
+    return 0;
   }
 
  private:
@@ -304,7 +311,14 @@ class GLES2InterfaceForTests : public gpu::gles2::GLES2InterfaceStub,
     // Not unit tested yet. Tested with end-to-end tests.
     return false;
   }
-  void DrawingBufferClientForceLostContextWithAutoRecovery() override {
+  void DrawingBufferClientForceLostContextWithAutoRecovery(
+      const char* reason) override {
+    // Not unit tested yet. Tested with end-to-end tests.
+  }
+  void DrawingBufferClientInterruptPixelLocalStorage() override {
+    // Not unit tested yet. Tested with end-to-end tests.
+  }
+  void DrawingBufferClientRestorePixelLocalStorage() override {
     // Not unit tested yet. Tested with end-to-end tests.
   }
 
@@ -428,9 +442,11 @@ class DrawingBufferForTests : public DrawingBuffer {
             std::move(context_provider),
             graphics_info,
             false /* usingSwapChain */,
+            false /* desynchronized */,
             std::move(extensions_util),
             client,
             false /* discardFramebufferSupported */,
+            false /* textureStorageEnabled */,
             true /* wantAlphaChannel */,
             true /* premultipliedAlpha */,
             preserve,
@@ -440,7 +456,6 @@ class DrawingBufferForTests : public DrawingBuffer {
             DrawingBuffer::kAllowChromiumImage /* ChromiumImageUsage */,
             cc::PaintFlags::FilterQuality::kLow,
             PredefinedColorSpace::kSRGB,
-            CanvasPixelFormat::kUint8,
             gl::GpuPreference::kHighPerformance),
         live_(nullptr) {}
 
@@ -458,7 +473,7 @@ class DrawingBufferForTests : public DrawingBuffer {
         ContextProvider()->SharedImageInterface());
   }
 
-  bool* live_;
+  raw_ptr<bool, ExperimentalRenderer> live_;
 
   int RecycledBitmapCount() { return recycled_bitmaps_.size(); }
 };

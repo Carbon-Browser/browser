@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -17,6 +17,7 @@
 #include "components/prefs/pref_service.h"
 #include "components/safe_browsing/content/browser/threat_details.h"
 #include "components/safe_browsing/content/browser/triggers/trigger_manager.h"
+#include "components/safe_browsing/content/browser/web_contents_key.h"
 #include "components/safe_browsing/core/common/features.h"
 #include "components/safe_browsing/core/common/safe_browsing_prefs.h"
 #include "components/safe_browsing/core/common/utils.h"
@@ -85,6 +86,7 @@ AwSafeBrowsingBlockingPage::AwSafeBrowsingBlockingPage(
                 /*referrer_chain_provider*/ nullptr,
                 sb_error_ui()->get_error_display_options());
   }
+  warning_shown_ts_ = base::Time::Now().InMillisecondsSinceUnixEpoch();
 }
 
 AwSafeBrowsingBlockingPage* AwSafeBrowsingBlockingPage::CreateBlockingPage(
@@ -162,12 +164,15 @@ void AwSafeBrowsingBlockingPage::FinishThreatDetails(
 
   // Finish computing threat details. TriggerManager will decide if it is safe
   // to send the report.
-  bool report_sent = AwBrowserProcess::GetInstance()
-                         ->GetSafeBrowsingTriggerManager()
-                         ->FinishCollectingThreatDetails(
-                             safe_browsing::TriggerType::SECURITY_INTERSTITIAL,
-                             web_contents(), delay, did_proceed, num_visits,
-                             sb_error_ui()->get_error_display_options());
+  auto result =
+      AwBrowserProcess::GetInstance()
+          ->GetSafeBrowsingTriggerManager()
+          ->FinishCollectingThreatDetails(
+              safe_browsing::TriggerType::SECURITY_INTERSTITIAL,
+              safe_browsing::GetWebContentsKey(web_contents()), delay,
+              did_proceed, num_visits,
+              sb_error_ui()->get_error_display_options(), warning_shown_ts_);
+  bool report_sent = result.IsReportSent();
 
   if (report_sent) {
     controller()->metrics_helper()->RecordUserInteraction(

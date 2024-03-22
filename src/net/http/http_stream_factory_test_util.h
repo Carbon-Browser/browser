@@ -1,4 +1,4 @@
-// Copyright (c) 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -111,7 +111,6 @@ class MockHttpStreamFactoryJob : public HttpStreamFactory::Job {
                            RequestPriority priority,
                            ProxyInfo proxy_info,
                            const SSLConfig& server_ssl_config,
-                           const SSLConfig& proxy_ssl_config,
                            url::SchemeHostPort destination,
                            GURL origin_url,
                            NextProto alternative_protocol,
@@ -143,7 +142,6 @@ class TestJobFactory : public HttpStreamFactory::JobFactory {
       RequestPriority priority,
       const ProxyInfo& proxy_info,
       const SSLConfig& server_ssl_config,
-      const SSLConfig& proxy_ssl_config,
       url::SchemeHostPort destination,
       GURL origin_url,
       bool is_websocket,
@@ -157,9 +155,12 @@ class TestJobFactory : public HttpStreamFactory::JobFactory {
   MockHttpStreamFactoryJob* dns_alpn_h3_job() const { return dns_alpn_h3_job_; }
 
  private:
-  raw_ptr<MockHttpStreamFactoryJob> main_job_ = nullptr;
-  raw_ptr<MockHttpStreamFactoryJob> alternative_job_ = nullptr;
-  raw_ptr<MockHttpStreamFactoryJob> dns_alpn_h3_job_ = nullptr;
+  raw_ptr<MockHttpStreamFactoryJob, AcrossTasksDanglingUntriaged> main_job_ =
+      nullptr;
+  raw_ptr<MockHttpStreamFactoryJob, AcrossTasksDanglingUntriaged>
+      alternative_job_ = nullptr;
+  raw_ptr<MockHttpStreamFactoryJob, AcrossTasksDanglingUntriaged>
+      dns_alpn_h3_job_ = nullptr;
 };
 
 }  // namespace net

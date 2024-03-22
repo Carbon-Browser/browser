@@ -1,4 +1,4 @@
-# Copyright 2019 The Chromium Authors. All rights reserved.
+# Copyright 2019 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -17,9 +17,8 @@ class ExtensionInstallBlocklistTest(ChromeEnterpriseTestCase):
 
   @before_all
   def setup(self):
-    self.InstallChrome(self.win_config['client'])
     self.EnableUITest(self.win_config['client'])
-    self.InstallWebDriver(self.win_config['client'])
+    self.InstallChrome(self.win_config['client'])
 
   def installExtension(self, url):
     args = ['--url', url]

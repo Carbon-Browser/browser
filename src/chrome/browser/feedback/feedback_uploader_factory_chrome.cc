@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,6 +7,7 @@
 #include "base/memory/singleton.h"
 #include "chrome/browser/feedback/feedback_uploader_chrome.h"
 #include "chrome/browser/profiles/profile.h"
+#include "chrome/browser/profiles/profile_selections.h"
 #include "content/public/browser/browser_context.h"
 
 namespace feedback {
@@ -30,7 +31,13 @@ FeedbackUploaderFactoryChrome::~FeedbackUploaderFactoryChrome() = default;
 
 content::BrowserContext* FeedbackUploaderFactoryChrome::GetBrowserContextToUse(
     content::BrowserContext* context) const {
-  return Profile::FromBrowserContext(context)->GetOriginalProfile();
+  return ProfileSelections::Builder()
+      .WithRegular(ProfileSelection::kRedirectedToOriginal)
+      // TODO(crbug.com/1418376): Check if this service is needed in
+      // Guest mode.
+      .WithGuest(ProfileSelection::kRedirectedToOriginal)
+      .Build()
+      .ApplyProfileSelection(Profile::FromBrowserContext(context));
 }
 
 bool FeedbackUploaderFactoryChrome::ServiceIsCreatedWithBrowserContext() const {
@@ -43,9 +50,10 @@ bool FeedbackUploaderFactoryChrome::ServiceIsNULLWhileTesting() const {
   return true;
 }
 
-KeyedService* FeedbackUploaderFactoryChrome::BuildServiceInstanceFor(
+std::unique_ptr<KeyedService>
+FeedbackUploaderFactoryChrome::BuildServiceInstanceForBrowserContext(
     content::BrowserContext* context) const {
-  return new FeedbackUploaderChrome(context);
+  return std::make_unique<FeedbackUploaderChrome>(context);
 }
 
 }  // namespace feedback

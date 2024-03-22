@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -628,10 +628,10 @@ cvox.ChromeVoxEventWatcher.mouseOutEventWatcher = function(evt) {
  * @return {boolean} True if the default action should be performed.
  */
 cvox.ChromeVoxEventWatcher.focusEventWatcher = function(evt) {
-  // First remove any dummy spans. We create dummy spans in UserCommands in
+  // First remove any empty spans. We create empty spans in UserCommands in
   // order to sync the browser's default tab action with the user's current
   // navigation position.
-  cvox.ChromeVoxUserCommands.removeTabDummySpan();
+  cvox.ChromeVoxUserCommands.removeTabEmptySpan();
 
   if (!cvox.ChromeVoxEventSuspender.areEventsSuspended()) {
     cvox.ChromeVoxEventWatcher.addEvent(evt);

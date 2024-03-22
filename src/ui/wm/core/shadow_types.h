@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -18,6 +18,9 @@ constexpr int kShadowElevationDefault = -1;
 // Different types of drop shadows that can be drawn under a window by the
 // shell. Used as a value for the kShadowElevationKey property.
 constexpr int kShadowElevationNone = 0;
+
+// The shadow elevation for popups such as toasts and notifiers.
+constexpr int kShadowElevationPopup = 4;
 
 // Standard shadow elevations used by the the aura window manager. The value is
 // used to initialize an instance of wm::Shadow and controls the offset and blur

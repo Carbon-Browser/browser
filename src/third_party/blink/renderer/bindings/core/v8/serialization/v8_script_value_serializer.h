@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,12 +7,13 @@
 
 #include "base/dcheck_is_on.h"
 #include "base/memory/scoped_refptr.h"
+#include "base/types/pass_key.h"
 #include "third_party/blink/renderer/bindings/core/v8/serialization/serialization_tag.h"
 #include "third_party/blink/renderer/bindings/core/v8/serialization/serialized_color_params.h"
 #include "third_party/blink/renderer/bindings/core/v8/serialization/serialized_script_value.h"
+#include "third_party/blink/renderer/bindings/core/v8/serialization/trailer_writer.h"
 #include "third_party/blink/renderer/core/core_export.h"
 #include "third_party/blink/renderer/platform/bindings/exception_state.h"
-#include "third_party/blink/renderer/platform/bindings/script_state.h"
 #include "third_party/blink/renderer/platform/wtf/allocator/allocator.h"
 #include "third_party/blink/renderer/platform/wtf/vector.h"
 #include "v8/include/v8.h"
@@ -21,6 +22,7 @@ namespace blink {
 
 class File;
 class Transferables;
+class ScriptState;
 
 // Serializes V8 values according to the HTML structured clone algorithm:
 // https://html.spec.whatwg.org/C/#structured-clone
@@ -36,6 +38,7 @@ class CORE_EXPORT V8ScriptValueSerializer
 
  public:
   using Options = SerializedScriptValue::SerializeOptions;
+  using PassKey = base::PassKey<V8ScriptValueSerializer>;
 
   // |object_index| is for use in exceptiun messages.
   static bool ExtractTransferable(v8::Isolate*,
@@ -73,6 +76,11 @@ class CORE_EXPORT V8ScriptValueSerializer
   void WriteUnguessableToken(const base::UnguessableToken& token);
   void WriteUTF8String(const String&);
 
+  void WriteAndRequireInterfaceTag(SerializationTag tag) {
+    GetTrailerWriter().RequireExposedInterface(tag);
+    WriteTag(tag);
+  }
+
   template <typename E>
   void WriteUint32Enum(E value) {
     static_assert(
@@ -90,6 +98,8 @@ class CORE_EXPORT V8ScriptValueSerializer
   bool IsForStorage() const { return for_storage_; }
 
   const Transferables* GetTransferables() const { return transferables_; }
+
+  TrailerWriter& GetTrailerWriter() { return trailer_writer_; }
 
  private:
   // Transfer is split into two phases: scanning the transferables so that we
@@ -122,9 +132,13 @@ class CORE_EXPORT V8ScriptValueSerializer
                                size_t* actual_size) override;
   void FreeBufferMemory(void* buffer) override;
 
+  bool AdoptSharedValueConveyor(v8::Isolate* isolate,
+                                v8::SharedValueConveyor&& conveyor) override;
+
   ScriptState* script_state_;
   scoped_refptr<SerializedScriptValue> serialized_script_value_;
   v8::ValueSerializer serializer_;
+  TrailerWriter trailer_writer_;
   const Transferables* transferables_ = nullptr;
   const ExceptionState* exception_state_ = nullptr;
   WebBlobInfoArray* blob_info_array_ = nullptr;
@@ -136,7 +150,9 @@ class CORE_EXPORT V8ScriptValueSerializer
 #endif
 };
 
-// For code testing V8ScriptValueSerializer
+// For code testing V8ScriptValueSerializer. Behaves the same as
+// SerializedScriptValue::Create, except it can be called on an initializer
+// list.
 scoped_refptr<SerializedScriptValue> SerializedValue(
     const Vector<uint8_t>& bytes);
 

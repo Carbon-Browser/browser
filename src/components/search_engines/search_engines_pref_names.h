@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,11 +7,20 @@
 
 namespace prefs {
 
+extern const char kDefaultSearchProviderGUID[];
 extern const char kSyncedDefaultSearchProviderGUID[];
+extern const char kDefaultSearchProviderChoicePending[];
+extern const char kDefaultSearchProviderChoiceScreenCompletionTimestamp[];
+extern const char kDefaultSearchProviderChoiceScreenCompletionVersion[];
+extern const char kDefaultSearchProviderChoiceScreenRandomShuffleSeed[];
+extern const char kDefaultSearchProviderChoiceScreenShuffleMilestone[];
 extern const char kDefaultSearchProviderContextMenuAccessAllowed[];
+extern const char kDefaultSearchProviderKeywordsUseExtendedList[];
 extern const char kDefaultSearchProviderEnabled[];
 extern const char kSearchProviderOverrides[];
 extern const char kSearchProviderOverridesVersion[];
+extern const char kSearchEnginesChoiceProfile[];
+extern const char kSearchEnginesStudyGroup[];
 
 }  // namespace prefs
 

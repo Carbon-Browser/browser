@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -77,7 +77,7 @@ class SecurityStateTabHelperHistogramTest
   void NavigateToHTTPS() { NavigateAndCommit(GURL("https://example.test")); }
 
  private:
-  raw_ptr<SecurityStateTabHelper> helper_;
+  raw_ptr<SecurityStateTabHelper, DanglingUntriaged> helper_;
 };
 
 TEST_F(SecurityStateTabHelperHistogramTest, FormSubmissionHistogram) {

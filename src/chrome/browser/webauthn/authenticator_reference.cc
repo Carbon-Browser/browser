@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,9 +6,9 @@
 
 AuthenticatorReference::AuthenticatorReference(
     base::StringPiece authenticator_id,
-    device::FidoTransportProtocol transport)
-    : authenticator_id(authenticator_id),
-      transport(transport) {}
+    device::FidoTransportProtocol transport,
+    device::AuthenticatorType type)
+    : authenticator_id(authenticator_id), transport(transport), type(type) {}
 
 AuthenticatorReference::AuthenticatorReference(AuthenticatorReference&& data) =
     default;

@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,7 +11,9 @@
 namespace remote_cocoa {
 
 ApplicationHost::ApplicationHost(
-    mojo::PendingAssociatedReceiver<mojom::Application>* receiver) {
+    mojo::PendingAssociatedReceiver<mojom::Application>* receiver,
+    const std::string& bundle_id)
+    : bundle_id_(bundle_id) {
   *receiver = application_remote_.BindNewEndpointAndPassReceiver();
 }
 

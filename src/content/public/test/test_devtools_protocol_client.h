@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,7 +9,9 @@
 #include <string>
 #include <utility>
 #include <vector>
-#include "base/callback.h"
+
+#include "base/functional/callback.h"
+#include "base/functional/function_ref.h"
 #include "base/values.h"
 #include "content/public/browser/devtools_agent_host.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
@@ -31,18 +33,19 @@ class TestDevToolsProtocolClient : public DevToolsAgentHostClient {
     return SendSessionCommand(method, std::move(params), std::string(), wait);
   }
 
-  // DEPRECATED! Use the overload above.
-  const base::Value::Dict* SendCommand(
-      std::string method,
-      std::unique_ptr<base::DictionaryValue> params,
-      bool wait = true) {
-    base::Value::Dict params_dict;
-    if (params) {
-      params_dict = std::move(
-          base::Value::FromUniquePtrValue(std::move(params)).GetDict());
-    }
-    return SendSessionCommand(std::move(method), std::move(params_dict),
-                              std::string(), wait);
+  const base::Value::Dict* SendCommandSync(std::string method) {
+    return SendCommand(std::move(method), base::Value::Dict(), true);
+  }
+  const base::Value::Dict* SendCommandSync(std::string method,
+                                           base::Value::Dict params) {
+    return SendCommand(std::move(method), std::move(params), true);
+  }
+  const base::Value::Dict* SendCommandAsync(std::string method) {
+    return SendCommand(std::move(method), base::Value::Dict(), false);
+  }
+  const base::Value::Dict* SendCommandAsync(std::string method,
+                                            base::Value::Dict params) {
+    return SendCommand(std::move(method), std::move(params), false);
   }
 
   const base::Value::Dict* SendSessionCommand(const std::string method,
@@ -51,6 +54,7 @@ class TestDevToolsProtocolClient : public DevToolsAgentHostClient {
                                               bool wait);
 
   void AttachToWebContents(WebContents* web_contents);
+  void AttachToTabTarget(WebContents* web_contents);
   void AttachToBrowserTarget();
 
   void DetachProtocolClient() {
@@ -62,6 +66,8 @@ class TestDevToolsProtocolClient : public DevToolsAgentHostClient {
 
   bool HasExistingNotification() const { return !notifications_.empty(); }
   bool HasExistingNotification(const std::string& notification) const;
+  bool HasExistingNotificationMatching(
+      base::FunctionRef<bool(const base::Value::Dict&)> pred) const;
 
   base::Value::Dict WaitForNotification(const std::string& notification,
                                         bool allow_existing);
@@ -93,11 +99,17 @@ class TestDevToolsProtocolClient : public DevToolsAgentHostClient {
     may_read_local_files_ = may_read_local_files;
   }
 
+  void SetMayWriteLocalFiles(bool may_write_local_files) {
+    may_write_local_files_ = may_write_local_files;
+  }
+
   const base::Value::Dict* result() const;
   const base::Value::Dict* error() const;
   int received_responses_count() const { return received_responses_count_; }
 
   scoped_refptr<DevToolsAgentHost> agent_host_;
+
+  void SetProtocolCommandId(int id) { last_sent_id_ = id - 1; }
 
  private:
   void WaitForResponse();
@@ -110,6 +122,7 @@ class TestDevToolsProtocolClient : public DevToolsAgentHostClient {
   bool AllowUnsafeOperations() override;
   bool IsTrusted() override;
   bool MayReadLocalFiles() override;
+  bool MayWriteLocalFiles() override;
 
   int last_sent_id_ = 0;
   int waiting_for_command_result_id_ = 0;
@@ -129,6 +142,7 @@ class TestDevToolsProtocolClient : public DevToolsAgentHostClient {
   bool is_trusted_ = true;
   absl::optional<url::Origin> navigation_initiator_origin_;
   bool may_read_local_files_ = true;
+  bool may_write_local_files_ = true;
 };
 
 }  // namespace content

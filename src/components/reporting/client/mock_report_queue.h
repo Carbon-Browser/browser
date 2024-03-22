@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,7 +8,7 @@
 #include <memory>
 #include <string>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "components/reporting/client/report_queue.h"
 #include "components/reporting/proto/synced/record.pb.h"
 #include "components/reporting/proto/synced/record_constants.pb.h"
@@ -43,6 +43,8 @@ class MockReportQueueStrict : public ReportQueue {
       PrepareToAttachActualQueue,
       (),
       (const override));
+
+  MOCK_METHOD(Destination, GetDestination, (), (const override));
 
  private:
   // Helper method that executes |record_producer| and in case of success

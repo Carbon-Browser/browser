@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,9 +7,12 @@
 #include <string>
 
 #include "ash/constants/notifier_catalogs.h"
+#include "ash/public/cpp/holding_space/holding_space_item.h"
 #include "ash/public/cpp/notification_utils.h"
-#include "base/callback_helpers.h"
+#include "ash/webui/settings/public/constants/routes.mojom.h"
 #include "base/files/file_util.h"
+#include "base/functional/callback_helpers.h"
+#include "base/memory/raw_ptr.h"
 #include "base/notreached.h"
 #include "base/strings/strcat.h"
 #include "base/strings/string_number_conversions.h"
@@ -18,6 +21,7 @@
 #include "base/task/task_traits.h"
 #include "base/task/thread_pool.h"
 #include "base/time/time.h"
+#include "build/branding_buildflags.h"
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
 #include "chrome/app/vector_icons/vector_icons.h"
@@ -26,8 +30,8 @@
 #include "chrome/browser/nearby_sharing/common/nearby_share_enums.h"
 #include "chrome/browser/nearby_sharing/common/nearby_share_features.h"
 #include "chrome/browser/nearby_sharing/common/nearby_share_prefs.h"
-#include "chrome/browser/nearby_sharing/logging/logging.h"
-#include "chrome/browser/nearby_sharing/nearby_share_metrics_logger.h"
+#include "chrome/browser/nearby_sharing/common/nearby_share_resource_getter.h"
+#include "chrome/browser/nearby_sharing/nearby_share_metrics.h"
 #include "chrome/browser/nearby_sharing/nearby_sharing_service.h"
 #include "chrome/browser/notifications/notification_display_service.h"
 #include "chrome/browser/platform_util.h"
@@ -35,17 +39,22 @@
 #include "chrome/browser/ui/ash/holding_space/holding_space_keyed_service.h"
 #include "chrome/browser/ui/ash/holding_space/holding_space_keyed_service_factory.h"
 #include "chrome/browser/ui/settings_window_manager_chromeos.h"
-#include "chrome/browser/ui/webui/settings/chromeos/constants/routes.mojom.h"
 #include "chrome/grit/generated_resources.h"
+#include "components/cross_device/logging/logging.h"
 #include "components/prefs/pref_service.h"
 #include "content/public/browser/browser_thread.h"
 #include "content/public/browser/download_manager.h"
 #include "ui/base/clipboard/clipboard_buffer.h"
 #include "ui/base/clipboard/scoped_clipboard_writer.h"
 #include "ui/base/l10n/l10n_util.h"
+#include "ui/chromeos/styles/cros_tokens_color_mappings.h"
 #include "ui/message_center/public/cpp/notification.h"
 #include "ui/message_center/public/cpp/notification_types.h"
 #include "ui/strings/grit/ui_strings.h"
+
+#if BUILDFLAG(GOOGLE_CHROME_BRANDING)
+#include "chrome/browser/nearby_sharing/internal/icons/vector_icons.h"
+#endif  // BUILDFLAG(GOOGLE_CHROME_BRANDING)
 
 namespace {
 
@@ -61,7 +70,7 @@ constexpr char kNearbyNotifier[] = "nearby";
 
 std::string CreateNotificationIdForShareTarget(
     const ShareTarget& share_target) {
-  if (base::FeatureList::IsEnabled(features::kNearbySharingSelfShareUI)) {
+  if (base::FeatureList::IsEnabled(features::kNearbySharingSelfShare)) {
     return std::string(kNearbyTransferResultNotificationIdPrefix) +
            share_target.id.ToString();
   } else {
@@ -76,7 +85,10 @@ message_center::Notification CreateNearbyNotification(const std::string& id) {
       /*title=*/std::u16string(),
       /*message=*/std::u16string(),
       /*icon=*/ui::ImageModel(),
-      l10n_util::GetStringUTF16(IDS_NEARBY_NOTIFICATION_SOURCE),
+      features::IsNameEnabled()
+          ? NearbyShareResourceGetter::GetInstance()->GetStringWithFeatureName(
+                IDS_NEARBY_NOTIFICATION_SOURCE_PH)
+          : l10n_util::GetStringUTF16(IDS_NEARBY_NOTIFICATION_SOURCE),
       /*origin_url=*/GURL(),
       message_center::NotifierId(message_center::NotifierType::SYSTEM_COMPONENT,
                                  kNearbyNotifier,
@@ -84,8 +96,17 @@ message_center::Notification CreateNearbyNotification(const std::string& id) {
       /*optional_fields=*/{},
       /*delegate=*/nullptr);
 
-  notification.set_accent_color(ash::kSystemNotificationColorNormal);
+  notification.set_accent_color_id(cros_tokens::kCrosSysPrimary);
+#if BUILDFLAG(GOOGLE_CHROME_BRANDING)
+  if (features::IsNameEnabled()) {
+    notification.set_vector_small_image(kNearbyShareInternalIcon);
+  } else {
+    notification.set_vector_small_image(kNearbyShareIcon);
+  }
+#else   // !BUILDFLAG(GOOGLE_CHROME_BRANDING)
   notification.set_vector_small_image(kNearbyShareIcon);
+#endif  // !BUILDFLAG(GOOGLE_CHROME_BRANDING)
+
   notification.set_settings_button_handler(
       message_center::SettingsButtonHandler::DELEGATE);
 
@@ -222,9 +243,7 @@ std::u16string FormatNotificationTitle(const ShareTarget& share_target,
   size_t attachment_count = share_target.file_attachments.size() +
                             share_target.text_attachments.size();
 
-  if (!share_target.wifi_credentials_attachments.empty() &&
-      base::FeatureList::IsEnabled(
-          features::kNearbySharingReceiveWifiCredentials)) {
+  if (!share_target.wifi_credentials_attachments.empty()) {
     std::u16string network_name =
         base::UTF8ToUTF16(share_target.wifi_credentials_attachments[0].ssid());
     return base::ReplaceStringPlaceholders(
@@ -238,9 +257,7 @@ std::u16string FormatNotificationTitle(const ShareTarget& share_target,
 }
 
 std::u16string GetProgressNotificationTitle(const ShareTarget& share_target) {
-  if (!share_target.wifi_credentials_attachments.empty() &&
-      base::FeatureList::IsEnabled(
-          features::kNearbySharingReceiveWifiCredentials)) {
+  if (!share_target.wifi_credentials_attachments.empty()) {
     return FormatNotificationTitle(
         share_target,
         IDS_NEARBY_NOTIFICATION_RECEIVE_PROGRESS_TITLE_WIFI_CREDENTIALS,
@@ -256,9 +273,7 @@ std::u16string GetProgressNotificationTitle(const ShareTarget& share_target) {
 }
 
 std::u16string GetSuccessNotificationTitle(const ShareTarget& share_target) {
-  if (!share_target.wifi_credentials_attachments.empty() &&
-      base::FeatureList::IsEnabled(
-          features::kNearbySharingReceiveWifiCredentials)) {
+  if (!share_target.wifi_credentials_attachments.empty()) {
     return FormatNotificationTitle(
         share_target,
         IDS_NEARBY_NOTIFICATION_RECEIVE_SUCCESS_TITLE_WIFI_CREDENTIALS,
@@ -273,9 +288,7 @@ std::u16string GetSuccessNotificationTitle(const ShareTarget& share_target) {
 }
 
 std::u16string GetFailureNotificationTitle(const ShareTarget& share_target) {
-  if (!share_target.wifi_credentials_attachments.empty() &&
-      base::FeatureList::IsEnabled(
-          features::kNearbySharingReceiveWifiCredentials)) {
+  if (!share_target.wifi_credentials_attachments.empty()) {
     return FormatNotificationTitle(
         share_target,
         IDS_NEARBY_NOTIFICATION_RECEIVE_FAILURE_TITLE_WIFI_CREDENTIALS,
@@ -313,9 +326,7 @@ std::u16string GetConnectionRequestNotificationMessage(
   size_t attachment_count = share_target.file_attachments.size() +
                             share_target.text_attachments.size();
   std::u16string message;
-  if (!share_target.wifi_credentials_attachments.empty() &&
-      base::FeatureList::IsEnabled(
-          features::kNearbySharingReceiveWifiCredentials)) {
+  if (!share_target.wifi_credentials_attachments.empty()) {
     message = base::ReplaceStringPlaceholders(
         l10n_util::GetStringUTF16(
             IDS_NEARBY_NOTIFICATION_CONNECTION_REQUEST_MESSAGE_WIFI_CREDENTIALS),
@@ -336,6 +347,17 @@ std::u16string GetConnectionRequestNotificationMessage(
   }
 
   return message;
+}
+
+absl::optional<std::u16string> GetReceivedNotificationTextMessage(
+    const ShareTarget& share_target) {
+  size_t text_count = share_target.text_attachments.size();
+  if (text_count < 1) {
+    return absl::nullopt;
+  }
+
+  const TextAttachment& attachment = share_target.text_attachments[0];
+  return base::UTF8ToUTF16(attachment.GetDescription());
 }
 
 ui::ImageModel GetImageFromShareTarget(const ShareTarget& share_target) {
@@ -405,7 +427,7 @@ class ProgressNotificationDelegate : public NearbyNotificationDelegate {
   }
 
  private:
-  NearbyNotificationManager* manager_;
+  raw_ptr<NearbyNotificationManager, ExperimentalAsh> manager_;
   bool awaiting_remote_acceptance_ = false;
 };
 
@@ -442,7 +464,7 @@ class ConnectionRequestNotificationDelegate
   }
 
  private:
-  NearbyNotificationManager* manager_;
+  raw_ptr<NearbyNotificationManager, ExperimentalAsh> manager_;
 };
 
 class ReceivedImageDecoder : public ImageDecoder::ImageRequest {
@@ -484,7 +506,7 @@ class ReceivedImageDecoder : public ImageDecoder::ImageRequest {
   void OnFileRead(std::unique_ptr<std::string> contents,
                   bool is_contents_read) {
     if (!is_contents_read || !contents || contents->empty()) {
-      NS_LOG(VERBOSE) << __func__ << ": Image contents not found.";
+      CD_LOG(VERBOSE, Feature::NS) << __func__ << ": Image contents not found.";
       OnDecodeImageFailed();
       return;
     }
@@ -619,8 +641,8 @@ class SuccessNotificationDelegate : public NearbyNotificationDelegate {
     }
   }
 
-  NearbyNotificationManager* manager_;
-  Profile* profile_;
+  raw_ptr<NearbyNotificationManager, ExperimentalAsh> manager_;
+  raw_ptr<Profile, ExperimentalAsh> profile_;
   ShareTarget share_target_;
   NearbyNotificationManager::ReceivedContentType type_;
   SkBitmap image_;
@@ -662,23 +684,15 @@ class NearbyDeviceTryingToShareNotificationDelegate
   }
 
  private:
-  NearbyNotificationManager* manager_;
+  raw_ptr<NearbyNotificationManager, ExperimentalAsh> manager_;
 };
-
-bool IsVisibilityReminderEnabled() {
-  return base::FeatureList::IsEnabled(
-      features::kNearbySharingVisibilityReminder);
-}
 
 class NearbyVisibilityReminderNotificationDelegate
     : public NearbyNotificationDelegate {
  public:
   explicit NearbyVisibilityReminderNotificationDelegate(
       NearbyNotificationManager* manager)
-      : manager_(manager) {
-    // Make sure the delegate is only created when the feature flag is enabled.
-    DCHECK(IsVisibilityReminderEnabled());
-  }
+      : manager_(manager) {}
 
   ~NearbyVisibilityReminderNotificationDelegate() override = default;
 
@@ -708,7 +722,7 @@ class NearbyVisibilityReminderNotificationDelegate
   }
 
  private:
-  NearbyNotificationManager* manager_;
+  raw_ptr<NearbyNotificationManager, ExperimentalAsh> manager_;
 };
 
 bool ShouldShowNearbyDeviceTryingToShareNotification(
@@ -721,8 +735,9 @@ bool ShouldShowNearbyDeviceTryingToShareNotification(
   base::TimeDelta last_dismissed_delta = base::Time::Now() - last_dismissed;
   if (last_dismissed_delta <
       NearbyNotificationManager::kNearbyDeviceTryingToShareDismissedTimeout) {
-    NS_LOG(VERBOSE) << "Not showing onboarding notification: the user recently "
-                       "dismissed the notification.";
+    CD_LOG(VERBOSE, Feature::NS)
+        << "Not showing onboarding notification: the user recently "
+           "dismissed the notification.";
     return false;
   }
 
@@ -838,12 +853,12 @@ void NearbyNotificationManager::OnTransferUpdate(
         ShowProgress(share_target, transfer_metadata);
       break;
     case TransferMetadata::Status::kAwaitingLocalConfirmation:
-      if (base::FeatureList::IsEnabled(
-              features::kNearbySharingSelfShareAutoAccept)) {
+      if (base::FeatureList::IsEnabled(features::kNearbySharingSelfShare)) {
         // Only incoming transfers are handled via notifications.
-        // Don't show notification for self shares since we will auto-accept.
-        if (share_target.is_incoming && !share_target.for_self_share)
+        // Don't show notification for auto-accept self shares.
+        if (share_target.is_incoming && !share_target.CanAutoAccept()) {
           ShowConnectionRequest(share_target, transfer_metadata);
+        }
       } else {
         // Only incoming transfers are handled via notifications.
         if (share_target.is_incoming)
@@ -958,8 +973,12 @@ void NearbyNotificationManager::ShowConnectionRequest(
 
   message_center::Notification notification =
       CreateNearbyNotification(kNearbyInProgressNotificationId);
-  notification.set_title(l10n_util::GetStringUTF16(
-      IDS_NEARBY_NOTIFICATION_CONNECTION_REQUEST_TITLE));
+  notification.set_title(
+      features::IsNameEnabled()
+          ? NearbyShareResourceGetter::GetInstance()->GetStringWithFeatureName(
+                IDS_NEARBY_NOTIFICATION_CONNECTION_REQUEST_TITLE_PH)
+          : l10n_util::GetStringUTF16(
+                IDS_NEARBY_NOTIFICATION_CONNECTION_REQUEST_TITLE));
   notification.set_message(
       GetConnectionRequestNotificationMessage(share_target, transfer_metadata));
   notification.set_icon(GetImageFromShareTarget(share_target));
@@ -986,6 +1005,8 @@ void NearbyNotificationManager::ShowNearbyDeviceTryingToShare() {
   if (!ShouldShowNearbyDeviceTryingToShareNotification(pref_service_))
     return;
 
+  CD_LOG(INFO, Feature::NS) << "Showing fast initiation notification.";
+
   message_center::Notification notification =
       CreateNearbyNotification(kNearbyDeviceTryingToShareNotificationId);
 
@@ -994,9 +1015,18 @@ void NearbyNotificationManager::ShowNearbyDeviceTryingToShare() {
 
   notification.set_title(
       l10n_util::GetStringUTF16(IDS_NEARBY_NOTIFICATION_ONBOARDING_TITLE));
-  notification.set_message(l10n_util::GetStringUTF16(
-      is_onboarding_complete ? IDS_NEARBY_NOTIFICATION_GO_VISIBLE_MESSAGE
-                             : IDS_NEARBY_NOTIFICATION_ONBOARDING_MESSAGE));
+
+  const std::u16string onboarding_message =
+      features::IsNameEnabled()
+          ? NearbyShareResourceGetter::GetInstance()->GetStringWithFeatureName(
+                IDS_NEARBY_NOTIFICATION_ONBOARDING_MESSAGE_PH)
+          : l10n_util::GetStringUTF16(
+                IDS_NEARBY_NOTIFICATION_ONBOARDING_MESSAGE);
+
+  notification.set_message(is_onboarding_complete
+                               ? l10n_util::GetStringUTF16(
+                                     IDS_NEARBY_NOTIFICATION_GO_VISIBLE_MESSAGE)
+                               : onboarding_message);
 
   std::vector<message_center::ButtonInfo> notification_actions;
   notification_actions.emplace_back(l10n_util::GetStringUTF16(
@@ -1083,10 +1113,16 @@ void NearbyNotificationManager::ShowIncomingSuccess(
 
   std::vector<message_center::ButtonInfo> notification_actions;
   switch (type) {
-    case ReceivedContentType::kText:
+    case ReceivedContentType::kText: {
       notification_actions.emplace_back(l10n_util::GetStringUTF16(
           IDS_NEARBY_NOTIFICATION_ACTION_COPY_TO_CLIPBOARD));
+      absl::optional<std::u16string> message =
+          GetReceivedNotificationTextMessage(share_target);
+      if (message) {
+        notification.set_message(message.value());
+      }
       break;
+    }
     case ReceivedContentType::kSingleUrl:
       notification_actions.emplace_back(
           l10n_util::GetStringUTF16(IDS_NEARBY_NOTIFICATION_ACTION_OPEN_URL));
@@ -1122,7 +1158,9 @@ void NearbyNotificationManager::ShowIncomingSuccess(
   if (holding_space_keyed_service) {
     for (const auto& file : share_target.file_attachments) {
       if (file.file_path().has_value())
-        holding_space_keyed_service->AddNearbyShare(file.file_path().value());
+        holding_space_keyed_service->AddItemOfType(
+            ash::HoldingSpaceItem::Type::kNearbyShare,
+            file.file_path().value());
     }
   }
 }
@@ -1173,8 +1211,9 @@ void NearbyNotificationManager::ShowCancelled(const ShareTarget& share_target) {
 void NearbyNotificationManager::ShowVisibilityReminder() {
   DCHECK_CURRENTLY_ON(content::BrowserThread::UI);
 
-  DCHECK(IsVisibilityReminderEnabled());
-  DCHECK(ShouldShowNearbyVisibilityReminderNotification(pref_service_));
+  if (!ShouldShowNearbyVisibilityReminderNotification(pref_service_)) {
+    return;
+  }
 
   message_center::Notification notification =
       CreateNearbyNotification(kNearbyVisibilityReminderNotificationId);

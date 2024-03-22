@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,6 +6,8 @@
  * @fileoverview Translates text to braille, optionally with some parts
  * uncontracted.
  */
+import {Spannable} from '../../common/spannable.js';
+
 import {LibLouis} from './liblouis.js';
 import {BrailleTextStyleSpan, ExtraCellsSpan, ValueSelectionSpan, ValueSpan} from './spans.js';
 
@@ -144,7 +146,9 @@ export class ExpandingBrailleTranslator {
             text.toString().substring(chunk.start, chunk.end),
             formTypeMap.slice(chunk.start, chunk.end),
             ExpandingBrailleTranslator.nullParamsToEmptyAdapter_(
-                chunk.end - chunk.start, chunkTranslated.bind(null, chunk)));
+                chunk.end - chunk.start,
+                (cells, textToBraille, brailleToText) => chunkTranslated(
+                    chunk, cells, textToBraille, brailleToText)));
       });
     } else {
       finish();

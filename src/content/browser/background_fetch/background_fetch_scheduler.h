@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,8 +10,8 @@
 #include <utility>
 #include <vector>
 
-#include "base/callback.h"
 #include "base/containers/circular_deque.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "content/browser/background_fetch/background_fetch_data_manager_observer.h"
@@ -46,7 +46,7 @@ class CONTENT_EXPORT BackgroundFetchScheduler
       BackgroundFetchDataManager* data_manager,
       BackgroundFetchRegistrationNotifier* registration_notifier,
       BackgroundFetchDelegateProxy* delegate_proxy,
-      DevToolsBackgroundServicesContextImpl* devtools_context,
+      DevToolsBackgroundServicesContextImpl& devtools_context,
       scoped_refptr<ServiceWorkerContextWrapper> service_worker_context);
 
   BackgroundFetchScheduler(const BackgroundFetchScheduler&) = delete;
@@ -96,6 +96,9 @@ class CONTENT_EXPORT BackgroundFetchScheduler
                              const GURL& pattern,
                              const blink::StorageKey& key) override;
   void OnStorageWiped() override;
+
+  // Called by BackgroundFetchContext during shutdown.
+  void Shutdown();
 
  private:
   friend class BackgroundFetchJobControllerTest;
@@ -164,9 +167,9 @@ class CONTENT_EXPORT BackgroundFetchScheduler
       std::map<std::string, std::string> metadata = {});
 
   // Owned by BackgroundFetchContext.
-  raw_ptr<BackgroundFetchDataManager> data_manager_;
+  raw_ptr<BackgroundFetchDataManager, DanglingUntriaged> data_manager_;
   raw_ptr<BackgroundFetchRegistrationNotifier> registration_notifier_;
-  raw_ptr<BackgroundFetchDelegateProxy> delegate_proxy_;
+  raw_ptr<BackgroundFetchDelegateProxy, DanglingUntriaged> delegate_proxy_;
   raw_ptr<DevToolsBackgroundServicesContextImpl> devtools_context_;
 
   BackgroundFetchEventDispatcher event_dispatcher_;

@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,7 +11,7 @@ var testTab = null;
 function compareSenders(expected, actual) {
   // documentId is a unique ID so we can't assume anything about it, just
   // that it is provided.
-  chrome.test.assertTrue(actual.documentId != undefined);
+  chrome.test.assertNe(undefined, actual.documentId);
   chrome.test.assertEq('active', actual.documentLifecycle);
   chrome.test.assertEq(expected.frameId, actual.frameId);
   chrome.test.assertEq(expected.url, actual.url);
@@ -23,7 +23,6 @@ function createExpectedSender(frameId, url) {
   return {frameId: frameId, url: url};
 }
 
-var mparchEnabled;
 var serverOrigin;
 var serverURL;
 
@@ -54,8 +53,7 @@ var tests = [
       });
     });
     await messagePromise;
-    expectedSender = createExpectedSender(
-        mparchEnabled ? 5 : 4, serverURL + 'fenced_frame.html');
+    expectedSender = createExpectedSender(5, serverURL + 'fenced_frame.html');
     compareSenders(expectedSender, actualSender);
     chrome.test.succeed();
   },
@@ -78,7 +76,6 @@ var tests = [
 ];
 
 chrome.test.getConfig(async (config) => {
-  mparchEnabled = config.customArg == 'MPArch';
   serverOrigin = `http://localhost:${config.testServer.port}`;
   serverURL = serverOrigin + '/extensions/api_test/messaging/'
                            + 'connect_fenced_frames/';

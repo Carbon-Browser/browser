@@ -1,4 +1,4 @@
-# Copyright (c) 2012 The Chromium Authors. All rights reserved.
+# Copyright 2012 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -34,7 +34,7 @@ def ReverseBytes(byte_string):
   """
   assert len(byte_string) % 2 == 0, byte_string
   return ''.join([byte_string[i - 2 : i]
-                  for i in xrange(len(byte_string), 0, -2)])
+                  for i in range(len(byte_string), 0, -2)])
 
 
 def GetProgCtrString(connection, arch):

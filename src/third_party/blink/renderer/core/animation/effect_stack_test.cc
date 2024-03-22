@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -17,6 +17,7 @@
 #include "third_party/blink/renderer/core/animation/keyframe_effect_model.h"
 #include "third_party/blink/renderer/core/animation/pending_animations.h"
 #include "third_party/blink/renderer/core/animation/string_keyframe.h"
+#include "third_party/blink/renderer/core/css/properties/longhands.h"
 #include "third_party/blink/renderer/core/execution_context/security_context.h"
 #include "third_party/blink/renderer/core/html/html_element.h"
 #include "third_party/blink/renderer/core/testing/page_test_base.h"
@@ -33,7 +34,7 @@ class AnimationEffectStackTest : public PageTestBase {
     PageTestBase::SetUp(gfx::Size());
     GetDocument().GetAnimationClock().ResetTimeForTesting();
     timeline = GetDocument().Timeline();
-    element = GetDocument().CreateElementForBinding("foo");
+    element = GetDocument().CreateElementForBinding(AtomicString("foo"));
   }
 
   Animation* Play(KeyframeEffect* effect, double start_time) {
@@ -75,7 +76,7 @@ class AnimationEffectStackTest : public PageTestBase {
     Timing timing;
     timing.fill_mode = Timing::FillMode::BOTH;
     return MakeGarbageCollected<InertEffect>(
-        effect, timing, false, AnimationTimeDelta(), absl::nullopt, 1.0);
+        effect, timing, animation_test_helpers::TestAnimationProxy());
   }
 
   KeyframeEffect* MakeKeyframeEffect(KeyframeEffectModelBase* effect,
@@ -300,7 +301,7 @@ TEST_F(AnimationEffectStackTest, AffectedPropertiesDefaultPriority) {
 
   EXPECT_TRUE(
       effect_stack.AffectedProperties(KeyframeEffect::kTransitionPriority)
-          .IsEmpty());
+          .empty());
 
   auto set = effect_stack.AffectedProperties(KeyframeEffect::kDefaultPriority);
   ASSERT_EQ(3u, set.size());
@@ -323,7 +324,7 @@ TEST_F(AnimationEffectStackTest, AffectedPropertiesTransitionPriority) {
       body->GetElementAnimations()->GetEffectStack();
 
   EXPECT_TRUE(effect_stack.AffectedProperties(KeyframeEffect::kDefaultPriority)
-                  .IsEmpty());
+                  .empty());
 
   auto set =
       effect_stack.AffectedProperties(KeyframeEffect::kTransitionPriority);

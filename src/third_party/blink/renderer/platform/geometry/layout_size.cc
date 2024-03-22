@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,17 +9,14 @@
 
 namespace blink {
 
-std::ostream& operator<<(std::ostream& ostream, const LayoutSize& size) {
+std::ostream& operator<<(std::ostream& ostream,
+                         const DeprecatedLayoutSize& size) {
   return ostream << size.ToString();
 }
 
-String LayoutSize::ToString() const {
+String DeprecatedLayoutSize::ToString() const {
   return String::Format("%sx%s", Width().ToString().Ascii().c_str(),
                         Height().ToString().Ascii().c_str());
-}
-
-WTF::TextStream& operator<<(WTF::TextStream& ts, const LayoutSize& size) {
-  return ts << gfx::SizeF(size).ToString();
 }
 
 }  // namespace blink

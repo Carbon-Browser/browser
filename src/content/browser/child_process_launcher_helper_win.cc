@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -27,8 +27,8 @@ void ChildProcessLauncherHelper::BeforeLaunchOnClientThread() {
 }
 
 absl::optional<mojo::NamedPlatformChannel>
-ChildProcessLauncherHelper::CreateNamedPlatformChannelOnClientThread() {
-  DCHECK(client_task_runner_->RunsTasksInCurrentSequence());
+ChildProcessLauncherHelper::CreateNamedPlatformChannelOnLauncherThread() {
+  DCHECK(CurrentlyOnProcessLauncherTaskRunner());
 
   if (!delegate_->ShouldLaunchElevated())
     return absl::nullopt;
@@ -42,6 +42,10 @@ ChildProcessLauncherHelper::CreateNamedPlatformChannelOnClientThread() {
 std::unique_ptr<FileMappedForLaunch>
 ChildProcessLauncherHelper::GetFilesToMap() {
   return nullptr;
+}
+
+bool ChildProcessLauncherHelper::IsUsingLaunchOptions() {
+  return true;
 }
 
 bool ChildProcessLauncherHelper::BeforeLaunchOnLauncherThread(
@@ -59,14 +63,14 @@ bool ChildProcessLauncherHelper::BeforeLaunchOnLauncherThread(
 
 ChildProcessLauncherHelper::Process
 ChildProcessLauncherHelper::LaunchProcessOnLauncherThread(
-    const base::LaunchOptions& options,
+    const base::LaunchOptions* options,
     std::unique_ptr<FileMappedForLaunch> files_to_register,
     bool* is_synchronous_launch,
     int* launch_result) {
   DCHECK(CurrentlyOnProcessLauncherTaskRunner());
   *is_synchronous_launch = true;
   if (delegate_->ShouldLaunchElevated()) {
-    DCHECK(options.elevated);
+    DCHECK(options->elevated);
     // When establishing a Mojo connection, the pipe path has already been added
     // to the command line.
     base::LaunchOptions win_options;
@@ -81,13 +85,13 @@ ChildProcessLauncherHelper::LaunchProcessOnLauncherThread(
   ChildProcessLauncherHelper::Process process;
   *launch_result =
       StartSandboxedProcess(delegate_.get(), *command_line(),
-                            options.handles_to_inherit, &process.process);
+                            options->handles_to_inherit, &process.process);
   return process;
 }
 
 void ChildProcessLauncherHelper::AfterLaunchOnLauncherThread(
     const ChildProcessLauncherHelper::Process& process,
-    const base::LaunchOptions& options) {
+    const base::LaunchOptions* options) {
   DCHECK(CurrentlyOnProcessLauncherTaskRunner());
 }
 
@@ -116,10 +120,12 @@ void ChildProcessLauncherHelper::ForceNormalProcessTerminationSync(
 
 void ChildProcessLauncherHelper::SetProcessPriorityOnLauncherThread(
     base::Process process,
-    const ChildProcessLauncherPriority& priority) {
+    base::Process::Priority priority) {
   DCHECK(CurrentlyOnProcessLauncherTaskRunner());
-  if (process.CanBackgroundProcesses())
-    process.SetProcessBackgrounded(priority.is_background());
+  if (process.CanSetPriority() && priority_ != priority) {
+    priority_ = priority;
+    process.SetPriority(priority);
+  }
 }
 
 }  // namespace internal

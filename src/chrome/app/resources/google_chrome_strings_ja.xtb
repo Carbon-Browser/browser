@@ -1,407 +1,496 @@
 <?xml version="1.0" ?>
 <!DOCTYPE translationbundle>
 <translationbundle lang="ja">
-<translation id="1001534784610492198">インストーラー アーカイブが壊れているか無効です。Carbon Browser Browser をダウンロードし直してください。</translation>
+<translation id="1001534784610492198">インストーラー アーカイブが壊れているか無効です。Carbon Browser をダウンロードし直してください。</translation>
 <translation id="1026101648481255140">インストールを再開</translation>
-<translation id="102763973188675173">Carbon Browser Browser をカスタマイズしてご活用ください。アップデートが利用可能です。</translation>
-<translation id="1051826050538111504">お使いのパソコンに有害なソフトウェアが見つかりました。Carbon Browser Browser では、ブラウザを正常な動作に戻すためにこのソフトウェアを削除し、設定を復元して、拡張機能を無効化することができます。</translation>
+<translation id="102763973188675173">Carbon Browser をカスタマイズしてご活用ください。アップデートが利用可能です。</translation>
 <translation id="1065672644894730302">ユーザー設定ファイルを読み込むことができません。一部の機能が利用できない可能性があります。また、設定への変更は保存されません。</translation>
-<translation id="1088300314857992706">Carbon Browser Browser の前回の使用者は <ph name="USER_EMAIL_ADDRESS" /> です</translation>
+<translation id="1088300314857992706">Carbon Browser の前回の使用者は <ph name="USER_EMAIL_ADDRESS" /> です</translation>
 <translation id="110877069173485804">自分好みに設定</translation>
-<translation id="1125124144982679672">Carbon Browser Browser はどなたが使用しますか？</translation>
-<translation id="1142745911746664600">Carbon Browser Browser を更新できません</translation>
-<translation id="1152920704813762236">Carbon Browser BrowserOS について</translation>
-<translation id="1154147086299354128">Carbon Browser Browser で開く(&amp;O)</translation>
-<translation id="1178374936842835197">このページに設定が表示されない場合は、<ph name="LINK_BEGIN" />
-        Carbon Browser BrowserOS Flex の設定<ph name="LINK_END" />を確認してください</translation>
+<translation id="1125124144982679672">Carbon Browser はどなたが使用しますか？</translation>
+<translation id="1142745911746664600">Carbon Browser を更新できません</translation>
+<translation id="1149651794389918149">Carbon Browser にログインしますアカウントに今回だけログインする場合は、<ph name="GUEST_LINK_BEGIN" />デバイスをゲストとして使用<ph name="GUEST_LINK_END" />できます。</translation>
+<translation id="1152920704813762236">Carbon BrowserOS について</translation>
+<translation id="1154147086299354128">Carbon Browser で開く(&amp;O)</translation>
+<translation id="1194807384646768652">このダウンロードは Carbon Browser でブロックされました。ファイル形式が一般的にダウンロードされるものではなく、危害を及ぼす可能性があります</translation>
 <translation id="1203500561924088507">インストールいただきありがとうございます。<ph name="BUNDLE_NAME" /> を使用するにはブラウザを再起動してください。</translation>
-<translation id="1278833599417554002">再起動して Carbon Browser Browser を更新(&amp;C)</translation>
-<translation id="1302523850133262269">Carbon Browser Browser は最新のシステム アップデートをインストールしています。しばらくお待ちください。</translation>
-<translation id="1335640173511558774"><ph name="MANAGER" /> では、このデバイスを使用する前に下記の利用規約を確認しこれに同意していただく必要があります。これらの規約は Carbon Browser BrowserOS Flex 利用規約を拡張、変更、制限するものではありません。</translation>
+<translation id="1278833599417554002">再起動して Carbon Browser を更新(&amp;C)</translation>
+<translation id="1302523850133262269">Carbon Browser は最新のシステム アップデートをインストールしています。しばらくお待ちください。</translation>
+<translation id="1335640173511558774"><ph name="MANAGER" /> では、このデバイスを使用する前に下記の利用規約を確認しこれに同意していただく必要があります。これらの規約は Carbon BrowserOS Flex 利用規約を拡張、変更、制限するものではありません。</translation>
+<translation id="1341711321000856656">別の Carbon Browser プロフィールに切り替えて、そのプロフィールのパスワードを表示できます</translation>
 <translation id="1363996462118479832">ログイン時にエラーが発生したため、Chrome OS はデータを同期できませんでした。</translation>
-<translation id="137466361146087520">Carbon Browser Browser ベータ版</translation>
-<translation id="1399397803214730675">新しいバージョンの Carbon Browser Browser が既にインストールされています。ソフトウェアが動作しない場合は、Carbon Browser Browser をアンインストールしてからもう一度お試しください。</translation>
-<translation id="139993653570221430">この設定は Carbon Browser Browser の設定でいつでも変更できます。テストは、現在の方法での広告配信と並行して実施されるため、すぐに変更が行われるわけではありません。</translation>
-<translation id="1434626383986940139">Carbon Browser Browser Canary アプリ</translation>
-<translation id="1507198376417198979">新しい Carbon Browser Browser プロフィールをカスタマイズ</translation>
-<translation id="1516530951338665275">Carbon Browser Browser でペアリングを続行するには、Bluetooth へのアクセスが必要です。<ph name="IDS_BLUETOOTH_DEVICE_CHOOSER_AUTHORIZE_BLUETOOTH_LINK" /></translation>
+<translation id="137466361146087520">Carbon Browser ベータ版</translation>
+<translation id="1399397803214730675">新しいバージョンの Carbon Browser が既にインストールされています。ソフトウェアが動作しない場合は、Carbon Browser をアンインストールしてからもう一度お試しください。</translation>
+<translation id="139993653570221430">この設定は Carbon Browser の設定でいつでも変更できます。テストは、現在の方法での広告配信と並行して実施されるため、すぐに変化が現れるわけではありません。</translation>
+<translation id="1425903838053942728">{COUNT,plural, =0{Carbon Browser の更新が完了しました。再起動すると最新バージョンをすぐに使用できます。その後、現在のタブが再度開きます。}=1{Carbon Browser の更新が完了しました。再起動すると最新バージョンをすぐに使用できます。その後、現在のタブが再度開きます。シークレット ウィンドウは、再起動後は自動的には開きません。}other{Carbon Browser の更新が完了しました。再起動すると最新バージョンをすぐに使用できます。その後、現在のタブが再度開きます。現在開いている # 個のシークレット ウィンドウは、再起動後は自動的には開きません。}}</translation>
+<translation id="1434626383986940139">Carbon Browser Canary アプリ</translation>
+<translation id="146866447420868597">Carbon Browser にログインしますか？</translation>
+<translation id="1492280395845991349">Carbon Browser の更新を完了するには再起動してください</translation>
+<translation id="1497802159252041924">インストール エラー: <ph name="INSTALL_ERROR" /></translation>
+<translation id="1507198376417198979">新しい Carbon Browser プロフィールをカスタマイズ</translation>
+<translation id="1516530951338665275">Carbon Browser でペアリングを続行するには、Bluetooth へのアクセスが必要です。<ph name="IDS_BLUETOOTH_DEVICE_CHOOSER_AUTHORIZE_BLUETOOTH_LINK" /></translation>
 <translation id="1547295885616600893">Chrome OS は、追加の<ph name="BEGIN_LINK_CROS_OSS" />オープンソース ソフトウェア<ph name="END_LINK_CROS_OSS" />によって実現しました。</translation>
-<translation id="1553358976309200471">Carbon Browser Browser を更新</translation>
-<translation id="1583073672411044740"><ph name="EXISTING_USER" /> さんはこの Carbon Browser Browser プロファイルにすでにログインしています。<ph name="USER_EMAIL_ADDRESS" /> 用の新しい Carbon Browser Browser プロファイルが作成されます。</translation>
-<translation id="1587223624401073077">Carbon Browser Browser がカメラを使用しています。</translation>
-<translation id="1587325591171447154"><ph name="FILE_NAME" /> は危険なファイルであるため、Carbon Browser Browser でブロックしました。</translation>
-<translation id="1597911401261118146">パスワードにデータ侵害などセキュリティに関する問題がないかどうかを確認するには、<ph name="BEGIN_LINK" />Carbon Browser Browser にログイン<ph name="END_LINK" />してください。</translation>
-<translation id="1619887657840448962">Carbon Browser Browser をより安全にご利用いただくために、<ph name="IDS_EXTENSION_WEB_STORE_TITLE" />で提供していない次の拡張機能を無効にしました。これは知らないうちに追加された可能性があります。</translation>
-<translation id="1627304841979541023"><ph name="BEGIN_BOLD" />データを管理する方法:<ph name="END_BOLD" /> ユーザーのプライバシーを保護するために、4 週間以上経過したユーザーの興味 / 関心は自動削除されます。ブラウジングを続けていると、興味 / 関心がリストに再度表示される場合もあります。Carbon Browser Browser に認識してほしくない興味 / 関心は削除できます。</translation>
-<translation id="1628000112320670027">Carbon Browser Browser のヘルプを見る</translation>
+<translation id="1553358976309200471">Carbon Browser を更新</translation>
+<translation id="1583073672411044740"><ph name="EXISTING_USER" /> さんはこの Carbon Browser プロファイルにすでにログインしています。<ph name="USER_EMAIL_ADDRESS" /> 用の新しい Carbon Browser プロファイルが作成されます。</translation>
+<translation id="1587223624401073077">Carbon Browser がカメラを使用しています。</translation>
+<translation id="1587325591171447154"><ph name="FILE_NAME" /> は危険なファイルであるため、Carbon Browser でブロックしました。</translation>
+<translation id="1597911401261118146">パスワードにデータ侵害などセキュリティに関する問題がないかどうかを確認するには、<ph name="BEGIN_LINK" />Carbon Browser にログイン<ph name="END_LINK" />してください。</translation>
+<translation id="1619887657840448962">Carbon Browser をより安全にご利用いただくために、<ph name="IDS_EXTENSION_WEB_STORE_TITLE" />で提供していない次の拡張機能を無効にしました。これは知らないうちに追加された可能性があります。</translation>
+<translation id="1627304841979541023"><ph name="BEGIN_BOLD" />データの管理方法:<ph name="END_BOLD" /> ユーザーのプライバシーを保護するため、4 週間以上経過したユーザーの興味 / 関心は自動削除されます。閲覧を続けていると、興味 / 関心がリストに再度表示される場合もあります。Carbon Browser に認識してほしくない興味 / 関心は削除できます。</translation>
+<translation id="1628000112320670027">Carbon Browser のヘルプを見る</translation>
 <translation id="1640672724030957280">ダウンロードしています...</translation>
-<translation id="1662146548738125461">Carbon Browser BrowserOS Flex について</translation>
-<translation id="1674870198290878346">Carbon Browser Browser のシークレット ウインドウでリンクを開く(&amp;G)</translation>
-<translation id="1682634494516646069">Carbon Browser Browser はこのデータ ディレクトリへの読み書きを実行できません: <ph name="USER_DATA_DIRECTORY" /></translation>
-<translation id="1698376642261615901">Carbon Browser Browser は、ウェブページやアプリケーションを高速に実行できるスピードと、高い安定性を兼ね備えた非常に使いやすいウェブブラウザです。不正なソフトウェアやフィッシングに対する保護機能が組み込まれており、ウェブを安全にブラウジングできます。</translation>
-<translation id="1713301662689114961">{0,plural, =1{Carbon Browser Browser は 1 時間後に再起動されます}other{Carbon Browser Browser は # 時間後に再起動されます}}</translation>
+<translation id="1642309806724967937">設定によっては、Carbon Browser から Cookie や現在の URL が送信されることもあります</translation>
+<translation id="1662146548738125461">Carbon BrowserOS Flex について</translation>
+<translation id="1674870198290878346">Carbon Browser のシークレット ウインドウでリンクを開く(&amp;G)</translation>
+<translation id="1682634494516646069">Carbon Browser はこのデータ ディレクトリへの読み書きを実行できません: <ph name="USER_DATA_DIRECTORY" /></translation>
+<translation id="1698376642261615901">Carbon Browser は、ウェブページやアプリケーションを高速に実行できるスピードと、高い安定性を兼ね備えた非常に使いやすいウェブブラウザです。不正なソフトウェアやフィッシングに対する保護機能が組み込まれており、ウェブを安全にブラウジングできます。</translation>
+<translation id="1713301662689114961">{0,plural, =1{Carbon Browser は 1 時間後に再起動されます}other{Carbon Browser は # 時間後に再起動されます}}</translation>
 <translation id="1734234790201236882">このパスワードは Google アカウントに保存されるため、覚えておく必要はありません。</translation>
-<translation id="1759842336958782510">Carbon Browser Browser</translation>
-<translation id="1786003790898721085"><ph name="TARGET_DEVICE_NAME" /> で Carbon Browser Browser にログインしていることを確認してから、もう一度送信してください。</translation>
-<translation id="1812689907177901597">この設定を無効にすると、Carbon Browser Browser にログインすることなく Gmail などの Google サイトにログインできます</translation>
-<translation id="1860536484129686729">このサイトを利用するには、Carbon Browser Browser でカメラの使用を許可する必要があります</translation>
-<translation id="1873233029667955273">Carbon Browser Browser はデフォルトのブラウザとして設定されていません</translation>
-<translation id="1874309113135274312">Carbon Browser Browser ベータ版（mDNS-In）</translation>
-<translation id="1877026089748256423">Carbon Browser Browser は古いバージョンです</translation>
-<translation id="1919130412786645364">Carbon Browser Browser へのログインを許可する</translation>
-<translation id="1952239763774043237">今後、Carbon Browser Browser のアップデートを受信するには、macOS 10.13 以降が必要となります。このコンピュータでは macOS 10.12 が実行されています。</translation>
+<translation id="1786003790898721085"><ph name="TARGET_DEVICE_NAME" /> で Carbon Browser にログインしていることを確認してから、もう一度送信してください。</translation>
+<translation id="1812689907177901597">この設定を無効にすると、Carbon Browser にログインすることなく Gmail などの Google サイトにログインできます</translation>
+<translation id="1860536484129686729">このサイトを利用するには、Carbon Browser でカメラの使用を許可する必要があります</translation>
+<translation id="1873233029667955273">Carbon Browser はデフォルトのブラウザとして設定されていません</translation>
+<translation id="1874309113135274312">Carbon Browser ベータ版（mDNS-In）</translation>
+<translation id="1877026089748256423">Carbon Browser は古いバージョンです</translation>
+<translation id="1919130412786645364">Carbon Browser へのログインを許可する</translation>
 <translation id="1953553007165777902">ダウンロードしています... 残り <ph name="MINUTE" /> 分です</translation>
-<translation id="2018528049276128029">Carbon Browser Browser の情報（ブックマーク、履歴、パスワードなど）はプロファイルごとに分けて保持されます</translation>
+<translation id="2018528049276128029">Carbon Browser の情報（ブックマーク、履歴、パスワードなど）はプロファイルごとに分けて保持されます</translation>
 <translation id="2018879682492276940">インストールできませんでした。もう一度お試しください。</translation>
-<translation id="2071318482926839249">別のアカウントですでにログインしています。ブラウジング環境を分ける場合は、Carbon Browser Browser で自分用のプロフィールを作成できます。</translation>
-<translation id="207902854391093810">試用期間中の広告の測定により、アクセスしたサイトは、サイトが広告のパフォーマンスを測定する際に役立つ Carbon Browser Browser の情報をリクエストできます。広告の測定は、サイト間で転送する情報をできるだけ少なくすることで、クロスサイト トラッキングを制限します。</translation>
-<translation id="2094648590148273905">Carbon Browser BrowserOS Flex 利用規約</translation>
-<translation id="2094919256425865063">今すぐ Carbon Browser Browser を終了しますか？</translation>
-<translation id="2106831557840787829">Carbon Browser BrowserOS Flex も <ph name="BEGIN_LINK_LINUX_OSS" />Linux 開発環境<ph name="END_LINK_LINUX_OSS" />も追加の<ph name="BEGIN_LINK_CROS_OSS" />オープンソース ソフトウェア<ph name="END_LINK_CROS_OSS" />によって実現しました。</translation>
-<translation id="2120620239521071941">このデバイスから <ph name="ITEMS_COUNT" /> 件の項目を削除します。後でデータを取得するには、<ph name="USER_EMAIL" /> として Carbon Browser Browser にログインしてください。</translation>
-<translation id="2121284319307530122">再起動して Carbon Browser Browser を更新(&amp;C)</translation>
-<translation id="2123055963409958220"><ph name="BEGIN_LINK" />現在の設定<ph name="END_LINK" />を送信して Carbon Browser Browser の品質向上にご協力ください</translation>
-<translation id="2131230230468101642">ユーザーのプライバシーを保護するために、4 週間以上経過したユーザーの興味 / 関心は自動削除されます。ブラウジングを続けていると、興味 / 関心がリストに再度表示される場合もあります。Carbon Browser Browser に認識してほしくない興味 / 関心は削除できます。</translation>
+<translation id="2071318482926839249">別のアカウントですでにログインしています。ブラウジング環境を分ける場合は、Carbon Browser で自分用のプロファイルを作成できます。</translation>
+<translation id="207902854391093810">試用期間中の広告の測定により、アクセスしたサイトは、サイトが広告のパフォーマンスを測定する際に役立つ Carbon Browser の情報をリクエストできます。広告の測定は、サイト間で転送する情報をできるだけ少なくすることで、クロスサイト トラッキングを制限します。</translation>
+<translation id="2091012649849228750">今後、Carbon Browser のアップデートを受信するには、Windows 10 以降が必要となります。このパソコンでは Windows 8 が実行されています。</translation>
+<translation id="2094648590148273905">Carbon BrowserOS Flex 利用規約</translation>
+<translation id="2094919256425865063">今すぐ Carbon Browser を終了しますか？</translation>
+<translation id="2106831557840787829">Carbon BrowserOS Flex も <ph name="BEGIN_LINK_LINUX_OSS" />Linux 開発環境<ph name="END_LINK_LINUX_OSS" />も追加の<ph name="BEGIN_LINK_CROS_OSS" />オープンソース ソフトウェア<ph name="END_LINK_CROS_OSS" />によって実現しました。</translation>
+<translation id="2120620239521071941">このデバイスから <ph name="ITEMS_COUNT" /> 件の項目を削除します。後でデータを取得するには、<ph name="USER_EMAIL" /> として Carbon Browser にログインしてください。</translation>
+<translation id="2121284319307530122">再起動して Carbon Browser を更新(&amp;C)</translation>
+<translation id="2123055963409958220"><ph name="BEGIN_LINK" />現在の設定<ph name="END_LINK" />を送信して Carbon Browser の品質向上にご協力ください</translation>
+<translation id="2126108037660393668">ダウンロードしたファイルの検証で不合格でした。</translation>
+<translation id="2130870084309816036">インターネットに接続できません。ファイアウォールを使用している場合は、許可リストに <ph name="PRODUCT_EXE_NAME" /> を登録してください。</translation>
+<translation id="2131230230468101642">ユーザーのプライバシーを保護するため、4 週間以上経過したユーザーの興味 / 関心は自動削除されます。閲覧を続けていると、興味 / 関心がリストに再度表示される場合もあります。Carbon Browser に認識してほしくない興味 / 関心は削除できます。</translation>
 <translation id="2139300032719313227">Chrome OS を再起動してください</translation>
-<translation id="2151406531797534936">Carbon Browser Browser を今すぐ再起動してください</translation>
+<translation id="2146761408396054429">このファイルは危険な可能性があります<ph name="LINE_BREAK" />パスワードを入力すると、Carbon Browser でダウンロードを確認します。パスワードは第三者とは共有されません</translation>
+<translation id="2151406531797534936">Carbon Browser を今すぐ再起動してください</translation>
 <translation id="2174917724755363426">インストールは完了していません。キャンセルしてもよろしいですか？</translation>
-<translation id="223889379102603431">Carbon Browser Browser でのルート証明書の管理方法に関する情報</translation>
-<translation id="2258103955319320201">お使いのすべてのデバイスで Carbon Browser Browser ブラウザの設定やデータを使用するには、ログインして同期を有効にしてください。</translation>
-<translation id="2290014774651636340">Google API キーが欠落しています。Carbon Browser Browser の一部の機能は無効になります。</translation>
-<translation id="2290095356545025170">Carbon Browser Browser をアンインストールしてもよろしいですか？</translation>
-<translation id="2309047409763057870">この Carbon Browser Browser はセカンダリ インストールのため、既定のブラウザには設定できません。</translation>
-<translation id="2345992953227471816">Carbon Browser Browser で次の拡張機能に不正なソフトウェアが含まれていることが検出されました。</translation>
-<translation id="2348335408836342058">このサイトを利用するには、Carbon Browser Browser でカメラとマイクの使用を許可する必要があります</translation>
-<translation id="234869673307233423">Carbon Browser Browser でパスワードを確認できません。しばらくしてからもう一度お試しください。</translation>
-<translation id="235650106824528204">このプロファイルの使用中に生成された Carbon Browser Browser データ（ブックマーク、履歴、パスワード、他の設定など）は、仕事用プロファイルの管理者によって削除される場合があります。<ph name="LEARN_MORE" /></translation>
+<translation id="2190166659037789668">更新確認エラー: <ph name="UPDATE_CHECK_ERROR" />。</translation>
+<translation id="223889379102603431">Carbon Browser でのルート証明書の管理方法に関する情報</translation>
+<translation id="2258103955319320201">お使いのすべてのデバイスで Carbon Browser ブラウザの設定やデータを使用するには、ログインして同期を有効にしてください。</translation>
+<translation id="2290014774651636340">Google API キーが欠落しています。Carbon Browser の一部の機能は無効になります。</translation>
+<translation id="2290095356545025170">Carbon Browser をアンインストールしてもよろしいですか？</translation>
+<translation id="2298849085402457754">閲覧データをこのデバイスからのみ削除して、Google アカウントに残すには、<ph name="BEGIN_LINK" />Carbon Browser からログアウト<ph name="END_LINK" />します。</translation>
+<translation id="2309047409763057870">この Carbon Browser はセカンダリ インストールのため、既定のブラウザには設定できません。</translation>
+<translation id="2345992953227471816">Carbon Browser で次の拡張機能に不正なソフトウェアが含まれていることが検出されました。</translation>
+<translation id="2348335408836342058">このサイトを利用するには、Carbon Browser でカメラとマイクの使用を許可する必要があります</translation>
+<translation id="234869673307233423">Carbon Browser でパスワードを確認できません。しばらくしてからもう一度お試しください。</translation>
+<translation id="235650106824528204">このプロファイルの使用中に生成された Carbon Browser データ（ブックマーク、履歴、パスワード、他の設定など）は、仕事用プロファイルの管理者によって削除される場合があります。<ph name="LEARN_MORE" /></translation>
 <translation id="2359808026110333948">続行</translation>
 <translation id="2401189691232800402">Chrome OS システム</translation>
-<translation id="2467438592969358367">Carbon Browser Browser からパスワードをエクスポートするための許可を求められています。許可するには Windows のパスワードを入力してください。</translation>
+<translation id="2409816192575564775">{NUM_DEVICES,plural, =0{1 つ以上の Carbon Browser 拡張機能が 1 台の HID デバイスにアクセスしていました}=1{1 つ以上の Carbon Browser 拡張機能が 1 台の HID デバイスにアクセスしています}other{1 つ以上の Carbon Browser 拡張機能が # 台の HID デバイスにアクセスしています}}</translation>
+<translation id="2424440923901031101">この拡張機能は Carbon Browser ウェブストアのポリシーに違反しており、安全でない可能性があります。アクセスしたサイトでユーザーデータ（個人情報を含む）が参照、変更されないように、Carbon Browser からこの拡張機能を削除してください。</translation>
+<translation id="2467438592969358367">Carbon Browser からパスワードをエクスポートするための許可を求められています。許可するには Windows のパスワードを入力してください。</translation>
+<translation id="2472092250898121027">この拡張機能にはマルウェアが含まれており、安全ではありません。アクセスしたサイトでユーザーデータ（個人情報を含む）が参照、変更されないように、Carbon Browser からこの拡張機能を削除してください。</translation>
+<translation id="2472163211318554013">Carbon Browser を最大限に活用するにはログインしてください</translation>
 <translation id="2485422356828889247">アンインストール</translation>
-<translation id="2494974097748878569">Carbon Browser Browser の Google アシスタント</translation>
-<translation id="2534507159460261402">Google Pay（Carbon Browser Browser にコピー）</translation>
-<translation id="2559253115192232574">その後、アクセスしたサイトは、表示する広告をカスタマイズするために、Carbon Browser Browser にユーザーの興味 / 関心を提示するよう依頼できます。Carbon Browser Browser では、興味 / 関心を 3 つまで共有できます。</translation>
-<translation id="2563121210305478421">Carbon Browser Browser を再起動しますか？</translation>
-<translation id="2574930892358684005"><ph name="EXISTING_USER" /> さんはこの Carbon Browser Browser プロファイルにすでにログインしています。ブラウジング環境を分ける場合は、Carbon Browser Browser で自分用のプロファイルを作成できます。</translation>
-<translation id="2580411288591421699">実行中の Carbon Browser Browser と同じバージョンをインストールすることはできません。Carbon Browser Browser を閉じてからもう一度お試しください。</translation>
-<translation id="2586406160782125153">このデバイスから閲覧データを削除します。後でデータを取得するには、<ph name="USER_EMAIL" /> として Carbon Browser Browser にログインしてください。</translation>
-<translation id="2597976513418770460">Carbon Browser Browser ブラウザのアイテムを <ph name="ACCOUNT_EMAIL" /> から取得</translation>
-<translation id="2622559029861875898">Carbon Browser Browser がアップデートを確認できません。インターネット接続を確認してみてください。</translation>
+<translation id="2513154137948333830">再起動が必要です: <ph name="INSTALL_SUCCESS" /></translation>
+<translation id="2534365042754120737">データを保護するため、最近アクセスしていないサイトから権限を自動で削除します。通知は停止されません。</translation>
+<translation id="2534507159460261402">Google Pay（Carbon Browser にコピー）</translation>
+<translation id="2556847002339236023"><ph name="TIMEOUT_DURATION" /> 使用しなかったため、Carbon Browser は組織によって終了されます。閲覧データは削除されました。これには、履歴、自動入力、ダウンロードが含まれます。</translation>
+<translation id="2559253115192232574">その後、アクセスしたサイトは、表示する広告をパーソナライズするために、Carbon Browser にユーザーの興味 / 関心を提示するよう依頼できます。Carbon Browser では、興味 / 関心を 3 つまで共有できます。</translation>
+<translation id="2563121210305478421">Carbon Browser を再起動しますか？</translation>
+<translation id="2569974318947988067">Carbon Browser で移動先の HTTPS へのアップグレードを試行します</translation>
+<translation id="2574930892358684005"><ph name="EXISTING_USER" /> さんはこの Carbon Browser プロファイルにすでにログインしています。ブラウジング環境を分ける場合は、Carbon Browser で自分用のプロファイルを作成できます。</translation>
+<translation id="2580411288591421699">実行中の Carbon Browser と同じバージョンをインストールすることはできません。Carbon Browser を閉じてからもう一度お試しください。</translation>
+<translation id="2586406160782125153">このデバイスから閲覧データを削除します。後でデータを取得するには、<ph name="USER_EMAIL" /> として Carbon Browser にログインしてください。</translation>
+<translation id="2597976513418770460">Carbon Browser ブラウザのアイテムを <ph name="ACCOUNT_EMAIL" /> から取得</translation>
+<translation id="259935314519650377">ダウンロードしたインストーラのキャッシュに失敗しました。エラー: <ph name="UNPACK_CACHING_ERROR_CODE" />。</translation>
+<translation id="2622559029861875898">Carbon Browser がアップデートを確認できません。インターネット接続を確認してみてください。</translation>
 <translation id="2645435784669275700">Chrome OS</translation>
-<translation id="2652691236519827073">新しい Carbon Browser Browser タブでリンクを開く(&amp;T)</translation>
-<translation id="2665296953892887393">障害レポートと<ph name="UMA_LINK" />を Google に自動送信して Carbon Browser Browser の機能向上に役立てる</translation>
-<translation id="2689103672227170538">この拡張機能により、Carbon Browser Browser の起動時に表示されるページが変更されました。</translation>
-<translation id="2742320827292110288">警告: 拡張機能による閲覧履歴の記録を Carbon Browser Browser で停止することはできません。シークレット モードでこの拡張機能を無効にするには、このオプションの選択を解除してください。</translation>
-<translation id="2765403129283291972">このサイトを利用するには、Carbon Browser Browser でマイクの使用を許可する必要があります</translation>
+<translation id="2649768380733403658">Carbon Browser では、ブラウザが安全な設定になっているかどうかを定期的に確認しています。お客様による確認が必要な項目がありましたらお知らせします。</translation>
+<translation id="2652691236519827073">新しい Carbon Browser タブでリンクを開く(&amp;T)</translation>
+<translation id="2665296953892887393">障害レポートと<ph name="UMA_LINK" />を Google に自動送信して Carbon Browser の機能向上に役立てる</translation>
+<translation id="2712234843277364121">再起動して更新 - タブは再度開きます</translation>
+<translation id="2738871930057338499">インターネットに接続できません。HTTP 403 アクセス不可エラーが発生しました。プロキシ設定をご確認ください。</translation>
+<translation id="2742320827292110288">警告: 拡張機能による閲覧履歴の記録を Carbon Browser で停止することはできません。シークレット モードでこの拡張機能を無効にするには、このオプションの選択を解除してください。</translation>
+<translation id="2765403129283291972">このサイトを利用するには、Carbon Browser でマイクの使用を許可する必要があります</translation>
 <translation id="2770231113462710648">既定のブラウザを変更:</translation>
-<translation id="2775140325783767197">Carbon Browser Browser がパスワードを確認できません。インターネット接続を確認してみてください。</translation>
+<translation id="2775140325783767197">Carbon Browser がパスワードを確認できません。インターネット接続を確認してみてください。</translation>
 <translation id="2799223571221894425">再起動</translation>
-<translation id="2847461019998147611">Carbon Browser Browser をこの言語で表示</translation>
-<translation id="2857540653560290388">Carbon Browser Browser を起動しています...</translation>
-<translation id="2857972467023607093">このアカウントの Carbon Browser Browser プロファイルはすでに存在します</translation>
-<translation id="2861074815332034794">Carbon Browser Browser を更新しています（<ph name="PROGRESS_PERCENT" />）</translation>
-<translation id="2871893339301912279">Carbon Browser Browser にログインしました</translation>
+<translation id="2846251086934905009">インストール エラー: インストーラが完了しませんでした。インストールは中止されました。</translation>
+<translation id="2847461019998147611">Carbon Browser をこの言語で表示</translation>
+<translation id="2853415089995957805">アクセスする可能性の高いページはプリロードされるので、実際にアクセスしたときの読み込み時間が短縮されます</translation>
+<translation id="2857540653560290388">Carbon Browser を起動しています...</translation>
+<translation id="2857972467023607093">このアカウントの Carbon Browser プロファイルはすでに存在します</translation>
+<translation id="286025080868315611">Carbon Browser で一部のダウンロードがブロックされる理由</translation>
+<translation id="2861074815332034794">Carbon Browser を更新しています（<ph name="PROGRESS_PERCENT" />）</translation>
+<translation id="2871893339301912279">Carbon Browser にログインしました</translation>
+<translation id="2876628302275096482"><ph name="BEGIN_LINK" />Carbon Browser でユーザーデータのプライバシーを保護する方法<ph name="END_LINK" />についての詳細</translation>
 <translation id="2885378588091291677">タスク マネージャ</translation>
-<translation id="2888126860611144412">Carbon Browser Browser について</translation>
+<translation id="2888126860611144412">Carbon Browser について</translation>
 <translation id="2915996080311180594">後で再起動</translation>
-<translation id="2926676257163822632">脆弱なパスワードは簡単に推測されてしまいます。Carbon Browser Browser で<ph name="BEGIN_LINK" />安全性の高いパスワードを自動生成して保存する<ph name="END_LINK" />ことができます。</translation>
-<translation id="2926952073016206995">このサイトを利用するには、Carbon Browser Browser でカメラの使用を許可する必要があります</translation>
+<translation id="2926676257163822632">脆弱なパスワードは簡単に推測されてしまいます。Carbon Browser で<ph name="BEGIN_LINK" />安全性の高いパスワードを自動生成して保存する<ph name="END_LINK" />ことができます。</translation>
+<translation id="2926952073016206995">このサイトを利用するには、Carbon Browser でカメラの使用を許可する必要があります</translation>
 <translation id="2928420929544864228">インストールが完了しました。</translation>
-<translation id="2929907241665500097">エラーが発生したため、Carbon Browser Browser が更新されませんでした。<ph name="BEGIN_LINK" />Carbon Browser Browser の更新に関する問題を解決してください。<ph name="END_LINK" /></translation>
-<translation id="2969728957078202736"><ph name="PAGE_TITLE" /> - ネットワークにログイン - Carbon Browser Browser</translation>
-<translation id="3019382870990049182">再起動して Carbon Browser BrowserOS Flex を更新(&amp;C)</translation>
-<translation id="303514781271618814">Carbon Browser Browser では、使用されるユーザーデータの量を抑えつつ、同じようにサイトをブラウジングできる新機能をテストしています</translation>
-<translation id="3037838751736561277">Carbon Browser Browser はバックグラウンド モードです。</translation>
+<translation id="2929907241665500097">エラーが発生したため、Carbon Browser が更新されませんでした。<ph name="BEGIN_LINK" />Carbon Browser の更新に関する問題を解決してください。<ph name="END_LINK" /></translation>
+<translation id="2945997411976714835">インストール エラー: インストーラのプロセスを開始できませんでした。</translation>
+<translation id="2969728957078202736"><ph name="PAGE_TITLE" /> - ネットワークにログイン - Carbon Browser</translation>
+<translation id="3018957014024118866">Carbon Browser（<ph name="URL" />）からもデータを削除する</translation>
+<translation id="3019382870990049182">再起動して Carbon BrowserOS Flex を更新(&amp;C)</translation>
+<translation id="303514781271618814">Carbon Browser では、使用するユーザー情報量を減らしながら、これまでと同様にブラウジングできる新機能をテストしています</translation>
+<translation id="3037838751736561277">Carbon Browser はバックグラウンド モードです。</translation>
 <translation id="3038232873781883849">インストールの待機中...</translation>
-<translation id="3059710691562604940">セーフ ブラウジングがオフになっています。Carbon Browser Browser はオンにすることをおすすめしています。</translation>
-<translation id="3065168410429928842">Carbon Browser Browser タブ</translation>
-<translation id="3069821012350118710">Carbon Browser Browser を閉じるまで、アクセスしたサイトにお客様の情報が保存されます</translation>
-<translation id="3080151273017101988">Carbon Browser Browser を閉じた際にバックグラウンド アプリの処理を続行する</translation>
+<translation id="3059710691562604940">セーフ ブラウジングがオフになっています。Carbon Browser はオンにすることをおすすめしています。</translation>
+<translation id="306179102415443347">ショートカットを使用して Google パスワード マネージャーにすばやくアクセスできます。ショートカットはパソコンのホーム画面やアプリ ランチャーに移動できます。</translation>
+<translation id="3065168410429928842">Carbon Browser タブ</translation>
+<translation id="3080151273017101988">Carbon Browser を閉じた際にバックグラウンド アプリの処理を続行する</translation>
 <translation id="3089968997497233615">Google クロームブラウザがより速く、さらに便利に。いますぐトライ！</translation>
-<translation id="3100998948628680988">Carbon Browser Browser プロフィールの名前を設定</translation>
-<translation id="3103390129666310801">デバイスが最新の状態かどうか確認するには、<ph name="LINK_BEGIN" />Carbon Browser BrowserOS Flex の設定<ph name="LINK_END" />をご覧ください</translation>
-<translation id="3114643501466072395">他のパスワードにデータ侵害などセキュリティに関する問題がないかどうかを確認するには、<ph name="BEGIN_LINK" />Carbon Browser Browser にログイン<ph name="END_LINK" />してください。</translation>
-<translation id="3140883423282498090">変更内容は次に Carbon Browser Browser を再起動したときに有効になります。</translation>
-<translation id="3149510190863420837">Carbon Browser Browser アプリ</translation>
-<translation id="3169523567916669830">テスト期間中、サイトでの広告表示に使用される興味 / 関心のトピックを表示、削除できます。Carbon Browser Browser では最近の閲覧履歴に基づいてユーザーの興味 / 関心を推定します。</translation>
-<translation id="3245429137663807393">Carbon Browser Browser の使用状況レポートを送信する場合は、アクセスした URL がこのレポートに含められます</translation>
-<translation id="3282568296779691940">Carbon Browser Browser にログイン</translation>
+<translation id="3100998948628680988">Carbon Browser プロフィールの名前を設定</translation>
+<translation id="3112458742631356345">このダウンロードは Carbon Browser でブロックされました。ファイルが一般的にダウンロードされるものではなく、危害を及ぼす可能性があります</translation>
+<translation id="3114643501466072395">他のパスワードにデータ侵害などセキュリティに関する問題がないかどうかを確認するには、<ph name="BEGIN_LINK" />Carbon Browser にログイン<ph name="END_LINK" />してください。</translation>
+<translation id="3140883423282498090">変更内容は次に Carbon Browser を再起動したときに有効になります。</translation>
+<translation id="3149510190863420837">Carbon Browser アプリ</translation>
+<translation id="3169523567916669830">テスト期間中、サイトでの広告表示に使用される興味 / 関心のトピックを表示、削除できます。Carbon Browser では最近の閲覧履歴に基づいてユーザーの興味 / 関心を推定します。</translation>
+<translation id="3196187562065225381">危険なファイルであるため、このダウンロードは Carbon Browser でブロックされました</translation>
+<translation id="3226612997184048185">ブックマークを Google アカウントにも保存している場合は、Carbon Browser で商品価格をトラッキングして、値下げがあったときに通知を受け取ることができます</translation>
+<translation id="3245429137663807393">Carbon Browser の使用状況レポートを送信する場合は、アクセスした URL がこのレポートに含められます</translation>
+<translation id="3282568296779691940">Carbon Browser にログイン</translation>
 <translation id="3286538390144397061">今すぐ再起動</translation>
-<translation id="3360895254066713204">Carbon Browser Browser Helper</translation>
-<translation id="3379938682270551431">{0,plural, =0{Carbon Browser Browser は今すぐ再起動されます}=1{Carbon Browser Browser は 1 秒後に再起動されます}other{Carbon Browser Browser は # 秒後に再起動されます}}</translation>
-<translation id="3396977131400919238">インストール中にオペレーティング システム エラーが発生しました。Carbon Browser Browser をダウンロード直してください。</translation>
-<translation id="3428747202529429621">ログイン時に、Carbon Browser Browser を安全に利用できるようにするほか、他の Google アプリのセキュリティ強化に使用されることがあります</translation>
-<translation id="3434246496373299699">Google アカウントでログインすると、Carbon Browser Browser がパスワードを確認できます。</translation>
-<translation id="3451115285585441894">Carbon Browser Browser に追加...</translation>
-<translation id="345171907106878721">Carbon Browser Browser に自分を追加</translation>
+<translation id="3293912612584488930">Carbon Browser でもっと便利に</translation>
+<translation id="3360895254066713204">Carbon Browser Helper</translation>
+<translation id="3379938682270551431">{0,plural, =0{Carbon Browser は今すぐ再起動されます}=1{Carbon Browser は 1 秒後に再起動されます}other{Carbon Browser は # 秒後に再起動されます}}</translation>
+<translation id="3396977131400919238">インストール中にオペレーティング システム エラーが発生しました。Carbon Browser をダウンロード直してください。</translation>
+<translation id="3426646014273736870">メモリセーバーで Carbon Browser の速度を向上</translation>
+<translation id="3428747202529429621">ログイン時に、Carbon Browser を安全に利用できるようにするほか、他の Google アプリのセキュリティ強化に使用されることがあります</translation>
+<translation id="3434246496373299699">Google アカウントでログインすると、Carbon Browser がパスワードを確認できます。</translation>
+<translation id="3451115285585441894">Carbon Browser に追加...</translation>
+<translation id="345171907106878721">Carbon Browser に自分を追加</translation>
 <translation id="3453763134178591239">Chrome OS 利用規約</translation>
-<translation id="34857402635545079">Carbon Browser Browser のデータ（<ph name="URL" />）も消去する</translation>
-<translation id="3503306920980160878">このサイトで現在地を共有するには、Carbon Browser Browser で位置情報の使用を許可する必要があります</translation>
-<translation id="3533694711092285624">保存されているパスワードがありません。パスワードを保存すると Carbon Browser Browser で確認できるようになります。</translation>
-<translation id="3541482654983822893">Carbon Browser Browser でパスワードを確認できません。24 時間後にもう一度お試しください。</translation>
-<translation id="3576528680708590453">システム管理者が、<ph name="TARGET_URL_HOSTNAME" /> へのアクセスに代替ブラウザを開くよう Carbon Browser Browser を設定しています。</translation>
-<translation id="3582972582564653026">同期してカスタマイズした Carbon Browser Browser をどのデバイスでも使用できます</translation>
-<translation id="3596080736082218006">{COUNT,plural, =0{管理者が、アップデートを適用するために Carbon Browser Browser を再起動するよう求めています}=1{管理者が、アップデートを適用するために Carbon Browser Browser を再起動するよう求めています。シークレット ウィンドウは、再起動後は自動的には開きません。}other{管理者が、アップデートを適用するために Carbon Browser Browser を再起動するよう求めています。現在開いている # 個のシークレット ウィンドウは、再起動後は自動的には開きません。}}</translation>
-<translation id="3622797965165704966">共有パソコンの Carbon Browser Browser で Google アカウントが簡単に使用できるようになりました。</translation>
-<translation id="3673813398384385993">Carbon Browser Browser で「<ph name="EXTENSION_NAME" />」に不正なソフトウェアが含まれていることが検出されました</translation>
+<translation id="3503306920980160878">このサイトで現在地を共有するには、Carbon Browser で位置情報の使用を許可する必要があります</translation>
+<translation id="3533694711092285624">保存されているパスワードがありません。パスワードを保存すると Carbon Browser で確認できるようになります。</translation>
+<translation id="3541482654983822893">Carbon Browser でパスワードを確認できません。24 時間後にもう一度お試しください。</translation>
+<translation id="3576528680708590453">システム管理者が、<ph name="TARGET_URL_HOSTNAME" /> へのアクセスに代替ブラウザを開くよう Carbon Browser を設定しています。</translation>
+<translation id="3582972582564653026">同期してカスタマイズした Carbon Browser をどのデバイスでも使用できます</translation>
+<translation id="3596080736082218006">{COUNT,plural, =0{管理者が、アップデートを適用するために Carbon Browser を再起動するよう求めています}=1{管理者が、アップデートを適用するために Carbon Browser を再起動するよう求めています。シークレット ウィンドウは、再起動後は自動的には開きません。}other{管理者が、アップデートを適用するために Carbon Browser を再起動するよう求めています。現在開いている # 個のシークレット ウィンドウは、再起動後は自動的には開きません。}}</translation>
+<translation id="3622797965165704966">共有パソコンの Carbon Browser で Google アカウントが簡単に使用できるようになりました。</translation>
+<translation id="3635073343384702370">パスワードを保存すると、Carbon Browser による確認が可能になります</translation>
+<translation id="3667616615096815454">インストールできません。このアプリはサーバーに認識されていません。</translation>
+<translation id="3673813398384385993">Carbon Browser で「<ph name="EXTENSION_NAME" />」に不正なソフトウェアが含まれていることが検出されました</translation>
 <translation id="3703994572283698466">Chrome OS は、<ph name="BEGIN_LINK_LINUX_OSS" />Linux 開発環境<ph name="END_LINK_LINUX_OSS" />と同様に、追加の<ph name="BEGIN_LINK_CROS_OSS" />オープンソース ソフトウェア<ph name="END_LINK_CROS_OSS" />によって実現しました。</translation>
-<translation id="3716540481907974026">Carbon Browser BrowserOS Flex のバージョン</translation>
-<translation id="3718181793972440140">このデバイスから 1 件の項目を削除します。後でデータを取得するには、<ph name="USER_EMAIL" /> として Carbon Browser Browser にログインしてください。</translation>
-<translation id="3735758079232443276">拡張機能「<ph name="EXTENSION_NAME" />」により、Carbon Browser Browser の起動時に表示されるページが変更されました。</translation>
+<translation id="3716540481907974026">Carbon BrowserOS Flex のバージョン</translation>
+<translation id="3718181793972440140">このデバイスから 1 件の項目を削除します。後でデータを取得するには、<ph name="USER_EMAIL" /> として Carbon Browser にログインしてください。</translation>
 <translation id="3744202345691150878">Chrome OS のヘルプを見る</translation>
-<translation id="3780814664026482060">Carbon Browser Browser - <ph name="PAGE_TITLE" /></translation>
-<translation id="3785324443014631273">ログイン時にエラーが発生したため、Carbon Browser BrowserOS Flex はデータを同期できませんでした。</translation>
-<translation id="3795971588916395511">Google Chrome OS</translation>
-<translation id="3835168907083856002"><ph name="USER_EMAIL_ADDRESS" /> 用の新しい Carbon Browser Browser プロファイルが作成されます。</translation>
-<translation id="386202838227397562">すべての Carbon Browser Browser ウィンドウを閉じてからもう一度お試しください。</translation>
-<translation id="3865754807470779944">Carbon Browser Browser のバージョン <ph name="PRODUCT_VERSION" /> がインストールされています</translation>
-<translation id="3873044882194371212">Carbon Browser Browser のシークレット ウインドウでリンクを開く(&amp;G)</translation>
-<translation id="3889417619312448367">Carbon Browser Browser をアンインストール</translation>
-<translation id="3999683152997576765">サイトでの広告表示に使用される興味 / 関心のトピックを表示、削除できます。Carbon Browser Browser では最近の閲覧履歴に基づいてユーザーの興味 / 関心を推定します。</translation>
+<translation id="3780814664026482060">Carbon Browser - <ph name="PAGE_TITLE" /></translation>
+<translation id="3785324443014631273">ログイン時にエラーが発生したため、Carbon BrowserOS Flex はデータを同期できませんでした。</translation>
+<translation id="3795971588916395511">Carbon BrowserOS</translation>
+<translation id="3809772425479558446">Carbon Browser のご利用には Windows 10 以上が必要です。</translation>
+<translation id="3835168907083856002"><ph name="USER_EMAIL_ADDRESS" /> 用の新しい Carbon Browser プロファイルが作成されます。</translation>
+<translation id="386202838227397562">すべての Carbon Browser ウィンドウを閉じてからもう一度お試しください。</translation>
+<translation id="3865754807470779944">Carbon Browser のバージョン <ph name="PRODUCT_VERSION" /> がインストールされています</translation>
+<translation id="3873044882194371212">Carbon Browser のシークレット ウインドウでリンクを開く(&amp;G)</translation>
+<translation id="3889417619312448367">Carbon Browser をアンインストール</translation>
+<translation id="3941890832296813527">インストール エラー: インストーラのファイル名が無効またはサポートされていません。</translation>
+<translation id="3999683152997576765">サイトでの広告表示に使用される興味 / 関心のトピックを表示、削除できます。Carbon Browser では最近の閲覧履歴に基づいてユーザーの興味 / 関心を推定します。</translation>
 <translation id="4035053306113201399">更新を適用するには、Chrome OS を再起動する必要があります。</translation>
 <translation id="4050175100176540509">最新バージョンに更新すると、重要なセキュリティ更新と新機能が適用されます。</translation>
-<translation id="4053720452172726777">Carbon Browser Browser の設定</translation>
-<translation id="4106587138345390261">Carbon Browser Browser では、使用されるユーザーの情報の量を抑えつつ、同じようにサイトをブラウジングできる新機能をテストしています</translation>
-<translation id="4110895483821904099">新しい Carbon Browser Browser プロファイルの設定</translation>
-<translation id="4147555960264124640">現在、管理対象アカウントでログインしており、あなたの Carbon Browser Browser プロファイルを管理者が制御できる状態になっています。あなたの Carbon Browser Browser データ（アプリ、ブックマーク、履歴、パスワードなどの設定）は永続的に <ph name="USER_NAME" /> に関連付けられます。このデータは Google アカウントのダッシュボードを介して削除できますが、このデータを別のアカウントに関連付けることはできなくなります。<ph name="LEARN_MORE" /></translation>
+<translation id="4053720452172726777">Carbon Browser の設定</translation>
+<translation id="4106587138345390261">Carbon Browser では、使用するユーザー情報量を減らしながら、これまでと同様にブラウジングできる新機能をテストしています</translation>
+<translation id="4110895483821904099">新しい Carbon Browser プロファイルの設定</translation>
+<translation id="4147555960264124640">現在、管理対象アカウントでログインしており、あなたの Carbon Browser プロファイルを管理者が制御できる状態になっています。あなたの Carbon Browser データ（アプリ、ブックマーク、履歴、パスワードなどの設定）は永続的に <ph name="USER_NAME" /> に関連付けられます。このデータは Google アカウントのダッシュボードを介して削除できますが、このデータを別のアカウントに関連付けることはできなくなります。<ph name="LEARN_MORE" /></translation>
 <translation id="4148957013307229264">インストール中...</translation>
-<translation id="4149882025268051530">インストーラー アーカイブを解凍できませんでした。Carbon Browser Browser をダウンロードし直してください。</translation>
-<translation id="4191857738314598978">{0,plural, =1{1 日以内に Carbon Browser Browser を再起動してください}other{# 日以内に Carbon Browser Browser を再起動してください}}</translation>
-<translation id="4205939740494406371">Carbon Browser Browser でパスワードを確認できません。24 時間後にもう一度お試しいただくか、<ph name="BEGIN_LINK" />Google アカウントでパスワードをご確認ください<ph name="END_LINK" />。</translation>
+<translation id="4149882025268051530">インストーラー アーカイブを解凍できませんでした。Carbon Browser をダウンロードし直してください。</translation>
+<translation id="4153934450158521343">Carbon Browser はまもなく終了し、データが削除されます</translation>
+<translation id="4175922240926474352">このダウンロードは Carbon Browser でブロックされました。サイトで安全な接続が使用されておらず、ファイルが改ざんされている可能性があります</translation>
+<translation id="4191857738314598978">{0,plural, =1{1 日以内に Carbon Browser を再起動してください}other{# 日以内に Carbon Browser を再起動してください}}</translation>
+<translation id="4205939740494406371">Carbon Browser でパスワードを確認できません。24 時間後にもう一度お試しいただくか、<ph name="BEGIN_LINK" />Google アカウントでパスワードをご確認ください<ph name="END_LINK" />。</translation>
 <translation id="4222932583846282852">キャンセルしています...</translation>
-<translation id="4242034826641750751">このサイトを利用するには、Carbon Browser Browser でカメラとマイクの使用を許可する必要があります</translation>
-<translation id="424864128008805179">Carbon Browser Browser からログアウトしますか？</translation>
-<translation id="4251615635259297716">Carbon Browser Browser データをこのアカウントにリンクしますか？</translation>
-<translation id="4262915912852657291"><ph name="BEGIN_BOLD" />使用されるデータ:<ph name="END_BOLD" /> 閲覧履歴（このデバイスで Carbon Browser Browser を使用してアクセスしたサイトの記録）。</translation>
+<translation id="4242034826641750751">このサイトを利用するには、Carbon Browser でカメラとマイクの使用を許可する必要があります</translation>
+<translation id="424864128008805179">Carbon Browser からログアウトしますか？</translation>
+<translation id="4251615635259297716">Carbon Browser データをこのアカウントにリンクしますか？</translation>
+<translation id="4262915912852657291"><ph name="BEGIN_BOLD" />使用されるデータ:<ph name="END_BOLD" /> ユーザーの閲覧履歴（該当のデバイスで Carbon Browser を使用して訪れたウェブサイトの記録）。</translation>
 <translation id="4281844954008187215">利用規約</translation>
-<translation id="4293420128516039005">ログインすると、同期してカスタマイズした Carbon Browser Browser をどのデバイスでも使用できます</translation>
-<translation id="4328355335528187361">Carbon Browser Browser Dev（mDNS-In）</translation>
+<translation id="4293420128516039005">ログインすると、同期してカスタマイズした Carbon Browser をどのデバイスでも使用できます</translation>
+<translation id="430327780270213103">拡張機能に Carbon Browser ツールバーへのアクセス リクエストの表示を許可する</translation>
+<translation id="4328355335528187361">Carbon Browser Dev（mDNS-In）</translation>
 <translation id="4334294535648607276">ダウンロードが完了しました。</translation>
-<translation id="4335235004908507846">Carbon Browser Browser でデータ侵害や不正な拡張機能などの脅威から保護されているか確認します</translation>
-<translation id="4343195214584226067">「<ph name="EXTENSION_NAME" />」が Carbon Browser Browser に追加されました</translation>
-<translation id="4384570495110188418">ログインしていないため、Carbon Browser Browser でパスワードを確認できません</translation>
+<translation id="4335235004908507846">Carbon Browser でデータ侵害や不正な拡張機能などの脅威から保護されているか確認します</translation>
+<translation id="4343195214584226067">「<ph name="EXTENSION_NAME" />」が Carbon Browser に追加されました</translation>
+<translation id="4384570495110188418">ログインしていないため、Carbon Browser でパスワードを確認できません</translation>
+<translation id="4389991535395284064">シークレット モードでブラウジングする際、Carbon Browser で安全でない接続を使用してサイトを読み込む前に警告を表示します</translation>
+<translation id="4393248995085527349">今後、Carbon Browser のアップデートを受信するには、macOS 10.15 以降が必要となります。このコンピュータでは macOS 10.13 が実行されています。</translation>
 <translation id="4427306783828095590">保護強化機能により、フィッシングを防ぎ、不正なソフトウェアをより強力にブロックします</translation>
-<translation id="4450664632294415862">Carbon Browser Browser - ネットワークにログイン - <ph name="PAGE_TITLE" /></translation>
-<translation id="4458462641685292929">Carbon Browser Browser で別の処理が行われています。しばらくしてからもう一度お試しください。</translation>
-<translation id="4459234553906210702">広告の測定により、アクセスしたサイトは、サイトが広告のパフォーマンスを測定する際に役立つ Carbon Browser Browser の情報をリクエストできます。広告の測定は、サイト間で転送する情報をできるだけ少なくすることで、クロスサイト トラッキングを制限します。</translation>
-<translation id="4561051373932531560">Carbon Browser Browser では、ウェブサイト上の電話番号をクリックするだけで Skype で通話を発信できます。</translation>
+<translation id="4450664632294415862">Carbon Browser - ネットワークにログイン - <ph name="PAGE_TITLE" /></translation>
+<translation id="4458462641685292929">Carbon Browser で別の処理が行われています。しばらくしてからもう一度お試しください。</translation>
+<translation id="4459234553906210702">広告の測定により、アクセスしたサイトは、サイトが広告のパフォーマンスを測定する際に役立つ Carbon Browser の情報をリクエストできます。広告の測定は、サイト間で転送する情報をできるだけ少なくすることで、クロスサイト トラッキングを制限します。</translation>
+<translation id="4501471624619070934">お住まいの国ではアクセスが制限されているため、インストールに失敗しました。</translation>
+<translation id="4561051373932531560">Carbon Browser では、ウェブサイト上の電話番号をクリックするだけで Skype で通話を発信できます。</translation>
 <translation id="4567424176335768812"><ph name="USER_EMAIL_ADDRESS" /> としてログインしています。ログインしているすべてのデバイスで、ブックマーク、履歴、その他の設定にアクセスできます。</translation>
-<translation id="4571503333518166079">Carbon Browser Browser の通知設定に移動</translation>
-<translation id="459622048091363950">Carbon Browser Browser にアクセスを許可すると、ウェブサイトからアクセスをリクエストできるようになります。</translation>
-<translation id="4600710005438004015">Carbon Browser Browser を最新版に更新できませんでした。新しい機能とセキュリティ修正は適用されていません。</translation>
-<translation id="4627412468266359539">オプション: 診断と使用状況のデータを Google に自動送信して Carbon Browser BrowserOS Flex の機能と動作の改善に役立てる。</translation>
-<translation id="4633000520311261472">Carbon Browser Browser をより安全にご利用いただくため、<ph name="IDS_EXTENSION_WEB_STORE_TITLE" />で提供していない一部の拡張機能を無効にしました。これらは知らないうちに追加された可能性があります。</translation>
+<translation id="4571503333518166079">Carbon Browser の通知設定に移動</translation>
+<translation id="459622048091363950">Carbon Browser にアクセスを許可すると、ウェブサイトからアクセスをリクエストできるようになります。</translation>
+<translation id="4600710005438004015">Carbon Browser を最新版に更新できませんでした。新しい機能とセキュリティ修正は適用されていません。</translation>
+<translation id="4624065194742029982">Carbon Browser のシークレット モード</translation>
+<translation id="4627412468266359539">オプション: 診断と使用状況のデータを Google に自動送信して Carbon BrowserOS Flex の機能と動作の改善に役立てる。</translation>
+<translation id="4633000520311261472">Carbon Browser をより安全にご利用いただくため、<ph name="IDS_EXTENSION_WEB_STORE_TITLE" />で提供していない一部の拡張機能を無効にしました。これらは知らないうちに追加された可能性があります。</translation>
 <translation id="4680828127924988555">インストールをキャンセル</translation>
-<translation id="469553575393225953">提供元不明の拡張機能、アプリ、テーマはデバイスに危害を及ぼす可能性があります。Carbon Browser Browser ウェブストアで公開されているアイテムのみをインストールすることをおすすめします</translation>
-<translation id="4728575227883772061">原因不明のエラーによりインストールが失敗しました。実行中の Carbon Browser Browser を終了してからやり直してください。</translation>
-<translation id="4747730611090640388">Carbon Browser Browser はユーザーの興味 / 関心を推定する場合があります。その後、アクセスしたサイトは、表示する広告をカスタマイズするために、Carbon Browser Browser にユーザーの興味 / 関心を確認するよう依頼できます。</translation>
-<translation id="4754614261631455953">Carbon Browser Browser Canary（mDNS インバウンド）</translation>
-<translation id="4771048833395599659">このファイルは危険なファイルの可能性があるため、Carbon Browser Browser でブロックしました。</translation>
+<translation id="469553575393225953">提供元不明の拡張機能、アプリ、テーマはデバイスに危害を及ぼす可能性があります。Carbon Browser ウェブストアで公開されているアイテムのみをインストールすることをおすすめします</translation>
+<translation id="4724676981607797757">サポートされていないプロトコル エラーが発生したため、インストールできませんでした。</translation>
+<translation id="4728575227883772061">原因不明のエラーによりインストールが失敗しました。実行中の Carbon Browser を終了してからやり直してください。</translation>
+<translation id="4747730611090640388">Carbon Browser はユーザーの興味 / 関心を推定する場合があります。その後、アクセスしたサイトは、表示する広告をパーソナライズするために、Carbon Browser にユーザーの興味 / 関心を確認するよう依頼できます。</translation>
+<translation id="4754614261631455953">Carbon Browser Canary（mDNS インバウンド）</translation>
+<translation id="4771048833395599659">このファイルは危険なファイルの可能性があるため、Carbon Browser でブロックしました。</translation>
 <translation id="479167709087336770">Google 検索と同じスペルチェックが使用されます。ブラウザに入力したテキストは Google に送信されます。この動作はいつでも設定で変更できます。</translation>
-<translation id="4842397268809523050">お使いのドメインでは同期が利用できないため、Carbon Browser BrowserOS Flex はデータを同期できませんでした。</translation>
-<translation id="4873783916118289636">Carbon Browser Browser のプライバシーとセキュリティに関する重要な設定を確認します</translation>
-<translation id="4891791193823137474">Carbon Browser Browser のバックグラウンドでの実行を許可する</translation>
-<translation id="4895437082222824641">新しい Carbon Browser Browser タブでリンクを開く(&amp;T)</translation>
-<translation id="4953650215774548573">Carbon Browser Browser を既定のブラウザとして設定する</translation>
-<translation id="495931528404527476">Carbon Browser Browser 専用</translation>
-<translation id="4969674060580488087">アカウントのログイン情報が最新ではないため、Carbon Browser BrowserOS Flex はデータを同期できませんでした。</translation>
-<translation id="4970761609246024540">Carbon Browser Browser プロフィールへようこそ</translation>
+<translation id="4793679854893018356">Carbon Browser のユーザー保護の仕組みについて</translation>
+<translation id="4828579605166583682">Carbon Browser が既存のパスワードを置き換えようとしています。続行するには、Windows のパスワードを入力してください。</translation>
+<translation id="4842397268809523050">お使いのドメインでは同期が利用できないため、Carbon BrowserOS Flex はデータを同期できませんでした。</translation>
+<translation id="4873783916118289636">Carbon Browser のプライバシーとセキュリティに関する重要な設定を確認します</translation>
+<translation id="4891791193823137474">Carbon Browser のバックグラウンドでの実行を許可する</translation>
+<translation id="4895437082222824641">新しい Carbon Browser タブでリンクを開く(&amp;T)</translation>
+<translation id="492720062778050435">この拡張機能を確認することをおすすめします</translation>
+<translation id="4953650215774548573">Carbon Browser を既定のブラウザとして設定する</translation>
+<translation id="495931528404527476">Carbon Browser 専用</translation>
+<translation id="4969674060580488087">アカウントのログイン情報が最新ではないため、Carbon BrowserOS Flex はデータを同期できませんでした。</translation>
+<translation id="4970761609246024540">Carbon Browser プロフィールへようこそ</translation>
 <translation id="4970880042055371251">Chrome OS のバージョン</translation>
-<translation id="4970947549776831107">危険なファイル形式のため Carbon Browser Browser でブロックされました</translation>
-<translation id="4990567037958725628">Carbon Browser Browser Canary</translation>
-<translation id="5037581483200764584">今後、Carbon Browser Browser のアップデートを受信するには、macOS 10.13 以降が必要となります。このコンピュータでは OS X 10.11 が実行されています。</translation>
-<translation id="5098668839038261629">オンにすると、Carbon Browser Browser からもログアウトします</translation>
-<translation id="5112116809696021727">デバイスが最新の状態かどうかを確認するには、<ph name="LINK_BEGIN" />Chrome OS の設定<ph name="LINK_END" />をご覧ください</translation>
-<translation id="5132929315877954718">Carbon Browser Browser のすばらしいアプリ、ゲーム、拡張機能、テーマをぜひご利用ください。</translation>
-<translation id="5139423532931106058">Carbon Browser Browser プロファイルをカスタマイズ</translation>
-<translation id="5163087008893166964">Carbon Browser Browser へようこそ。新しいブラウザ ウィンドウが開いています</translation>
-<translation id="5170938038195470297">バージョンが新しい Carbon Browser Browser のプロファイルは使用できません。一部の機能が利用できない可能性があります。別の場所のプロファイルを指定するか、新しいバージョンの Carbon Browser Browser をご使用ください。</translation>
-<translation id="521447420733633466">デバイスを共有している場合でも、友だちや家族はそれぞれ Carbon Browser Browser を自分専用のブラウザとして自分用の設定をして使うことができます</translation>
-<translation id="5251420635869119124">ゲスト ユーザーは、記録を残さずに Carbon Browser Browser を使用できます。</translation>
+<translation id="4970947549776831107">危険なファイル形式のため Carbon Browser でブロックされました</translation>
+<translation id="4990567037958725628">Carbon Browser Canary</translation>
+<translation id="5003967926796347400">[Google パスワード マネージャー] をクリックします</translation>
+<translation id="5126049312684316860">アクセスする可能性の高いページがさらに多くプリロードされ、該当のページにアクセスしたときにページの読み込み速度が向上します</translation>
+<translation id="5132929315877954718">Carbon Browser のすばらしいアプリ、ゲーム、拡張機能、テーマをぜひご利用ください。</translation>
+<translation id="5139423532931106058">Carbon Browser プロファイルをカスタマイズ</translation>
+<translation id="5163087008893166964">Carbon Browser へようこそ。新しいブラウザ ウィンドウが開いています</translation>
+<translation id="5170938038195470297">バージョンが新しい Carbon Browser のプロファイルは使用できません。一部の機能が利用できない可能性があります。別の場所のプロファイルを指定するか、新しいバージョンの Carbon Browser をご使用ください。</translation>
+<translation id="5201744974236816379">Carbon Browser の更新</translation>
+<translation id="521447420733633466">デバイスを共有している場合でも、友だちや家族はそれぞれ Carbon Browser を自分専用のブラウザとして自分用の設定をして使うことができます</translation>
+<translation id="5239627039202700673">メッセージ、ドキュメント、他のアプリのリンクをクリックしたときに、常に Carbon Browser で開くよう設定できます</translation>
+<translation id="5251420635869119124">ゲスト ユーザーは、記録を残さずに Carbon Browser を使用できます。</translation>
+<translation id="5320351714793324716">Cookie を許可した場合、Carbon Browser はプリロードの際に Cookie を使用することがあります</translation>
 <translation id="5334309298019785904">ご使用のドメインでは同期を利用できないため、Chrome OS はデータを同期できませんでした。</translation>
-<translation id="5334487786912937552">ファイルをダウンロードするには、Carbon Browser Browser でストレージへのアクセスを許可する必要があります</translation>
+<translation id="5334487786912937552">ファイルをダウンロードするには、Carbon Browser でストレージへのアクセスを許可する必要があります</translation>
 <translation id="5337648990166757586">任意: 診断と使用状況のデータを Google に自動送信して、Chrome OS の機能とパフォーマンスの改善に協力する。</translation>
-<translation id="5357889879764279201">Carbon Browser BrowserOS Flex のヘルプを見る</translation>
-<translation id="5386244825306882791">この拡張機能では、Carbon Browser Browser の起動時、またはアドレスバーからの検索時に表示されるページも制御されます。</translation>
-<translation id="5394833366792865639">Carbon Browser Browser タブの共有</translation>
-<translation id="5412485296464121825">サイトでは、ユーザーの興味 / 関心についての情報を Carbon Browser Browser に保存する場合があります。たとえば、マラソン用のシューズを購入するためにあるサイトにアクセスすると、そのサイトでは「ランニング」をユーザーの興味 / 関心として定義する可能性があります。その後、別のサイトにアクセスして競技に登録しようとすると、そのサイトでは、ユーザーの興味 / 関心に基づいてランニング用シューズの広告が表示される場合があります。</translation>
+<translation id="5357889879764279201">Carbon BrowserOS Flex のヘルプを見る</translation>
+<translation id="5368118228313795342">他のコード: <ph name="EXTRA_CODE" />。</translation>
+<translation id="5386118856456530849">Carbon Browser のバージョン設定に移動</translation>
+<translation id="5386244825306882791">この拡張機能では、Carbon Browser の起動時、またはアドレスバーからの検索時に表示されるページも制御されます。</translation>
+<translation id="5394833366792865639">Carbon Browser タブの共有</translation>
+<translation id="5412485296464121825">サイトでは、ユーザーの興味 / 関心についての情報を Carbon Browser に保存する場合があります。たとえば、マラソン用のシューズを購入するためにあるサイトにアクセスすると、そのサイトでは「ランニング」をユーザーの興味 / 関心として定義する可能性があります。その後、別のサイトにアクセスして競技に登録しようとすると、そのサイトでは、ユーザーの興味 / 関心に基づいてランニング用シューズの広告が表示される場合があります。</translation>
 <translation id="5430073640787465221">ユーザー設定ファイルが壊れているか無効です。設定を復元できません。</translation>
-<translation id="5524761631371622910">Carbon Browser Browser の試用期間がランダムに割り当てられた場合は、閲覧履歴が、表示される広告と以下の推定された興味 / 関心に影響します。プライバシーを保護するために、Carbon Browser Browser ではユーザーの興味 / 関心が毎月順番に削除されます。</translation>
-<translation id="556024056938947818">Carbon Browser Browser はパスワードを表示しようとしています。</translation>
-<translation id="5566025111015594046">Carbon Browser Browser（mDNS インバウンド）</translation>
-<translation id="565744775970812598"><ph name="FILE_NAME" /> は危険なファイルの可能性があるため、Carbon Browser Browser でブロックしました。</translation>
-<translation id="5678190148303298925">{COUNT,plural, =0{管理者が、このアップデートを適用するために Carbon Browser Browser を再起動するよう求めています}=1{管理者が、このアップデートを適用するために Carbon Browser Browser を再起動するよう求めています。シークレット ウィンドウは、再起動後は自動的には開きません。}other{管理者が、このアップデートを適用するために Carbon Browser Browser を再起動するよう求めています。現在開いている # 個のシークレット ウィンドウは、再起動後は自動的には開きません。}}</translation>
-<translation id="5686916850681061684">Carbon Browser Browser をカスタマイズ、制御します。確認の必要な項目があります。クリックして詳細をご覧ください。</translation>
+<translation id="5468572406162360320">Carbon Browser では、これらの機能を改善するため、ユーザーの操作内容を Google に送信します。このデータは人間のレビュアーによって読み取られ、処理され、注釈が付けられる可能性があります。</translation>
+<translation id="5524761631371622910">Carbon Browser の試用期間がランダムに割り当てられた場合は、閲覧履歴が、表示される広告と以下の推定された興味 / 関心に影響します。プライバシーを保護するために、Carbon Browser ではユーザーの興味 / 関心が毎月順番に削除されます。</translation>
+<translation id="5530733413481476019">Carbon Browser を高速化する</translation>
+<translation id="5566025111015594046">Carbon Browser（mDNS インバウンド）</translation>
+<translation id="5572786658631721382">オフにした場合も、ローカルで提供される検索候補は引き続き表示されます</translation>
+<translation id="565744775970812598"><ph name="FILE_NAME" /> は危険なファイルの可能性があるため、Carbon Browser でブロックしました。</translation>
+<translation id="5678190148303298925">{COUNT,plural, =0{管理者が、このアップデートを適用するために Carbon Browser を再起動するよう求めています}=1{管理者が、このアップデートを適用するために Carbon Browser を再起動するよう求めています。シークレット ウィンドウは、再起動後は自動的には開きません。}other{管理者が、このアップデートを適用するために Carbon Browser を再起動するよう求めています。現在開いている # 個のシークレット ウィンドウは、再起動後は自動的には開きません。}}</translation>
+<translation id="5686916850681061684">Carbon Browser をカスタマイズ、制御します。確認の必要な項目があります。クリックして詳細をご覧ください。</translation>
 <translation id="5690427481109656848">Carbon X Labs</translation>
-<translation id="5715063361988620182">{SECONDS,plural, =1{Carbon Browser Browser は 1 秒後に再起動します}other{Carbon Browser Browser は # 秒後に再起動します}}</translation>
-<translation id="5727531838415286053">Carbon Browser Browser の試用期間がランダムに割り当てられた場合は、閲覧履歴が、表示される広告と以下の推定された興味 / 関心に影響します。プライバシーを保護するために、Carbon Browser Browser ではユーザーの興味 / 関心が毎月順番に削除されます。ユーザーが削除しない限り、興味 / 関心は更新されます。</translation>
+<translation id="569897634095159764">インターネットに接続できません。プロキシ サーバーにより認証を求められています。</translation>
+<translation id="570005089986962444">オンにすると、アクティブでないタブのメモリを解放します。これにより、アクティブなタブや他のアプリで利用できるコンピュータ リソースが増え、Carbon Browser の速度低下を抑えられます。アクティブでないタブは、再度アクセスすると自動的にアクティブになります。</translation>
+<translation id="5709557627224531708">Carbon Browser を既定のブラウザに設定する</translation>
+<translation id="5727531838415286053">Carbon Browser の試用期間がランダムに割り当てられた場合は、閲覧履歴が、表示される広告と以下の推定された興味 / 関心に影響します。プライバシーを保護するために、Carbon Browser ではユーザーの興味 / 関心が毎月順番に削除されます。ユーザーが削除しない限り、興味 / 関心は更新されます。</translation>
 <translation id="5736850870166430177">サイトがパスワードを不正に取得しようとしている場合や、ユーザーが安全でないファイルをダウンロードしようとした場合は、URL とページ コンテンツの一部をセーフ ブラウジングに送信することがあります</translation>
-<translation id="5756509061973259733">このアカウントの Carbon Browser Browser プロファイルは、このデバイスにすでに存在します</translation>
-<translation id="5795887333006832406"><ph name="PAGE_TITLE" /> - Carbon Browser Browser Canary</translation>
-<translation id="5804318322022881572">Carbon Browser Browser を起動できませんでした。もう一度お試しください。</translation>
-<translation id="5867197326698922595">Carbon Browser Browser でパスワードを編集しようとしています。</translation>
+<translation id="5756509061973259733">このアカウントの Carbon Browser プロファイルは、このデバイスにすでに存在します</translation>
+<translation id="5795887333006832406"><ph name="PAGE_TITLE" /> - Carbon Browser Canary</translation>
+<translation id="5804318322022881572">Carbon Browser を起動できませんでした。もう一度お試しください。</translation>
+<translation id="5809516625706423866">インターネットに接続できません。HTTP 401 認証エラーが発生しました。プロキシ設定をご確認ください。</translation>
+<translation id="586971344380992563">安全でないサイトやダウンロードが見つかると <ph name="BEGIN_LINK" />Carbon Browser が警告<ph name="END_LINK" /></translation>
 <translation id="5895138241574237353">再起動</translation>
-<translation id="5901850848447342934">Carbon Browser Browser を閉じると、<ph name="BEGIN_BOLD" />ほとんどのサイトからログアウト<ph name="END_BOLD" />します。同期がオフの場合は、<ph name="BEGIN_BOLD" />Google サービスと Carbon Browser Browser からもログアウト<ph name="END_BOLD" />します。</translation>
 <translation id="5903106910045431592"><ph name="PAGE_TITLE" /> - ネットワークにログイン</translation>
 <translation id="5924017743176219022">インターネットに接続しています…</translation>
-<translation id="5940385492829620908">ウェブ、ブックマーク、その他の Carbon Browser Browser データを好みに設定できます。</translation>
+<translation id="5932997892801542621">Carbon Browser でアドレスバーや検索ボックスに入力を始めると、入力内容が Google ドライブに送信され、検索候補が表示されます。シークレット モードの場合、この設定はオフになっています。</translation>
+<translation id="5940385492829620908">ウェブ、ブックマーク、その他の Carbon Browser データを好みに設定できます。</translation>
 <translation id="5941711191222866238">最小化</translation>
-<translation id="5941830788786076944">Carbon Browser Browser を既定のブラウザにする</translation>
-<translation id="5959292945051687759">このページに設定が表示されない場合は、<ph name="LINK_BEGIN" />Chrome OS の設定<ph name="LINK_END" />を確認してください</translation>
+<translation id="5941830788786076944">Carbon Browser を既定のブラウザにする</translation>
 <translation id="6003112304606738118">ダウンロードしています... 残り <ph name="HOURS" /> 時間です</translation>
+<translation id="6010556343189461180">今後、Carbon Browser のアップデートを受信するには、macOS 10.15 以降が必要となります。このコンピュータでは macOS 10.14 が実行されています。</translation>
+<translation id="6014316319780893079"><ph name="BEGIN_LINK" />Carbon Browser のツール<ph name="END_LINK" />を使って、自分で管理しながら安全にブラウジングできます</translation>
+<translation id="6022659036123304283">Carbon Browser を独自にカスタマイズ</translation>
+<translation id="6025087594896450715">Carbon Browser は <ph name="REMAINING_TIME" /> 後に再起動します</translation>
 <translation id="6040143037577758943">閉じる</translation>
-<translation id="6070348360322141662">セキュリティ強化のため、データは Carbon Browser Browser で暗号化されます</translation>
+<translation id="6070348360322141662">セキュリティ強化のため、データは Carbon Browser で暗号化されます</translation>
 <translation id="608006075545470555">このブラウザに仕事用プロファイルを追加</translation>
-<translation id="6113794647360055231">進化する Carbon Browser Browser</translation>
-<translation id="6145313976051292476">Carbon Browser Browser で PDF を開く</translation>
-<translation id="6169866489629082767"><ph name="PAGE_TITLE" /> - Carbon Browser Browser</translation>
-<translation id="6173637689840186878"><ph name="PAGE_TITLE" /> - Carbon Browser Browser Beta</translation>
-<translation id="6235018212288296708">mDNS トラフィックを許可する Carbon Browser Browser のインバウンド ルールです。</translation>
+<translation id="6113794647360055231">進化する Carbon Browser</translation>
+<translation id="6145313976051292476">Carbon Browser で PDF を開く</translation>
+<translation id="6155960517327665396">メモリセーバーで Carbon Browser の速度を向上</translation>
+<translation id="6157638032135951407"><ph name="TIMEOUT_DURATION" /> 使用しなかったため、Carbon Browser のデータは組織によって削除されます。これには、履歴、自動入力、ダウンロードが含まれます。</translation>
+<translation id="6169866489629082767"><ph name="PAGE_TITLE" /> - Carbon Browser</translation>
+<translation id="6173637689840186878"><ph name="PAGE_TITLE" /> - Carbon Browser Beta</translation>
+<translation id="6182736845697986886">更新サーバーの内部エラーが発生したため、インストールできませんでした。</translation>
+<translation id="6235018212288296708">mDNS トラフィックを許可する Carbon Browser のインバウンド ルールです。</translation>
+<translation id="624230925347970731">Carbon Browser はまもなく終了します</translation>
 <translation id="6247557882553405851">Google パスワード マネージャー</translation>
+<translation id="6251759518630934363">標準保護機能より多くのサイトデータを分析して、危険なサイト（Google が認識していなかったサイトも含む）について警告します。Carbon Browser の警告をスキップすることもできます。</translation>
 <translation id="6273793429163604305">位置について...</translation>
-<translation id="6291089322031436445">Carbon Browser Browser Dev アプリ</translation>
-<translation id="6291549208091401781">Carbon Browser Browser は既にパソコンのすべてのユーザー対してインストールされています。</translation>
+<translation id="6277547788421725101">保護者が Carbon Browser の「サイト、アプリ、拡張機能の権限」をオフにしました</translation>
+<translation id="6291089322031436445">Carbon Browser Dev アプリ</translation>
+<translation id="6291549208091401781">Carbon Browser は既にパソコンのすべてのユーザー対してインストールされています。</translation>
+<translation id="6326175484149238433">Carbon Browser から削除</translation>
 <translation id="6327105987658262776">利用できるアップデートはありません。</translation>
-<translation id="6412673304250309937">Carbon Browser Browser に保存されている安全でないサイトのリストと URL を照合します。サイトがパスワードを不正に取得しようとしている場合や、ユーザーが安全でないファイルをダウンロードしようとした場合は、URL とページ コンテンツの一部をセーフ ブラウジングに送信することがあります。</translation>
-<translation id="6418662306461808273">既存の Carbon Browser Browser プロファイルに切り替えますか？</translation>
-<translation id="6506909944137591434">周囲の 3D マップを作成するには、Carbon Browser Browser にカメラの使用を許可する必要があります</translation>
-<translation id="6515495397637126556"><ph name="PAGE_TITLE" /> - Carbon Browser Browser Dev</translation>
+<translation id="6360449101159168105">Carbon Browser を高速に保つため、このタブがアクティブでないときにメモリを解放しました。このサイトを常にアクティブにするよう選択できます。</translation>
+<translation id="6412673304250309937">Carbon Browser に保存されている安全でないサイトのリストと URL を照合します。サイトがパスワードを不正に取得しようとしている場合や、ユーザーが安全でないファイルをダウンロードしようとした場合は、URL とページ コンテンツの一部をセーフ ブラウジングに送信することがあります。</translation>
+<translation id="6417690341895039567">{COUNT,plural, =1{1 分間使用しなかった場合、組織は Carbon Browser を自動的に終了します。閲覧データは削除されます。これには、履歴、自動入力、ダウンロードが含まれます。}other{# 分間使用しなかった場合、組織は Carbon Browser を自動的に終了します。閲覧データは削除されます。これには、履歴、自動入力、ダウンロードが含まれます。}}</translation>
+<translation id="6418662306461808273">既存の Carbon Browser プロファイルに切り替えますか？</translation>
+<translation id="648319183876919572">セーフ ブラウジング保護強化機能では、危険なウェブサイトやダウンロードから高いセキュリティ強度で保護されます</translation>
+<translation id="6493527311031785448">Carbon Browser が <ph name="AUTHENTICATION_PURPOSE" /></translation>
+<translation id="6497147134301593682">Carbon Browser は自動的に終了しました</translation>
+<translation id="6506909944137591434">周囲の 3D マップを作成するには、Carbon Browser にカメラの使用を許可する必要があります</translation>
+<translation id="6515495397637126556"><ph name="PAGE_TITLE" /> - Carbon Browser Dev</translation>
 <translation id="659498884637196217">このデバイスの Google パスワード マネージャー</translation>
-<translation id="6632473616050862500">Carbon Browser BrowserOS Flex は、追加の<ph name="BEGIN_LINK_CROS_OSS" />オープンソース ソフトウェア<ph name="END_LINK_CROS_OSS" />によって実現しました。</translation>
+<translation id="6632473616050862500">Carbon BrowserOS Flex は、追加の<ph name="BEGIN_LINK_CROS_OSS" />オープンソース ソフトウェア<ph name="END_LINK_CROS_OSS" />によって実現しました。</translation>
 <translation id="6676384891291319759">インターネットにアクセス</translation>
-<translation id="6679975945624592337">Carbon Browser Browser をバックグラウンドで実行する</translation>
-<translation id="6696915334902295848">このサイトを利用するには、Carbon Browser Browser でマイクの使用を許可する必要があります</translation>
-<translation id="6735387454586646204">Carbon Browser BrowserOS Flex システム</translation>
-<translation id="6739177684496155661">新しい Carbon Browser Browser プロファイルで続行しますか？</translation>
-<translation id="6750954913813541382">スペルミスを修正するために、ブラウザに入力したテキストが Carbon Browser Browser から Google に送信されます</translation>
-<translation id="677276454032249905">今すぐ Carbon Browser Browser を終了しますか？</translation>
-<translation id="6785872064505734160">Carbon Browser Browser の Google アシスタントは、ユーザーに代わってウェブサイトでの操作を完了できます</translation>
-<translation id="683440813066116847">mDNS トラフィックを許可する Carbon Browser Browser Canary のインバウンド ルールです。</translation>
-<translation id="6881299373831449287">Carbon Browser Browser を更新しています</translation>
-<translation id="6885412569789873916">Carbon Browser Browser ベータ版アプリ</translation>
+<translation id="6679975945624592337">Carbon Browser をバックグラウンドで実行する</translation>
+<translation id="6696915334902295848">このサイトを利用するには、Carbon Browser でマイクの使用を許可する必要があります</translation>
+<translation id="6712881677154121168">ダウンロード エラー: <ph name="DOWNLOAD_ERROR" />。</translation>
+<translation id="6718739135284199302">Carbon Browser を高速化する</translation>
+<translation id="6735387454586646204">Carbon BrowserOS Flex システム</translation>
+<translation id="6739177684496155661">新しい Carbon Browser プロファイルで続行しますか？</translation>
+<translation id="6750954913813541382">スペルミスを修正するために、ブラウザに入力したテキストが Carbon Browser から Google に送信されます</translation>
+<translation id="677276454032249905">今すぐ Carbon Browser を終了しますか？</translation>
+<translation id="6794858689789885890">Carbon Browser を閉じるとき、常にデバイスからサイトデータを削除する</translation>
+<translation id="683440813066116847">mDNS トラフィックを許可する Carbon Browser Canary のインバウンド ルールです。</translation>
+<translation id="6881299373831449287">Carbon Browser を更新しています</translation>
+<translation id="6885412569789873916">Carbon Browser ベータ版アプリ</translation>
 <translation id="6933858244219479645">Chrome OS システム</translation>
-<translation id="6943584222992551122">この操作を行うと、このユーザーの閲覧データがこのデバイスから削除されます。データを復元するには、<ph name="USER_EMAIL" /> として Carbon Browser Browser にログインしてください。</translation>
-<translation id="6967962315388095737">mDNS トラフィックを許可する Carbon Browser Browser ベータ版のインバウンド ルールです。</translation>
-<translation id="6989339256997917931">Carbon Browser Browser が更新されましたが、30 日間以上使用されていません。</translation>
+<translation id="6938166777909186039">今後、Carbon Browser のアップデートを受信するには、Windows 10 以降が必要となります。このパソコンでは Windows 8.1 が実行されています。</translation>
+<translation id="6943584222992551122">この操作を行うと、このユーザーの閲覧データがこのデバイスから削除されます。データを復元するには、<ph name="USER_EMAIL" /> として Carbon Browser にログインしてください。</translation>
+<translation id="6967962315388095737">mDNS トラフィックを許可する Carbon Browser ベータ版のインバウンド ルールです。</translation>
+<translation id="6989339256997917931">Carbon Browser が更新されましたが、30 日間以上使用されていません。</translation>
+<translation id="7011190694940573312">このバージョンのオペレーティング システムはサポートされていないため、インストールできませんでした。</translation>
+<translation id="7024536598735240744">解凍エラー: <ph name="UNPACK_ERROR" />。</translation>
 <translation id="7025789849649390912">インストールが停止しました。</translation>
-<translation id="7025800014283535195">こちらで Carbon Browser Browser プロフィールを切り替えることができます</translation>
-<translation id="7036251913954633326">このアカウントを 1 回だけ使用する場合は、Carbon Browser Browser ブラウザの<ph name="GUEST_LINK_BEGIN" />ゲストモード<ph name="GUEST_LINK_END" />を使用できます。他のユーザーのアカウントを追加する場合は、<ph name="DEVICE_TYPE" /> に<ph name="LINK_BEGIN" />新しいユーザーを追加<ph name="LINK_END" />します。
+<translation id="7025800014283535195">こちらで Carbon Browser プロファイルを切り替えることができます</translation>
+<translation id="7036251913954633326">このアカウントを 1 回だけ使用する場合は、Carbon Browser ブラウザの<ph name="GUEST_LINK_BEGIN" />ゲストモード<ph name="GUEST_LINK_END" />を使用できます。他のユーザーのアカウントを追加する場合は、<ph name="DEVICE_TYPE" /> に<ph name="LINK_BEGIN" />新しいユーザーを追加<ph name="LINK_END" />します。
 
 これまでにウェブサイトやアプリに許可した権限がこのアカウントに適用される可能性があります。Google アカウントは [<ph name="SETTINGS_LINK_BEGIN" />設定<ph name="SETTINGS_LINK_END" />] で管理できます。</translation>
-<translation id="7062128746136194023">保護者が Carbon Browser Browser の「サイト、アプリ、拡張機能の権限」をオフにしました。この <ph name="EXTENSION_TYPE_PARAMETER" /> を追加することはできません。</translation>
-<translation id="7085332316435785646">Carbon Browser Browser の履歴を含めて、Google サービスのパーソナライズに使用するかどうかを選択してください</translation>
-<translation id="7088681679121566888">Carbon Browser Browser は最新の状態です</translation>
-<translation id="7098166902387133879">Carbon Browser Browser がマイクを使用しています。</translation>
+<translation id="7071827361006050863">Carbon Browser でまもなく閲覧データが削除されます</translation>
+<translation id="7085332316435785646">Carbon Browser の履歴を含めて、Google サービスのパーソナライズに使用するかどうかを選択してください</translation>
+<translation id="7088681679121566888">Carbon Browser は最新の状態です</translation>
+<translation id="7098166902387133879">Carbon Browser がマイクを使用しています。</translation>
 <translation id="7099479769133613710">再起動して Chrome OS を更新</translation>
-<translation id="7106741999175697885">タスク マネージャ - Carbon Browser Browser</translation>
-<translation id="7140653346177713799">{COUNT,plural, =0{Carbon Browser Browser の新しいアップデートを利用できます。再起動するとすぐにアップデートが適用されます。}=1{Carbon Browser Browser の新しいアップデートを利用できます。再起動するとすぐにアップデートが適用されます。シークレット ウィンドウは、再起動後は自動的には開きません。}other{Carbon Browser Browser の新しいアップデートを利用できます。再起動するとすぐにアップデートが適用されます。現在開いている # 個のシークレット ウィンドウは、再起動後は自動的には開きません。}}</translation>
-<translation id="7155997830309522122">その場合は、Carbon Browser Browser に保存したパスワードを編集して、新しいパスワードと一致するようにしてください。</translation>
-<translation id="7161904924553537242">Carbon Browser Browser へようこそ</translation>
-<translation id="7177959540995930968">これらの機能について詳しくは、Carbon Browser Browser の設定をご覧ください。</translation>
-<translation id="7242029209006116544">現在、管理対象アカウントでログインしており、あなたの Carbon Browser Browser プロファイルを管理者が制御できる状態になっています。あなたの Carbon Browser Browser データ（アプリ、ブックマーク、履歴、パスワードなどの設定）は永続的に <ph name="USER_NAME" /> に関連付けられます。このデータは Google アカウントのダッシュボードを介して削除できますが、このデータを別のアカウントに関連付けることはできなくなります。新しいプロファイルを作成して、既存の Carbon Browser Browser データを別に保管することができます。<ph name="LEARN_MORE" /></translation>
-<translation id="7295052994004373688">この言語が Carbon Browser Browser UI の表示に使用されます</translation>
+<translation id="7106741999175697885">タスク マネージャ - Carbon Browser</translation>
+<translation id="7140653346177713799">{COUNT,plural, =0{Carbon Browser の新しいアップデートを利用できます。再起動するとすぐにアップデートが適用されます。}=1{Carbon Browser の新しいアップデートを利用できます。再起動するとすぐにアップデートが適用されます。シークレット ウィンドウは、再起動後は自動的には開きません。}other{Carbon Browser の新しいアップデートを利用できます。再起動するとすぐにアップデートが適用されます。現在開いている # 個のシークレット ウィンドウは、再起動後は自動的には開きません。}}</translation>
+<translation id="7155997830309522122">その場合は、Carbon Browser に保存したパスワードを編集して、新しいパスワードと一致するようにしてください。</translation>
+<translation id="7161904924553537242">Carbon Browser へようこそ</translation>
+<translation id="7177959540995930968">これらの機能について詳しくは、Carbon Browser の設定をご覧ください。</translation>
+<translation id="7193885263065350793"><ph name="TIMEOUT_DURATION" /> 使用しなかったため、Carbon Browser は組織によって終了されます。</translation>
+<translation id="7242029209006116544">現在、管理対象アカウントでログインしており、あなたの Carbon Browser プロファイルを管理者が制御できる状態になっています。あなたの Carbon Browser データ（アプリ、ブックマーク、履歴、パスワードなどの設定）は永続的に <ph name="USER_NAME" /> に関連付けられます。このデータは Google アカウントのダッシュボードを介して削除できますが、このデータを別のアカウントに関連付けることはできなくなります。新しいプロファイルを作成して、既存の Carbon Browser データを別に保管することができます。<ph name="LEARN_MORE" /></translation>
+<translation id="7284878711178835966">入力を始めると、アドレスバーや検索ボックスの内容が既定の検索エンジンに送信されます</translation>
+<translation id="7295052994004373688">この言語が Carbon Browser UI の表示に使用されます</translation>
 <translation id="7296210096911315575">使用と安全に関する重要事項</translation>
-<translation id="7308322188646931570">ファイルをダウンロードするには、Carbon Browser Browser でストレージへのアクセスを許可する必要があります</translation>
+<translation id="7308322188646931570">ファイルをダウンロードするには、Carbon Browser でストレージへのアクセスを許可する必要があります</translation>
 <translation id="7339898014177206373">新しいウィンドウ</translation>
-<translation id="7388770099345495132">このアカウントを 1 回だけ使用する場合は、Carbon Browser Browser ブラウザのゲストモードを使用できます。他のユーザーのアカウントを追加する場合は、<ph name="DEVICE_TYPE" /> に<ph name="LINK_BEGIN" />新しいユーザーを追加<ph name="LINK_END" />します。
-
-これまでにウェブサイトやアプリに許可した権限がこのアカウントに適用される可能性があります。Google アカウントは [<ph name="SETTINGS_LINK_BEGIN" />設定<ph name="SETTINGS_LINK_END" />] で管理できます。</translation>
-<translation id="7398801000654795464">Carbon Browser Browser に <ph name="USER_EMAIL_ADDRESS" /> としてログインしていました。再度ログインするには同じアカウントを使用してください。</translation>
-<translation id="7410958280246779049">危険なファイルのため Carbon Browser Browser でブロックされました</translation>
-<translation id="7426611252293106642">この Linux ディストリビューションはサポートされなくなったため、Carbon Browser Browser は正常に機能しない可能性があります</translation>
-<translation id="7481213027396403996">Carbon Browser Browser の最高水準のセキュリティで保護</translation>
-<translation id="7486227612705979895">Carbon Browser Browser からお客様のドライブにアクセスして、アドレスバーに候補を表示します</translation>
-<translation id="7535429826459677826">Carbon Browser Browser Dev</translation>
+<translation id="7398801000654795464">Carbon Browser に <ph name="USER_EMAIL_ADDRESS" /> としてログインしていました。再度ログインするには同じアカウントを使用してください。</translation>
+<translation id="7410958280246779049">危険なファイルのため Carbon Browser でブロックされました</translation>
+<translation id="7412494426921990001">Carbon Browser メニューをクリックします</translation>
+<translation id="742463671275348370">{NUM_DEVICES,plural, =0{1 つ以上の Carbon Browser 拡張機能が 1 台の USB デバイスにアクセスしていました}=1{1 つ以上の Carbon Browser 拡張機能が 1 台の USB デバイスにアクセスしています}other{1 つ以上の Carbon Browser 拡張機能が # 台の USB デバイスにアクセスしています}}</translation>
+<translation id="7426611252293106642">この Linux ディストリビューションはサポートされなくなったため、Carbon Browser は正常に機能しない可能性があります</translation>
+<translation id="7449333426561673451">{COUNT,plural, =1{1 分間使用しなかった場合、組織は Carbon Browser を自動的に終了します。}other{# 分間使用しなかった場合、組織は Carbon Browser を自動的に終了します。}}</translation>
+<translation id="7452987490177144319">{COUNT,plural, =1{1 分間使用しなかった場合、組織は Carbon Browser の閲覧データを自動的に削除します。これには、履歴、自動入力、ダウンロードが含まれます。タブは開いたままになります。}other{# 分間使用しなかった場合、組織は Carbon Browser の閲覧データを自動的に削除します。これには、履歴、自動入力、ダウンロードが含まれます。タブは開いたままになります。}}</translation>
+<translation id="7477130805345743099">Carbon Browser で安全でない接続を使用してサイトを読み込む前に警告を表示します</translation>
+<translation id="7481213027396403996">Carbon Browser の最高水準のセキュリティで保護</translation>
+<translation id="7535429826459677826">Carbon Browser Dev</translation>
 <translation id="7583399374488819119"><ph name="COMPANY_NAME" /> インストーラ</translation>
-<translation id="7606334485649076285">Carbon Browser BrowserOS Flex</translation>
-<translation id="7626032353295482388">Carbon Browser Browser へようこそ</translation>
+<translation id="7606334485649076285">Carbon BrowserOS Flex</translation>
+<translation id="7626032353295482388">Carbon Browser へようこそ</translation>
 <translation id="7626072681686626474"><ph name="MANAGER" /> では、このデバイスを使用する前に下記の利用規約を確認しこれに同意していただく必要があります。これらの規約は Google Chrome OS 利用規約を拡張、変更、制限するものではありません。</translation>
-<translation id="7629695634924605473">Carbon Browser Browser では、特定のパスワードが侵害された事実の有無がわかります</translation>
-<translation id="7641148173327520642">システム管理者が、<ph name="TARGET_URL_HOSTNAME" /> へのアクセスに <ph name="ALTERNATIVE_BROWSER_NAME" /> を開くよう Carbon Browser Browser を設定しています。</translation>
+<translation id="7629695634924605473">Carbon Browser では、特定のパスワードが侵害された事実の有無がわかります</translation>
+<translation id="7641148173327520642">システム管理者が、<ph name="TARGET_URL_HOSTNAME" /> へのアクセスに <ph name="ALTERNATIVE_BROWSER_NAME" /> を開くよう Carbon Browser を設定しています。</translation>
 <translation id="7649070708921625228">ヘルプ</translation>
-<translation id="7651907282515937834">Carbon Browser Browser Enterprise ロゴ</translation>
-<translation id="7655455401911432608">閲覧履歴（このデバイスで Carbon Browser Browser を使用してアクセスしたサイトの記録）。</translation>
+<translation id="7651907282515937834">Carbon Browser Enterprise ロゴ</translation>
+<translation id="76531479118467370">このダウンロードは Carbon Browser でブロックされました。セーフ ブラウジングがオフになっており、ファイルを確認できません</translation>
+<translation id="7655455401911432608">ユーザーの閲覧履歴（該当のデバイスで Carbon Browser を使用して訪れたウェブサイトの記録）。</translation>
+<translation id="769538538642757151">確認の必要な項目がありましたらお知らせします</translation>
 <translation id="7747138024166251722">インストーラーの一時ディレクトリを作成できませんでした。ディスクの空き領域とソフトウェアのインストール許可があることを確認してください。</translation>
-<translation id="7761834446675418963">Carbon Browser Browser を開いてブラウジングを始めるには、名前をクリックしてください。</translation>
-<translation id="7777080907402804672">画像に有効な説明が設定されていない場合に、Carbon Browser Browser で説明を自動的に生成できるよう Google に画像が送信されます。この機能は設定でいつでも無効にできます。</translation>
+<translation id="7761834446675418963">Carbon Browser を開いてブラウジングを始めるには、名前をクリックしてください。</translation>
+<translation id="7777080907402804672">画像に有効な説明が設定されていない場合に、Carbon Browser で説明を自動的に生成できるよう Google に画像が送信されます。この機能は設定でいつでも無効にできます。</translation>
 <translation id="7781002470561365167">Google クロームブラウザの最新バージョンを是非お試しください。</translation>
-<translation id="778331955594035129">このサイトを利用するには、Carbon Browser Browser で位置情報の使用を許可する必要があります</translation>
-<translation id="7787950393032327779">プロファイルは、別のコンピュータ（<ph name="HOST_NAME" />）の別の Carbon Browser Browser プロセス（<ph name="PROCESS_ID" />）で使用されているようです。Carbon Browser Browser はプロファイルが破損しないようにプロファイルをロックしています。他のプロセスがこのプロファイルを使用していないことが確実であれば、プロファイルのロックを解除して Carbon Browser Browser を再起動できます。</translation>
-<translation id="7801699035218095297">Carbon Browser Browser がパスワードをコピーしようとしています。続行するには、Windows のパスワードを入力してください。</translation>
-<translation id="7808348361785373670">Carbon Browser Browser から削除...</translation>
-<translation id="7825851276765848807">原因不明のエラーによりインストールに失敗しました。Carbon Browser Browser をもう一度ダウンロードしてください。</translation>
+<translation id="778331955594035129">このサイトを利用するには、Carbon Browser で位置情報の使用を許可する必要があります</translation>
+<translation id="7787950393032327779">プロファイルは、別のコンピュータ（<ph name="HOST_NAME" />）の別の Carbon Browser プロセス（<ph name="PROCESS_ID" />）で使用されているようです。Carbon Browser はプロファイルが破損しないようにプロファイルをロックしています。他のプロセスがこのプロファイルを使用していないことが確実であれば、プロファイルのロックを解除して Carbon Browser を再起動できます。</translation>
+<translation id="7801699035218095297">Carbon Browser がパスワードをコピーしようとしています。続行するには、Windows のパスワードを入力してください。</translation>
+<translation id="7808348361785373670">Carbon Browser から削除...</translation>
+<translation id="7825851276765848807">原因不明のエラーによりインストールに失敗しました。Carbon Browser をもう一度ダウンロードしてください。</translation>
 <translation id="7845233973568007926">インストールいただきありがとうございます。<ph name="BUNDLE_NAME" /> を使用するにはコンピュータを再起動してください。</translation>
 <translation id="7872446069773932638">ダウンロードしています... 残り <ph name="SECONDS" /> 秒です</translation>
-<translation id="7880591377632733558">Carbon Browser Browser へようこそ、<ph name="ACCOUNT_FIRST_NAME" /> さん</translation>
-<translation id="7890208801193284374">パソコンを共有している場合、友だちや家族はそれぞれ Carbon Browser Browser を自分専用のブラウザとして自分用の設定をして使うことができます。</translation>
-<translation id="7896673875602241923">前回このパソコンで別のユーザー（<ph name="ACCOUNT_EMAIL_LAST" />）が Carbon Browser Browser にログインしました。情報を個別に保持するには、新しい Carbon Browser Browser ユーザーを作成してください。</translation>
-<translation id="7917876797003313048">ログインする Google アカウントを管理できます。Google アカウントは、Carbon Browser Browser ブラウザ、Play ストア、Gmail などで使用されます。家族など、あなた以外の人のアカウントを追加する場合は、<ph name="DEVICE_TYPE" /> に新しいユーザーを追加してください。<ph name="LINK_BEGIN" />詳細<ph name="LINK_END" /></translation>
-<translation id="7930071585467473040">Carbon Browser Browser がパスワードをコピーしようとしています。</translation>
-<translation id="7951272445806340501">アップデートを適用するには Carbon Browser BrowserOS Flex を再起動する必要があります。</translation>
-<translation id="7962410387636238736">Windows XP と Windows Vista はサポートされなくなったため、このパソコンでは今後 Carbon Browser Browser のアップデートは受信されません</translation>
+<translation id="7880591377632733558">Carbon Browser へようこそ、<ph name="ACCOUNT_FIRST_NAME" /> さん</translation>
+<translation id="7890208801193284374">パソコンを共有している場合、友だちや家族はそれぞれ Carbon Browser を自分専用のブラウザとして自分用の設定をして使うことができます。</translation>
+<translation id="7896673875602241923">前回このパソコンで別のユーザー（<ph name="ACCOUNT_EMAIL_LAST" />）が Carbon Browser にログインしました。情報を個別に保持するには、新しい Carbon Browser ユーザーを作成してください。</translation>
+<translation id="7917876797003313048">ログインする Google アカウントを管理できます。Google アカウントは、Carbon Browser ブラウザ、Play ストア、Gmail などで使用されます。家族など、あなた以外の人のアカウントを追加する場合は、<ph name="DEVICE_TYPE" /> に新しいユーザーを追加してください。<ph name="LINK_BEGIN" />詳細<ph name="LINK_END" /></translation>
+<translation id="7936702483636872823">このダウンロードは Carbon Browser でブロックされました。ファイルが虚偽のもので、デバイスに予期しない変更を加える可能性があります</translation>
+<translation id="7951272445806340501">アップデートを適用するには Carbon BrowserOS Flex を再起動する必要があります。</translation>
+<translation id="7962368738413920945">サイトはおおむね想定どおりに機能しますが、Carbon Browser のウィンドウをすべて閉じるとユーザーに関する情報は失われます</translation>
+<translation id="7962410387636238736">Windows XP と Windows Vista はサポートされなくなったため、このパソコンでは今後 Carbon Browser のアップデートは受信されません</translation>
 <translation id="8005666035647241369">このデバイスの Google パスワード マネージャーに移動</translation>
-<translation id="8008534537613507642">Carbon Browser Browser を再インストール</translation>
-<translation id="8013993649590906847">画像に有効な説明が設定されていない場合に、Carbon Browser Browser で説明を自動的に生成できるよう Google に画像が送信されます。</translation>
+<translation id="8008534537613507642">Carbon Browser を再インストール</translation>
+<translation id="8009904340233602924">アカウントなしで Carbon Browser を使用する</translation>
+<translation id="8013993649590906847">画像に有効な説明が設定されていない場合に、Carbon Browser で説明を自動的に生成できるよう Google に画像が送信されます。</translation>
+<translation id="8019103195866286235">この拡張機能はデベロッパーが非公開にしており、安全でない可能性があります。アクセスしたサイトでユーザーデータ（個人情報を含む）が参照、変更されないように、Carbon Browser からこの拡張機能を削除してください。</translation>
 <translation id="80471789339884597">インストールいただきありがとうございます。<ph name="BUNDLE_NAME" /> を使用するにはすべてのブラウザを再起動してください。</translation>
-<translation id="8064015586118426197">Carbon Browser BrowserOS Flex</translation>
-<translation id="808089508890593134">Google</translation>
-<translation id="8129812357326543296">Carbon Browser Browser について(&amp;G)</translation>
+<translation id="8064015586118426197">Carbon BrowserOS Flex</translation>
+<translation id="8086881907087796310">パソコンがハードウェアの最小要件を満たしていないため、インストールできませんでした。</translation>
+<translation id="8129812357326543296">Carbon Browser について(&amp;G)</translation>
 <translation id="813913629614996137">初期化しています...</translation>
-<translation id="8255190535488645436">Carbon Browser Browser がカメラとマイクを使用しています。</translation>
-<translation id="8270775718612349140">Carbon Browser Browser で管理されている証明書</translation>
-<translation id="8286862437124483331">Carbon Browser Browser でパスワードを表示しようとしています。続行するには、Windows のパスワードを入力してください。</translation>
-<translation id="828798499196665338">保護者が Carbon Browser Browser の「サイト、アプリ、拡張機能の権限」をオフにしました。この <ph name="EXTENSION_TYPE_PARAMETER" /> を有効にすることはできません。</translation>
-<translation id="8290100596633877290">エラー: Carbon Browser Browser で問題が発生しました。今すぐ再起動しますか？</translation>
-<translation id="8342675569599923794">このファイルは危険なファイルであるため、Carbon Browser Browser でブロックしました。</translation>
-<translation id="8349795646647783032"><ph name="BEGIN_BOLD" />このデータの利用方法:<ph name="END_BOLD" /> サイトでは、ユーザーの興味 / 関心に関する情報を Carbon Browser Browser に保存できます。たとえば、マラソン用のシューズを購入するためにあるサイトにアクセスすると、そのサイトでは「ランニング」をユーザーの興味 / 関心として定義する可能性があります。その後、別のサイトにアクセスして競技に登録しようとすると、そのサイトでは、ユーザーの興味 / 関心に基づいてランニング用シューズの広告が表示される場合があります。</translation>
+<translation id="8255190535488645436">Carbon Browser がカメラとマイクを使用しています。</translation>
+<translation id="8267953129876836456">安全に関する推奨事項をご確認ください</translation>
+<translation id="8270775718612349140">Carbon Browser で管理されている証明書</translation>
+<translation id="8286862437124483331">Carbon Browser でパスワードを表示しようとしています。続行するには、Windows のパスワードを入力してください。</translation>
+<translation id="8290100596633877290">エラー: Carbon Browser で問題が発生しました。今すぐ再起動しますか？</translation>
+<translation id="829923460755755423">Google パスワード マネージャーへのショートカットを追加できます</translation>
+<translation id="8336463659890584292">ページのリンクを非公開でプリロードするようサイトから求められた場合、Carbon Browser は Google サーバーを使用します。これによりプリロードしたサイトにユーザーの情報が知られることはありませんが、Google はどのようなサイトがプリロードされたかを学習します。</translation>
+<translation id="8342675569599923794">このファイルは危険なファイルであるため、Carbon Browser でブロックしました。</translation>
+<translation id="8349795646647783032"><ph name="BEGIN_BOLD" />このデータの利用方法:<ph name="END_BOLD" /> サイトでは、ユーザーの興味 / 関心に関する情報を Carbon Browser に保存できます。たとえば、マラソン用のシューズを購入するためにあるサイトにアクセスすると、そのサイトでは「ランニング」をユーザーの興味 / 関心として定義する可能性があります。その後、別のサイトにアクセスして競技に登録しようとすると、そのサイトでは、ユーザーの興味 / 関心に基づいてランニング用シューズの広告が表示される場合があります。</translation>
 <translation id="8370517070665726704">Copyright <ph name="YEAR" /> Carbon X Labs. All rights reserved.</translation>
-<translation id="8383226135083126309"><ph name="BEGIN_BOLD" />このデータの利用方法:<ph name="END_BOLD" /> Carbon Browser Browser はユーザーの興味 / 関心を推定できます。その後、アクセスしたサイトは、表示する広告をカスタマイズするために、Carbon Browser Browser にユーザーの興味 / 関心を確認するよう依頼できます。</translation>
-<translation id="8394720698884623075">Carbon Browser Browser に保存されている安全でないサイトのリストと URL を照合します</translation>
-<translation id="840084489713044809">Carbon Browser Browser からパスワードをエクスポートするための許可を求められています。</translation>
-<translation id="8416347857511542594">Carbon Browser Browser での広告のカスタマイズの詳細</translation>
+<translation id="8383226135083126309"><ph name="BEGIN_BOLD" />このデータの利用方法:<ph name="END_BOLD" /> Carbon Browser はユーザーの興味 / 関心を推定できます。その後、アクセスしたサイトは、表示する広告をパーソナライズするために、Carbon Browser にユーザーの興味 / 関心を確認するよう依頼できます。</translation>
+<translation id="8387459386171870978">Carbon Browser を引き続き使用</translation>
+<translation id="8394720698884623075">Carbon Browser に保存されている安全でないサイトのリストと URL を照合します</translation>
+<translation id="8403038600646341038">パソコンの画面に表示された Carbon Browser のロゴ。</translation>
+<translation id="8416347857511542594">Carbon Browser での広告のパーソナライズの詳細</translation>
 <translation id="8418845734693287262">アカウントのログイン情報が最新でないため、Chrome OS はデータを同期できませんでした。</translation>
-<translation id="8433638294851456451">Android スマートフォンに番号を送信するには、両方のデバイスで Carbon Browser Browser にログインしてください。</translation>
-<translation id="8451192282033883849">あなたのアカウントは <ph name="MANAGER_NAME" /> によって管理されています。管理者は、この Carbon Browser Browser ブラウザのプロフィールとそのデータ（ブックマーク、履歴、パスワードなど）を表示、編集できます。</translation>
-<translation id="8498858610309223613">Carbon Browser Browser の特別なセキュリティ アップデートが適用されました。今すぐ再起動してください。タブは復元されます。</translation>
-<translation id="8504220326736535258">このファイルにはマルウェアが含まれているため、Carbon Browser Browser でブロックされました</translation>
-<translation id="8516431725144212809">Carbon Browser Browser が推定したお客様の興味 / 関心</translation>
-<translation id="8521348052903287641">mDNS トラフィックを許可する Carbon Browser Browser Dev のインバウンド ルールです。</translation>
-<translation id="8540666473246803645">Carbon Browser Browser</translation>
+<translation id="842386925677997438">Carbon Browser の安全性ツール</translation>
+<translation id="8433638294851456451">Android スマートフォンに番号を送信するには、両方のデバイスで Carbon Browser にログインしてください。</translation>
+<translation id="8451192282033883849">あなたのアカウントは <ph name="MANAGER_NAME" /> によって管理されています。管理者は、この Carbon Browser ブラウザのプロフィールとそのデータ（ブックマーク、履歴、パスワードなど）を表示、編集できます。</translation>
+<translation id="8496177819998570653">Google パスワード マネージャー(&amp;A)</translation>
+<translation id="8498858610309223613">Carbon Browser の特別なセキュリティ アップデートが適用されました。今すぐ再起動してください。タブは復元されます。</translation>
+<translation id="8504220326736535258">このファイルにはマルウェアが含まれているため、Carbon Browser でブロックされました</translation>
+<translation id="8516431725144212809">Carbon Browser が推定したお客様の興味 / 関心</translation>
+<translation id="8521348052903287641">mDNS トラフィックを許可する Carbon Browser Dev のインバウンド ルールです。</translation>
 <translation id="8550334526674375523">この仕事用プロファイルは個人用プロファイルとは別に管理されます。</translation>
+<translation id="8555465886620020932">サービスエラー: <ph name="SERVICE_ERROR" />。</translation>
 <translation id="8556340503434111824">Google クロームブラウザがバージョンアップ！是非お試しください。</translation>
-<translation id="8571790202382503603">Carbon Browser Browser プロフィールを使うと、Carbon Browser Browser のあらゆる項目や設定を個別に管理できます。これにより、仕事と遊びの使い分けが簡単になります。</translation>
-<translation id="8614913330719544658">Carbon Browser Browser が応答しません。今すぐ再起動しますか？</translation>
-<translation id="861702415419836452">周囲の 3D マップを作成するには、Carbon Browser Browser にカメラの使用を許可する必要があります</translation>
-<translation id="8625237574518804553">{0,plural, =1{Carbon Browser Browser は 1 分後に再起動されます}other{Carbon Browser Browser は # 分後に再起動されます}}</translation>
-<translation id="8629311577791198377">Carbon Browser Browser のウィンドウをすべて閉じると、Cookie とサイトデータは自動的に削除されます</translation>
-<translation id="8641606876632989680">不正使用されたパスワードでログインした場合、Carbon Browser Browser で通知します</translation>
-<translation id="8649026945479135076">多くのサイトでは、アクセスしたユーザーの興味 / 関心を記憶して、エクスペリエンスをカスタマイズするのが一般的です。そうしたサイトでは、ユーザーの興味 / 関心についての情報を Carbon Browser Browser に保存する場合もあります。</translation>
-<translation id="8669527147644353129">Carbon Browser Browser Helper</translation>
-<translation id="8679801911857917785">この拡張機能では、Carbon Browser Browser の起動時に表示されるページも制御されます。</translation>
-<translation id="8684875378076460854">このファイルは危害を及ぼす可能性があるため、スキャンすることをおすすめします</translation>
-<translation id="8686817260976772516">Carbon Browser Browser プロフィールを使うと、Carbon Browser Browser のあらゆる項目や設定を個別に管理できます。友達や家族のプロフィールを作成したり、仕事とプライベートでプロフィールを使い分けたりできます。</translation>
-<translation id="8712767363896337380">アップデートが適用されました。更新を完了するには Carbon Browser Browser を再起動してください。</translation>
-<translation id="873133009373065397">Carbon Browser Browser では既定のブラウザを判定または設定できません</translation>
-<translation id="8823341990149967727">Carbon Browser Browser は古いバージョンです</translation>
-<translation id="8825634023950448068">ユーザーのプライバシーを保護するために、4 週間以上経過したユーザーの興味 / 関心は自動削除されます。ブラウジングを続けていると、興味 / 関心がリストに再度表示される場合もあります。Carbon Browser Browser に情報を残したくない場合、または特定の広告を表示させたくない場合は、興味 / 関心を削除できます。</translation>
-<translation id="8834965163890861871">Carbon Browser Browser でパスワードを編集しようとしています。続行するには、Windows のパスワードを入力してください。</translation>
-<translation id="884296878221830158">この拡張機能では、Carbon Browser Browser の起動時、またはホーム ボタンのクリック時に表示されるページも制御されます。</translation>
+<translation id="8571790202382503603">Carbon Browser プロフィールを使うと、Carbon Browser のあらゆる項目や設定を個別に管理できます。これにより、仕事と遊びの使い分けが簡単になります。</translation>
+<translation id="8614913330719544658">Carbon Browser が応答しません。今すぐ再起動しますか？</translation>
+<translation id="861702415419836452">周囲の 3D マップを作成するには、Carbon Browser にカメラの使用を許可する必要があります</translation>
+<translation id="8625237574518804553">{0,plural, =1{Carbon Browser は 1 分後に再起動されます}other{Carbon Browser は # 分後に再起動されます}}</translation>
+<translation id="8641606876632989680">不正使用されたパスワードでログインした場合、Carbon Browser で通知します</translation>
+<translation id="8649026945479135076">多くのウェブサイトでは、アクセスしたユーザーの興味 / 関心を記録して、ユーザー体験をパーソナライズするのが一般的です。そうしたウェブサイトでは、ユーザーの興味 / 関心についての情報を Carbon Browser に保存する場合があります。</translation>
+<translation id="8669527147644353129">Carbon Browser Helper</translation>
+<translation id="8679801911857917785">この拡張機能では、Carbon Browser の起動時に表示されるページも制御されます。</translation>
+<translation id="8686817260976772516">Carbon Browser プロファイルを使うと、Carbon Browser のあらゆる項目や設定を個別に管理できます。友達や家族のプロファイルを作成したり、仕事とプライベートでプロファイルを使い分けたりできます。</translation>
+<translation id="8712767363896337380">アップデートが適用されました。更新を完了するには Carbon Browser を再起動してください。</translation>
+<translation id="873133009373065397">Carbon Browser では既定のブラウザを判定または設定できません</translation>
+<translation id="8765470054473112089">Carbon Browser でアドレスバーや検索ボックスに入力を始めると、入力内容がデフォルトの検索エンジンに送信され、より関連性の高い検索候補が表示されます。シークレット モードの場合、この設定はオフになっています。</translation>
+<translation id="878572486461146056">インストール エラー: ネットワーク管理者により、インストールを許可しないというグループ ポリシーが適用されています: <ph name="INSTALL_ERROR" /></translation>
+<translation id="8821043148920470810">今後、Carbon Browser のアップデートを受信するには、Windows 10 以降が必要となります。このパソコンでは Windows 7 が実行されています。</translation>
+<translation id="8823341990149967727">Carbon Browser は古いバージョンです</translation>
+<translation id="8825634023950448068">ユーザーのプライバシーを保護するため、4 週間以上経過したユーザーの興味 / 関心は自動削除されます。閲覧を続けていると、興味 / 関心がリストに再度表示される場合もあります。Carbon Browser に情報を残したくない場合、または特定の広告を表示させたくない場合は、興味 / 関心を削除できます。</translation>
+<translation id="8834965163890861871">Carbon Browser でパスワードを編集しようとしています。続行するには、Windows のパスワードを入力してください。</translation>
 <translation id="8862326446509486874">権限が不十分なためシステムレベルのインストールができません。管理者権限でインストールしてください。</translation>
-<translation id="8914504000324227558">Carbon Browser Browser の再起動</translation>
-<translation id="8922193594870374009"><ph name="ORIGIN" /> から Android スマートフォンに番号を送信するには、両方のデバイスで Carbon Browser Browser にログインしてください。</translation>
-<translation id="8983720963221508955">アカウントでセーフ ブラウジング保護強化機能がオンになっています。Carbon Browser Browser にも適用します。</translation>
+<translation id="8914504000324227558">Carbon Browser の再起動</translation>
+<translation id="8922193594870374009"><ph name="ORIGIN" /> から Android スマートフォンに番号を送信するには、両方のデバイスで Carbon Browser にログインしてください。</translation>
 <translation id="8986207147630327271">このブラウザに仕事用プロファイルを追加し、管理者がこの仕事用プロファイルのみを管理できるようにします。</translation>
-<translation id="8989968390305463310">閲覧履歴は、表示される広告と以下の推定された興味 / 関心に影響します。プライバシーを保護するために、Carbon Browser Browser ではユーザーの興味 / 関心が毎月順番に自動削除されます。ユーザーが削除しない限り、興味 / 関心は更新される可能性があります。</translation>
-<translation id="8999208279178790196">{0,plural, =0{Carbon Browser Browser のアップデートが利用可能です}=1{Carbon Browser Browser のアップデートが利用可能です}other{Carbon Browser Browser のアップデートが利用可能になってから # 日経過しています}}</translation>
-<translation id="9053892488859122171">Carbon Browser BrowserOS Flex システム</translation>
-<translation id="9067395829937117663">Carbon Browser Browser のご利用には Windows 7 以上が必要です。</translation>
+<translation id="8989968390305463310">閲覧履歴は、表示される広告と以下の推定された興味 / 関心に影響します。プライバシーを保護するため、Carbon Browser ではユーザーの興味 / 関心が毎月順番に自動削除されます。ユーザーが削除しない限り、興味 / 関心は更新される可能性があります。</translation>
+<translation id="8999117580775242387">HTTPS を使用できない場合、Carbon Browser では警告を表示せずに安全でない接続を使用します</translation>
+<translation id="8999208279178790196">{0,plural, =0{Carbon Browser のアップデートが利用可能です}=1{Carbon Browser のアップデートが利用可能です}other{Carbon Browser のアップデートが利用可能になってから # 日経過しています}}</translation>
+<translation id="9053892488859122171">Carbon BrowserOS Flex システム</translation>
+<translation id="9054037008353851982">再起動して更新 - タブは再度開きます</translation>
+<translation id="9090566250983691233">Carbon Browser で一部のファイルがブロックされる理由</translation>
 <translation id="911206726377975832">閲覧データも削除しますか？</translation>
-<translation id="9138603949443464873">変更を適用するには Carbon Browser Browser を再起動してください</translation>
-<translation id="9195993889682885387">Carbon Browser Browser は、過去数週間の閲覧履歴に基づいてユーザーの興味 / 関心を推定する場合があります。この情報はユーザーのデバイスに保存されます。</translation>
-<translation id="919706545465235479">同期を開始するには、Carbon Browser Browser を更新します</translation>
-<translation id="922152298093051471">Carbon Browser Browser をカスタマイズ</translation>
-<translation id="93760716455950538">Carbon Browser BrowserOS Flex を再起動</translation>
-<translation id="940313311831216333">お使いのすべてのデバイスで Carbon Browser Browser の設定やデータを使用するには、ログインして同期を有効にしてください。</translation>
-<translation id="989369509083708165">既定のブラウザは Carbon Browser Browser です</translation>
-<translation id="989816563149873169">Carbon Browser Browser プロフィールを切り替えるには、<ph name="SHORTCUT" /> を使用します</translation>
+<translation id="9138603949443464873">変更を適用するには Carbon Browser を再起動してください</translation>
+<translation id="9195993889682885387">Carbon Browser は、過去数週間の閲覧履歴に基づいてユーザーの興味 / 関心を推定する場合があります。この情報はユーザーのデバイスに保存されます。</translation>
+<translation id="919706545465235479">同期を開始するには、Carbon Browser を更新します</translation>
+<translation id="922152298093051471">Carbon Browser をカスタマイズ</translation>
+<translation id="92460355979482493">オンにするとページがプリロードされ、閲覧と検索をすばやく行えるようになります。</translation>
+<translation id="93760716455950538">Carbon BrowserOS Flex を再起動</translation>
+<translation id="940313311831216333">お使いのすべてのデバイスで Carbon Browser の設定やデータを使用するには、ログインして同期を有効にしてください。</translation>
+<translation id="943390475793766444">このファイルは危害を及ぼす可能性があるため、スキャンすることをおすすめします。</translation>
+<translation id="963650557422347554">オンにすると、バックグラウンド アクティビティと視覚効果（滑らかなスクロールや動画のフレームレートなど）を制限することで、バッテリーを節約します。</translation>
+<translation id="983803489796659991">更新サーバーにアプリケーションのハッシュデータがないため、インストールできませんでした。</translation>
+<translation id="989369509083708165">既定のブラウザは Carbon Browser です</translation>
+<translation id="989816563149873169">Carbon Browser プロフィールを切り替えるには、<ph name="SHORTCUT" /> を使用します</translation>
 </translationbundle>

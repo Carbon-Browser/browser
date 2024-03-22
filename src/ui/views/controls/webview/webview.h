@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,7 +9,8 @@
 
 #include <memory>
 
-#include "base/callback.h"
+#include "base/callback_list.h"
+#include "base/functional/callback.h"
 #include "base/location.h"
 #include "base/memory/raw_ptr.h"
 #include "content/public/browser/web_contents_delegate.h"
@@ -20,6 +21,7 @@
 #include "ui/views/controls/webview/webview_export.h"
 #include "ui/views/metadata/view_factory.h"
 #include "ui/views/view.h"
+#include "ui/views/view_tracker.h"
 
 namespace views {
 
@@ -44,12 +46,16 @@ class WEBVIEW_EXPORT WebView : public View,
  public:
   METADATA_HEADER(WebView);
 
+  using WebContentsAttachedCallback = base::RepeatingCallback<void(WebView*)>;
+
   explicit WebView(content::BrowserContext* browser_context = nullptr);
 
   WebView(const WebView&) = delete;
   WebView& operator=(const WebView&) = delete;
 
   ~WebView() override;
+
+  static bool IsWebViewContents(const content::WebContents* web_contents);
 
   // This creates a WebContents if |browser_context_| has been set and there is
   // not yet a WebContents associated with this WebView, otherwise it will
@@ -87,8 +93,16 @@ class WEBVIEW_EXPORT WebView : public View,
 
   // If provided, this View will be shown in place of the web contents
   // when the web contents is in a crashed state. This is cleared automatically
-  // if the web contents is changed.
+  // if the web contents is changed. The passed-in overlay view must be owned by
+  // the client; this method never takes ownership of it.
+  //
+  // TODO(https://crbug.com/1471674): This method should take ownership of
+  // `crashed_overlay_view`.
   void SetCrashedOverlayView(View* crashed_overlay_view);
+
+  // Adds a callback for when a WebContents is attached to this WebView.
+  base::CallbackListSubscription AddWebContentsAttachedCallback(
+      WebContentsAttachedCallback callback);
 
   // Sets whether this is the primary web contents for the window.
   void set_is_primary_web_contents_for_window(bool is_primary) {
@@ -99,6 +113,12 @@ class WEBVIEW_EXPORT WebView : public View,
   // processed. Default is false.
   void set_allow_accelerators(bool allow_accelerators) {
     allow_accelerators_ = allow_accelerators;
+  }
+
+  // When `lock = true` changes in web contents will not reset the override.
+  // Default is false.
+  void set_lock_child_ax_tree_id_override(bool lock) {
+    lock_child_ax_tree_id_override_ = lock;
   }
 
   // Overridden from content::WebContentsDelegate:
@@ -124,9 +144,10 @@ class WEBVIEW_EXPORT WebView : public View,
     ~ScopedWebContentsCreatorForTesting();
   };
 
+  // View:
+  void GetAccessibleNodeData(ui::AXNodeData* node_data) override;
+
  protected:
-  // Called when the web contents is successfully attached.
-  virtual void OnWebContentsAttached() {}
   // Called when letterboxing (scaling the native view to preserve aspect
   // ratio) is enabled or disabled.
   virtual void OnLetterboxingChanged() {}
@@ -135,7 +156,7 @@ class WEBVIEW_EXPORT WebView : public View,
   const gfx::Size& min_size() const { return min_size_; }
   const gfx::Size& max_size() const { return max_size_; }
 
-  // Overridden from View:
+  // View:
   void OnBoundsChanged(const gfx::Rect& previous_bounds) override;
   void ViewHierarchyChanged(
       const ViewHierarchyChangedDetails& details) override;
@@ -143,7 +164,6 @@ class WEBVIEW_EXPORT WebView : public View,
   bool OnMousePressed(const ui::MouseEvent& event) override;
   void OnFocus() override;
   void AboutToRequestFocusFromTabTraversal(bool reverse) override;
-  void GetAccessibleNodeData(ui::AXNodeData* node_data) override;
   gfx::NativeViewAccessible GetNativeViewAccessible() override;
   void AddedToWidget() override;
 
@@ -196,13 +216,19 @@ class WEBVIEW_EXPORT WebView : public View,
   bool is_letterboxing_ = false;
   raw_ptr<content::BrowserContext> browser_context_;
   bool allow_accelerators_ = false;
-  raw_ptr<View> crashed_overlay_view_ = nullptr;
+  ViewTracker crashed_overlay_view_;
   bool is_primary_web_contents_for_window_ = false;
+
+  bool lock_child_ax_tree_id_override_ = false;
 
   // Minimum and maximum sizes to determine WebView bounds for auto-resizing.
   // Empty if auto resize is not enabled.
   gfx::Size min_size_;
   gfx::Size max_size_;
+
+  // List of subscriptions listening for new WebContents being attached to this
+  // WebView.
+  base::RepeatingCallbackList<void(WebView*)> web_contents_attached_callbacks_;
 };
 
 BEGIN_VIEW_BUILDER(WEBVIEW_EXPORT, WebView, View)

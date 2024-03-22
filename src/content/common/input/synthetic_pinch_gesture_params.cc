@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -25,13 +25,6 @@ SyntheticPinchGestureParams::~SyntheticPinchGestureParams() {}
 SyntheticGestureParams::GestureType
 SyntheticPinchGestureParams::GetGestureType() const {
   return PINCH_GESTURE;
-}
-
-const SyntheticPinchGestureParams* SyntheticPinchGestureParams::Cast(
-    const SyntheticGestureParams* gesture_params) {
-  DCHECK(gesture_params);
-  DCHECK_EQ(PINCH_GESTURE, gesture_params->GetGestureType());
-  return static_cast<const SyntheticPinchGestureParams*>(gesture_params);
 }
 
 }  // namespace content

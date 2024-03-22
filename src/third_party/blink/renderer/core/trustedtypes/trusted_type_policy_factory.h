@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -23,7 +23,7 @@ class TrustedTypePolicy;
 class TrustedTypePolicyOptions;
 
 class CORE_EXPORT TrustedTypePolicyFactory final
-    : public EventTargetWithInlineData,
+    : public EventTarget,
       public ExecutionContextClient {
   DEFINE_WRAPPERTYPEINFO();
 
@@ -50,19 +50,13 @@ class CORE_EXPORT TrustedTypePolicyFactory final
   TrustedScript* emptyScript() const;
 
   String getPropertyType(const String& tagName,
-                         const String& propertyName) const;
-  String getPropertyType(const String& tagName,
                          const String& propertyName,
                          const String& elementNS) const;
-  String getAttributeType(const String& tagName,
-                          const String& attributeName) const;
-  String getAttributeType(const String& tagName,
-                          const String& attributeName,
-                          const String& tagNS) const;
   String getAttributeType(const String& tagName,
                           const String& attributeName,
                           const String& tagNS,
                           const String& attributeNS) const;
+
   ScriptValue getTypeMapping(ScriptState*) const;
   ScriptValue getTypeMapping(ScriptState*, const String& ns) const;
 

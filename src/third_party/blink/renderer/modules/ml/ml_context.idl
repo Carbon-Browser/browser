@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,9 +12,30 @@
 // In the future, this interface may be extended when WebNN is implemented so
 // a dictionary may be insufficient.
 
+typedef record<DOMString, ArrayBufferView> MLNamedArrayBufferViews;
+
+dictionary MLComputeResult {
+  MLNamedArrayBufferViews inputs;
+  MLNamedArrayBufferViews outputs;
+};
+
 [
-  RuntimeEnabled=MachineLearningModelLoader,
+  RuntimeEnabled=MachineLearningCommon,
   SecureContext,
-  Exposed=Window
+  Exposed=(Window, DedicatedWorker)
 ] interface MLContext {
+  [
+    RuntimeEnabled=MachineLearningNeuralNetwork,
+    CallWith=ScriptState,
+    RaisesException,
+    Exposed=Window
+  ] Promise<MLComputeResult> compute(
+      MLGraph graph, MLNamedArrayBufferViews inputs, MLNamedArrayBufferViews outputs);
+
+  [
+    RuntimeEnabled=MachineLearningNeuralNetwork,
+    RaisesException,
+    Exposed=DedicatedWorker
+  ] void computeSync(
+      MLGraph graph, MLNamedArrayBufferViews inputs, MLNamedArrayBufferViews outputs);
 };

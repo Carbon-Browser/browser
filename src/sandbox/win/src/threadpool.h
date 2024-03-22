@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,6 +6,7 @@
 #define SANDBOX_WIN_SRC_THREADPOOL_H_
 
 #include <list>
+#include "base/memory/raw_ptr.h"
 #include "base/synchronization/lock.h"
 #include "base/win/windows_types.h"
 
@@ -71,7 +72,7 @@ class ThreadPool {
  private:
   // Record to keep track of a wait and its associated cookie.
   struct PoolObject {
-    const void* cookie;
+    raw_ptr<const void> cookie;
     HANDLE wait;
   };
   // The list of pool wait objects.

@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,9 +13,10 @@
 #include <vector>
 
 #include "base/compiler_specific.h"
+#include "base/memory/raw_ptr.h"
 #include "extensions/renderer/native_handler.h"
 #include "extensions/renderer/object_backed_native_handler.h"
-#include "extensions/renderer/script_injection_callback.h"
+#include "third_party/blink/public/web/web_script_execution_callback.h"
 #include "v8/include/v8-forward.h"
 #include "v8/include/v8-object.h"
 #include "v8/include/v8-persistent-handle.h"
@@ -54,7 +55,7 @@ class ModuleSystem : public ObjectBackedNativeHandler {
     std::string CreateExceptionString(const v8::TryCatch& try_catch);
     // A script context associated with this handler. Owned by the module
     // system.
-    ScriptContext* context_;
+    raw_ptr<ScriptContext, ExperimentalRenderer> context_;
   };
 
   // Enables native bindings for the duration of its lifetime.
@@ -95,7 +96,7 @@ class ModuleSystem : public ObjectBackedNativeHandler {
                             const std::string& method_name);
   void CallModuleMethodSafe(const std::string& module_name,
                             const std::string& method_name,
-                            std::vector<v8::Local<v8::Value>>* args);
+                            v8::LocalVector<v8::Value>* args);
   void CallModuleMethodSafe(const std::string& module_name,
                             const std::string& method_name,
                             int argc,
@@ -104,7 +105,7 @@ class ModuleSystem : public ObjectBackedNativeHandler {
                             const std::string& method_name,
                             int argc,
                             v8::Local<v8::Value> argv[],
-                            ScriptInjectionCallback::CompleteCallback callback);
+                            blink::WebScriptExecutionCallback callback);
 
   // Register |native_handler| as a potential target for requireNative(), so
   // calls to requireNative(|name|) from JS will return a new object created by
@@ -212,14 +213,14 @@ class ModuleSystem : public ObjectBackedNativeHandler {
   v8::Local<v8::Function> GetModuleFunction(const std::string& module_name,
                                             const std::string& method_name);
 
-  ScriptContext* context_;
+  raw_ptr<ScriptContext, ExperimentalRenderer> context_;
 
   // TODO(1276144): remove once investigation finished.
   bool has_been_invalidated_ = false;
 
   // A map from module names to the JS source for that module. GetSource()
   // performs a lookup on this map.
-  const SourceMap* const source_map_;
+  const raw_ptr<const SourceMap, ExperimentalRenderer> source_map_;
 
   // A map from native handler names to native handlers.
   NativeHandlerMap native_handler_map_;

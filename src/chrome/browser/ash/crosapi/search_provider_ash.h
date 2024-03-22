@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,7 +8,7 @@
 #include <string>
 #include <vector>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/weak_ptr.h"
 #include "chromeos/crosapi/mojom/launcher_search.mojom.h"
 #include "mojo/public/cpp/bindings/associated_receiver_set.h"
@@ -70,6 +70,8 @@ class SearchProviderAsh : public mojom::SearchResultsPublisher,
   void OnSearchResultsReceived(
       mojom::SearchStatus status,
       absl::optional<std::vector<mojom::SearchResultPtr>> results) override;
+
+  bool IsSearchControllerConnected() const;
 
  private:
   void BindPublisher(

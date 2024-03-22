@@ -1,26 +1,22 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include <memory>
-#include <string>
+#import <memory>
+#import <string>
 
-#include "base/mac/foundation_util.h"
-#include "base/strings/sys_string_conversions.h"
-#include "base/values.h"
-#include "components/strings/grit/components_strings.h"
-#include "ios/chrome/browser/ui/autofill/card_name_fix_flow_view_bridge.h"
-#import "ios/chrome/browser/ui/list_model/list_model.h"
-#import "ios/chrome/browser/ui/table_view/cells/table_view_text_edit_item.h"
-#import "ios/chrome/browser/ui/table_view/cells/table_view_text_header_footer_item.h"
-#import "ios/chrome/browser/ui/util/rtl_geometry.h"
-#import "ios/chrome/browser/ui/util/uikit_ui_util.h"
+#import "base/apple/foundation_util.h"
+#import "base/strings/sys_string_conversions.h"
+#import "base/values.h"
+#import "components/strings/grit/components_strings.h"
+#import "ios/chrome/browser/shared/ui/list_model/list_model.h"
+#import "ios/chrome/browser/shared/ui/table_view/cells/table_view_text_edit_item.h"
+#import "ios/chrome/browser/shared/ui/table_view/cells/table_view_text_header_footer_item.h"
+#import "ios/chrome/browser/shared/ui/util/rtl_geometry.h"
+#import "ios/chrome/browser/shared/ui/util/uikit_ui_util.h"
+#import "ios/chrome/browser/ui/autofill/card_name_fix_flow_view_bridge.h"
 #import "ios/chrome/common/ui/colors/semantic_color_names.h"
-#include "ui/base/l10n/l10n_util.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
+#import "ui/base/l10n/l10n_util.h"
 
 NSString* const kCellReuseID = @"ConfirmNameTableViewTextEditCell";
 CGFloat const kMainSection = 0;
@@ -154,9 +150,7 @@ void CardNameFixFlowViewBridge::DeleteSelf() {
           : nil;
 
   _footerView = [[TableViewTextHeaderFooterView alloc] init];
-  _footerView.subtitleLabel.textColor =
-      [UIColor colorNamed:kTextSecondaryColor];
-  _footerView.subtitleLabel.text = inferredNameTooltipText;
+  [_footerView setSubtitle:inferredNameTooltipText];
 
   [self.tableView registerClass:[TableViewTextEditCell class]
          forCellReuseIdentifier:kCellReuseID];
@@ -244,7 +238,7 @@ void CardNameFixFlowViewBridge::DeleteSelf() {
                                           .whitespaceAndNewlineCharacterSet];
 
   // After an edit, refresh footer text to no longer include name tooltip.
-  _footerView.subtitleLabel.text = nil;
+  [_footerView setSubtitle:nil];
 
   _confirmedName = confirmedName;
   [self updateSaveButtonEnabledStatus];

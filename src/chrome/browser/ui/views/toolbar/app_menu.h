@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -34,12 +34,10 @@ class AppMenu : public views::MenuDelegate,
                 public GlobalErrorObserver,
                 public base::SupportsWeakPtr<AppMenu> {
  public:
-  AppMenu(Browser* browser, int run_types, bool alert_reopen_tab_items);
+  AppMenu(Browser* browser, ui::MenuModel* model, int run_types);
   AppMenu(const AppMenu&) = delete;
   AppMenu& operator=(const AppMenu&) = delete;
   ~AppMenu() override;
-
-  void Init(ui::MenuModel* model);
 
   // Shows the menu relative to the specified controller's button.
   void RunMenu(views::MenuButtonController* host);
@@ -56,7 +54,7 @@ class AppMenu : public views::MenuDelegate,
 
   views::MenuItemView* root_menu_item() { return root_; }
 
-  // MenuDelegate overrides:
+  // views::MenuDelegate:
   const gfx::FontList* GetLabelFontList(int command_id) const override;
   absl::optional<SkColor> GetLabelColor(int command_id) const override;
   std::u16string GetTooltipText(int command_id,
@@ -141,36 +139,43 @@ class AppMenu : public views::MenuDelegate,
   // in |command_id_to_entry_|.
   size_t ModelIndexFromCommandId(int command_id) const;
 
-  // The views menu. Owned by |menu_runner_|.
-  raw_ptr<views::MenuItemView> root_ = nullptr;
-
   std::unique_ptr<views::MenuRunner> menu_runner_;
+
+  // The views menu. Owned by `menu_runner_`.
+  raw_ptr<views::MenuItemView> root_ = nullptr;
 
   // Maps from the command ID in model to the model/index pair the item came
   // from.
   CommandIDToEntry command_id_to_entry_;
 
   // Browser the menu is being shown for.
-  const raw_ptr<Browser> browser_;
+  const raw_ptr<Browser, DanglingUntriaged> browser_;
+
+  const raw_ptr<ui::MenuModel> model_;
 
   // |CancelAndEvaluate| sets |selected_menu_model_| and |selected_index_|.
   // If |selected_menu_model_| is non-null after the menu completes
   // ActivatedAt is invoked. This is done so that ActivatedAt isn't invoked
   // while the message loop is nested.
-  raw_ptr<ui::ButtonMenuItemModel> selected_menu_model_ = nullptr;
+  raw_ptr<ui::ButtonMenuItemModel, DanglingUntriaged> selected_menu_model_ =
+      nullptr;
   size_t selected_index_ = 0;
+
+  std::vector<base::CallbackListSubscription>
+      profile_menu_item_selected_subscription_list_;
 
   // Used for managing the bookmark menu items.
   std::unique_ptr<BookmarkMenuDelegate> bookmark_menu_delegate_;
 
   // Menu corresponding to IDC_BOOKMARKS_MENU.
-  raw_ptr<views::MenuItemView> bookmark_menu_ = nullptr;
+  raw_ptr<views::MenuItemView, DanglingUntriaged> bookmark_menu_ = nullptr;
 
   // Menu corresponding to IDC_FEEDBACK.
-  raw_ptr<views::MenuItemView> feedback_menu_item_ = nullptr;
+  raw_ptr<views::MenuItemView, DanglingUntriaged> feedback_menu_item_ = nullptr;
 
   // Menu corresponding to IDC_TAKE_SCREENSHOT.
-  raw_ptr<views::MenuItemView> screenshot_menu_item_ = nullptr;
+  raw_ptr<views::MenuItemView, DanglingUntriaged> screenshot_menu_item_ =
+      nullptr;
 
   // Used for managing "Recent tabs" menu items.
   std::unique_ptr<RecentTabsMenuModelDelegate> recent_tabs_menu_model_delegate_;
@@ -180,9 +185,6 @@ class AppMenu : public views::MenuDelegate,
 
   // The bit mask of views::MenuRunner::RunTypes.
   const int run_types_;
-
-  // Whether to show items relating to reopening the last-closed tab as alerted.
-  const bool alert_reopen_tab_items_;
 
   // Records the time from when menu opens to when the user selects a menu item.
   base::ElapsedTimer menu_opened_timer_;

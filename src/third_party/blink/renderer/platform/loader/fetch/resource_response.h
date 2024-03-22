@@ -32,25 +32,31 @@
 
 #include "base/memory/scoped_refptr.h"
 #include "base/time/time.h"
+#include "net/base/auth.h"
 #include "net/base/ip_endpoint.h"
+#include "net/http/alternate_protocol_usage.h"
 #include "net/ssl/ssl_info.h"
-#include "services/network/public/mojom/cross_origin_embedder_policy.mojom-shared.h"
+#include "services/network/public/cpp/cors/cors_error_status.h"
+#include "services/network/public/cpp/trigger_verification.h"
+#include "services/network/public/mojom/cross_origin_embedder_policy.mojom-forward.h"
 #include "services/network/public/mojom/fetch_api.mojom-shared.h"
 #include "services/network/public/mojom/ip_address_space.mojom-shared.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
-#include "third_party/blink/public/mojom/timing/resource_timing.mojom-blink.h"
+#include "third_party/blink/public/mojom/timing/resource_timing.mojom-blink-forward.h"
 #include "third_party/blink/public/platform/web_url_response.h"
 #include "third_party/blink/renderer/platform/network/http_header_map.h"
 #include "third_party/blink/renderer/platform/network/http_parsers.h"
 #include "third_party/blink/renderer/platform/platform_export.h"
 #include "third_party/blink/renderer/platform/weborigin/kurl.h"
 #include "third_party/blink/renderer/platform/wtf/allocator/allocator.h"
+#include "third_party/blink/renderer/platform/wtf/date_math.h"
 #include "third_party/blink/renderer/platform/wtf/ref_counted.h"
 #include "third_party/blink/renderer/platform/wtf/vector.h"
 
 namespace blink {
 
 class ResourceLoadTiming;
+class ServiceWorkerRouterInfo;
 
 // A ResourceResponse is a "response" object used in blink. Conceptually
 // it is https://fetch.spec.whatwg.org/#concept-response, but it contains
@@ -190,9 +196,6 @@ class PLATFORM_EXPORT ResourceResponse final {
     has_major_certificate_errors_ = has_major_certificate_errors;
   }
 
-  bool IsLegacyTLSVersion() const { return is_legacy_tls_version_; }
-  void SetIsLegacyTLSVersion(bool value) { is_legacy_tls_version_ = value; }
-
   bool HasRangeRequested() const { return has_range_requested_; }
   void SetHasRangeRequested(bool value) { has_range_requested_ = value; }
 
@@ -226,16 +229,15 @@ class PLATFORM_EXPORT ResourceResponse final {
     was_fetched_via_service_worker_ = value;
   }
 
-  base::TimeTicks ArrivalTimeAtRenderer() const {
-    return arrival_time_at_renderer_;
-  }
-  void SetArrivalTimeAtRenderer(base::TimeTicks value) {
-    arrival_time_at_renderer_ = value;
-  }
-
   network::mojom::FetchResponseSource GetServiceWorkerResponseSource() const {
     return service_worker_response_source_;
   }
+
+  // See network.mojom.URLResponseHead.service_worker_router_info.
+  const blink::ServiceWorkerRouterInfo* GetServiceWorkerRouterInfo() const {
+    return service_worker_router_info_.get();
+  }
+  void SetServiceWorkerRouterInfo(scoped_refptr<ServiceWorkerRouterInfo> value);
 
   void SetServiceWorkerResponseSource(
       network::mojom::FetchResponseSource value) {
@@ -283,6 +285,11 @@ class PLATFORM_EXPORT ResourceResponse final {
     did_service_worker_navigation_preload_ = value;
   }
 
+  bool DidUseSharedDictionary() const { return did_use_shared_dictionary_; }
+  void SetDidUseSharedDictionary(bool value) {
+    did_use_shared_dictionary_ = value;
+  }
+
   base::Time ResponseTime() const { return response_time_; }
   void SetResponseTime(base::Time response_time) {
     response_time_ = response_time;
@@ -295,6 +302,15 @@ class PLATFORM_EXPORT ResourceResponse final {
     remote_ip_endpoint_ = value;
   }
 
+  const WTF::Vector<network::TriggerVerification>& GetTriggerVerifications()
+      const {
+    return trigger_verifications_;
+  }
+  void SetTriggerVerifications(
+      WTF::Vector<network::TriggerVerification> value) {
+    trigger_verifications_ = std::move(value);
+  }
+
   network::mojom::IPAddressSpace AddressSpace() const { return address_space_; }
   void SetAddressSpace(network::mojom::IPAddressSpace value) {
     address_space_ = value;
@@ -305,6 +321,15 @@ class PLATFORM_EXPORT ResourceResponse final {
   }
   void SetClientAddressSpace(network::mojom::IPAddressSpace value) {
     client_address_space_ = value;
+  }
+
+  network::mojom::PrivateNetworkAccessPreflightResult
+  PrivateNetworkAccessPreflightResult() const {
+    return private_network_access_preflight_result_;
+  }
+  void SetPrivateNetworkAccessPreflightResult(
+      network::mojom::PrivateNetworkAccessPreflightResult result) {
+    private_network_access_preflight_result_ = result;
   }
 
   bool WasAlpnNegotiated() const { return was_alpn_negotiated_; }
@@ -326,10 +351,15 @@ class PLATFORM_EXPORT ResourceResponse final {
     alpn_negotiated_protocol_ = value;
   }
 
-  net::HttpResponseInfo::ConnectionInfo ConnectionInfo() const {
-    return connection_info_;
+  net::AlternateProtocolUsage AlternateProtocolUsage() const {
+    return alternate_protocol_usage_;
   }
-  void SetConnectionInfo(net::HttpResponseInfo::ConnectionInfo value) {
+  void SetAlternateProtocolUsage(net::AlternateProtocolUsage value) {
+    alternate_protocol_usage_ = value;
+  }
+
+  net::HttpConnectionInfo ConnectionInfo() const { return connection_info_; }
+  void SetConnectionInfo(net::HttpConnectionInfo value) {
     connection_info_ = value;
   }
 
@@ -342,7 +372,7 @@ class PLATFORM_EXPORT ResourceResponse final {
   void SetEncodedDataLength(int64_t value);
 
   int64_t EncodedBodyLength() const { return encoded_body_length_; }
-  void SetEncodedBodyLength(int64_t value);
+  void SetEncodedBodyLength(uint64_t value);
 
   int64_t DecodedBodyLength() const { return decoded_body_length_; }
   void SetDecodedBodyLength(int64_t value);
@@ -431,9 +461,19 @@ class PLATFORM_EXPORT ResourceResponse final {
     request_include_credentials_ = request_include_credentials;
   }
 
-  bool HasPartitionedCookie() const { return has_partitioned_cookie_; }
-  void SetHasPartitionedCookie(bool has_partitioned_cookie) {
-    has_partitioned_cookie_ = has_partitioned_cookie;
+  bool ShouldUseSourceHashForJSCodeCache() const {
+    return should_use_source_hash_for_js_code_cache_;
+  }
+  void SetShouldUseSourceHashForJSCodeCache(
+      bool should_use_source_hash_for_js_code_cache) {
+    if (should_use_source_hash_for_js_code_cache) {
+      // This flag should only be set for http(s) resources, because others
+      // would end up blocked in the browser process anyway (see
+      // code_cache_host_impl.cc).
+      CHECK(CurrentRequestUrl().ProtocolIsInHTTPFamily());
+    }
+    should_use_source_hash_for_js_code_cache_ =
+        should_use_source_hash_for_js_code_cache;
   }
 
  private:
@@ -462,6 +502,12 @@ class PLATFORM_EXPORT ResourceResponse final {
   network::mojom::IPAddressSpace client_address_space_ =
       network::mojom::IPAddressSpace::kUnknown;
 
+  // The result of any PNA preflight sent for this request, if any.
+  // TODO(https://crbug.com/1268378): Remove this once preflights are enforced.
+  network::mojom::PrivateNetworkAccessPreflightResult
+      private_network_access_preflight_result_ =
+          network::mojom::PrivateNetworkAccessPreflightResult::kNone;
+
   bool was_cached_ : 1;
   bool connection_reused_ : 1;
   bool is_null_ : 1;
@@ -473,10 +519,6 @@ class PLATFORM_EXPORT ResourceResponse final {
   // True if the resource was retrieved by the embedder in spite of
   // certificate errors.
   bool has_major_certificate_errors_ : 1;
-
-  // True if the response was sent over TLS 1.0 or 1.1, which are deprecated and
-  // will be removed in the future.
-  bool is_legacy_tls_version_ : 1;
 
   // This corresponds to the range-requested flag in the Fetch spec:
   // https://fetch.spec.whatwg.org/#concept-response-range-requested-flag
@@ -495,6 +537,9 @@ class PLATFORM_EXPORT ResourceResponse final {
   // True if service worker navigation preload was performed due to
   // the request for this resource.
   bool did_service_worker_navigation_preload_ : 1;
+
+  // True if a shared dictionary was used to decompress the response body.
+  bool did_use_shared_dictionary_ : 1;
 
   // True if this resource is stale and needs async revalidation. Will only
   // possibly be set if the load_flags indicated SUPPORT_ASYNC_REVALIDATION.
@@ -536,6 +581,12 @@ class PLATFORM_EXPORT ResourceResponse final {
   // See: https://fetch.spec.whatwg.org/#concept-http-network-fetch
   bool request_include_credentials_ : 1;
 
+  // If this response contains JavaScript, then downstream components may cache
+  // the parsed bytecode, but must use a source hash comparison rather than the
+  // response time when determining whether the current version of the script
+  // matches the cached bytecode.
+  bool should_use_source_hash_for_js_code_cache_ : 1;
+
   // Pre-computed padding.  This should only be non-zero if |response_type| is
   // set to kOpaque.  In addition, it is only set if the response was provided
   // by a service worker FetchEvent handler.
@@ -549,6 +600,10 @@ class PLATFORM_EXPORT ResourceResponse final {
   // kUnspecified if |was_fetched_via_service_worker| is false.
   network::mojom::FetchResponseSource service_worker_response_source_ =
       network::mojom::FetchResponseSource::kUnspecified;
+
+  // The information about the ServiceWorker Static Router that handled the
+  // request. Null if there was no registered Static Routers.
+  scoped_refptr<blink::ServiceWorkerRouterInfo> service_worker_router_info_;
 
   // https://fetch.spec.whatwg.org/#concept-response-type
   network::mojom::FetchResponseType response_type_ =
@@ -596,22 +651,23 @@ class PLATFORM_EXPORT ResourceResponse final {
   // ALPN negotiated protocol of the socket which fetched this resource.
   AtomicString alpn_negotiated_protocol_;
 
+  // The reason why Chrome uses a specific transport protocol for HTTP
+  // semantics.
+  net::AlternateProtocolUsage alternate_protocol_usage_ =
+      net::AlternateProtocolUsage::ALTERNATE_PROTOCOL_USAGE_UNSPECIFIED_REASON;
+
   // Information about the type of connection used to fetch this resource.
-  net::HttpResponseInfo::ConnectionInfo connection_info_ =
-      net::HttpResponseInfo::ConnectionInfo::CONNECTION_INFO_UNKNOWN;
+  net::HttpConnectionInfo connection_info_ = net::HttpConnectionInfo::kUNKNOWN;
 
   // Size of the response in bytes prior to decompression.
   int64_t encoded_data_length_ = 0;
 
   // Size of the response body in bytes prior to decompression.
-  int64_t encoded_body_length_ = 0;
+  uint64_t encoded_body_length_ = 0;
 
   // Sizes of the response body in bytes after any content-encoding is
   // removed.
   int64_t decoded_body_length_ = 0;
-
-  // Represents when the response arrives at the renderer.
-  base::TimeTicks arrival_time_at_renderer_;
 
   // This is propagated from the browser process's PrefetchURLLoader on
   // cross-origin prefetch responses. It is used to pass the token along to
@@ -631,9 +687,7 @@ class PLATFORM_EXPORT ResourceResponse final {
 
   bool emitted_extra_info_ = false;
 
-  // See URLResponseHead.has_partitioned_cookie.
-  // TODO(https://crbug.com/1296161): Delete this field.
-  bool has_partitioned_cookie_ = false;
+  WTF::Vector<network::TriggerVerification> trigger_verifications_;
 };
 
 }  // namespace blink

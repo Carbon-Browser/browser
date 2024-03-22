@@ -1,12 +1,13 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 package org.chromium.chrome.browser.feed;
 
-import androidx.annotation.VisibleForTesting;
+import androidx.annotation.NonNull;
 
 import org.chromium.base.CommandLine;
+import org.chromium.base.ResettersForTesting;
 import org.chromium.chrome.browser.feed.componentinterfaces.SurfaceCoordinator.StreamTabId;
 import org.chromium.chrome.browser.flags.ChromeFeatureList;
 import org.chromium.chrome.browser.preferences.Pref;
@@ -16,16 +17,15 @@ import org.chromium.components.prefs.PrefService;
 import org.chromium.components.signin.identitymanager.ConsentLevel;
 import org.chromium.components.user_prefs.UserPrefs;
 
-/**
- * Helper methods covering more complex Feed related feature checks and states.
- */
-public final class FeedFeatures {
-    private static final String TAG = "FeedFeatures";
+import java.util.concurrent.TimeUnit;
 
+/** Helper methods covering more complex Feed related feature checks and states. */
+public final class FeedFeatures {
     // Finch param constants for controlling the feed tab stickiness logic to use.
     private static final String FEED_TAB_STICKYNESS_LOGIC_PARAM = "feed_tab_stickiness_logic";
     private static final String RESET_UPON_CHROME_RESTART = "reset_upon_chrome_restart";
     private static final String INDEFINITELY_PERSISTED = "indefinitely_persisted";
+    private static final long ONE_DAY_DELTA_MILLIS = TimeUnit.DAYS.toMillis(1L);
 
     private static PrefService sFakePrefServiceForTest;
     private static boolean sIsFirstFeedTabStickinessCheckSinceLaunch = true;
@@ -36,21 +36,91 @@ public final class FeedFeatures {
      * change.
      */
     public static boolean isFeedEnabled() {
-        return FeedServiceBridge.isEnabled();
+        // return FeedServiceBridge.isEnabled() && isFeedEnabledByDSE();
+        return false;
     }
 
     /**
-     * @return Whether the WebFeed UI should be enabled. Checks for the WEB_FEED flag, if
-     *         the user is signed in and confirms it's not a child profile.
+     * Deprecated. Use {@link #isWebFeedUIEnabled(Profile profile)} instead. TODO(1410601): Migrate
+     * clank test `FeedFirstRunDialogIntegrationTest` and remove this method.
+     *
+     * @return Whether the feed is allowed to be used. Returns false if the feed is disabled due to
+     *     enterprise policy, or by flag. The value returned should not be cached as it may change.
      */
     public static boolean isWebFeedUIEnabled() {
+        return isWebFeedUIEnabled(Profile.getLastUsedRegularProfile());
+    }
+
+    /**
+     * @param profile the profile of the current user.
+     * @return Whether the WebFeed UI should be enabled. Checks for the WEB_FEED flag, if the user
+     *     is signed in and confirms it's not a child profile.
+     */
+    public static boolean isWebFeedUIEnabled(@NonNull Profile profile) {
         // TODO(b/197354832, b/188188861): change consent check to SIGNIN.
+        boolean isPrimaryAccountSignedIn = false;
+        if (IdentityServicesProvider.get().getSigninManager(profile) != null) {
+            isPrimaryAccountSignedIn =
+                    IdentityServicesProvider.get()
+                            .getSigninManager(profile)
+                            .getIdentityManager()
+                            .hasPrimaryAccount(ConsentLevel.SIGNIN);
+        }
         return ChromeFeatureList.isEnabled(ChromeFeatureList.WEB_FEED)
-                && IdentityServicesProvider.get()
-                           .getSigninManager(Profile.getLastUsedRegularProfile())
-                           .getIdentityManager()
-                           .hasPrimaryAccount(ConsentLevel.SYNC)
-                && !Profile.getLastUsedRegularProfile().isChild();
+                && isPrimaryAccountSignedIn
+                && !profile.isChild()
+                && isFeedEnabledByDSE();
+    }
+
+    private static boolean isFeedEnabledByDSE() {
+        return !ChromeFeatureList.sNewTabSearchEngineUrlAndroid.isEnabled()
+                || getPrefService().getBoolean(Pref.ENABLE_SNIPPETS_BY_DSE);
+    }
+
+    public static boolean shouldUseWebFeedAwarenessIPH() {
+        String awarenessStyleParam =
+                ChromeFeatureList.getFieldTrialParamByFeature(
+                        ChromeFeatureList.WEB_FEED_AWARENESS, "awareness_style");
+        return ChromeFeatureList.isEnabled(ChromeFeatureList.WEB_FEED)
+                && (awarenessStyleParam.equals("IPH") || awarenessStyleParam.isEmpty());
+    }
+
+    public static boolean shouldUseNewIndicator() {
+        // Return true if we are not rate limited.
+        if (ChromeFeatureList.getFieldTrialParamByFeature(
+                        ChromeFeatureList.WEB_FEED_AWARENESS, "awareness_style")
+                .equals("new_animation_no_limit")) {
+            return true;
+        }
+        // Otherwise, the rate limit is:
+        // 1. We have never seen the web feed.
+        // 2. It's been > 1 day since we last seen the new indicator.
+        if (ChromeFeatureList.getFieldTrialParamByFeature(
+                                ChromeFeatureList.WEB_FEED_AWARENESS, "awareness_style")
+                        .equals("new_animation")
+                && !getPrefService().getBoolean(Pref.HAS_SEEN_WEB_FEED)) {
+            String timestamp = getPrefService().getString(Pref.LAST_BADGE_ANIMATION_TIME);
+            long currentTime = System.currentTimeMillis();
+            long parsedTime;
+            try {
+                parsedTime = Long.parseLong(timestamp);
+            } catch (NumberFormatException e) {
+                parsedTime = 0L;
+            }
+            // Ignore parsed timestamps in the future.
+            return currentTime < parsedTime || currentTime - parsedTime > ONE_DAY_DELTA_MILLIS;
+        }
+        return false;
+    }
+
+    /** Updates the timestamp for the last time the new indicator was seen to now. */
+    public static void updateNewIndicatorTimestamp() {
+        getPrefService().setString(Pref.LAST_BADGE_ANIMATION_TIME, "" + System.currentTimeMillis());
+    }
+
+    /** Updates that the following feed has been seen. */
+    public static void updateFollowingFeedSeen() {
+        getPrefService().setBoolean(Pref.HAS_SEEN_WEB_FEED, true);
     }
 
     /**
@@ -70,9 +140,9 @@ public final class FeedFeatures {
         return UserPrefs.get(Profile.getLastUsedRegularProfile());
     }
 
-    @VisibleForTesting
     public static void setFakePrefsForTest(PrefService fakePref) {
         sFakePrefServiceForTest = fakePref;
+        ResettersForTesting.register(() -> sFakePrefServiceForTest = null);
     }
 
     /**
@@ -84,8 +154,9 @@ public final class FeedFeatures {
      * - reset_upon_chrome_restart: tab choice is reset upon Chrome relaunch.
      */
     public static @StreamTabId int getFeedTabIdToRestore() {
-        String stickinessLogic = ChromeFeatureList.getFieldTrialParamByFeature(
-                ChromeFeatureList.WEB_FEED, FEED_TAB_STICKYNESS_LOGIC_PARAM);
+        String stickinessLogic =
+                ChromeFeatureList.getFieldTrialParamByFeature(
+                        ChromeFeatureList.WEB_FEED, FEED_TAB_STICKYNESS_LOGIC_PARAM);
 
         if (RESET_UPON_CHROME_RESTART.equals(stickinessLogic)) {
             if (sIsFirstFeedTabStickinessCheckSinceLaunch) {
@@ -116,7 +187,6 @@ public final class FeedFeatures {
         return getPrefService().getInteger(Pref.LAST_SEEN_FEED_TYPE);
     }
 
-    @VisibleForTesting
     static void resetInternalStateForTesting() {
         sIsFirstFeedTabStickinessCheckSinceLaunch = true;
     }

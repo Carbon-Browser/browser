@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -20,7 +20,8 @@ public class IMEFeedbackSource implements FeedbackSource {
     @Override
     public Map<String, String> getFeedback() {
         String imePackage =
-                Settings.Secure.getString(ContextUtils.getApplicationContext().getContentResolver(),
+                Settings.Secure.getString(
+                        ContextUtils.getApplicationContext().getContentResolver(),
                         Settings.Secure.DEFAULT_INPUT_METHOD);
         if (TextUtils.isEmpty(imePackage)) return null;
         return CollectionUtil.newHashMap(Pair.create("Default IME", imePackage));

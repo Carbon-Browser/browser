@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -98,7 +98,7 @@ class ImpressionStoreTest : public testing::Test {
   bool load_result_;
   Entries loaded_entries_;
 
-  raw_ptr<FakeDB<proto::ClientState, ClientState>> db_;
+  raw_ptr<FakeDB<proto::ClientState, ClientState>, DanglingUntriaged> db_;
   std::unique_ptr<CollectionStore<ClientState>> store_;
 };
 

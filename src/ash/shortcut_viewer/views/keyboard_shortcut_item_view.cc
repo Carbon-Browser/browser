@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,7 @@
 #include <memory>
 #include <vector>
 
-#include "ash/constants/ash_features.h"
+#include "ash/accelerators/keyboard_code_util.h"
 #include "ash/public/cpp/keyboard_shortcut_item.h"
 #include "ash/public/cpp/style/color_provider.h"
 #include "ash/resources/vector_icons/vector_icons.h"
@@ -16,13 +16,15 @@
 #include "ash/shortcut_viewer/views/bubble_view.h"
 #include "ash/style/dark_light_mode_controller_impl.h"
 #include "base/i18n/rtl.h"
+#include "base/memory/raw_ptr.h"
 #include "base/no_destructor.h"
 #include "base/notreached.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/trace_event/trace_event.h"
-#include "ui/accessibility/ax_node_data.h"
 #include "ui/base/l10n/l10n_util.h"
+#include "ui/base/metadata/metadata_impl_macros.h"
 #include "ui/gfx/paint_vector_icon.h"
+#include "ui/strings/grit/ui_strings.h"
 #include "ui/views/accessibility/view_accessibility.h"
 #include "ui/views/border.h"
 #include "ui/views/controls/image_view.h"
@@ -63,8 +65,7 @@ class KSVSeparatorImageView : public views::ImageView {
   void ConfigureImage() {
     DCHECK(color_provider_);
     SkColor kShortcutBubbleSeparatorColor = kShortcutBubbleSeparatorColorLight;
-    if (ash::features::IsDarkLightModeEnabled() &&
-        ash::DarkLightModeControllerImpl::Get()->IsDarkModeEnabled()) {
+    if (ash::DarkLightModeControllerImpl::Get()->IsDarkModeEnabled()) {
       kShortcutBubbleSeparatorColor = color_provider_->GetContentLayerColor(
           ash::ColorProvider::ContentLayerType::kTextColorSecondary);
     }
@@ -73,7 +74,7 @@ class KSVSeparatorImageView : public views::ImageView {
     SetImageSize(gfx::Size(kIconSize, kIconSize));
   }
 
-  ash::ColorProvider* color_provider_;  // Not owned.
+  raw_ptr<ash::ColorProvider, ExperimentalAsh> color_provider_;  // Not owned.
 };
 
 // Creates the separator view between bubble views of modifiers and key.
@@ -87,7 +88,8 @@ std::unique_ptr<views::View> CreateSeparatorView() {
 std::unique_ptr<views::View> CreateBubbleView(const std::u16string& bubble_text,
                                               ui::KeyboardCode key_code) {
   auto bubble_view = std::make_unique<BubbleView>();
-  const gfx::VectorIcon* vector_icon = GetVectorIconForKeyboardCode(key_code);
+  const gfx::VectorIcon* vector_icon =
+      ash::GetVectorIconForKeyboardCode(key_code);
   if (vector_icon)
     bubble_view->SetIcon(*vector_icon);
   else
@@ -123,7 +125,7 @@ KeyboardShortcutItemView::KeyboardShortcutItemView(
     auto iter = GetKeycodeToString16Cache()->find(key_code);
     if (iter == GetKeycodeToString16Cache()->end()) {
       iter = GetKeycodeToString16Cache()
-                 ->emplace(key_code, GetStringForKeyboardCode(key_code))
+                 ->emplace(key_code, ash::GetStringForKeyboardCode(key_code))
                  .first;
     }
 
@@ -140,8 +142,8 @@ KeyboardShortcutItemView::KeyboardShortcutItemView(
         item.description_message_id == IDS_KSV_DESCRIPTION_IDC_ZOOM_PLUS ||
         item.description_message_id == IDS_KSV_DESCRIPTION_IDC_ZOOM_MINUS;
     if (dont_remap_position) {
-      dom_key_string =
-          GetStringForKeyboardCode(key_code, /*remap_positional_key=*/false);
+      dom_key_string = ash::GetStringForKeyboardCode(
+          key_code, /*remap_positional_key=*/false);
     }
 
     // If the |key_code| has no mapped |dom_key_string|, we use alternative
@@ -212,7 +214,7 @@ KeyboardShortcutItemView::KeyboardShortcutItemView(
       base::i18n::IsRTL() ? gfx::ALIGN_LEFT : gfx::ALIGN_RIGHT);
   DCHECK_EQ(replacement_strings.size(), offsets.size());
   // TODO(wutao): make this reliable.
-  // If the replacement string is "+ ", it indicates to insert a seperator view.
+  // If the replacement string is "+ ", it indicates to insert a separator view.
   const std::u16string separator_string = u"+ ";
   for (size_t i = 0; i < offsets.size(); ++i) {
     views::StyledLabel::RangeStyleInfo style_info;
@@ -232,17 +234,15 @@ KeyboardShortcutItemView::KeyboardShortcutItemView(
   SetBorder(views::CreateEmptyBorder(
       gfx::Insets::TLBR(kVerticalPadding, 0, kVerticalPadding, 0)));
 
+  SetAccessibilityProperties(
+      ax::mojom::Role::kListItem,
+      l10n_util::GetStringFUTF16(IDS_CONCAT_TWO_STRINGS_WITH_COMMA,
+                                 description_label_view_->GetText(),
+                                 accessible_string));
+
   // Use leaf list item role so that name is spoken by screen reader, but
   // redundant child label text is not also spoken.
-  GetViewAccessibility().OverrideRole(ax::mojom::Role::kListItem);
   GetViewAccessibility().OverrideIsLeaf(true);
-  accessible_name_ =
-      description_label_view_->GetText() + u", " + accessible_string;
-}
-
-void KeyboardShortcutItemView::GetAccessibleNodeData(
-    ui::AXNodeData* node_data) {
-  node_data->SetName(accessible_name_);
 }
 
 int KeyboardShortcutItemView::GetHeightForWidth(int w) const {
@@ -338,5 +338,8 @@ void KeyboardShortcutItemView::CalculateLayout(int width) const {
       std::max(shortcut_height, description_height + 2 * description_delta_y);
   calculated_size_ = gfx::Size(width, content_height + insets.height());
 }
+
+BEGIN_METADATA(KeyboardShortcutItemView, views::View)
+END_METADATA
 
 }  // namespace keyboard_shortcut_viewer

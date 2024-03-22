@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,13 +8,14 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
 #include "base/files/file_path.h"
+#include "base/functional/bind.h"
 #include "base/lazy_instance.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/memory/raw_ptr.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/time/time.h"
+#include "chromeos/ash/components/dbus/dbus_thread_manager.h"
 #include "chromeos/ash/components/dbus/upstart/upstart_client.h"
-#include "chromeos/dbus/dbus_thread_manager.h"
 #include "extensions/browser/api/extensions_api_client.h"
 #include "extensions/browser/api/media_perception_private/conversion_utils.h"
 #include "extensions/browser/api/media_perception_private/media_perception_api_delegate.h"
@@ -37,7 +38,7 @@ extensions::api::media_perception_private::State GetStateForServiceError(
         service_error) {
   extensions::api::media_perception_private::State state;
   state.status =
-      extensions::api::media_perception_private::STATUS_SERVICE_ERROR;
+      extensions::api::media_perception_private::Status::kServiceError;
   state.service_error = service_error;
   return state;
 }
@@ -48,7 +49,7 @@ GetProcessStateForServiceError(
         service_error) {
   extensions::api::media_perception_private::ProcessState process_state;
   process_state.status =
-      extensions::api::media_perception_private::PROCESS_STATUS_SERVICE_ERROR;
+      extensions::api::media_perception_private::ProcessStatus::kServiceError;
   process_state.service_error = service_error;
   return process_state;
 }
@@ -66,17 +67,15 @@ extensions::api::media_perception_private::ComponentState
 GetFailedToInstallComponentState() {
   extensions::api::media_perception_private::ComponentState component_state;
   component_state.status = extensions::api::media_perception_private::
-      COMPONENT_STATUS_FAILED_TO_INSTALL;
+      ComponentStatus::kFailedToInstall;
   return component_state;
 }
 
 // Pulls out the version number from a mount_point location for the media
 // perception component. Mount points look like
 // /run/imageloader/rtanalytics-light/1.0, where 1.0 is the version string.
-std::unique_ptr<std::string> ExtractVersionFromMountPoint(
-    const std::string& mount_point) {
-  return std::make_unique<std::string>(
-      base::FilePath(mount_point).BaseName().value());
+std::string ExtractVersionFromMountPoint(const std::string& mount_point) {
+  return base::FilePath(mount_point).BaseName().value();
 }
 
 }  // namespace
@@ -112,7 +111,8 @@ class MediaPerceptionAPIManager::MediaPerceptionControllerClient
 
  private:
   // Provides access to methods for talking to core Chrome code.
-  MediaPerceptionAPIDelegate* delegate_;
+  raw_ptr<MediaPerceptionAPIDelegate, DanglingUntriaged | ExperimentalAsh>
+      delegate_;
 
   // Receiver of the MediaPerceptionControllerClient to the message pipe.
   mojo::Receiver<
@@ -140,12 +140,20 @@ MediaPerceptionAPIManager::MediaPerceptionAPIManager(
     content::BrowserContext* context)
     : browser_context_(context),
       analytics_process_state_(AnalyticsProcessState::IDLE) {
-  scoped_observation_.Observe(ash::MediaAnalyticsClient::Get());
+  // `MediaAnalyticsClient` can be null in tests (browser_tests or
+  // extensions_browsertests).
+  if (auto* client = ash::MediaAnalyticsClient::Get()) {
+    scoped_observation_.Observe(client);
+  }
 }
 
 MediaPerceptionAPIManager::~MediaPerceptionAPIManager() {
   // Stop the separate media analytics process.
-  ash::UpstartClient::Get()->StopMediaAnalytics();
+  // `UpstartClient` can be null in tests (browser_tests or
+  // extensions_browsertests).
+  if (auto* client = ash::UpstartClient::Get()) {
+    client->StopMediaAnalytics();
+  }
 }
 
 void MediaPerceptionAPIManager::ActivateMediaPerception(
@@ -171,14 +179,14 @@ void MediaPerceptionAPIManager::GetState(APIStateCallback callback) {
       AnalyticsProcessState::CHANGING_PROCESS_STATE) {
     std::move(callback).Run(
         GetStateForServiceError(extensions::api::media_perception_private::
-                                    SERVICE_ERROR_SERVICE_BUSY_LAUNCHING));
+                                    ServiceError::kServiceBusyLaunching));
     return;
   }
 
   // Calling getState with process not running returns State UNINITIALIZED.
   extensions::api::media_perception_private::State state_uninitialized;
   state_uninitialized.status =
-      extensions::api::media_perception_private::STATUS_UNINITIALIZED;
+      extensions::api::media_perception_private::Status::kUninitialized;
   std::move(callback).Run(std::move(state_uninitialized));
 }
 
@@ -205,7 +213,7 @@ void MediaPerceptionAPIManager::LoadComponentCallback(
         installation_error,
     const base::FilePath& mount_point) {
   if (installation_error != extensions::api::media_perception_private::
-                                COMPONENT_INSTALLATION_ERROR_NONE) {
+                                ComponentInstallationError::kNone) {
     extensions::api::media_perception_private::ComponentState component_state =
         GetFailedToInstallComponentState();
     component_state.installation_error_code = installation_error;
@@ -218,7 +226,7 @@ void MediaPerceptionAPIManager::LoadComponentCallback(
 
   extensions::api::media_perception_private::ComponentState component_state;
   component_state.status =
-      extensions::api::media_perception_private::COMPONENT_STATUS_INSTALLED;
+      extensions::api::media_perception_private::ComponentStatus::kInstalled;
   component_state.version = ExtractVersionFromMountPoint(mount_point_);
   std::move(callback).Run(std::move(component_state));
   return;
@@ -230,20 +238,20 @@ void MediaPerceptionAPIManager::SetComponentProcessState(
     APIComponentProcessStateCallback callback) {
   DCHECK(
       process_state.status ==
-          extensions::api::media_perception_private::PROCESS_STATUS_STARTED ||
+          extensions::api::media_perception_private::ProcessStatus::kStarted ||
       process_state.status ==
-          extensions::api::media_perception_private::PROCESS_STATUS_STOPPED);
+          extensions::api::media_perception_private::ProcessStatus::kStopped);
   if (analytics_process_state_ ==
       AnalyticsProcessState::CHANGING_PROCESS_STATE) {
     std::move(callback).Run(GetProcessStateForServiceError(
-        extensions::api::media_perception_private::
-            SERVICE_ERROR_SERVICE_BUSY_LAUNCHING));
+        extensions::api::media_perception_private::ServiceError::
+            kServiceBusyLaunching));
     return;
   }
 
   analytics_process_state_ = AnalyticsProcessState::CHANGING_PROCESS_STATE;
   if (process_state.status ==
-      extensions::api::media_perception_private::PROCESS_STATUS_STOPPED) {
+      extensions::api::media_perception_private::ProcessStatus::kStopped) {
     base::OnceCallback<void(bool)> stop_callback =
         base::BindOnce(&MediaPerceptionAPIManager::UpstartStopProcessCallback,
                        weak_ptr_factory_.GetWeakPtr(), std::move(callback));
@@ -252,14 +260,14 @@ void MediaPerceptionAPIManager::SetComponentProcessState(
   }
 
   if (process_state.status ==
-      extensions::api::media_perception_private::PROCESS_STATUS_STARTED) {
+      extensions::api::media_perception_private::ProcessStatus::kStarted) {
     // Check if a component is loaded and add the necessary mount_point
     // information to the Upstart start command.
     if (mount_point_.empty()) {
       analytics_process_state_ = AnalyticsProcessState::IDLE;
       std::move(callback).Run(GetProcessStateForServiceError(
-          extensions::api::media_perception_private::
-              SERVICE_ERROR_SERVICE_NOT_INSTALLED));
+          extensions::api::media_perception_private::ServiceError::
+              kServiceNotInstalled));
       return;
     }
 
@@ -276,7 +284,7 @@ void MediaPerceptionAPIManager::SetComponentProcessState(
   analytics_process_state_ = AnalyticsProcessState::IDLE;
   std::move(callback).Run(
       GetProcessStateForServiceError(extensions::api::media_perception_private::
-                                         SERVICE_ERROR_SERVICE_NOT_RUNNING));
+                                         ServiceError::kServiceNotRunning));
 }
 
 void MediaPerceptionAPIManager::SetState(
@@ -294,7 +302,7 @@ void MediaPerceptionAPIManager::SetState(
       AnalyticsProcessState::CHANGING_PROCESS_STATE) {
     std::move(callback).Run(
         GetStateForServiceError(extensions::api::media_perception_private::
-                                    SERVICE_ERROR_SERVICE_BUSY_LAUNCHING));
+                                    ServiceError::kServiceBusyLaunching));
     return;
   }
 
@@ -348,7 +356,7 @@ void MediaPerceptionAPIManager::SetState(
 
   std::move(callback).Run(
       GetStateForServiceError(extensions::api::media_perception_private::
-                                  SERVICE_ERROR_SERVICE_NOT_RUNNING));
+                                  ServiceError::kServiceNotRunning));
 }
 
 void MediaPerceptionAPIManager::SetStateInternal(APIStateCallback callback,
@@ -372,8 +380,8 @@ void MediaPerceptionAPIManager::UpstartStartProcessCallback(
   if (!succeeded) {
     analytics_process_state_ = AnalyticsProcessState::IDLE;
     std::move(callback).Run(GetProcessStateForServiceError(
-        extensions::api::media_perception_private::
-            SERVICE_ERROR_SERVICE_NOT_RUNNING));
+        extensions::api::media_perception_private::ServiceError::
+            kServiceNotRunning));
     return;
   }
 
@@ -388,7 +396,7 @@ void MediaPerceptionAPIManager::UpstartStartProcessCallback(
   // TODO(crbug.com/1003968): Look into using
   // ObjectProxy::WaitForServiceToBeAvailable instead, since a timeout is
   // inherently not deterministic, even if it works in practice.
-  base::ThreadTaskRunnerHandle::Get()->PostDelayedTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostDelayedTask(
       FROM_HERE,
       base::BindOnce(&MediaPerceptionAPIManager::SendMojoInvitation,
                      weak_ptr_factory_.GetWeakPtr(), std::move(callback)),
@@ -402,8 +410,8 @@ void MediaPerceptionAPIManager::SendMojoInvitation(
   if (!delegate) {
     DLOG(WARNING) << "Could not get MediaPerceptionAPIDelegate.";
     std::move(callback).Run(GetProcessStateForServiceError(
-        extensions::api::media_perception_private::
-            SERVICE_ERROR_MOJO_CONNECTION_FAILURE));
+        extensions::api::media_perception_private::ServiceError::
+            kMojoConnectionFailure));
     return;
   }
 
@@ -435,15 +443,15 @@ void MediaPerceptionAPIManager::OnBootstrapMojoConnection(
   if (!succeeded) {
     analytics_process_state_ = AnalyticsProcessState::UNKNOWN;
     std::move(callback).Run(GetProcessStateForServiceError(
-        extensions::api::media_perception_private::
-            SERVICE_ERROR_MOJO_CONNECTION_FAILURE));
+        extensions::api::media_perception_private::ServiceError::
+            kMojoConnectionFailure));
     return;
   }
 
   analytics_process_state_ = AnalyticsProcessState::RUNNING;
   extensions::api::media_perception_private::ProcessState state_started;
   state_started.status =
-      extensions::api::media_perception_private::PROCESS_STATUS_STARTED;
+      extensions::api::media_perception_private::ProcessStatus::kStarted;
 
   // Check if the extensions api client is available in this context. Code path
   // used for testing.
@@ -458,16 +466,16 @@ void MediaPerceptionAPIManager::OnBootstrapMojoConnection(
   if (!delegate) {
     DLOG(WARNING) << "Could not get MediaPerceptionAPIDelegate.";
     std::move(callback).Run(GetProcessStateForServiceError(
-        extensions::api::media_perception_private::
-            SERVICE_ERROR_MOJO_CONNECTION_FAILURE));
+        extensions::api::media_perception_private::ServiceError::
+            kMojoConnectionFailure));
     return;
   }
 
   if (!media_perception_service_.is_bound()) {
     DLOG(WARNING) << "MediaPerceptionService interface not bound.";
     std::move(callback).Run(GetProcessStateForServiceError(
-        extensions::api::media_perception_private::
-            SERVICE_ERROR_MOJO_CONNECTION_FAILURE));
+        extensions::api::media_perception_private::ServiceError::
+            kMojoConnectionFailure));
     return;
   }
 
@@ -496,15 +504,15 @@ void MediaPerceptionAPIManager::UpstartStopProcessCallback(
   if (!succeeded) {
     analytics_process_state_ = AnalyticsProcessState::UNKNOWN;
     std::move(callback).Run(GetProcessStateForServiceError(
-        extensions::api::media_perception_private::
-            SERVICE_ERROR_SERVICE_UNREACHABLE));
+        extensions::api::media_perception_private::ServiceError::
+            kServiceUnreachable));
     return;
   }
   analytics_process_state_ = AnalyticsProcessState::IDLE;
   // Stopping the process succeeded so fire a callback with status STOPPED.
   extensions::api::media_perception_private::ProcessState state_stopped;
   state_stopped.status =
-      extensions::api::media_perception_private::PROCESS_STATUS_STOPPED;
+      extensions::api::media_perception_private::ProcessStatus::kStopped;
   std::move(callback).Run(std::move(state_stopped));
 }
 
@@ -515,7 +523,7 @@ void MediaPerceptionAPIManager::UpstartStartCallback(APIStateCallback callback,
     analytics_process_state_ = AnalyticsProcessState::IDLE;
     std::move(callback).Run(
         GetStateForServiceError(extensions::api::media_perception_private::
-                                    SERVICE_ERROR_SERVICE_NOT_RUNNING));
+                                    ServiceError::kServiceNotRunning));
     return;
   }
   analytics_process_state_ = AnalyticsProcessState::RUNNING;
@@ -528,14 +536,14 @@ void MediaPerceptionAPIManager::UpstartStopCallback(APIStateCallback callback,
     analytics_process_state_ = AnalyticsProcessState::UNKNOWN;
     std::move(callback).Run(
         GetStateForServiceError(extensions::api::media_perception_private::
-                                    SERVICE_ERROR_SERVICE_UNREACHABLE));
+                                    ServiceError::kServiceUnreachable));
     return;
   }
   analytics_process_state_ = AnalyticsProcessState::IDLE;
   // Stopping the process succeeded so fire a callback with status STOPPED.
   extensions::api::media_perception_private::State state_stopped;
   state_stopped.status =
-      extensions::api::media_perception_private::STATUS_STOPPED;
+      extensions::api::media_perception_private::Status::kStopped;
   std::move(callback).Run(std::move(state_stopped));
 }
 
@@ -546,7 +554,7 @@ void MediaPerceptionAPIManager::UpstartRestartCallback(
     analytics_process_state_ = AnalyticsProcessState::IDLE;
     std::move(callback).Run(
         GetStateForServiceError(extensions::api::media_perception_private::
-                                    SERVICE_ERROR_SERVICE_NOT_RUNNING));
+                                    ServiceError::kServiceNotRunning));
     return;
   }
   analytics_process_state_ = AnalyticsProcessState::RUNNING;
@@ -555,11 +563,11 @@ void MediaPerceptionAPIManager::UpstartRestartCallback(
 
 void MediaPerceptionAPIManager::StateCallback(
     APIStateCallback callback,
-    absl::optional<mri::State> result) {
+    std::optional<mri::State> result) {
   if (!result.has_value()) {
     std::move(callback).Run(
         GetStateForServiceError(extensions::api::media_perception_private::
-                                    SERVICE_ERROR_SERVICE_UNREACHABLE));
+                                    ServiceError::kServiceUnreachable));
     return;
   }
   std::move(callback).Run(
@@ -569,11 +577,11 @@ void MediaPerceptionAPIManager::StateCallback(
 
 void MediaPerceptionAPIManager::GetDiagnosticsCallback(
     APIGetDiagnosticsCallback callback,
-    absl::optional<mri::Diagnostics> result) {
+    std::optional<mri::Diagnostics> result) {
   if (!result.has_value()) {
     std::move(callback).Run(GetDiagnosticsForServiceError(
-        extensions::api::media_perception_private::
-            SERVICE_ERROR_SERVICE_UNREACHABLE));
+        extensions::api::media_perception_private::ServiceError::
+            kServiceUnreachable));
     return;
   }
   std::move(callback).Run(

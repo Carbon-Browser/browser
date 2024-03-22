@@ -1,16 +1,15 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/ash/file_system_provider/operations/remove_watcher.h"
 
-#include <memory>
 #include <string>
 #include <vector>
 
-#include "base/bind.h"
 #include "base/files/file.h"
 #include "base/files/file_path.h"
+#include "base/functional/bind.h"
 #include "chrome/browser/ash/file_system_provider/icon_set.h"
 #include "chrome/browser/ash/file_system_provider/operations/test_util.h"
 #include "chrome/browser/ash/file_system_provider/provided_file_system_interface.h"
@@ -56,11 +55,9 @@ TEST_F(FileSystemProviderOperationsRemoveWatcherTest, Execute) {
   util::StatusCallbackLog callback_log;
 
   RemoveWatcher remove_watcher(
-      NULL, file_system_info_, base::FilePath(kEntryPath), true /* recursive */,
+      &dispatcher, file_system_info_, base::FilePath(kEntryPath),
+      true /* recursive */,
       base::BindOnce(&util::LogStatusCallback, &callback_log));
-  remove_watcher.SetDispatchEventImplForTesting(
-      base::BindRepeating(&util::LoggingDispatchEventImpl::OnDispatchEventImpl,
-                          base::Unretained(&dispatcher)));
 
   EXPECT_TRUE(remove_watcher.Execute(kRequestId));
 
@@ -75,13 +72,13 @@ TEST_F(FileSystemProviderOperationsRemoveWatcherTest, Execute) {
   const base::Value* options_as_value = &event_args[0];
   ASSERT_TRUE(options_as_value->is_dict());
 
-  RemoveWatcherRequestedOptions options;
-  ASSERT_TRUE(
-      RemoveWatcherRequestedOptions::Populate(*options_as_value, &options));
-  EXPECT_EQ(kFileSystemId, options.file_system_id);
-  EXPECT_EQ(kRequestId, options.request_id);
-  EXPECT_EQ(kEntryPath, options.entry_path);
-  EXPECT_TRUE(options.recursive);
+  auto options =
+      RemoveWatcherRequestedOptions::FromValue(options_as_value->GetDict());
+  ASSERT_TRUE(options);
+  EXPECT_EQ(kFileSystemId, options->file_system_id);
+  EXPECT_EQ(kRequestId, options->request_id);
+  EXPECT_EQ(kEntryPath, options->entry_path);
+  EXPECT_TRUE(options->recursive);
 }
 
 TEST_F(FileSystemProviderOperationsRemoveWatcherTest, Execute_NoListener) {
@@ -89,11 +86,9 @@ TEST_F(FileSystemProviderOperationsRemoveWatcherTest, Execute_NoListener) {
   util::StatusCallbackLog callback_log;
 
   RemoveWatcher remove_watcher(
-      NULL, file_system_info_, base::FilePath(kEntryPath), true /* recursive */,
+      &dispatcher, file_system_info_, base::FilePath(kEntryPath),
+      true /* recursive */,
       base::BindOnce(&util::LogStatusCallback, &callback_log));
-  remove_watcher.SetDispatchEventImplForTesting(
-      base::BindRepeating(&util::LoggingDispatchEventImpl::OnDispatchEventImpl,
-                          base::Unretained(&dispatcher)));
 
   EXPECT_FALSE(remove_watcher.Execute(kRequestId));
 }
@@ -103,16 +98,13 @@ TEST_F(FileSystemProviderOperationsRemoveWatcherTest, OnSuccess) {
   util::StatusCallbackLog callback_log;
 
   RemoveWatcher remove_watcher(
-      NULL, file_system_info_, base::FilePath(kEntryPath), true /* recursive */,
+      &dispatcher, file_system_info_, base::FilePath(kEntryPath),
+      true /* recursive */,
       base::BindOnce(&util::LogStatusCallback, &callback_log));
-  remove_watcher.SetDispatchEventImplForTesting(
-      base::BindRepeating(&util::LoggingDispatchEventImpl::OnDispatchEventImpl,
-                          base::Unretained(&dispatcher)));
 
   EXPECT_TRUE(remove_watcher.Execute(kRequestId));
 
-  remove_watcher.OnSuccess(kRequestId, std::make_unique<RequestValue>(),
-                           false /* has_more */);
+  remove_watcher.OnSuccess(kRequestId, RequestValue(), false /* has_more */);
   ASSERT_EQ(1u, callback_log.size());
   EXPECT_EQ(base::File::FILE_OK, callback_log[0]);
 }
@@ -122,15 +114,13 @@ TEST_F(FileSystemProviderOperationsRemoveWatcherTest, OnError) {
   util::StatusCallbackLog callback_log;
 
   RemoveWatcher remove_watcher(
-      NULL, file_system_info_, base::FilePath(kEntryPath), true /* recursive */,
+      &dispatcher, file_system_info_, base::FilePath(kEntryPath),
+      true /* recursive */,
       base::BindOnce(&util::LogStatusCallback, &callback_log));
-  remove_watcher.SetDispatchEventImplForTesting(
-      base::BindRepeating(&util::LoggingDispatchEventImpl::OnDispatchEventImpl,
-                          base::Unretained(&dispatcher)));
 
   EXPECT_TRUE(remove_watcher.Execute(kRequestId));
 
-  remove_watcher.OnError(kRequestId, std::make_unique<RequestValue>(),
+  remove_watcher.OnError(kRequestId, RequestValue(),
                          base::File::FILE_ERROR_TOO_MANY_OPENED);
   ASSERT_EQ(1u, callback_log.size());
   EXPECT_EQ(base::File::FILE_ERROR_TOO_MANY_OPENED, callback_log[0]);

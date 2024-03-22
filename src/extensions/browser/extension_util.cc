@@ -1,35 +1,35 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "extensions/browser/extension_util.h"
 
 #include "base/barrier_closure.h"
-#include "base/callback_helpers.h"
+#include "base/command_line.h"
 #include "base/no_destructor.h"
 #include "build/chromeos_buildflags.h"
 #include "components/crx_file/id_util.h"
 #include "content/public/browser/browser_context.h"
 #include "content/public/browser/child_process_security_policy.h"
-#include "content/public/browser/cors_origin_pattern_setter.h"
+#include "content/public/browser/render_frame_host.h"
 #include "content/public/browser/site_instance.h"
+#include "content/public/browser/storage_partition.h"
 #include "content/public/browser/storage_partition_config.h"
-#include "content/public/common/url_constants.h"
 #include "extensions/browser/extension_prefs.h"
 #include "extensions/browser/extension_registry.h"
 #include "extensions/browser/extensions_browser_client.h"
-#include "extensions/browser/process_manager.h"
+#include "extensions/browser/renderer_startup_helper.h"
 #include "extensions/browser/ui_util.h"
-#include "extensions/common/cors_util.h"
 #include "extensions/common/extension.h"
-#include "extensions/common/features/behavior_feature.h"
 #include "extensions/common/features/feature.h"
-#include "extensions/common/features/feature_provider.h"
 #include "extensions/common/manifest.h"
 #include "extensions/common/manifest_handlers/incognito_info.h"
 #include "extensions/common/manifest_handlers/shared_module_info.h"
 #include "extensions/common/permissions/permissions_data.h"
+#include "extensions/common/switches.h"
+#include "extensions/grit/extensions_browser_resources.h"
 #include "mojo/public/cpp/bindings/clone_traits.h"
+#include "ui/base/resource/resource_bundle.h"
 #include "url/gurl.h"
 
 #if BUILDFLAG(IS_CHROMEOS_ASH)
@@ -41,6 +41,10 @@ namespace util {
 
 namespace {
 
+const char kDefaultUserScriptWorldKey[] = "_default";
+const char kUserScriptWorldMessagingKey[] = "messaging";
+const char kUserScriptWorldCspKey[] = "csp";
+
 #if BUILDFLAG(IS_CHROMEOS_ASH)
 bool IsSigninProfileTestExtensionOnTestImage(const Extension* extension) {
   if (extension->id() != extension_misc::kSigninProfileTestExtensionId)
@@ -49,28 +53,6 @@ bool IsSigninProfileTestExtensionOnTestImage(const Extension* extension) {
   return true;
 }
 #endif
-
-void SetCorsOriginAccessListForExtensionHelper(
-    const std::vector<content::BrowserContext*>& browser_contexts,
-    const Extension& extension,
-    std::vector<network::mojom::CorsOriginPatternPtr> allow_patterns,
-    std::vector<network::mojom::CorsOriginPatternPtr> block_patterns,
-    base::OnceClosure closure) {
-  auto barrier_closure =
-      BarrierClosure(browser_contexts.size(), std::move(closure));
-  for (content::BrowserContext* browser_context : browser_contexts) {
-    // SetCorsOriginAccessListForExtensionHelper should only affect an incognito
-    // profile if the extension is actually allowed to run in an incognito
-    // profile (not just by the extension manifest, but also by user
-    // preferences).
-    if (browser_context->IsOffTheRecord())
-      DCHECK(IsIncognitoEnabled(extension.id(), browser_context));
-
-    content::CorsOriginPatternSetter::Set(
-        browser_context, extension.origin(), mojo::Clone(allow_patterns),
-        mojo::Clone(block_patterns), barrier_closure);
-  }
-}
 
 }  // namespace
 
@@ -112,6 +94,13 @@ bool CanCrossIncognito(const Extension* extension,
          !IncognitoInfo::IsSplitMode(extension);
 }
 
+bool AllowFileAccess(const ExtensionId& extension_id,
+                     content::BrowserContext* context) {
+  return base::CommandLine::ForCurrentProcess()->HasSwitch(
+             switches::kDisableExtensionsFileAccessCheck) ||
+         ExtensionPrefs::Get(context)->AllowFileAccess(extension_id);
+}
+
 const std::string& GetPartitionDomainForExtension(const Extension* extension) {
   // Extensions use their own ID for a partition domain.
   return extension->id();
@@ -145,6 +134,65 @@ content::StoragePartition* GetStoragePartitionForExtensionId(
   return storage_partition;
 }
 
+content::ServiceWorkerContext* GetServiceWorkerContextForExtensionId(
+    const ExtensionId& extension_id,
+    content::BrowserContext* browser_context) {
+  return GetStoragePartitionForExtensionId(extension_id, browser_context)
+      ->GetServiceWorkerContext();
+}
+
+void SetUserScriptWorldInfo(const Extension& extension,
+                            content::BrowserContext* browser_context,
+                            std::optional<std::string> csp,
+                            bool messaging) {
+  // Persist world configuratation in state store.
+  auto* extension_prefs = ExtensionPrefs::Get(browser_context);
+  ExtensionPrefs::ScopedDictionaryUpdate update(
+      extension_prefs, extension.id(), kUserScriptsWorldsConfiguration.name);
+  std::unique_ptr<prefs::DictionaryValueUpdate> update_dict = update.Get();
+  if (!update_dict) {
+    update_dict = update.Create();
+  }
+
+  base::Value::Dict world_info;
+  world_info.Set(kUserScriptWorldMessagingKey, messaging);
+  if (csp.has_value()) {
+    world_info.Set(kUserScriptWorldCspKey, *csp);
+  }
+  update_dict->SetKey(kDefaultUserScriptWorldKey,
+                      base::Value(std::move(world_info)));
+
+  // Notify the renderer.
+  RendererStartupHelperFactory::GetForBrowserContext(browser_context)
+      ->SetUserScriptWorldProperties(extension, csp, messaging);
+}
+
+mojom::UserScriptWorldInfoPtr GetUserScriptWorldInfo(
+    const ExtensionId& extension_id,
+    content::BrowserContext* browser_context) {
+  bool enable_messaging = false;
+  std::optional<std::string> csp = std::nullopt;
+
+  const base::Value::Dict* worlds_configuration =
+      ExtensionPrefs::Get(browser_context)
+          ->ReadPrefAsDictionary(extension_id, kUserScriptsWorldsConfiguration);
+  if (worlds_configuration) {
+    const base::Value::Dict* world_info =
+        worlds_configuration->FindDict(kDefaultUserScriptWorldKey);
+
+    if (world_info) {
+      enable_messaging =
+          world_info->FindBool(kUserScriptWorldMessagingKey).value_or(false);
+
+      const std::string* csp_pref =
+          world_info->FindString(kUserScriptWorldCspKey);
+      csp = csp_pref ? std::make_optional(*csp_pref) : std::nullopt;
+    }
+  }
+
+  return mojom::UserScriptWorldInfo::New(extension_id, csp, enable_messaging);
+}
+
 // This function is security sensitive. Bugs could cause problems that break
 // restrictions on local file access or NaCl's validation caching. If you modify
 // this function, please get a security review from a NaCl person.
@@ -161,7 +209,7 @@ bool MapUrlToLocalFilePath(const ExtensionSet* extensions,
   // (GetFilePath()), so that this can be called on the non blocking threads. It
   // only handles a subset of the urls.
   if (!use_blocking_api) {
-    if (file_url.SchemeIs(extensions::kExtensionScheme)) {
+    if (file_url.SchemeIs(kExtensionScheme)) {
       std::string path = file_url.path();
       base::TrimString(path, "/", &path);  // Remove first slash
       *file_path = extension->path().AppendASCII(path);
@@ -223,10 +271,8 @@ bool CanWithholdPermissionsFromExtension(const ExtensionId& extension_id,
          !PermissionsData::CanExecuteScriptEverywhere(extension_id, location);
 }
 
-// The below functionality maps a context to a unique id by increasing a static
-// counter.
 int GetBrowserContextId(content::BrowserContext* context) {
-  using ContextIdMap = std::map<content::BrowserContext*, int>;
+  using ContextIdMap = std::map<std::string, int>;
 
   static int next_id = 0;
   static base::NoDestructor<ContextIdMap> context_map;
@@ -234,33 +280,15 @@ int GetBrowserContextId(content::BrowserContext* context) {
   // we need to get the original context to make sure we take the right context.
   content::BrowserContext* original_context =
       ExtensionsBrowserClient::Get()->GetOriginalContext(context);
-  auto iter = context_map->find(original_context);
+  const std::string& context_id = original_context->UniqueId();
+  auto iter = context_map->find(context_id);
   if (iter == context_map->end()) {
-    iter =
-        context_map->insert(std::make_pair(original_context, next_id++)).first;
+    iter = context_map->insert(std::make_pair(context_id, next_id++)).first;
   }
   DCHECK(iter->second != kUnspecifiedContextId);
   return iter->second;
 }
 
-void SetCorsOriginAccessListForExtension(
-    const std::vector<content::BrowserContext*>& browser_contexts,
-    const Extension& extension,
-    base::OnceClosure closure) {
-  SetCorsOriginAccessListForExtensionHelper(
-      browser_contexts, extension, CreateCorsOriginAccessAllowList(extension),
-      CreateCorsOriginAccessBlockList(extension), std::move(closure));
-}
-
-void ResetCorsOriginAccessListForExtension(
-    content::BrowserContext* browser_context,
-    const Extension& extension) {
-  SetCorsOriginAccessListForExtensionHelper({browser_context}, extension, {},
-                                            {}, base::DoNothing());
-}
-
-// Returns whether the |extension| should be loaded in the given
-// |browser_context|.
 bool IsExtensionVisibleToContext(const Extension& extension,
                                  content::BrowserContext* browser_context) {
   // Renderers don't need to know about themes.
@@ -276,7 +304,6 @@ bool IsExtensionVisibleToContext(const Extension& extension,
          IsIncognitoEnabled(extension.id(), browser_context);
 }
 
-// Initializes file scheme access if the extension has such permission.
 void InitializeFileSchemeAccessForExtension(
     int render_process_id,
     const std::string& extension_id,
@@ -288,6 +315,16 @@ void InitializeFileSchemeAccessForExtension(
     content::ChildProcessSecurityPolicy::GetInstance()->GrantRequestScheme(
         render_process_id, url::kFileScheme);
   }
+}
+
+const gfx::ImageSkia& GetDefaultAppIcon() {
+  return *ui::ResourceBundle::GetSharedInstance().GetImageSkiaNamed(
+      IDR_APP_DEFAULT_ICON);
+}
+
+const gfx::ImageSkia& GetDefaultExtensionIcon() {
+  return *ui::ResourceBundle::GetSharedInstance().GetImageSkiaNamed(
+      IDR_EXTENSION_DEFAULT_ICON);
 }
 
 ExtensionId GetExtensionIdForSiteInstance(
@@ -317,12 +354,42 @@ ExtensionId GetExtensionIdForSiteInstance(
   return maybe_extension_id;
 }
 
+std::string GetExtensionIdFromFrame(
+    content::RenderFrameHost* render_frame_host) {
+  const GURL& site = render_frame_host->GetSiteInstance()->GetSiteURL();
+  if (!site.SchemeIs(kExtensionScheme))
+    return std::string();
+
+  return site.host();
+}
+
 bool CanRendererHostExtensionOrigin(int render_process_id,
                                     const ExtensionId& extension_id) {
   url::Origin extension_origin =
       Extension::CreateOriginFromExtensionId(extension_id);
   auto* policy = content::ChildProcessSecurityPolicy::GetInstance();
   return policy->CanAccessDataForOrigin(render_process_id, extension_origin);
+}
+
+bool IsChromeApp(const std::string& extension_id,
+                 content::BrowserContext* context) {
+  const Extension* extension =
+      ExtensionRegistry::Get(context)->enabled_extensions().GetByID(
+          extension_id);
+  return extension->is_platform_app();
+}
+
+bool IsAppLaunchable(const std::string& extension_id,
+                     content::BrowserContext* context) {
+  int reason = ExtensionPrefs::Get(context)->GetDisableReasons(extension_id);
+  return !((reason & disable_reason::DISABLE_UNSUPPORTED_REQUIREMENT) ||
+           (reason & disable_reason::DISABLE_CORRUPTED));
+}
+
+bool IsAppLaunchableWithoutEnabling(const std::string& extension_id,
+                                    content::BrowserContext* context) {
+  return ExtensionRegistry::Get(context)->GetExtensionById(
+             extension_id, ExtensionRegistry::ENABLED) != nullptr;
 }
 
 }  // namespace util

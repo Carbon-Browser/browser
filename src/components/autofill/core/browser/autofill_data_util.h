@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,7 +8,7 @@
 #include <string>
 #include <vector>
 
-#include "base/strings/string_piece_forward.h"
+#include "base/strings/string_piece.h"
 #include "components/autofill/core/browser/field_types.h"
 
 namespace autofill {
@@ -57,7 +57,7 @@ bool ContainsPhone(uint32_t groups);
 // phone number FieldTypeGroups are associated with the given |form|'s storable
 // types or |types|, respectively.
 uint32_t DetermineGroups(const FormStructure& form);
-uint32_t DetermineGroups(const std::vector<ServerFieldType>& types);
+uint32_t DetermineGroups(const ServerFieldTypeSet& types);
 
 // Returns true if a form has address fields or has least two supported
 // non-address fields.

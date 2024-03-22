@@ -1,16 +1,13 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #import "ios/chrome/test/earl_grey/chrome_matchers.h"
 
-#include "base/strings/sys_string_conversions.h"
+#import "base/strings/sys_string_conversions.h"
+#import "ios/chrome/browser/ui/browser_container/edit_menu_app_interface.h"
 #import "ios/chrome/test/earl_grey/chrome_matchers_app_interface.h"
 #import "ios/testing/earl_grey/earl_grey_test.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 namespace chrome_test_util {
 
@@ -42,12 +39,28 @@ id<GREYMatcher> ButtonWithAccessibilityLabelId(int message_id) {
   return [ChromeMatchersAppInterface buttonWithAccessibilityLabelID:message_id];
 }
 
+id<GREYMatcher> ContextMenuItemWithAccessibilityLabel(NSString* label) {
+  return
+      [ChromeMatchersAppInterface contextMenuItemWithAccessibilityLabel:label];
+}
+
+id<GREYMatcher> ContextMenuItemWithAccessibilityLabelId(int message_id) {
+  return [ChromeMatchersAppInterface
+      contextMenuItemWithAccessibilityLabelID:message_id];
+}
+
 id<GREYMatcher> ImageViewWithImageNamed(NSString* imageName) {
   return [ChromeMatchersAppInterface imageViewWithImageNamed:imageName];
 }
 
-id<GREYMatcher> ImageViewWithImage(int image_id) {
-  return [ChromeMatchersAppInterface imageViewWithImage:image_id];
+id<GREYMatcher> ImageViewWithCustomSymbolNameAndPointSize(NSString* symbolName,
+                                                          CGFloat pointSize) {
+  return [ChromeMatchersAppInterface imageViewWithCustomSymbolNamed:symbolName
+                                                          pointSize:pointSize];
+}
+
+id<GREYMatcher> ImageViewWithImage(UIImage* image) {
+  return [ChromeMatchersAppInterface imageViewWithImage:image];
 }
 
 id<GREYMatcher> ButtonWithImage(int image_id) {
@@ -144,6 +157,10 @@ id<GREYMatcher> OmniboxPopupRow() {
   return [ChromeMatchersAppInterface omniboxPopupRow];
 }
 
+id<GREYMatcher> OmniboxPopupRowWithString(NSString* string) {
+  return [ChromeMatchersAppInterface omniboxPopupRowWithString:string];
+}
+
 id<GREYMatcher> OmniboxPopupList() {
   return [ChromeMatchersAppInterface omniboxPopupList];
 }
@@ -167,6 +184,10 @@ id<GREYMatcher> OmniboxText(const std::string& text) {
 id<GREYMatcher> OmniboxContainingText(const std::string& text) {
   return [ChromeMatchersAppInterface
       omniboxContainingText:base::SysUTF8ToNSString(text)];
+}
+
+id<GREYMatcher> OmniboxAutocompleteLabel() {
+  return [ChromeMatchersAppInterface omniboxAutocompleteLabel];
 }
 
 id<GREYMatcher> LocationViewContainingText(const std::string& text) {
@@ -328,6 +349,14 @@ id<GREYMatcher> SecondarySignInButton() {
   return [ChromeMatchersAppInterface secondarySignInButton];
 }
 
+id<GREYMatcher> IdentityChooserScrim() {
+  return [ChromeMatchersAppInterface identityChooserScrim];
+}
+
+id<GREYMatcher> FakeAddAccountScreenCancelButton() {
+  return [ChromeMatchersAppInterface fakeFakeAddAccountScreenCancelButton];
+}
+
 id<GREYMatcher> SettingsAccountButton() {
   return [ChromeMatchersAppInterface settingsAccountButton];
 }
@@ -360,6 +389,22 @@ id<GREYMatcher> SettingsPrivacySafeBrowsingTableView() {
   return [ChromeMatchersAppInterface settingsPrivacySafeBrowsingTableView];
 }
 
+id<GREYMatcher> SettingsNotificationsTableView() {
+  return [ChromeMatchersAppInterface settingsNotificationsTableView];
+}
+
+id<GREYMatcher> SettingsInactiveTabsTableView() {
+  return [ChromeMatchersAppInterface settingsInactiveTabsTableView];
+}
+
+id<GREYMatcher> SettingsTabsTableView() {
+  return [ChromeMatchersAppInterface settingsTabsTableView];
+}
+
+id<GREYMatcher> SettingsTrackingPriceTableView() {
+  return [ChromeMatchersAppInterface settingsTrackingPriceTableView];
+}
+
 id<GREYMatcher> ContentSettingsButton() {
   return [ChromeMatchersAppInterface contentSettingsButton];
 }
@@ -372,8 +417,24 @@ id<GREYMatcher> ManageSyncSettingsButton() {
   return [ChromeMatchersAppInterface manageSyncSettingsButton];
 }
 
+id<GREYMatcher> InactiveTabsSettingsButton() {
+  return [ChromeMatchersAppInterface inactiveTabsSettingsButton];
+}
+
+id<GREYMatcher> TabPickupSettingsButton() {
+  return [ChromeMatchersAppInterface tabPickupSettingsButton];
+}
+
+id<GREYMatcher> TabsSettingsButton() {
+  return [ChromeMatchersAppInterface tabsSettingsButton];
+}
+
 id<GREYMatcher> GoogleServicesSettingsView() {
   return [ChromeMatchersAppInterface googleServicesSettingsView];
+}
+
+id<GREYMatcher> SettingsNavigationBar() {
+  return [ChromeMatchersAppInterface settingsNavigationBar];
 }
 
 id<GREYMatcher> SettingsMenuBackButton() {
@@ -389,8 +450,16 @@ id<GREYMatcher> SettingsMenuPrivacyButton() {
   return [ChromeMatchersAppInterface settingsMenuPrivacyButton];
 }
 
+id<GREYMatcher> SettingsMenuNotificationsButton() {
+  return [ChromeMatchersAppInterface settingsMenuNotificationsButton];
+}
+
 id<GREYMatcher> SettingsMenuPasswordsButton() {
   return [ChromeMatchersAppInterface settingsMenuPasswordsButton];
+}
+
+id<GREYMatcher> SettingsMenuSafetyCheckButton() {
+  return [ChromeMatchersAppInterface settingsMenuSafetyCheckButton];
 }
 
 id<GREYMatcher> PaymentRequestView() {
@@ -474,19 +543,27 @@ id<GREYMatcher> OpenNewWindowMenuButton() {
 }
 
 id<GREYMatcher> SystemSelectionCallout() {
-  return [ChromeMatchersAppInterface systemSelectionCallout];
+  return [EditMenuAppInterface editMenuButtonMatcher];
 }
 
 id<GREYMatcher> SystemSelectionCalloutLinkToTextButton() {
-  return [ChromeMatchersAppInterface systemSelectionCalloutLinkToTextButton];
+  return [EditMenuAppInterface editMenuLinkToTextButtonMatcher];
 }
 
 id<GREYMatcher> SystemSelectionCalloutCopyButton() {
-  return [ChromeMatchersAppInterface systemSelectionCalloutCopyButton];
+  return [EditMenuAppInterface editMenuCopyButtonMatcher];
+}
+
+id<GREYMatcher> SystemSelectionCalloutCutButton() {
+  return [EditMenuAppInterface editMenuCutButtonMatcher];
+}
+
+id<GREYMatcher> SystemSelectionCalloutPasteButton() {
+  return [EditMenuAppInterface editMenuPasteButtonMatcher];
 }
 
 id<GREYMatcher> SystemSelectionCalloutOverflowButton() {
-  return [ChromeMatchersAppInterface systemSelectionCalloutOverflowButton];
+  return [EditMenuAppInterface editMenuNextButtonMatcher];
 }
 
 id<GREYMatcher> CopyActivityButton() {
@@ -646,6 +723,10 @@ id<GREYMatcher> SettingsSearchEngineButton() {
   return [ChromeMatchersAppInterface settingsSearchEngineButton];
 }
 
+id<GREYMatcher> SettingsAddressBarButton() {
+  return [ChromeMatchersAppInterface settingsAddressBarButton];
+}
+
 id<GREYMatcher> AutofillSuggestionViewMatcher() {
   return [ChromeMatchersAppInterface autofillSuggestionViewMatcher];
 }
@@ -662,6 +743,28 @@ id<GREYMatcher> HistoryEntry(const std::string& url, const std::string& title) {
 
 id<GREYMatcher> SettingsToolbarAddButton() {
   return [ChromeMatchersAppInterface settingsToolbarAddButton];
+}
+
+id<GREYMatcher> CellCanBeSwipedToDismissed() {
+  return [ChromeMatchersAppInterface cellCanBeSwipedToDismissed];
+}
+
+id<GREYMatcher> PasswordsTableViewMatcher() {
+  return [ChromeMatchersAppInterface passwordsTableViewMatcher];
+}
+
+id<GREYMatcher> DefaultBrowserSettingsTableViewMatcher() {
+  return [ChromeMatchersAppInterface defaultBrowserSettingsTableViewMatcher];
+}
+
+id<GREYMatcher> SafetyCheckTableViewMatcher() {
+  return [ChromeMatchersAppInterface safetyCheckTableViewMatcher];
+}
+
+id<GREYMatcher> AlertAction(NSString* title) {
+  return grey_allOf(
+      grey_accessibilityID([title stringByAppendingString:@"AlertAction"]),
+      grey_interactable(), nil);
 }
 
 #pragma mark - Overflow Menu Destinations
@@ -682,6 +785,10 @@ id<GREYMatcher> PasswordsDestinationButton() {
   return [ChromeMatchersAppInterface passwordsDestinationButton];
 }
 
+id<GREYMatcher> PriceNotificationsDestinationButton() {
+  return [ChromeMatchersAppInterface priceNotificationsDestinationButton];
+}
+
 id<GREYMatcher> DownloadsDestinationButton() {
   return [ChromeMatchersAppInterface downloadsDestinationButton];
 }
@@ -698,10 +805,48 @@ id<GREYMatcher> SettingsDestinationButton() {
   return [ChromeMatchersAppInterface settingsDestinationButton];
 }
 
+id<GREYMatcher> WhatsNewDestinationButton() {
+  return [ChromeMatchersAppInterface whatsNewDestinationButton];
+}
+
 #pragma mark - Overflow Menu Actions
 
 id<GREYMatcher> SettingsActionButton() {
   return [ChromeMatchersAppInterface settingsActionButton];
+}
+
+#pragma mark - Promo style view controller
+
+id<GREYMatcher> PromoStylePrimaryActionButtonMatcher() {
+  return [ChromeMatchersAppInterface promoStylePrimaryActionButtonMatcher];
+}
+
+id<GREYMatcher> PromoStyleSecondaryActionButtonMatcher() {
+  return [ChromeMatchersAppInterface promoStyleSecondaryActionButtonMatcher];
+}
+
+#pragma mark - Incognito Interstitial
+
+id<GREYMatcher> IncognitoInterstitialMatcher() {
+  return [ChromeMatchersAppInterface incognitoInterstitial];
+}
+
+id<GREYMatcher> IncognitoInterstitialLabelForURL(const std::string& url) {
+  return [ChromeMatchersAppInterface
+      incognitoInterstitialLabelForURL:base::SysUTF8ToNSString(url)];
+}
+
+id<GREYMatcher> IncognitoInterstitialOpenInChromeIncognitoButton() {
+  return [ChromeMatchersAppInterface
+      incognitoInterstitialOpenInChromeIncognitoButton];
+}
+
+id<GREYMatcher> IncognitoInterstitialOpenInChromeButton() {
+  return [ChromeMatchersAppInterface incognitoInterstitialOpenInChromeButton];
+}
+
+id<GREYMatcher> IncognitoInterstitialCancelButton() {
+  return [ChromeMatchersAppInterface incognitoInterstitialCancelButton];
 }
 
 #pragma mark - Manual Fallback
@@ -728,6 +873,10 @@ id<GREYMatcher> ManualFallbackPasswordSearchBarMatcher() {
 
 id<GREYMatcher> ManualFallbackManagePasswordsMatcher() {
   return [ChromeMatchersAppInterface manualFallbackManagePasswordsMatcher];
+}
+
+id<GREYMatcher> ManualFallbackManageSettingsMatcher() {
+  return [ChromeMatchersAppInterface manualFallbackManageSettingsMatcher];
 }
 
 id<GREYMatcher> ManualFallbackOtherPasswordsMatcher() {

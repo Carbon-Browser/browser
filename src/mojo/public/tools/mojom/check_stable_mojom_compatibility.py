@@ -1,5 +1,5 @@
-#!/usr/bin/env python
-# Copyright 2020 The Chromium Authors. All rights reserved.
+#!/usr/bin/env python3
+# Copyright 2020 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 """Verifies backward-compatibility of mojom type changes.
@@ -12,18 +12,17 @@ This can be used e.g. by a presubmit check to prevent developers from making
 breaking changes to stable mojoms."""
 
 import argparse
-import errno
 import io
 import json
 import os
 import os.path
-import shutil
 import sys
-import tempfile
 
 from mojom.generate import module
 from mojom.generate import translate
 from mojom.parse import parser
+
+# pylint: disable=raise-missing-from
 
 
 class ParseError(Exception):
@@ -76,6 +75,21 @@ def _ValidateDelta(root, delta):
     except Exception as e:
       raise ParseError('encountered exception {0} while parsing {1}'.format(
           e, mojom))
+
+    # Files which are generated at compile time can't be checked by this script
+    # (at the moment) since they may not exist in the output directory.
+    generated_files_to_skip = {
+        ('third_party/blink/public/mojom/runtime_feature_state/'
+         'runtime_feature.mojom'),
+        ('third_party/blink/public/mojom/origin_trial_feature/'
+         'origin_trial_feature.mojom'),
+    }
+
+    ast.import_list.items = [
+        x for x in ast.import_list.items
+        if x.import_filename not in generated_files_to_skip
+    ]
+
     for imp in ast.import_list:
       if (not file_overrides.get(imp.import_filename)
           and not os.path.exists(os.path.join(root, imp.import_filename))):
@@ -99,10 +113,10 @@ def _ValidateDelta(root, delta):
     modules[mojom] = translate.OrderedModule(ast, mojom, all_modules)
 
   old_modules = {}
-  for mojom in old_files.keys():
+  for mojom in old_files:
     parseMojom(mojom, old_files, old_modules)
   new_modules = {}
-  for mojom in new_files.keys():
+  for mojom in new_files:
     parseMojom(mojom, new_files, new_modules)
 
   # At this point we have a complete set of translated Modules from both the

@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,13 +7,19 @@
 
 #import <Foundation/Foundation.h>
 
+@class SnackbarCoordinator;
+
 // A delegate which provides an offset from the bottom of the window to
 // present a snackbar message above.
 @protocol SnackbarCoordinatorDelegate <NSObject>
 
 // Returns the current offset to use from the bottom of the screen to display
-// the snackbar UI.
-- (CGFloat)bottomOffsetForCurrentlyPresentedView;
+// the snackbar UI. When `forceBrowserToolbar`, uses the browser's toolbar
+// height, ignoring presented view controllers.
+- (CGFloat)snackbarCoordinatorBottomOffsetForCurrentlyPresentedView:
+               (SnackbarCoordinator*)snackbarCoordinator
+                                                forceBrowserToolbar:
+                                                    (BOOL)forceBrowserToolbar;
 
 @end
 

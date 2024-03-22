@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,17 +7,19 @@
 
 #include <string>
 
+#include "base/strings/string_piece.h"
+
 namespace policy {
 
 // Uses template to build a hostname. Returns valid hostname (after parameter
 // substitution) or empty string, if substitution result is not a valid
 // hostname.
-std::string FormatHostname(const std::string& name_template,
-                           const std::string& asset_id,
-                           const std::string& serial,
-                           const std::string& mac,
-                           const std::string& machine_name,
-                           const std::string& location);
+std::string FormatHostname(base::StringPiece name_template,
+                           base::StringPiece asset_id,
+                           base::StringPiece serial,
+                           base::StringPiece mac,
+                           base::StringPiece machine_name,
+                           base::StringPiece location);
 
 }  // namespace policy
 

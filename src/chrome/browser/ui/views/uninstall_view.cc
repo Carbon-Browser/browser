@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,7 +11,7 @@
 #include "chrome/browser/ui/uninstall_browser_prompt.h"
 #include "chrome/browser/ui/views/chrome_layout_provider.h"
 #include "chrome/common/chrome_result_codes.h"
-#include "chrome/grit/chromium_strings.h"
+#include "chrome/grit/branded_strings.h"
 #include "chrome/installer/util/shell_util.h"
 #include "ui/base/l10n/l10n_util.h"
 #include "ui/base/metadata/metadata_impl_macros.h"
@@ -123,9 +123,9 @@ void UninstallView::SetupControls() {
 }
 
 void UninstallView::OnDialogAccepted() {
-  user_selection_ = content::RESULT_CODE_NORMAL_EXIT;
+  *user_selection_ = content::RESULT_CODE_NORMAL_EXIT;
   if (delete_profile_->GetChecked())
-    user_selection_ = chrome::RESULT_CODE_UNINSTALL_DELETE_PROFILE;
+    *user_selection_ = chrome::RESULT_CODE_UNINSTALL_DELETE_PROFILE;
   if (change_default_browser_ && change_default_browser_->GetChecked()) {
     BrowsersMap::const_iterator i = browsers_->begin();
     std::advance(i, browsers_combo_->GetSelectedIndex().value());
@@ -136,7 +136,7 @@ void UninstallView::OnDialogAccepted() {
 }
 
 void UninstallView::OnDialogCancelled() {
-  user_selection_ = chrome::RESULT_CODE_UNINSTALL_USER_CANCEL;
+  *user_selection_ = chrome::RESULT_CODE_UNINSTALL_USER_CANCEL;
 }
 
 size_t UninstallView::GetItemCount() const {

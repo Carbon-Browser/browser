@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -23,7 +23,7 @@ class TestSharedBitmapManager : public SharedBitmapManager {
   // SharedBitmapManager implementation.
   std::unique_ptr<SharedBitmap> GetSharedBitmapFromId(
       const gfx::Size& size,
-      ResourceFormat format,
+      SharedImageFormat format,
       const SharedBitmapId& id) override;
   base::UnguessableToken GetSharedBitmapTracingGUIDFromId(
       const SharedBitmapId& id) override;

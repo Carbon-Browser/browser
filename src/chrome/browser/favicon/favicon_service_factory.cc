@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,25 +6,17 @@
 
 #include <memory>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
-#include "base/memory/singleton.h"
+#include "base/no_destructor.h"
 #include "chrome/browser/favicon/chrome_favicon_client.h"
 #include "chrome/browser/history/history_service_factory.h"
 #include "chrome/browser/profiles/profile.h"
-#include "components/favicon/content/large_favicon_provider_getter.h"
 #include "components/favicon/core/favicon_service_impl.h"
 #include "components/history/core/browser/history_service.h"
-#include "components/keyed_service/content/browser_context_dependency_manager.h"
 #include "components/prefs/pref_service.h"
 
 namespace {
-
-favicon::LargeFaviconProvider* GetLargeFaviconProvider(
-    content::BrowserContext* context) {
-  return FaviconServiceFactory::GetInstance()->GetForProfile(
-      Profile::FromBrowserContext(context), ServiceAccessType::EXPLICIT_ACCESS);
-}
 
 std::unique_ptr<KeyedService> BuildFaviconService(
     content::BrowserContext* context) {
@@ -60,12 +52,13 @@ favicon::FaviconService* FaviconServiceFactory::GetForProfile(
 
   // Profile is OffTheRecord without access.
   NOTREACHED() << "This profile is OffTheRecord";
-  return NULL;
+  return nullptr;
 }
 
 // static
 FaviconServiceFactory* FaviconServiceFactory::GetInstance() {
-  return base::Singleton<FaviconServiceFactory>::get();
+  static base::NoDestructor<FaviconServiceFactory> instance;
+  return instance.get();
 }
 
 // static
@@ -75,19 +68,23 @@ FaviconServiceFactory::GetDefaultFactory() {
 }
 
 FaviconServiceFactory::FaviconServiceFactory()
-    : BrowserContextKeyedServiceFactory(
-        "FaviconService",
-        BrowserContextDependencyManager::GetInstance()) {
+    : ProfileKeyedServiceFactory(
+          "FaviconService",
+          ProfileSelections::Builder()
+              .WithRegular(ProfileSelection::kOriginalOnly)
+              // TODO(crbug.com/1418376): Check if this service is needed in
+              // Guest mode.
+              .WithGuest(ProfileSelection::kOriginalOnly)
+              .Build()) {
   DependsOn(HistoryServiceFactory::GetInstance());
-  favicon::SetLargeFaviconProviderGetter(
-      base::BindRepeating(&GetLargeFaviconProvider));
 }
 
 FaviconServiceFactory::~FaviconServiceFactory() = default;
 
-KeyedService* FaviconServiceFactory::BuildServiceInstanceFor(
+std::unique_ptr<KeyedService>
+FaviconServiceFactory::BuildServiceInstanceForBrowserContext(
     content::BrowserContext* context) const {
-  return BuildFaviconService(context).release();
+  return BuildFaviconService(context);
 }
 
 bool FaviconServiceFactory::ServiceIsNULLWhileTesting() const {

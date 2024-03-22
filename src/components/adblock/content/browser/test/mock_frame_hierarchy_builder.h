@@ -32,7 +32,7 @@ class MockFrameHierarchyBuilder
 
   MOCK_METHOD(content::RenderFrameHost*,
               FindRenderFrameHost,
-              (int32_t, int32_t),
+              (content::GlobalRenderFrameHostId),
               (const, override));
   MOCK_METHOD(std::vector<GURL>,
               BuildFrameHierarchy,

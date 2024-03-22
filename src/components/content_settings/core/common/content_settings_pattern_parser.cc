@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,9 +6,13 @@
 
 #include <stddef.h>
 
+#include "base/logging.h"
 #include "base/notreached.h"
+#include "base/strings/string_number_conversions.h"
 #include "base/strings/string_piece.h"
 #include "base/strings/string_util.h"
+#include "url/gurl.h"
+#include "url/url_canon.h"
 #include "url/url_constants.h"
 
 namespace {
@@ -22,10 +26,6 @@ const char kSchemeWildcard[] = "*";
 const char kUrlPathSeparator = '/';
 const char kUrlPortSeparator = ':';
 const char kUrlPortAndPathSeparator[] = ":/";
-// A domain wildcard pattern involves exactly one separating dot,
-// inside the square brackets. This is a common misunderstanding of that
-// pattern that we want to check for. See: https://crbug.com/823706.
-const char kDomainWildcardWithSuperfluousDot[] = "[*.].";
 
 }  // namespace
 
@@ -138,12 +138,6 @@ void PatternParser::Parse(base::StringPiece pattern_spec,
         return;
       }
 
-      if (base::StartsWith(host_piece, kDomainWildcardWithSuperfluousDot,
-                           base::CompareCase::SENSITIVE)) {
-        builder->Invalid();
-        return;
-      }
-
       host_piece.remove_prefix(kDomainWildcardLength);
       builder->WithDomainWildcard();
       builder->WithHost(std::string(host_piece));
@@ -157,9 +151,11 @@ void PatternParser::Parse(base::StringPiece pattern_spec,
     }
   }
 
+  bool port_allowed =
+      !ContentSettingsPattern::IsNonWildcardDomainNonPortScheme(scheme_piece) &&
+      !base::EqualsCaseInsensitiveASCII(scheme_piece, url::kFileScheme);
   if (!port_piece.empty()) {
-    if (ContentSettingsPattern::IsNonWildcardDomainNonPortScheme(
-            scheme_piece)) {
+    if (!port_allowed) {
       builder->Invalid();
       return;
     }
@@ -177,10 +173,7 @@ void PatternParser::Parse(base::StringPiece pattern_spec,
       // TODO(markusheintz): Check port range.
       builder->WithPort(std::string(port_piece));
     }
-  } else if (!ContentSettingsPattern::IsNonWildcardDomainNonPortScheme(
-                 scheme_piece) &&
-             !base::EqualsCaseInsensitiveASCII(scheme_piece,
-                                               url::kFileScheme)) {
+  } else if (port_allowed) {
     builder->WithPortWildcard();
   }
 
@@ -241,6 +234,40 @@ std::string PatternParser::ToString(
   }
 
   return str;
+}
+
+GURL PatternParser::ToRepresentativeUrl(
+    const ContentSettingsPattern::PatternParts& parts) {
+  if (parts.scheme == url::kFileScheme) {
+    if (parts.is_path_wildcard) {
+      return GURL();
+    }
+    return GURL(parts.scheme + url::kStandardSchemeSeparator + parts.path);
+  }
+
+  if (parts.host.empty()) {
+    return GURL();
+  }
+
+  std::string default_port;
+  GURL::Replacements r;
+  r.SetHostStr(parts.host);
+
+  if (!parts.is_scheme_wildcard) {
+    r.SetSchemeStr(parts.scheme);
+    default_port = base::NumberToString(
+        url::DefaultPortForScheme(parts.scheme.c_str(), parts.scheme.length()));
+    r.SetPortStr(default_port);
+  }
+
+  if (!parts.is_port_wildcard) {
+    r.SetPortStr(parts.port);
+  }
+
+  GURL url("https://example.com");
+  url = url.ReplaceComponents(r);
+  DCHECK(url.is_valid()) << "parts: " << ToString(parts);
+  return url;
 }
 
 }  // namespace content_settings

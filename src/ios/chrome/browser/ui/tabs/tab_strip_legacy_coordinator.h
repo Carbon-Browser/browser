@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,13 +7,10 @@
 
 #import <UIKit/UIKit.h>
 
-#import "ios/chrome/browser/ui/coordinators/chrome_coordinator.h"
-#import "ios/chrome/browser/ui/gestures/view_revealing_animatee.h"
+#import "ios/chrome/browser/shared/coordinator/chrome_coordinator/chrome_coordinator.h"
 #import "ios/chrome/browser/ui/tabs/requirements/tab_strip_highlighting.h"
 
-@protocol PopupMenuLongPressDelegate;
 @protocol TabStripPresentation;
-@class ViewRevealingVerticalPanHandler;
 
 // A legacy coordinator that presents the public interface for the tablet tab
 // strip feature.
@@ -26,24 +23,17 @@
 - (instancetype)initWithBaseViewController:(UIViewController*)viewController
                                    browser:(Browser*)browser NS_UNAVAILABLE;
 
-// Delegate for the long press gesture recognizer triggering popup menu.
-@property(nonatomic, weak) id<PopupMenuLongPressDelegate> longPressDelegate;
+// The base view controller for this coordinator. This is required because the
+// TabStripLegacyCoordinator is instantiated before the BrowserViewController.
+@property(nonatomic, weak, readwrite) UIViewController* baseViewController;
 
 // Provides methods for presenting the tab strip and checking the visibility
 // of the tab strip in the containing object.
-@property(nonatomic, assign) id<TabStripPresentation> presentationProvider;
+@property(nonatomic, weak) id<TabStripPresentation> presentationProvider;
 
 // The duration to wait before starting tab strip animations. Used to
 // synchronize animations.
 @property(nonatomic, assign) NSTimeInterval animationWaitDuration;
-
-// Animatee for this tab strip. It is not added to the `panGestureHandler` as
-// it needs to be run in sync with BVC.
-@property(nonatomic, readonly, strong) id<ViewRevealingAnimatee> animatee;
-
-// Sets the pan gesture handler for the tab strip controller.
-- (void)setPanGestureHandler:
-    (ViewRevealingVerticalPanHandler*)panGestureHandler;
 
 // Hides or shows the TabStrip.
 - (void)hideTabStrip:(BOOL)hidden;

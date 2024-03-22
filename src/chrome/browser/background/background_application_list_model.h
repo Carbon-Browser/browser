@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -31,7 +31,6 @@ class ImageSkia;
 
 namespace extensions {
 class ExtensionRegistry;
-struct UpdatedExtensionPermissionsInfo;
 }  // namespace extensions
 
 // Model for list of Background Applications associated with a Profile (i.e.
@@ -156,7 +155,9 @@ class BackgroundApplicationListModel
 
   // extensions::PermissionsManager::Observer:
   void OnExtensionPermissionsUpdated(
-      const extensions::UpdatedExtensionPermissionsInfo& info) override;
+      const extensions::Extension& extension,
+      const extensions::PermissionSet& permissions,
+      extensions::PermissionsManager::UpdateReason reason) override;
 
   // Intended to be called when extension system is ready.
   void OnExtensionSystemReady();

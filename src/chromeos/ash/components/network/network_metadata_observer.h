@@ -1,4 +1,4 @@
-// Copyright (c) 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,7 +11,7 @@
 #include "base/observer_list_types.h"
 #include "base/values.h"
 
-namespace chromeos {
+namespace ash {
 
 // Observer class for events that affect network metadata.  All callbacks are
 // executed after related metadata has been updated.
@@ -28,13 +28,13 @@ class COMPONENT_EXPORT(CHROMEOS_NETWORK) NetworkMetadataObserver
   // Called after a network configuration and associated metadata has been
   // updated.
   virtual void OnNetworkUpdate(const std::string& guid,
-                               const base::Value* set_properties);
+                               const base::Value::Dict* set_properties);
 
  protected:
   NetworkMetadataObserver();
   ~NetworkMetadataObserver() override;
 };
 
-}  // namespace chromeos
+}  // namespace ash
 
 #endif  // CHROMEOS_ASH_COMPONENTS_NETWORK_NETWORK_METADATA_OBSERVER_H_

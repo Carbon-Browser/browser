@@ -1,15 +1,16 @@
-# Copyright 2018 The Chromium Authors. All rights reserved.
+# Copyright 2018 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
 import("//build/config/ios/asset_catalog.gni")
 
-imageset("ntp_readinglist_icon") {
+imageset("magic_stack_placeholder_module") {
   sources = [
-    "ntp_readinglist_icon.imageset/Contents.json",
-    "ntp_readinglist_icon.imageset/ntp_readinglist_icon.png",
-    "ntp_readinglist_icon.imageset/ntp_readinglist_icon@2x.png",
-    "ntp_readinglist_icon.imageset/ntp_readinglist_icon@3x.png",
+    "magic_stack_placeholder_module.imageset/Contents.json",
+    "magic_stack_placeholder_module.imageset/magic_stack_placeholder_module_dark@2x.png",
+    "magic_stack_placeholder_module.imageset/magic_stack_placeholder_module_dark@3x.png",
+    "magic_stack_placeholder_module.imageset/magic_stack_placeholder_module_light@2x.png",
+    "magic_stack_placeholder_module.imageset/magic_stack_placeholder_module_light@3x.png",
   ]
 }
 
@@ -22,29 +23,10 @@ imageset("ntp_most_visited_tile") {
   ]
 }
 
-imageset("ntp_bookmarks_icon") {
+imageset("untrack_parcel") {
   sources = [
-    "ntp_bookmarks_icon.imageset/Contents.json",
-    "ntp_bookmarks_icon.imageset/ntp_bookmarks_icon.png",
-    "ntp_bookmarks_icon.imageset/ntp_bookmarks_icon@2x.png",
-    "ntp_bookmarks_icon.imageset/ntp_bookmarks_icon@3x.png",
-  ]
-}
-
-imageset("ntp_recent_icon") {
-  sources = [
-    "ntp_recent_icon.imageset/Contents.json",
-    "ntp_recent_icon.imageset/ntp_recent_icon.png",
-    "ntp_recent_icon.imageset/ntp_recent_icon@2x.png",
-    "ntp_recent_icon.imageset/ntp_recent_icon@3x.png",
-  ]
-}
-
-imageset("ntp_history_icon") {
-  sources = [
-    "ntp_history_icon.imageset/Contents.json",
-    "ntp_history_icon.imageset/ntp_history_icon.png",
-    "ntp_history_icon.imageset/ntp_history_icon@2x.png",
-    "ntp_history_icon.imageset/ntp_history_icon@3x.png",
+    "untrack_parcel.imageset/Contents.json",
+    "untrack_parcel.imageset/untrack_parcel@2x.png",
+    "untrack_parcel.imageset/untrack_parcel@3x.png",
   ]
 }

@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -20,11 +20,11 @@
 
 namespace autofill {
 
-class AutofillProfile;
 class AutofillTable;
 class AutofillWebDataBackend;
 class AutofillWebDataService;
 class CreditCard;
+class Iban;
 struct CreditCardCloudTokenData;
 struct PaymentsCustomerData;
 
@@ -56,10 +56,10 @@ class AutofillWalletSyncBridge : public base::SupportsUserData::Data,
   // ModelTypeSyncBridge implementation.
   std::unique_ptr<syncer::MetadataChangeList> CreateMetadataChangeList()
       override;
-  absl::optional<syncer::ModelError> MergeSyncData(
+  absl::optional<syncer::ModelError> MergeFullSyncData(
       std::unique_ptr<syncer::MetadataChangeList> metadata_change_list,
       syncer::EntityChangeList entity_data) override;
-  absl::optional<syncer::ModelError> ApplySyncChanges(
+  absl::optional<syncer::ModelError> ApplyIncrementalSyncChanges(
       std::unique_ptr<syncer::MetadataChangeList> metadata_change_list,
       syncer::EntityChangeList entity_changes) override;
   void GetData(StorageKeyList storage_keys, DataCallback callback) override;
@@ -67,8 +67,8 @@ class AutofillWalletSyncBridge : public base::SupportsUserData::Data,
   std::string GetClientTag(const syncer::EntityData& entity_data) override;
   std::string GetStorageKey(const syncer::EntityData& entity_data) override;
   bool SupportsIncrementalUpdates() const override;
-  void ApplyStopSyncChanges(std::unique_ptr<syncer::MetadataChangeList>
-                                delete_metadata_change_list) override;
+  void ApplyDisableSyncChanges(std::unique_ptr<syncer::MetadataChangeList>
+                                   delete_metadata_change_list) override;
 
   // Retrieves all Wallet Data from local table, converts to EntityData and
   // sends all Wallet Data to the |callback| and keeps all the strings in their
@@ -76,60 +76,39 @@ class AutofillWalletSyncBridge : public base::SupportsUserData::Data,
   void GetAllDataForTesting(DataCallback callback);
 
  private:
-  template <class Item>
-  struct AutofillWalletDiff {
-    int items_added = 0;
-    int items_removed = 0;
-    std::vector<AutofillDataModelChange<Item>> changes;
-
-    bool IsEmpty() const { return items_added == 0 && items_removed == 0; }
-  };
-
   // Sends all Wallet Data to the |callback|. If |enforce_utf8|, the string
   // fields that are in non-UTF-8 get encoded so that they conform to UTF-8.
   void GetAllDataImpl(DataCallback callback, bool enforce_utf8);
 
-  // Sets the wallet data from |entity_data| to this client and records metrics
-  // about added/deleted data. If |notify_metadata_bridge|, it also notifies
+  // Sets the wallet data from `entity_data` to this client and records metrics
+  // about added/deleted data. If `notify_webdata_backend`, it also notifies
   // the metadata sync bridge about individual changes.
   void SetSyncData(const syncer::EntityChangeList& entity_data,
-                   bool notify_metadata_bridge);
+                   bool notify_webdata_backend);
 
   // Sets |customer_data| to this client and returns whether any change has been
   // applied (i.e., whether |customer_data| was different from local data).
   bool SetPaymentsCustomerData(std::vector<PaymentsCustomerData> customer_data);
 
-  // Sets |wallet_cards| to this client and returns whether any change has been
-  // applied (i.e., whether |wallet_cards| was different from local data). If
-  // |notify_metadata_bridge|, it also notifies via WebDataBackend about any
+  // Sets `wallet_cards` to this client and returns whether any change has been
+  // applied (i.e., whether `wallet_cards` was different from local data). If
+  // `notify_webdata_backend`, it also notifies via WebDataBackend about any
   // individual entity changes.
   bool SetWalletCards(std::vector<CreditCard> wallet_cards,
-                      bool notify_metadata_bridge);
+                      bool notify_webdata_backend);
 
-  // Sets |wallet_addresses| to this client and returns whether any change has
-  // been applied (i.e., whether |wallet_addresses| was different from local
-  // data). If |notify_metadata_bridge|, it also notifies via WebDataBackend
-  // about any individual entity changes.
-  bool SetWalletAddresses(std::vector<AutofillProfile> wallet_addresses,
-                          bool notify_metadata_bridge);
+  // Sets `wallet_ibans` to this client and returns whether any change has been
+  // applied (i.e., whether `wallet_ibans` was different from local data). If
+  // `notify_webdata_backend` is true, it also notifies via WebDataBackend about
+  // any individual entity changes.
+  bool SetWalletIbans(std::vector<Iban> wallet_ibans,
+                      bool notify_webdata_backend);
 
   // Sets |cloud_token_data| to this client and returns whether any change has
   // been applied (i.e., whether |cloud_token_data| was different from the local
   // data).
   bool SetCreditCardCloudTokenData(
       const std::vector<CreditCardCloudTokenData>& cloud_token_data);
-
-  // Computes a "diff" (items added, items removed) of two vectors of items,
-  // which should be either CreditCard or AutofillProfile. This is used for
-  // three purposes:
-  // 1) Detecting if anything has changed, so that we don't write to disk in the
-  //    common case where nothing has changed.
-  // 3) Notifying |web_data_backend_| of any changes.
-  // 2) Recording metrics on the number of added/removed items.
-  template <class Item>
-  AutofillWalletDiff<Item> ComputeAutofillWalletDiff(
-      const std::vector<std::unique_ptr<Item>>& old_data,
-      const std::vector<Item>& new_data);
 
   // Returns the table associated with the |web_data_backend_|.
   AutofillTable* GetAutofillTable();

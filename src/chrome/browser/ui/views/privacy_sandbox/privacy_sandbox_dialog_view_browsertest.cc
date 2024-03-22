@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -44,6 +44,9 @@ class PrivacySandboxDialogViewBrowserTest : public DialogBrowserTest {
     if (name == "Notice") {
       prompt_type = PrivacySandboxService::PromptType::kNotice;
     }
+    if (name == "RestrictedNotice") {
+      prompt_type = PrivacySandboxService::PromptType::kM1NoticeRestricted;
+    }
     ASSERT_NE(prompt_type, PrivacySandboxService::PromptType::kNone);
 
     // Resize the browser window to guarantee enough space for the dialog.
@@ -53,7 +56,7 @@ class PrivacySandboxDialogViewBrowserTest : public DialogBrowserTest {
     views::NamedWidgetShownWaiter waiter(
         views::test::AnyWidgetTestPasskey{},
         PrivacySandboxDialogView::kViewClassName);
-    ShowPrivacySandboxPrompt(browser(), prompt_type);
+    ShowPrivacySandboxDialog(browser(), prompt_type);
     waiter.WaitIfNeededAndGet();
 
     base::RunLoop().RunUntilIdle();
@@ -62,7 +65,7 @@ class PrivacySandboxDialogViewBrowserTest : public DialogBrowserTest {
   MockPrivacySandboxService* mock_service() { return mock_service_; }
 
  private:
-  raw_ptr<MockPrivacySandboxService> mock_service_;
+  raw_ptr<MockPrivacySandboxService, DanglingUntriaged> mock_service_;
 };
 
 #if BUILDFLAG(IS_WIN)

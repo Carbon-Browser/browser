@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,6 +11,7 @@
 #include "base/strings/stringprintf.h"
 #include "base/task/common/task_annotator.h"
 #include "build/build_config.h"
+#include "content/browser/renderer_host/frame_tree.h"
 #include "content/browser/renderer_host/frame_tree_node.h"
 #include "content/browser/renderer_host/navigation_entry_impl.h"
 #include "content/browser/renderer_host/page_impl.h"
@@ -153,19 +154,12 @@ void WebContentsObserverConsistencyChecker::RenderFrameHostChanged(
     AssertRenderFrameExists(new_host->GetParent());
     // RenderFrameCreated should be called before RenderFrameHostChanged for all
     // the subframes except for those which are the outer delegates for:
-    //  - Portals
     //  - Fenced frames based specifically on MPArch
     // This is because those special-case frames do not have live RenderFrames
     // in the renderer process.
     bool is_render_frame_created_needed_for_child =
-        (new_host->GetFrameOwnerElementType() !=
-             blink::FrameOwnerElementType::kPortal &&
-         new_host->GetFrameOwnerElementType() !=
-             blink::FrameOwnerElementType::kFencedframe) ||
-        (new_host->GetFrameOwnerElementType() ==
-             blink::FrameOwnerElementType::kFencedframe &&
-         blink::features::kFencedFramesImplementationTypeParam.Get() ==
-             blink::features::FencedFramesImplementationType::kShadowDOM);
+        new_host->GetFrameOwnerElementType() !=
+        blink::FrameOwnerElementType::kFencedframe;
     if (is_render_frame_created_needed_for_child) {
       AssertRenderFrameExists(new_host);
     }
@@ -174,26 +168,7 @@ void WebContentsObserverConsistencyChecker::RenderFrameHostChanged(
   }
 
   GlobalRoutingID routing_pair = GetRoutingPair(new_host);
-  bool host_exists = !current_hosts_.insert(routing_pair).second;
-  // TODO(https://crbug.com/1179683): Figure out a better way to deal with
-  // MPArch.
-  if (host_exists && !blink::features::IsPrerender2Enabled()) {
-    CHECK(false)
-        << "RenderFrameHostChanged called more than once for routing pair:"
-        << Format(new_host);
-  }
-
-  // If |new_host| is restored from the BackForwardCache, it can contain
-  // iframes, otherwise it has just been created and can't contain iframes for
-  // the moment.
-  //
-  // TODO(https://crbug.com/1179683): Figure out a better way to deal with
-  // handling the new RenderFrameHost coming from a prerendered activation
-  // rather than an ordinary activation.
-  if (!IsBackForwardCacheEnabled() && !blink::features::IsPrerender2Enabled()) {
-    CHECK(!HasAnyChildren(new_host))
-        << "A frame should not have children before it is committed.";
-  }
+  current_hosts_.insert(routing_pair);
 }
 
 void WebContentsObserverConsistencyChecker::FrameDeleted(
@@ -210,10 +185,9 @@ void WebContentsObserverConsistencyChecker::FrameDeleted(
   // Will be nullptr if this is main frame of a non primary FrameTree whose page
   // was moved out (e.g. due Prerender activation).
   if (!render_frame_host) {
-    DCHECK_NE(FrameTreeNode::GloballyFindByID(frame_tree_node_id)
-                  ->frame_tree()
-                  ->type(),
-              FrameTree::Type::kPrimary);
+    DCHECK(!FrameTreeNode::GloballyFindByID(frame_tree_node_id)
+                ->frame_tree()
+                .is_primary());
     return;
   }
 
@@ -461,8 +435,7 @@ std::string WebContentsObserverConsistencyChecker::Format(
 
 bool WebContentsObserverConsistencyChecker::NavigationIsOngoing(
     NavigationHandle* navigation_handle) {
-  auto it = ongoing_navigations_.find(navigation_handle);
-  return it != ongoing_navigations_.end();
+  return base::Contains(ongoing_navigations_, navigation_handle);
 }
 
 void WebContentsObserverConsistencyChecker::EnsureStableParentValue(
@@ -543,9 +516,8 @@ void WebContentsObserverConsistencyChecker::AddInputEventObserver(
 
 void WebContentsObserverConsistencyChecker::RemoveInputEventObserver(
     RenderFrameHost* render_frame_host) {
-  auto it = input_observer_map_.find(render_frame_host);
-  CHECK(it != input_observer_map_.end());
-  input_observer_map_.erase(it);
+  DCHECK(base::Contains(input_observer_map_, render_frame_host));
+  input_observer_map_.erase(render_frame_host);
 }
 
 WebContentsObserverConsistencyChecker::TaskChecker::TaskChecker()

@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,14 +12,10 @@ import org.chromium.components.embedder_support.util.WebResourceResponseInfo;
 import java.util.ArrayList;
 import java.util.List;
 
-/**
- * AwServiceWorkerClient subclass used for testing.
- */
+/** AwServiceWorkerClient subclass used for testing. */
 public class TestAwServiceWorkerClient extends AwServiceWorkerClient {
 
-    /**
-     * Helper class to wait for callbacks on the TestAwServiceWorkerClient.
-     */
+    /** Helper class to wait for callbacks on the TestAwServiceWorkerClient. */
     public static class ShouldInterceptRequestHelper extends CallbackHelper {
         private List<AwWebResourceRequest> mInterceptedRequests =
                 new ArrayList<AwWebResourceRequest>();

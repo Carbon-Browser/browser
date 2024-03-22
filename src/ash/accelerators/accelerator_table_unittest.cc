@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -16,10 +16,10 @@ namespace ash {
 namespace {
 
 // The number of non-Search-based accelerators.
-constexpr int kNonSearchAcceleratorsNum = 109;
+constexpr int kNonSearchAcceleratorsNum = 107;
 // The hash of non-Search-based accelerators. See HashAcceleratorData().
 constexpr char kNonSearchAcceleratorsHash[] =
-    "2cada710fecfc1ae0fa22ecad7900f16";
+    "fb4ed36bdb78ed9f9767adb03adc4909";
 
 struct Cmp {
   bool operator()(const AcceleratorData& lhs,

@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,11 +12,10 @@
 #include "base/android/jni_string.h"
 #include "base/android/scoped_java_ref.h"
 #include "base/memory/ptr_util.h"
-#include "chrome/browser/password_entry_edit/android/jni_headers/CredentialEditBridge_jni.h"
+#include "chrome/browser/password_entry_edit/android/internal/jni/CredentialEditBridge_jni.h"
 #include "chrome/grit/generated_resources.h"
-#include "components/password_manager/core/browser/android_affiliation/affiliation_utils.h"
+#include "components/password_manager/core/browser/affiliation/affiliation_utils.h"
 #include "components/password_manager/core/browser/password_form.h"
-#include "components/password_manager/core/browser/password_list_sorter.h"
 #include "components/password_manager/core/browser/ui/saved_passwords_presenter.h"
 #include "components/url_formatter/url_formatter.h"
 #include "ui/base/l10n/l10n_util.h"
@@ -109,10 +108,11 @@ void CredentialEditBridge::OnUIDismissed(JNIEnv* env) {
 
 std::u16string CredentialEditBridge::GetDisplayURLOrAppName() {
   auto facet = password_manager::FacetURI::FromPotentiallyInvalidSpec(
-      credential_.signon_realm);
+      credential_.GetFirstSignonRealm());
+  std::string display_name = credential_.GetDisplayName();
 
   if (facet.IsValidAndroidFacetURI()) {
-    if (credential_.app_display_name.empty()) {
+    if (display_name.empty()) {
       // In case no affiliation information could be obtained show the
       // formatted package name to the user.
       return l10n_util::GetStringFUTF16(
@@ -120,11 +120,11 @@ std::u16string CredentialEditBridge::GetDisplayURLOrAppName() {
           base::UTF8ToUTF16(facet.android_package_name()));
     }
 
-    return base::UTF8ToUTF16(credential_.app_display_name);
+    return base::UTF8ToUTF16(display_name);
   }
 
   return url_formatter::FormatUrl(
-      credential_.url.DeprecatedGetOriginAsURL(),
+      credential_.GetURL().DeprecatedGetOriginAsURL(),
       url_formatter::kFormatUrlOmitDefaults |
           url_formatter::kFormatUrlOmitHTTPS |
           url_formatter::kFormatUrlOmitTrivialSubdomains |

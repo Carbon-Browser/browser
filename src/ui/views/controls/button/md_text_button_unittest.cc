@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,6 +6,7 @@
 
 #include "third_party/skia/include/core/SkBitmap.h"
 #include "third_party/skia/include/core/SkColor.h"
+#include "ui/actions/actions.h"
 #include "ui/color/color_id.h"
 #include "ui/color/color_provider.h"
 #include "ui/views/background.h"
@@ -37,7 +38,7 @@ TEST_F(MdTextButtonTest, BackgroundColorChangesWithWidgetActivation) {
 
   std::unique_ptr<Widget> widget = CreateTestWidget();
   auto* button = widget->SetContentsView(
-      std::make_unique<MdTextButton>(Button::PressedCallback(), u"button"));
+      std::make_unique<MdTextButton>(Button::PressedCallback(), u" "));
   button->SetProminent(true);
   button->SetBounds(0, 0, 70, 20);
   widget->LayoutRootViewIfNecessary();
@@ -49,15 +50,8 @@ TEST_F(MdTextButtonTest, BackgroundColorChangesWithWidgetActivation) {
   SkBitmap active_bitmap = views::test::PaintViewToBitmap(button);
 
   auto background_color = [button](const SkBitmap& bitmap) {
-    // The very edge of the bitmap contains the button's border, which we aren't
-    // interested in here. Instead, grab a pixel that is inset by the button's
-    // corner radius from the top-left point to avoid the border.
-    //
-    // It would make a bit more sense to inset by the border thickness or
-    // something, but MdTextButton doesn't expose (or even know) that value
-    // without some major abstraction violation.
-    int corner_radius = button->GetCornerRadius();
-    return bitmap.getColor(corner_radius, corner_radius);
+    return bitmap.getColor(button->size().width() / 2.,
+                           button->size().height() / 2.);
   };
 
   EXPECT_EQ(background_color(active_bitmap),
@@ -79,4 +73,23 @@ TEST_F(MdTextButtonTest, BackgroundColorChangesWithWidgetActivation) {
       color_provider->GetColor(ui::kColorButtonBackgroundProminentDisabled));
 }
 
+using MdTextButtonActionViewInterfaceTest = ViewsTestBase;
+
+TEST_F(MdTextButtonActionViewInterfaceTest, TestActionChanged) {
+  auto md_text_button = std::make_unique<MdTextButton>();
+  const std::u16string test_string = u"test_string";
+  std::unique_ptr<actions::ActionItem> action_item =
+      actions::ActionItem::Builder()
+          .SetText(test_string)
+          .SetActionId(0)
+          .SetEnabled(false)
+          .Build();
+  action_item->SetText(test_string);
+  md_text_button->GetActionViewInterface()->ActionItemChangedImpl(
+      action_item.get());
+  // Test some properties to ensure that the right ActionViewInterface is linked
+  // to the view.
+  EXPECT_EQ(test_string, md_text_button->GetText());
+  EXPECT_FALSE(md_text_button->GetEnabled());
+}
 }  // namespace views

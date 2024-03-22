@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -83,8 +83,7 @@ class NfcPermissionContextTests : public content::RenderViewHostTestHarness {
 
 PermissionRequestID NfcPermissionContextTests::RequestID(int request_id) {
   return PermissionRequestID(
-      web_contents()->GetPrimaryMainFrame()->GetProcess()->GetID(),
-      web_contents()->GetPrimaryMainFrame()->GetRoutingID(),
+      web_contents()->GetPrimaryMainFrame()->GetGlobalId(),
       permissions::PermissionRequestID::RequestLocalId(request_id));
 }
 
@@ -93,7 +92,8 @@ void NfcPermissionContextTests::RequestNfcPermission(
     const GURL& requesting_frame,
     bool user_gesture) {
   nfc_permission_context_->RequestPermission(
-      id, requesting_frame, user_gesture,
+      PermissionRequestData(nfc_permission_context_, id, user_gesture,
+                            requesting_frame),
       base::BindOnce(&NfcPermissionContextTests::PermissionResponse,
                      base::Unretained(this), id));
   content::RunAllTasksUntilIdle();
@@ -102,7 +102,7 @@ void NfcPermissionContextTests::RequestNfcPermission(
 void NfcPermissionContextTests::PermissionResponse(
     const PermissionRequestID& id,
     ContentSetting content_setting) {
-  responses_[id.render_process_id()] =
+  responses_[id.global_render_frame_host_id().child_id] =
       std::make_pair(id.request_local_id_for_testing(),
                      content_setting == CONTENT_SETTING_ALLOW);
 }

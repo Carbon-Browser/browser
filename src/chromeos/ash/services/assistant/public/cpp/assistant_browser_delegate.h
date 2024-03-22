@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,7 +10,7 @@
 #include "chromeos/ash/components/assistant/buildflags.h"
 #include "chromeos/ash/services/assistant/public/cpp/assistant_enums.h"
 #include "chromeos/ash/services/assistant/public/mojom/assistant_audio_decoder.mojom.h"
-#include "chromeos/services/libassistant/public/cpp/assistant_notification.h"
+#include "chromeos/ash/services/libassistant/public/cpp/assistant_notification.h"
 #include "chromeos/services/network_config/public/mojom/cros_network_config.mojom.h"
 #include "media/mojo/mojom/audio_stream_factory.mojom.h"
 #include "mojo/public/cpp/bindings/pending_receiver.h"
@@ -21,14 +21,13 @@
 #include "ui/accessibility/mojom/ax_assistant_structure.mojom.h"
 
 #if BUILDFLAG(ENABLE_CROS_LIBASSISTANT)
-#include "chromeos/services/libassistant/public/mojom/service.mojom-forward.h"
+#include "chromeos/ash/services/libassistant/public/mojom/service.mojom-forward.h"
 #endif  // BUILDFLAG(ENABLE_CROS_LIBASSISTANT)
 
-namespace chromeos {
-namespace assistant {
+namespace ash::assistant {
 
 // Main interface implemented in browser to provide dependencies to
-// |chromeos::assistant::Service|.
+// |ash::assistant::Service|.
 class COMPONENT_EXPORT(ASSISTANT_SERVICE_PUBLIC) AssistantBrowserDelegate {
  public:
   AssistantBrowserDelegate();
@@ -43,7 +42,7 @@ class COMPONENT_EXPORT(ASSISTANT_SERVICE_PUBLIC) AssistantBrowserDelegate {
 
   // Requests Ash's AssistantVolumeControl interface from the browser.
   virtual void RequestAssistantVolumeControl(
-      mojo::PendingReceiver<ash::mojom::AssistantVolumeControl> receiver) = 0;
+      mojo::PendingReceiver<::ash::mojom::AssistantVolumeControl> receiver) = 0;
 
   // Requests a BatteryMonitor from the browser.
   virtual void RequestBatteryMonitor(
@@ -61,7 +60,8 @@ class COMPONENT_EXPORT(ASSISTANT_SERVICE_PUBLIC) AssistantBrowserDelegate {
   // Requests an audio decoder interface from the Assistant Audio Decoder
   // service, via the browser.
   virtual void RequestAudioDecoderFactory(
-      mojo::PendingReceiver<mojom::AssistantAudioDecoderFactory> receiver) = 0;
+      mojo::PendingReceiver<ash::assistant::mojom::AssistantAudioDecoderFactory>
+          receiver) = 0;
 
   // Requests a connection to the Media Session service's AudioFocusManager from
   // the browser.
@@ -88,12 +88,17 @@ class COMPONENT_EXPORT(ASSISTANT_SERVICE_PUBLIC) AssistantBrowserDelegate {
 #if BUILDFLAG(ENABLE_CROS_LIBASSISTANT)
   // Requests a connection to Libassistant service interface via the browser.
   virtual void RequestLibassistantService(
-      mojo::PendingReceiver<chromeos::libassistant::mojom::LibassistantService>
+      mojo::PendingReceiver<libassistant::mojom::LibassistantService>
           receiver) = 0;
 #endif  // BUILDFLAG(ENABLE_CROS_LIBASSISTANT)
 };
 
-}  // namespace assistant
-}  // namespace chromeos
+}  // namespace ash::assistant
+
+// TODO(b/258750971): remove when internal assistant codes are migrated to
+// namespace ash.
+namespace chromeos::assistant {
+using ::ash::assistant::AssistantBrowserDelegate;
+}
 
 #endif  // CHROMEOS_ASH_SERVICES_ASSISTANT_PUBLIC_CPP_ASSISTANT_BROWSER_DELEGATE_H_

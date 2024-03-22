@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,23 +10,30 @@
 #include "chrome/browser/enterprise/util/managed_browser_utils.h"
 #include "chrome/browser/new_tab_page/promos/promo_service.h"
 #include "chrome/browser/profiles/profile.h"
+#include "chrome/browser/search/search.h"
 #include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/browser_finder.h"
 #include "chrome/browser/ui/browser_navigator.h"
 #include "chrome/browser/ui/browser_window.h"
 #include "chrome/browser/ui/chrome_pages.h"
-#include "chrome/browser/ui/user_education/user_education_service.h"
-#include "chrome/browser/ui/user_education/user_education_service_factory.h"
-#include "chrome/browser/ui/views/user_education/browser_user_education_service.h"
+#include "chrome/browser/ui/tabs/tab_group_model.h"
+#include "chrome/browser/user_education/user_education_service.h"
+#include "chrome/browser/user_education/user_education_service_factory.h"
 #include "chrome/common/chrome_features.h"
 #include "chrome/common/webui_url_constants.h"
+#include "components/password_manager/core/common/password_manager_features.h"
+#include "components/performance_manager/public/features.h"
 #include "components/safe_browsing/content/browser/web_ui/safe_browsing_ui.h"
 #include "components/safe_browsing/core/common/safe_browsing_policy_handler.h"
 #include "components/safe_browsing/core/common/safe_browsing_prefs.h"
+#include "components/safe_browsing/core/common/safebrowsing_referral_methods.h"
+#include "components/user_education/common/tutorial_identifier.h"
 #include "components/user_education/common/tutorial_service.h"
 #include "ui/base/interaction/element_identifier.h"
 #include "ui/base/page_transition_types.h"
+#include "ui/base/ui_base_features.h"
 #include "ui/base/window_open_disposition.h"
+#include "ui/base/window_open_disposition_utils.h"
 
 using browser_command::mojom::ClickInfoPtr;
 using browser_command::mojom::Command;
@@ -81,12 +88,28 @@ void BrowserCommandHandler::CanExecuteCommand(
     case Command::kOpenPrivacyGuide:
       can_execute = !chrome::enterprise_util::IsBrowserManaged(profile_) &&
                     !profile_->IsChild();
+      base::UmaHistogramBoolean("Privacy.Settings.PrivacyGuide.CanShowNTPPromo",
+                                can_execute);
       break;
     case Command::kStartTabGroupTutorial:
-      can_execute = !!GetTutorialService();
+      can_execute = TutorialServiceExists() && BrowserSupportsTabGroups();
       break;
     case Command::kOpenPasswordManager:
       can_execute = true;
+      break;
+    case Command::kNoOpCommand:
+      can_execute = true;
+      break;
+    case Command::kOpenPerformanceSettings:
+      can_execute = true;
+      break;
+    case Command::kOpenNTPAndStartCustomizeChromeTutorial:
+      can_execute = TutorialServiceExists() &&
+                    BrowserSupportsCustomizeChromeSidePanel() &&
+                    DefaultSearchProviderIsGoogle();
+      break;
+    case Command::kStartPasswordManagerTutorial:
+      can_execute = TutorialServiceExists();
       break;
   }
   std::move(callback).Run(can_execute);
@@ -126,9 +149,7 @@ void BrowserCommandHandler::ExecuteCommandWithDisposition(
           base::UserMetricsAction("NewTabPage_Promos_SafetyCheck"));
       break;
     case Command::kOpenSafeBrowsingEnhancedProtectionSettings:
-      NavigateToURL(GURL(chrome::GetSettingsUrl(
-                        chrome::kSafeBrowsingEnhancedProtectionSubPage)),
-                    disposition);
+      NavigateToEnhancedProtectionSetting();
       base::RecordAction(
           base::UserMetricsAction("NewTabPage_Promos_EnhancedProtection"));
       break;
@@ -145,9 +166,20 @@ void BrowserCommandHandler::ExecuteCommandWithDisposition(
       StartTabGroupTutorial();
       break;
     case Command::kOpenPasswordManager:
-      NavigateToURL(
-          GURL(chrome::GetSettingsUrl(chrome::kPasswordManagerSubPage)),
-          disposition);
+      OpenPasswordManager();
+      break;
+    case Command::kNoOpCommand:
+      // Nothing to do.
+      break;
+    case Command::kOpenPerformanceSettings:
+      NavigateToURL(GURL(chrome::GetSettingsUrl(chrome::kPerformanceSubPage)),
+                    disposition);
+      break;
+    case Command::kOpenNTPAndStartCustomizeChromeTutorial:
+      OpenNTPAndStartCustomizeChromeTutorial();
+      break;
+    case Command::kStartPasswordManagerTutorial:
+      StartPasswordManagerTutorial();
       break;
     default:
       NOTREACHED() << "Unspecified behavior for command " << id;
@@ -155,30 +187,83 @@ void BrowserCommandHandler::ExecuteCommandWithDisposition(
   }
 }
 
-user_education::TutorialService* BrowserCommandHandler::GetTutorialService() {
-  auto* service = UserEducationServiceFactory::GetForProfile(profile_);
-  return service ? &service->tutorial_service() : nullptr;
+void BrowserCommandHandler::OnTutorialStarted(
+    user_education::TutorialIdentifier tutorial_id,
+    user_education::TutorialService* tutorial_service) {
+  if (tutorial_service) {
+    tutorial_service->LogStartedFromWhatsNewPage(
+        tutorial_id, tutorial_service->IsRunningTutorial(tutorial_id));
+  }
 }
 
-ui::ElementContext BrowserCommandHandler::GetUiElementContext() {
-  return chrome::FindBrowserWithProfile(profile_)
-      ->window()
-      ->GetElementContext();
+void BrowserCommandHandler::StartTutorial(StartTutorialInPage::Params params) {
+  auto* browser = chrome::FindBrowserWithProfile(profile_);
+  StartTutorialInPage::Start(browser, std::move(params));
+}
+
+bool BrowserCommandHandler::TutorialServiceExists() {
+  auto* service = UserEducationServiceFactory::GetForBrowserContext(profile_);
+  auto* tutorial_service = service ? &service->tutorial_service() : nullptr;
+  return !!tutorial_service;
+}
+
+bool BrowserCommandHandler::BrowserSupportsTabGroups() {
+  Browser* browser = chrome::FindBrowserWithProfile(profile_);
+  return browser->tab_strip_model()->SupportsTabGroups();
 }
 
 void BrowserCommandHandler::StartTabGroupTutorial() {
-  user_education::TutorialService* tutorial_service = GetTutorialService();
-  if (!tutorial_service) {
-    // Should never happen since we return false in CanExecuteCommand(), but
-    // avoid a browser crash anyway.
-    return;
+  auto* tutorial_id = kTabGroupTutorialId;
+
+  if (BrowserSupportsTabGroups()) {
+    StartTutorialInPage::Params params;
+    params.tutorial_id = tutorial_id;
+    params.callback = base::BindOnce(&BrowserCommandHandler::OnTutorialStarted,
+                                     base::Unretained(this), tutorial_id);
+    StartTutorial(std::move(params));
   }
+}
 
-  const ui::ElementContext context = GetUiElementContext();
-  if (!context)
-    return;
+void BrowserCommandHandler::NavigateToEnhancedProtectionSetting() {
+  chrome::ShowSafeBrowsingEnhancedProtectionWithIph(
+      chrome::FindBrowserWithProfile(profile_),
+      safe_browsing::SafeBrowsingSettingReferralMethod::kPromoSlingerReferral);
+}
 
-  tutorial_service->StartTutorial(kTabGroupTutorialId, context);
+void BrowserCommandHandler::OpenPasswordManager() {
+  chrome::ShowPasswordManager(chrome::FindBrowserWithProfile(profile_));
+}
+
+bool BrowserCommandHandler::BrowserSupportsCustomizeChromeSidePanel() {
+  return base::FeatureList::IsEnabled(features::kCustomizeChromeSidePanel);
+}
+
+bool BrowserCommandHandler::DefaultSearchProviderIsGoogle() {
+  return search::DefaultSearchProviderIsGoogle(profile_);
+}
+
+void BrowserCommandHandler::OpenNTPAndStartCustomizeChromeTutorial() {
+  auto* tutorial_id = kSidePanelCustomizeChromeTutorialId;
+
+  if (BrowserSupportsCustomizeChromeSidePanel() &&
+      DefaultSearchProviderIsGoogle()) {
+    StartTutorialInPage::Params params;
+    params.tutorial_id = tutorial_id;
+    params.callback = base::BindOnce(&BrowserCommandHandler::OnTutorialStarted,
+                                     base::Unretained(this), tutorial_id);
+    params.target_url = GURL(chrome::kChromeUINewTabPageURL);
+    StartTutorial(std::move(params));
+  }
+}
+
+void BrowserCommandHandler::StartPasswordManagerTutorial() {
+  auto* tutorial_id = kPasswordManagerTutorialId;
+
+  StartTutorialInPage::Params params;
+  params.tutorial_id = tutorial_id;
+  params.callback = base::BindOnce(&BrowserCommandHandler::OnTutorialStarted,
+                                   base::Unretained(this), tutorial_id);
+  StartTutorial(std::move(params));
 }
 
 void BrowserCommandHandler::OpenFeedbackForm() {

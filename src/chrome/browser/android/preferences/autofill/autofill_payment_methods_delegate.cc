@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,14 +9,14 @@
 #include "base/android/callback_android.h"
 #include "chrome/android/chrome_jni_headers/AutofillPaymentMethodsDelegate_jni.h"
 #include "chrome/browser/autofill/personal_data_manager_factory.h"
-#include "chrome/browser/autofill/risk_util.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/profiles/profile_android.h"
 #include "chrome/browser/signin/identity_manager_factory.h"
 #include "chrome/browser/ui/android/autofill/virtual_card_utils.h"
+#include "chrome/browser/ui/autofill/risk_util.h"
 #include "components/autofill/content/browser/content_autofill_driver.h"
 #include "components/autofill/core/browser/browser_autofill_manager.h"
-#include "components/autofill/core/browser/payments/payments_client.h"
+#include "components/autofill/core/browser/payments/payments_network_interface.h"
 #include "components/autofill/core/browser/payments/virtual_card_enrollment_flow.h"
 #include "components/autofill/core/browser/payments/virtual_card_enrollment_manager.h"
 #include "components/autofill/core/browser/personal_data_manager.h"
@@ -42,12 +42,14 @@ void RunVirtualCardEnrollmentFieldsLoadedCallback(
 AutofillPaymentMethodsDelegate::AutofillPaymentMethodsDelegate(Profile* profile)
     : profile_(profile) {
   personal_data_manager_ = PersonalDataManagerFactory::GetForProfile(profile);
-  payments_client_ = std::make_unique<payments::PaymentsClient>(
-      profile->GetURLLoaderFactory(),
-      IdentityManagerFactory::GetForProfile(profile), personal_data_manager_);
+  payments_network_interface_ =
+      std::make_unique<payments::PaymentsNetworkInterface>(
+          profile->GetURLLoaderFactory(),
+          IdentityManagerFactory::GetForProfile(profile),
+          personal_data_manager_);
   virtual_card_enrollment_manager_ =
-      std::make_unique<VirtualCardEnrollmentManager>(personal_data_manager_,
-                                                     payments_client_.get());
+      std::make_unique<VirtualCardEnrollmentManager>(
+          personal_data_manager_, payments_network_interface_.get());
 }
 
 AutofillPaymentMethodsDelegate::~AutofillPaymentMethodsDelegate() = default;
@@ -94,5 +96,10 @@ void AutofillPaymentMethodsDelegate::UnenrollVirtualCard(
   virtual_card_enrollment_manager_->Unenroll(
       instrument_id, base::BindOnce(&base::android::RunBooleanCallbackAndroid,
                                     ScopedJavaGlobalRef<jobject>(jcallback)));
+}
+
+void AutofillPaymentMethodsDelegate::DeleteSavedCvcs(JNIEnv* env) {
+  personal_data_manager_->ClearLocalCvcs();
+  personal_data_manager_->ClearServerCvcs();
 }
 }  // namespace autofill

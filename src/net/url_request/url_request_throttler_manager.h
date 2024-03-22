@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,7 +9,7 @@
 #include <set>
 #include <string>
 
-#include "base/memory/ref_counted.h"
+#include "base/memory/scoped_refptr.h"
 #include "base/threading/platform_thread.h"
 #include "base/threading/thread_checker.h"
 #include "net/base/net_export.h"
@@ -102,7 +102,9 @@ class NET_EXPORT_PRIVATE URLRequestThrottlerManager
   void OnNetworkChange();
 
   // Used by tests.
-  int GetNumberOfEntriesForTests() const { return url_entries_.size(); }
+  int GetNumberOfEntriesForTests() const {
+    return static_cast<int>(url_entries_.size());
+  }
 
  private:
   // From each URL we generate an ID composed of the scheme, host, port and path

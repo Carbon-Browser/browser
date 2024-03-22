@@ -1,11 +1,11 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/common/profiler/process_type.h"
 
 #include "base/command_line.h"
-#include "components/metrics/call_stack_profile_params.h"
+#include "components/metrics/call_stacks/call_stack_profile_params.h"
 #include "content/public/common/content_switches.h"
 #include "extensions/buildflags/buildflags.h"
 #include "services/network/public/mojom/network_service.mojom.h"

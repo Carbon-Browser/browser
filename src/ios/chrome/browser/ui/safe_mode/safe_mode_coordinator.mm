@@ -1,33 +1,35 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #import "ios/chrome/browser/ui/safe_mode/safe_mode_coordinator.h"
 
-#include <ostream>
+#import <ostream>
 
-#include "base/notreached.h"
-#include "ios/chrome/browser/crash_report/crash_loop_detection_util.h"
+#import "base/notreached.h"
+#import "ios/chrome/browser/crash_report/model/crash_loop_detection_util.h"
 #import "ios/chrome/browser/ui/safe_mode/safe_mode_view_controller.h"
 
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
-
 namespace {
-const int kStartupCrashLoopThreshold = 2;
+const int kStartupCrashLoopThreshold = 3;
 }
 
 @interface SafeModeCoordinator ()<SafeModeViewControllerDelegate>
+@property(weak, nonatomic, readonly) UIWindow* window;
 @end
 
-@implementation SafeModeCoordinator {
-  __weak UIWindow* _window;
-}
+@implementation SafeModeCoordinator
 
 @synthesize delegate = _delegate;
 
 #pragma mark - Public class methods
+
+- (instancetype)initWithWindow:(UIWindow*)window {
+  if ((self = [super initWithBaseViewController:nil browser:nullptr])) {
+    _window = window;
+  }
+  return self;
+}
 
 + (BOOL)shouldStart {
   // Check whether there appears to be a startup crash loop. If not, don't look

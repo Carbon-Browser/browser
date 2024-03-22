@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -93,6 +93,12 @@ ProtobufHttpStatus::ProtobufHttpStatus(const protobufhttpclient::Status& status)
 ProtobufHttpStatus::ProtobufHttpStatus(Code code,
                                        const std::string& error_message)
     : error_code_(code), error_message_(error_message) {}
+
+ProtobufHttpStatus::ProtobufHttpStatus(const protobufhttpclient::Status& status,
+                                       const std::string& response_body)
+    : error_code_(static_cast<ProtobufHttpStatus::Code>(status.code())),
+      error_message_(status.message()),
+      response_body_(response_body) {}
 
 ProtobufHttpStatus::~ProtobufHttpStatus() = default;
 

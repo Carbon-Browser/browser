@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -36,8 +36,15 @@ const char kArrayBufferTooBig[] =
     "The provided ArrayBuffer exceeds the maximum allowed size.";
 const char kContextGone[] = "Script context has shut down.";
 
-bool IsProtected(
-    const device::mojom::blink::HidUsageAndPage& hid_usage_and_page) {
+enum ReportType {
+  kInput,
+  kOutput,
+  kFeature,
+};
+
+bool IsProtectedReportType(
+    const device::mojom::blink::HidUsageAndPage& hid_usage_and_page,
+    ReportType report_type) {
   const uint16_t usage = hid_usage_and_page.usage;
   const uint16_t usage_page = hid_usage_and_page.usage_page;
 
@@ -54,7 +61,7 @@ bool IsProtected(
       usage == device::mojom::blink::kGenericDesktopMouse ||
       usage == device::mojom::blink::kGenericDesktopKeyboard ||
       usage == device::mojom::blink::kGenericDesktopKeypad) {
-    return true;
+    return report_type != ReportType::kFeature;
   }
 
   if (usage >= device::mojom::blink::kGenericDesktopSystemControl &&
@@ -200,6 +207,7 @@ HIDDevice::HIDDevice(ServiceInterface* parent,
                      device::mojom::blink::HidDeviceInfoPtr info,
                      ExecutionContext* context)
     : ExecutionContextLifecycleObserver(context),
+      ActiveScriptWrappable<HIDDevice>({}),
       parent_(parent),
       connection_(context),
       receiver_(this, context) {
@@ -207,7 +215,7 @@ HIDDevice::HIDDevice(ServiceInterface* parent,
 }
 
 HIDDevice::~HIDDevice() {
-  DCHECK(device_requests_.IsEmpty());
+  DCHECK(device_requests_.empty());
 }
 
 ExecutionContext* HIDDevice::GetExecutionContext() const {
@@ -274,8 +282,8 @@ ScriptPromise HIDDevice::open(ScriptState* script_state,
   device_state_change_in_progress_ = true;
   device_requests_.insert(resolver);
   parent_->Connect(device_info_->guid, std::move(client),
-                   WTF::Bind(&HIDDevice::FinishOpen, WrapPersistent(this),
-                             WrapPersistent(resolver)));
+                   WTF::BindOnce(&HIDDevice::FinishOpen, WrapPersistent(this),
+                                 WrapPersistent(resolver)));
   return promise;
 }
 
@@ -310,8 +318,8 @@ ScriptPromise HIDDevice::forget(ScriptState* script_state,
 
   device_state_change_in_progress_ = true;
   parent_->Forget(device_info_.Clone(),
-                  WTF::Bind(&HIDDevice::FinishForget, WrapPersistent(this),
-                            WrapPersistent(resolver)));
+                  WTF::BindOnce(&HIDDevice::FinishForget, WrapPersistent(this),
+                                WrapPersistent(resolver)));
   return promise;
 }
 
@@ -342,9 +350,10 @@ ScriptPromise HIDDevice::sendReport(ScriptState* script_state,
   vector.Append(data.Bytes(), static_cast<wtf_size_t>(data.ByteLength()));
 
   device_requests_.insert(resolver);
-  connection_->Write(report_id, vector,
-                     WTF::Bind(&HIDDevice::FinishSendReport,
-                               WrapPersistent(this), WrapPersistent(resolver)));
+  connection_->Write(
+      report_id, vector,
+      WTF::BindOnce(&HIDDevice::FinishSendReport, WrapPersistent(this),
+                    WrapPersistent(resolver)));
   return promise;
 }
 
@@ -377,8 +386,8 @@ ScriptPromise HIDDevice::sendFeatureReport(ScriptState* script_state,
   device_requests_.insert(resolver);
   connection_->SendFeatureReport(
       report_id, vector,
-      WTF::Bind(&HIDDevice::FinishSendFeatureReport, WrapPersistent(this),
-                WrapPersistent(resolver)));
+      WTF::BindOnce(&HIDDevice::FinishSendFeatureReport, WrapPersistent(this),
+                    WrapPersistent(resolver)));
   return promise;
 }
 
@@ -400,8 +409,8 @@ ScriptPromise HIDDevice::receiveFeatureReport(ScriptState* script_state,
 
   device_requests_.insert(resolver);
   connection_->GetFeatureReport(
-      report_id, WTF::Bind(&HIDDevice::FinishReceiveFeatureReport,
-                           WrapPersistent(this), WrapPersistent(resolver)));
+      report_id, WTF::BindOnce(&HIDDevice::FinishReceiveFeatureReport,
+                               WrapPersistent(this), WrapPersistent(resolver)));
   return promise;
 }
 
@@ -419,10 +428,23 @@ void HIDDevice::UpdateDeviceInfo(device::mojom::blink::HidDeviceInfoPtr info) {
   device_info_ = std::move(info);
   collections_.clear();
   for (const auto& collection : device_info_->collections) {
-    // Omit information about top-level collections with protected usages.
-    if (!IsProtected(*collection->usage))
-      collections_.push_back(ToHIDCollectionInfo(*collection));
+    auto* collection_info = ToHIDCollectionInfo(*collection);
+    // Omit information about protected reports.
+    if (IsProtectedReportType(*collection->usage, ReportType::kInput)) {
+      collection_info->setInputReports(HeapVector<Member<HIDReportInfo>>{});
+    }
+    if (IsProtectedReportType(*collection->usage, ReportType::kOutput)) {
+      collection_info->setOutputReports(HeapVector<Member<HIDReportInfo>>{});
+    }
+    if (IsProtectedReportType(*collection->usage, ReportType::kFeature)) {
+      collection_info->setFeatureReports(HeapVector<Member<HIDReportInfo>>{});
+    }
+    collections_.push_back(collection_info);
   }
+}
+
+void HIDDevice::ResetIsForgotten() {
+  device_is_forgotten_ = false;
 }
 
 void HIDDevice::Trace(Visitor* visitor) const {
@@ -431,7 +453,7 @@ void HIDDevice::Trace(Visitor* visitor) const {
   visitor->Trace(receiver_);
   visitor->Trace(device_requests_);
   visitor->Trace(collections_);
-  EventTargetWithInlineData::Trace(visitor);
+  EventTarget::Trace(visitor);
   ScriptWrappable::Trace(visitor);
   ExecutionContextLifecycleObserver::Trace(visitor);
 }
@@ -466,7 +488,7 @@ void HIDDevice::FinishOpen(
     connection_.Bind(
         std::move(connection),
         GetExecutionContext()->GetTaskRunner(TaskType::kMiscPlatformAPI));
-    connection_.set_disconnect_handler(WTF::Bind(
+    connection_.set_disconnect_handler(WTF::BindOnce(
         &HIDDevice::OnServiceConnectionError, WrapWeakPersistent(this)));
     resolver->Resolve();
   } else {
@@ -533,7 +555,7 @@ void HIDDevice::FinishReceiveFeatureReport(
 
 void HIDDevice::MarkRequestComplete(ScriptPromiseResolver* resolver) {
   auto find_result = device_requests_.find(resolver);
-  DCHECK_NE(device_requests_.end(), find_result);
+  CHECK_NE(device_requests_.end(), find_result);
   device_requests_.erase(find_result);
 }
 

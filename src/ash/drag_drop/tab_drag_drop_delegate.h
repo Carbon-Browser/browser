@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,7 +9,11 @@
 
 #include "ash/ash_export.h"
 #include "ash/drag_drop/drag_drop_capture_delegate.h"
+#include "ash/drag_drop/tab_drag_drop_windows_hider.h"
 #include "ash/wm/splitview/split_view_controller.h"
+#include "base/gtest_prod_util.h"
+#include "base/memory/raw_ptr.h"
+#include "ui/aura/window_observer.h"
 #include "ui/gfx/geometry/point.h"
 
 namespace aura {
@@ -19,17 +23,18 @@ class Window;
 namespace ui {
 class OSExchangeData;
 class PresentationTimeRecorder;
-}
+}  // namespace ui
 
 namespace ash {
 
 class SplitViewDragIndicators;
-class TabletModeBrowserWindowDragSessionWindowsHider;
+class TabDragDropWindowsHider;
 
 // Provides special handling for Chrome tab drags on behalf of
 // DragDropController. This must be created at the beginning of a tab drag and
 // destroyed at the end.
-class ASH_EXPORT TabDragDropDelegate : public DragDropCaptureDelegate {
+class ASH_EXPORT TabDragDropDelegate : public DragDropCaptureDelegate,
+                                       public aura::WindowObserver {
  public:
   // Determines whether |drag_data| indicates a tab drag from a WebUI tab strip
   // (or simply returns false if the integration is disabled).
@@ -59,6 +64,9 @@ class ASH_EXPORT TabDragDropDelegate : public DragDropCaptureDelegate {
   // calling this, this delegate must not be used.
   void DropAndDeleteSelf(const gfx::Point& location_in_screen,
                          const ui::OSExchangeData& drop_data);
+
+  // Overridden from aura::WindowObserver.
+  void OnWindowDestroying(aura::Window* window) override;
 
  private:
   FRIEND_TEST_ALL_PREFIXES(TabDragDropDelegateTest, DropWithoutNewWindow);
@@ -95,13 +103,12 @@ class ASH_EXPORT TabDragDropDelegate : public DragDropCaptureDelegate {
   // https://crbug.com/1316070
   bool ShouldPreventSnapToTheEdge(const gfx::Point& location_in_screen);
 
-  aura::Window* const root_window_;
-  aura::Window* const source_window_;
+  const raw_ptr<aura::Window, ExperimentalAsh> root_window_;
+  raw_ptr<aura::Window, ExperimentalAsh> source_window_;
   const gfx::Point start_location_in_screen_;
 
   std::unique_ptr<SplitViewDragIndicators> split_view_drag_indicators_;
-  std::unique_ptr<TabletModeBrowserWindowDragSessionWindowsHider>
-      windows_hider_;
+  std::unique_ptr<TabDragDropWindowsHider> windows_hider_;
 
   // Presentation time recorder for tab dragging in tablet mode with webui
   // tab strip enable.

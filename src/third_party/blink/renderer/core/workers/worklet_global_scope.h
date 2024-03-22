@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,6 +8,7 @@
 #include <memory>
 #include "base/task/single_thread_task_runner.h"
 #include "third_party/blink/public/common/tokens/tokens.h"
+#include "third_party/blink/public/mojom/blob/blob_url_store.mojom-blink-forward.h"
 #include "third_party/blink/public/platform/web_url_request.h"
 #include "third_party/blink/renderer/bindings/core/v8/active_script_wrappable.h"
 #include "third_party/blink/renderer/core/core_export.h"
@@ -67,7 +68,7 @@ class CORE_EXPORT WorkletGlobalScope
   scoped_refptr<base::SingleThreadTaskRunner> GetTaskRunner(TaskType) final;
   FrameOrWorkerScheduler* GetScheduler() final;
   bool CrossOriginIsolatedCapability() const final;
-  bool IsolatedApplicationCapability() const final;
+  bool IsIsolatedContext() const final;
   ukm::UkmRecorder* UkmRecorder() final;
   ukm::SourceId UkmSourceID() const final;
 
@@ -77,6 +78,17 @@ class CORE_EXPORT WorkletGlobalScope
   const base::UnguessableToken& GetDevToolsToken() const override;
   bool IsInitialized() const final { return true; }
   CodeCacheHost* GetCodeCacheHost() override;
+  absl::optional<mojo::PendingRemote<network::mojom::blink::URLLoaderFactory>>
+  FindRaceNetworkRequestURLLoaderFactory(
+      const base::UnguessableToken& token) override {
+    return absl::nullopt;
+  }
+
+  // Returns `blob_url_store_pending_remote_` for use when instantiating the
+  // PublicURLManager in threaded worklet contexts. This method should only be
+  // called once. See `blob_url_store_pending_remote_` for more details.
+  mojo::PendingRemote<mojom::blink::BlobURLStore>
+  TakeBlobUrlStorePendingRemote();
 
   virtual LocalFrame* GetFrame() const;
 
@@ -112,16 +124,16 @@ class CORE_EXPORT WorkletGlobalScope
 
   void Trace(Visitor*) const override;
 
+  // ActiveScriptWrappable.
+  bool HasPendingActivity() const override;
+
   HttpsState GetHttpsState() const override { return https_state_; }
 
   // Constructs an instance as a main thread worklet. Must be called on the main
   // thread.
-  // When |create_microtask_queue| is true, creates a microtask queue separated
-  // from the Isolate's default microtask queue.
   WorkletGlobalScope(std::unique_ptr<GlobalScopeCreationParams>,
                      WorkerReportingProxy&,
-                     LocalFrame*,
-                     bool create_microtask_queue);
+                     LocalFrame*);
 
   // Constructs an instance as a threaded worklet. Must be called on a worker
   // thread.
@@ -159,8 +171,7 @@ class CORE_EXPORT WorkletGlobalScope
                      v8::Isolate*,
                      ThreadType,
                      LocalFrame*,
-                     WorkerThread*,
-                     bool create_microtask_queue);
+                     WorkerThread*);
 
   // Returns a destination used for fetching worklet scripts.
   // https://html.spec.whatwg.org/C/#worklet-destination-type
@@ -199,13 +210,20 @@ class CORE_EXPORT WorkletGlobalScope
   // This is inherited at construction to ensure it's possible to use APIs
   // like Direct Sockets if they're made available in Worklets.
   //
-  // TODO(mkwst): We need a spec for this capability.
-  const bool parent_direct_socket_capability_;
+  // TODO(crbug.com/1206150): We need a spec for this capability.
+  const bool parent_is_isolated_context_;
 
   // This is the interface that handles generated code cache
   // requests both to fetch code cache when loading resources
   // and to store generated code cache to disk.
   std::unique_ptr<CodeCacheHost> code_cache_host_;
+
+  // A PendingRemote for use in threaded worklets that gets created from the
+  // parent frame's BrowserInterfaceBroker and used when instantiating the
+  // worklet's PublicURLManager. This remote is used for Blob URL related
+  // functionality such as registering, revoking, and navigating to Blob URLs.
+  mojo::PendingRemote<mojom::blink::BlobURLStore>
+      blob_url_store_pending_remote_;
 };
 
 template <>

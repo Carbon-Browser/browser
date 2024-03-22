@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,7 +8,7 @@
 #include <memory>
 #include <string>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/sequence_checker.h"
@@ -34,11 +34,14 @@ class ServiceWorkerVersion;
 class CONTENT_EXPORT ServiceWorkerFetchDispatcher {
  public:
   // Indicates how the service worker handled a fetch event.
+  // These values are persisted to logs. Entries should not be renumbered and
+  // numeric values should never be reused.
   enum class FetchEventResult {
     // Browser should fallback to native fetch.
-    kShouldFallback,
+    kShouldFallback = 0,
     // Service worker provided a ServiceWorkerResponse.
-    kGotResponse
+    kGotResponse = 1,
+    kMaxValue = kGotResponse,
   };
 
   using FetchCallback =
@@ -64,6 +67,8 @@ class CONTENT_EXPORT ServiceWorkerFetchDispatcher {
 
   ~ServiceWorkerFetchDispatcher();
 
+  static const char* FetchEventResultToSuffix(FetchEventResult result);
+
   // If appropriate, starts the navigation preload request and creates
   // |preload_handle_|. Returns true if it started navigation preload.
   bool MaybeStartNavigationPreload(
@@ -78,6 +83,19 @@ class CONTENT_EXPORT ServiceWorkerFetchDispatcher {
   void Run();
 
   bool FetchCallbackIsNull() { return fetch_callback_.is_null(); }
+
+  static scoped_refptr<network::SharedURLLoaderFactory>
+  CreateNetworkURLLoaderFactory(
+      scoped_refptr<ServiceWorkerContextWrapper> context_wrapper,
+      int frame_tree_node_id);
+
+  void set_race_network_request_token(base::UnguessableToken token) {
+    race_network_request_token_ = token;
+  }
+  void set_race_network_request_loader_factory(
+      mojo::PendingRemote<network::mojom::URLLoaderFactory> factory) {
+    race_network_request_loader_factory_ = std::move(factory);
+  }
 
  private:
   class ResponseCallback;
@@ -130,6 +148,10 @@ class CONTENT_EXPORT ServiceWorkerFetchDispatcher {
   // event.
   mojo::PendingReceiver<network::mojom::URLLoaderClient>
       preload_url_loader_client_receiver_;
+
+  base::UnguessableToken race_network_request_token_;
+  mojo::PendingRemote<network::mojom::URLLoaderFactory>
+      race_network_request_loader_factory_;
 
   // Whether to dispatch an offline-capability-check fetch event.
   const bool is_offline_capability_check_ = false;

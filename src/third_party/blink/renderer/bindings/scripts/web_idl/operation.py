@@ -1,11 +1,9 @@
-# Copyright 2019 The Chromium Authors. All rights reserved.
+# Copyright 2019 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
 import functools
 
-from .argument import Argument
-from .code_generator_info import CodeGeneratorInfo
 from .composition_parts import WithCodeGeneratorInfo
 from .composition_parts import WithComponent
 from .composition_parts import WithDebugInfo
@@ -13,10 +11,8 @@ from .composition_parts import WithExposure
 from .composition_parts import WithExtendedAttributes
 from .composition_parts import WithOwner
 from .composition_parts import WithOwnerMixin
-from .exposure import Exposure
 from .function_like import FunctionLike
 from .function_like import OverloadGroup
-from .idl_type import IdlType
 from .make_copy import make_copy
 
 
@@ -61,6 +57,7 @@ class Operation(FunctionLike, WithExtendedAttributes, WithCodeGeneratorInfo,
             self.is_deleter = is_deleter
             self.is_stringifier = False
             self.stringifier_attribute = None
+            self.is_async_iterator = False
             self.is_iterator = False
             self.is_optionally_defined = False
 
@@ -82,6 +79,7 @@ class Operation(FunctionLike, WithExtendedAttributes, WithCodeGeneratorInfo,
         self._is_deleter = ir.is_deleter
         self._is_stringifier = ir.is_stringifier
         self._stringifier_attribute = ir.stringifier_attribute
+        self._is_async_iterator = ir.is_async_iterator
         self._is_iterator = ir.is_iterator
         self._is_optionally_defined = ir.is_optionally_defined
 
@@ -130,6 +128,14 @@ class Operation(FunctionLike, WithExtendedAttributes, WithCodeGeneratorInfo,
         an attribute.
         """
         return self._stringifier_attribute
+
+    @property
+    def is_async_iterator(self):
+        """
+        Returns True if this operation must be exposed as @@asyncIterator in
+        addition to a property with the identifier.
+        """
+        return self._is_async_iterator
 
     @property
     def is_iterator(self):

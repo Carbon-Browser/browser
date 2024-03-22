@@ -1,11 +1,12 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include <string>
 
 #include "base/android/jni_string.h"
-#include "components/variations/jni/VariationsAssociatedData_jni.h"
+#include "base/metrics/field_trial_params.h"
+#include "components/variations/android/variations_jni/VariationsAssociatedData_jni.h"
 #include "components/variations/variations_associated_data.h"
 #include "components/variations/variations_ids_provider.h"
 
@@ -24,7 +25,7 @@ ScopedJavaLocalRef<jstring> JNI_VariationsAssociatedData_GetVariationParamValue(
   std::string trial_name(ConvertJavaStringToUTF8(env, jtrial_name));
   std::string param_name(ConvertJavaStringToUTF8(env, jparam_name));
   std::string param_value =
-      variations::GetVariationParamValue(trial_name, param_name);
+      base::GetFieldTrialParamValue(trial_name, param_name);
   return ConvertUTF8ToJavaString(env, param_value);
 }
 

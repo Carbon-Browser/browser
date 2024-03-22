@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -36,13 +36,18 @@ class VizPixelTest : public cc::PixelTest {
       case RendererType::kSkiaGL:
       case RendererType::kSkiaVk:
         return "skia";
-      case RendererType::kSkiaDawn:
-        return "dawn";
+      case RendererType::kSkiaGraphiteDawn:
+      case RendererType::kSkiaGraphiteMetal:
+        return "graphite";
     }
   }
 
   bool is_software_renderer() const {
     return renderer_type_ == RendererType::kSoftware;
+  }
+  bool is_skia_graphite() const {
+    return renderer_type_ == RendererType::kSkiaGraphiteDawn ||
+           renderer_type_ == RendererType::kSkiaGraphiteMetal;
   }
 
  protected:

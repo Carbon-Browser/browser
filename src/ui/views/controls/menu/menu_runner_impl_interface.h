@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,9 +6,14 @@
 #define UI_VIEWS_CONTROLS_MENU_MENU_RUNNER_IMPL_INTERFACE_H_
 
 #include <stdint.h>
+#include <string>
 
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
 #include "ui/views/controls/menu/menu_runner.h"
+
+namespace gfx {
+class RoundedCornersF;
+}  // namespace gfx
 
 namespace views {
 class MenuButtonController;
@@ -35,12 +40,16 @@ class MenuRunnerImplInterface {
   virtual void Release() = 0;
 
   // Runs the menu. See MenuRunner::RunMenuAt for more details.
-  virtual void RunMenuAt(Widget* parent,
-                         MenuButtonController* button_controller,
-                         const gfx::Rect& bounds,
-                         MenuAnchorPosition anchor,
-                         int32_t run_types,
-                         gfx::NativeView native_view_for_gestures) = 0;
+  virtual void RunMenuAt(
+      Widget* parent,
+      MenuButtonController* button_controller,
+      const gfx::Rect& bounds,
+      MenuAnchorPosition anchor,
+      int32_t run_types,
+      gfx::NativeView native_view_for_gestures,
+      absl::optional<gfx::RoundedCornersF> corners = absl::nullopt,
+      absl::optional<std::string> show_menu_host_duration_histogram =
+          absl::nullopt) = 0;
 
   // Hides and cancels the menu.
   virtual void Cancel() = 0;

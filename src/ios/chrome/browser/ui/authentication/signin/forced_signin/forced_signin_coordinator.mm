@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,23 +6,18 @@
 
 #import <UIKit/UIKit.h>
 
-#include "base/notreached.h"
+#import "base/notreached.h"
 #import "components/signin/public/identity_manager/identity_manager.h"
-#include "ios/chrome/browser/browser_state/chrome_browser_state.h"
-#include "ios/chrome/browser/main/browser.h"
-#import "ios/chrome/browser/signin/authentication_service.h"
-#import "ios/chrome/browser/signin/authentication_service_factory.h"
+#import "ios/chrome/browser/shared/model/browser/browser.h"
+#import "ios/chrome/browser/shared/model/browser_state/chrome_browser_state.h"
+#import "ios/chrome/browser/signin/model/authentication_service.h"
+#import "ios/chrome/browser/signin/model/authentication_service_factory.h"
 #import "ios/chrome/browser/ui/authentication/signin/signin_coordinator+protected.h"
 #import "ios/chrome/browser/ui/first_run/first_run_screen_delegate.h"
 #import "ios/chrome/browser/ui/first_run/first_run_util.h"
-#import "ios/chrome/browser/ui/first_run/legacy_signin/legacy_signin_screen_coordinator.h"
 #import "ios/chrome/browser/ui/first_run/signin/signin_screen_coordinator.h"
 #import "ios/chrome/browser/ui/screen/screen_provider.h"
 #import "ios/chrome/browser/ui/screen/screen_type.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 @interface ForcedSigninCoordinator () <FirstRunScreenDelegate>
 
@@ -82,7 +77,7 @@
   AuthenticationService* authService =
       AuthenticationServiceFactory::GetForBrowserState(
           self.browser->GetBrowserState());
-  ChromeIdentity* identity =
+  id<SystemIdentity> identity =
       authService->GetPrimaryIdentity(signin::ConsentLevel::kSignin);
   void (^completion)(void) = ^{
     SigninCoordinatorResult result =
@@ -110,21 +105,20 @@
 - (InterruptibleChromeCoordinator*)createChildCoordinatorWithScreenType:
     (ScreenType)type {
   switch (type) {
-    case kLegacySignIn:
-      return [[LegacySigninScreenCoordinator alloc]
-          initWithBaseNavigationController:self.navigationController
-                                   browser:self.browser
-                                  delegate:self];
     case kSignIn:
       return [[SigninScreenCoordinator alloc]
           initWithBaseNavigationController:self.navigationController
                                    browser:self.browser
-                            showFREConsent:NO
-                                  delegate:self];
-    case kSignInAndSync:
-    case kSync:
-    case kWelcomeAndConsent:
+                                  delegate:self
+                               accessPoint:signin_metrics::AccessPoint::
+                                               ACCESS_POINT_FORCED_SIGNIN
+                               promoAction:signin_metrics::PromoAction::
+                                               PROMO_ACTION_NO_SIGNIN_PROMO];
+    case kHistorySync:
+    case kTangibleSync:
     case kDefaultBrowserPromo:
+    case kChoice:
+    case kOmniboxPosition:
     case kStepsCompleted:
       NOTREACHED() << "Type of screen not supported." << static_cast<int>(type);
       break;
@@ -133,7 +127,7 @@
 }
 
 - (void)finishWithResult:(SigninCoordinatorResult)result
-                identity:(ChromeIdentity*)identity {
+                identity:(id<SystemIdentity>)identity {
   [self.childCoordinator stop];
   self.childCoordinator = nil;
   self.navigationController = nil;
@@ -148,19 +142,19 @@
 
 // This is called before finishing the presentation of a screen.
 // Stops the child coordinator and prepares the next screen to present.
-- (void)willFinishPresenting {
+- (void)screenWillFinishPresenting {
   [self.childCoordinator stop];
   self.childCoordinator = nil;
   [self presentScreen:[self.screenProvider nextScreenType]];
 }
 
-- (void)skipAll {
+- (void)skipAllScreens {
   [self finishPresentingScreens];
 }
 
 #pragma mark - SigninCoordinator
 
-- (void)interruptWithAction:(SigninCoordinatorInterruptAction)action
+- (void)interruptWithAction:(SigninCoordinatorInterrupt)action
                  completion:(ProceduralBlock)completion {
   __weak __typeof(self) weakSelf = self;
   ProceduralBlock finishCompletion = ^() {
@@ -171,19 +165,17 @@
   };
   BOOL animated = NO;
   switch (action) {
-    case SigninCoordinatorInterruptActionNoDismiss: {
+    case SigninCoordinatorInterrupt::UIShutdownNoDismiss: {
       [self.childCoordinator
-          interruptWithAction:SigninCoordinatorInterruptActionNoDismiss
-                   completion:^{
-                     finishCompletion();
-                   }];
+          interruptWithAction:SigninCoordinatorInterrupt::UIShutdownNoDismiss
+                   completion:finishCompletion];
       return;
     }
-    case SigninCoordinatorInterruptActionDismissWithoutAnimation: {
+    case SigninCoordinatorInterrupt::DismissWithoutAnimation: {
       animated = NO;
       break;
     }
-    case SigninCoordinatorInterruptActionDismissWithAnimation: {
+    case SigninCoordinatorInterrupt::DismissWithAnimation: {
       animated = YES;
       break;
     }
@@ -192,8 +184,7 @@
   // Interrupt the child coordinator UI first before dismissing the forced
   // sign-in navigation controller.
   [self.childCoordinator
-      interruptWithAction:
-          SigninCoordinatorInterruptActionDismissWithoutAnimation
+      interruptWithAction:SigninCoordinatorInterrupt::DismissWithoutAnimation
                completion:^{
                  [weakSelf.navigationController.presentingViewController
                      dismissViewControllerAnimated:animated

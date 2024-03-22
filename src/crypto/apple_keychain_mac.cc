@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -40,6 +40,12 @@ class OptionalOutParameter {
 };
 
 }  // namespace
+
+// Much of the Keychain API was marked deprecated as of the macOS 13 SDK.
+// Removal of its use is tracked in https://crbug.com/1348251 but deprecation
+// warnings are disabled in the meanwhile.
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wdeprecated-declarations"
 
 namespace crypto {
 
@@ -108,5 +114,7 @@ ScopedKeychainUserInteractionAllowed::~ScopedKeychainUserInteractionAllowed() {
     SecKeychainSetUserInteractionAllowed(*was_allowed_);
   }
 }
+
+#pragma clang diagnostic pop
 
 }  // namespace crypto

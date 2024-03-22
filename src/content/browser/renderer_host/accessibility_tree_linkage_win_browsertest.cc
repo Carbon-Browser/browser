@@ -1,9 +1,10 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "base/command_line.h"
 #include "base/memory/raw_ptr.h"
+#include "base/test/scoped_feature_list.h"
 #include "content/browser/accessibility/browser_accessibility.h"
 #include "content/browser/renderer_host/legacy_render_widget_host_win.h"
 #include "content/browser/renderer_host/render_widget_host_impl.h"
@@ -12,8 +13,9 @@
 #include "content/public/test/browser_test.h"
 #include "content/public/test/content_browser_test.h"
 #include "content/public/test/content_browser_test_utils.h"
+#include "content/public/test/scoped_accessibility_mode_override.h"
 #include "content/shell/browser/shell.h"
-#include "ui/accessibility/accessibility_switches.h"
+#include "ui/accessibility/accessibility_features.h"
 #include "ui/accessibility/platform/ax_fragment_root_win.h"
 #include "ui/accessibility/platform/ax_platform_node.h"
 #include "ui/aura/client/aura_constants.h"
@@ -33,6 +35,9 @@ class AccessibilityTreeLinkageWinBrowserTest
       public ::testing::WithParamInterface<AccessibilityLinkageTestParams> {
  public:
   AccessibilityTreeLinkageWinBrowserTest() {
+    if (GetParam().is_uia_enabled) {
+      scoped_feature_list_.InitAndEnableFeature(::features::kUiaProvider);
+    }
     dummy_ax_platform_node_ = ui::AXPlatformNode::Create(&dummy_ax_node_);
   }
 
@@ -47,9 +52,6 @@ class AccessibilityTreeLinkageWinBrowserTest
   }
 
   void SetUpCommandLine(base::CommandLine* command_line) override {
-    if (GetParam().is_uia_enabled)
-      base::CommandLine::ForCurrentProcess()->AppendSwitch(
-          ::switches::kEnableExperimentalUIAutomation);
     if (GetParam().is_legacy_window_disabled)
       base::CommandLine::ForCurrentProcess()->AppendSwitch(
           ::switches::kDisableLegacyIntermediateWindow);
@@ -66,12 +68,17 @@ class AccessibilityTreeLinkageWinBrowserTest
     return GetView()->legacy_render_widget_host_HWND_;
   }
 
+ private:
+  base::test::ScopedFeatureList scoped_feature_list_;
+
  protected:
-  ui::AXPlatformNodeDelegateBase dummy_ax_node_;
-  raw_ptr<ui::AXPlatformNode> dummy_ax_platform_node_;
+  ui::AXPlatformNodeDelegate dummy_ax_node_;
+  raw_ptr<ui::AXPlatformNode, DanglingUntriaged> dummy_ax_platform_node_;
 };
 
 IN_PROC_BROWSER_TEST_P(AccessibilityTreeLinkageWinBrowserTest, Linkage) {
+  ScopedAccessibilityModeOverride ax_mode_override(ui::kAXModeBasic.flags());
+
   EXPECT_TRUE(NavigateToURL(shell(), GURL(url::kAboutBlankURL)));
 
   GetParentWindow()->SetProperty(
@@ -90,7 +97,7 @@ IN_PROC_BROWSER_TEST_P(AccessibilityTreeLinkageWinBrowserTest, Linkage) {
   EXPECT_EQ(native_view_accessible, GetView()
                                         ->host()
                                         ->GetRootBrowserAccessibilityManager()
-                                        ->GetRoot()
+                                        ->GetBrowserAccessibilityRoot()
                                         ->GetNativeViewAccessible());
 
   // Used by LegacyRenderWidgetHostHWND to find the parent of the UIA fragment
@@ -115,6 +122,6 @@ IN_PROC_BROWSER_TEST_P(AccessibilityTreeLinkageWinBrowserTest, Linkage) {
 
 INSTANTIATE_TEST_SUITE_P(All,
                          AccessibilityTreeLinkageWinBrowserTest,
-                         testing::ValuesIn(kTestParameters));
+                         ::testing::ValuesIn(kTestParameters));
 
 }  // namespace content

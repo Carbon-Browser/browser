@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -133,9 +133,12 @@ void ViewsTextServicesContextMenuMac::UpdateTextDirection(
 
 void ViewsTextServicesContextMenuMac::LookUpInDictionary() {
   gfx::DecoratedText text;
-  gfx::Point baseline_point;
-  if (client()->GetWordLookupDataFromSelection(&text, &baseline_point)) {
+  gfx::Rect rect;
+  if (client()->GetWordLookupDataFromSelection(&text, &rect)) {
     Widget* widget = client()->GetWidget();
+
+    // We only care about the baseline of the glyph, not the space it occupies.
+    gfx::Point baseline_point = rect.origin();
     views::View::ConvertPointToTarget(client(), widget->GetRootView(),
                                       &baseline_point);
     NSView* view = widget->GetNativeView().GetNativeNSView();

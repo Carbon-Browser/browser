@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,8 @@
 #include "base/i18n/rtl.h"
 #include "third_party/blink/renderer/core/workers/worker_or_worklet_global_scope.h"
 #include "third_party/blink/renderer/core/workers/worker_thread.h"
-#include "third_party/blink/renderer/platform/bindings/v8_per_isolate_data.h"
+#include "third_party/blink/renderer/platform/scheduler/public/main_thread.h"
+#include "third_party/blink/renderer/platform/scheduler/public/main_thread_scheduler.h"
 #include "third_party/blink/renderer/platform/wtf/std_lib_extras.h"
 #include "third_party/icu/source/common/unicode/locid.h"
 #include "v8/include/v8.h"
@@ -29,7 +30,11 @@ void NotifyLocaleChangeOnWorkerThread(WorkerThread* worker_thread) {
 void UpdateLocale(const String& locale) {
   WebString web_locale(locale);
   base::i18n::SetICUDefaultLocale(web_locale.Ascii());
-  UpdateDefaultLocaleInIsolate(V8PerIsolateData::MainThreadIsolate());
+  Thread::MainThread()
+      ->Scheduler()
+      ->ToMainThreadScheduler()
+      ->ForEachMainThreadIsolate(
+          WTF::BindRepeating(&UpdateDefaultLocaleInIsolate));
   WorkerThread::CallOnAllWorkerThreads(&NotifyLocaleChangeOnWorkerThread,
                                        TaskType::kInternalDefault);
 }
@@ -41,7 +46,7 @@ LocaleController::LocaleController()
 String LocaleController::SetLocaleOverride(const String& locale) {
   if (locale_override_ == locale)
     return String();
-  if (locale.IsEmpty()) {
+  if (locale.empty()) {
     UpdateLocale(embedder_locale_);
   } else {
     icu::Locale locale_object(locale.Ascii().data());
@@ -55,7 +60,7 @@ String LocaleController::SetLocaleOverride(const String& locale) {
 }
 
 bool LocaleController::has_locale_override() const {
-  return !locale_override_.IsEmpty();
+  return !locale_override_.empty();
 }
 
 // static

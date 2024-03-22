@@ -1,4 +1,4 @@
-// Copyright (c) 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -158,7 +158,6 @@ class TRACING_EXPORT TraceStartupConfig {
   bool EnableFromCommandLine();
   bool EnableFromConfigFile();
   bool EnableFromBackgroundTracing();
-  bool EnableFromATrace();
 
   bool ParseTraceConfigFileContent(const std::string& content);
 

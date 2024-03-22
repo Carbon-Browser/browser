@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -18,15 +18,13 @@
 
 AppServiceInternalsUI::AppServiceInternalsUI(content::WebUI* web_ui)
     : ui::MojoWebUIController(web_ui), profile_(Profile::FromWebUI(web_ui)) {
-  content::WebUIDataSource* source = content::WebUIDataSource::Create(
-      chrome::kChromeUIAppServiceInternalsHost);
+  content::WebUIDataSource* source = content::WebUIDataSource::CreateAndAdd(
+      profile_, chrome::kChromeUIAppServiceInternalsHost);
   webui::SetupWebUIDataSource(
       source,
       base::make_span(kAppServiceInternalsResources,
                       kAppServiceInternalsResourcesSize),
       IDR_APP_SERVICE_INTERNALS_INDEX_HTML);
-
-  content::WebUIDataSource::Add(profile_, source);
 }
 
 void AppServiceInternalsUI::BindInterface(

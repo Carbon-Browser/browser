@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,12 +7,8 @@
 #import "ios/chrome/common/ui/colors/semantic_color_names.h"
 #import "ios/chrome/common/ui/util/button_util.h"
 #import "ios/chrome/common/ui/util/pointer_interaction_util.h"
-#include "ios/chrome/grit/ios_strings.h"
-#include "ui/base/l10n/l10n_util.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
+#import "ios/chrome/grit/ios_strings.h"
+#import "ui/base/l10n/l10n_util.h"
 
 @interface SCFirstRunHeroScreenViewController ()
 
@@ -32,7 +28,7 @@
   self.readMoreString =
       l10n_util::GetNSString(IDS_IOS_FIRST_RUN_SCREEN_READ_MORE);
   self.bannerName = @"Sample-banner-tall";
-  self.isTallBanner = YES;
+  self.bannerSize = BannerImageSizeType::kTall;
   self.scrollToEndMandatory = YES;
 
   // Add some screen-specific content and its constraints.
@@ -73,24 +69,31 @@
 
 - (UIButton*)createButton {
   UIButton* button = [UIButton buttonWithType:UIButtonTypeSystem];
-  [button setTitle:@"Custom button" forState:UIControlStateNormal];
-  button.contentEdgeInsets =
-      UIEdgeInsetsMake(kButtonVerticalInsets, 0, kButtonVerticalInsets, 0);
-  [button setBackgroundColor:[UIColor clearColor]];
+  NSString* buttonTitle = @"Custom button";
+
+  UIButtonConfiguration* buttonConfiguration =
+      [UIButtonConfiguration plainButtonConfiguration];
+  buttonConfiguration.contentInsets = NSDirectionalEdgeInsetsMake(
+      kButtonVerticalInsets, 0, kButtonVerticalInsets, 0);
+  buttonConfiguration.background.backgroundColor = [UIColor clearColor];
   UIColor* titleColor = [UIColor colorNamed:kBlueColor];
-  [button setTitleColor:titleColor forState:UIControlStateNormal];
-  button.titleLabel.font =
-      [UIFont preferredFontForTextStyle:UIFontTextStyleBody];
+  buttonConfiguration.baseForegroundColor = titleColor;
+
+  UIFont* font = [UIFont preferredFontForTextStyle:UIFontTextStyleBody];
+  NSDictionary* attributes = @{NSFontAttributeName : font};
+  NSMutableAttributedString* string =
+      [[NSMutableAttributedString alloc] initWithString:buttonTitle];
+  [string addAttributes:attributes range:NSMakeRange(0, string.length)];
+  buttonConfiguration.attributedTitle = string;
+  button.configuration = buttonConfiguration;
+
   button.translatesAutoresizingMaskIntoConstraints = NO;
-  button.titleLabel.adjustsFontForContentSizeCategory = YES;
   [button addTarget:self
                 action:@selector(didTapCustomActionButton)
       forControlEvents:UIControlEventTouchUpInside];
 
-  if (@available(iOS 13.4, *)) {
-    button.pointerInteractionEnabled = YES;
-    button.pointerStyleProvider = CreateOpaqueButtonPointerStyleProvider();
-  }
+  button.pointerInteractionEnabled = YES;
+  button.pointerStyleProvider = CreateOpaqueButtonPointerStyleProvider();
 
   return button;
 }

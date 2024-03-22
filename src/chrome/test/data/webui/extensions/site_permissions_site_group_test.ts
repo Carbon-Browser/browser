@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,7 +6,7 @@
 import 'chrome://extensions/extensions.js';
 
 import {SitePermissionsSiteGroupElement} from 'chrome://extensions/extensions.js';
-import {loadTimeData} from 'chrome://resources/js/load_time_data.m.js';
+import {loadTimeData} from 'chrome://resources/js/load_time_data.js';
 import {flush} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 import {assertEquals, assertFalse, assertTrue} from 'chrome://webui-test/chai_assert.js';
 import {isVisible} from 'chrome://webui-test/test_util.js';
@@ -18,7 +18,7 @@ suite('SitePermissionsSiteGroupElement', function() {
   let element: SitePermissionsSiteGroupElement;
 
   setup(function() {
-    document.body.innerHTML = '';
+    document.body.innerHTML = window.trustedTypes!.emptyHTML;
     element = document.createElement('site-permissions-site-group');
     document.body.appendChild(element);
   });
@@ -26,14 +26,22 @@ suite('SitePermissionsSiteGroupElement', function() {
   test('clicking expand shows all sites within this group', async function() {
     element.data = {
       etldPlusOne: 'google.ca',
+      numExtensions: 0,
       sites: [
         {
-          siteList: chrome.developerPrivate.UserSiteSet.PERMITTED,
-          site: 'https://images.google.ca',
+          siteSet: chrome.developerPrivate.SiteSet.USER_PERMITTED,
+          numExtensions: 0,
+          site: 'images.google.ca',
         },
         {
-          siteList: chrome.developerPrivate.UserSiteSet.PERMITTED,
-          site: 'http://google.ca',
+          siteSet: chrome.developerPrivate.SiteSet.USER_PERMITTED,
+          numExtensions: 0,
+          site: 'google.ca',
+        },
+        {
+          siteSet: chrome.developerPrivate.SiteSet.USER_PERMITTED,
+          numExtensions: 0,
+          site: '*.google.ca',
         },
       ],
     };
@@ -50,23 +58,36 @@ suite('SitePermissionsSiteGroupElement', function() {
 
     assertTrue(isVisible(sitesList));
     const expandedSites =
-        element.shadowRoot!.querySelectorAll<HTMLElement>('.site');
+        element.shadowRoot!.querySelectorAll<HTMLElement>('#sites-list .site');
+    const expandedIncludesSubdomains =
+        element.shadowRoot!.querySelectorAll<HTMLElement>(
+            '#sites-list .includes-subdomains');
 
-    assertEquals('https://images.google.ca', expandedSites[0]!.innerText);
-    assertEquals('http://google.ca', expandedSites[1]!.innerText);
+    assertEquals('images.google.ca', expandedSites[0]!.innerText);
+    assertFalse(isVisible(expandedIncludesSubdomains[0]!));
+    assertEquals('google.ca', expandedSites[1]!.innerText);
+    assertFalse(isVisible(expandedIncludesSubdomains[1]!));
+
+    // The site shown should not have the subdomain specifier '*.'.
+    assertEquals('google.ca', expandedSites[2]!.innerText);
+    // But there should be text indicating that it includes subdomains.
+    assertTrue(isVisible(expandedIncludesSubdomains[2]!));
   });
 
   test('no subtext shown for sites from different sets', async function() {
     element.data = {
       etldPlusOne: 'google.ca',
+      numExtensions: 0,
       sites: [
         {
-          siteList: chrome.developerPrivate.UserSiteSet.PERMITTED,
-          site: 'https://images.google.ca',
+          siteSet: chrome.developerPrivate.SiteSet.USER_PERMITTED,
+          numExtensions: 0,
+          site: 'images.google.ca',
         },
         {
-          siteList: chrome.developerPrivate.UserSiteSet.RESTRICTED,
-          site: 'http://google.ca',
+          siteSet: chrome.developerPrivate.SiteSet.USER_RESTRICTED,
+          numExtensions: 0,
+          site: 'google.ca',
         },
       ],
     };
@@ -80,8 +101,8 @@ suite('SitePermissionsSiteGroupElement', function() {
 
     assertTrue(isVisible(
         element.shadowRoot!.querySelector<HTMLElement>('#sites-list')));
-    const expandedSites =
-        element.shadowRoot!.querySelectorAll<HTMLElement>('.site-subtext');
+    const expandedSites = element.shadowRoot!.querySelectorAll<HTMLElement>(
+        '#sites-list .site-subtext');
 
     // The subtext for each expanded site should show which set it's from.
     assertEquals(PERMITTED_TEXT, expandedSites[0]!.innerText);
@@ -91,18 +112,39 @@ suite('SitePermissionsSiteGroupElement', function() {
   test('full site shown if there is only one site in group', async function() {
     element.data = {
       etldPlusOne: 'example.com',
+      numExtensions: 0,
       sites: [{
-        siteList: chrome.developerPrivate.UserSiteSet.PERMITTED,
-        site: 'https://a.example.com',
+        siteSet: chrome.developerPrivate.SiteSet.USER_PERMITTED,
+        numExtensions: 0,
+        site: 'a.example.com',
       }],
     };
     flush();
 
-    assertEquals('https://a.example.com', element.$.etldOrSite.innerText);
+    assertEquals('a.example.com', element.$.etldOrSite.innerText);
+    assertFalse(isVisible(element.$.etldOrSiteIncludesSubdomains));
     assertEquals(PERMITTED_TEXT, element.$.etldOrSiteSubtext.innerText);
 
     assertFalse(isVisible(
         element.shadowRoot!.querySelector<HTMLElement>('cr-expand-button')));
+
+    // Now set the element's one site in the group to match subdomains.
+    element.data = {
+      etldPlusOne: 'example.com',
+      numExtensions: 1,
+      sites: [{
+        siteSet: chrome.developerPrivate.SiteSet.EXTENSION_SPECIFIED,
+        numExtensions: 1,
+        site: '*.example.com',
+      }],
+    };
+    flush();
+
+    assertEquals('example.com', element.$.etldOrSite.innerText);
+    assertTrue(isVisible(element.$.etldOrSiteIncludesSubdomains));
+    assertEquals(
+        loadTimeData.getString('sitePermissionsAllSitesOneExtension'),
+        element.$.etldOrSiteSubtext.innerText);
   });
 
   test(
@@ -110,9 +152,11 @@ suite('SitePermissionsSiteGroupElement', function() {
       async function() {
         element.data = {
           etldPlusOne: 'example.com',
+          numExtensions: 0,
           sites: [{
-            siteList: chrome.developerPrivate.UserSiteSet.PERMITTED,
-            site: 'https://a.example.com',
+            siteSet: chrome.developerPrivate.SiteSet.USER_PERMITTED,
+            numExtensions: 0,
+            site: 'a.example.com',
           }],
         };
         flush();
@@ -128,9 +172,9 @@ suite('SitePermissionsSiteGroupElement', function() {
             'site-permissions-edit-permissions-dialog');
         assertTrue(!!dialog);
         assertTrue(dialog.$.dialog.open);
-        assertEquals('https://a.example.com', dialog.site);
+        assertEquals('a.example.com', dialog.site);
         assertEquals(
-            chrome.developerPrivate.UserSiteSet.PERMITTED,
+            chrome.developerPrivate.SiteSet.USER_PERMITTED,
             dialog.originalSiteSet);
       });
 
@@ -139,14 +183,17 @@ suite('SitePermissionsSiteGroupElement', function() {
       async function() {
         element.data = {
           etldPlusOne: 'google.ca',
+          numExtensions: 0,
           sites: [
             {
-              siteList: chrome.developerPrivate.UserSiteSet.PERMITTED,
-              site: 'https://images.google.ca',
+              siteSet: chrome.developerPrivate.SiteSet.USER_PERMITTED,
+              numExtensions: 0,
+              site: 'images.google.ca',
             },
             {
-              siteList: chrome.developerPrivate.UserSiteSet.RESTRICTED,
-              site: 'http://google.ca',
+              siteSet: chrome.developerPrivate.SiteSet.USER_RESTRICTED,
+              numExtensions: 0,
+              site: 'google.ca',
             },
           ],
         };
@@ -167,9 +214,9 @@ suite('SitePermissionsSiteGroupElement', function() {
             'site-permissions-edit-permissions-dialog');
         assertTrue(!!dialog);
         assertTrue(dialog.$.dialog.open);
-        assertEquals('http://google.ca', dialog.site);
+        assertEquals('google.ca', dialog.site);
         assertEquals(
-            chrome.developerPrivate.UserSiteSet.RESTRICTED,
+            chrome.developerPrivate.SiteSet.USER_RESTRICTED,
             dialog.originalSiteSet);
       });
 });

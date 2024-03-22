@@ -1,4 +1,4 @@
-# Copyright 2014 The Chromium Authors. All rights reserved.
+# Copyright 2014 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -41,6 +41,7 @@ component("webview") {
     "//ui/content_accelerators",
     "//ui/events",
     "//ui/events:events_base",
+    "//ui/gfx:native_widget_types",
     "//ui/web_dialogs",
     "//url",
   ]

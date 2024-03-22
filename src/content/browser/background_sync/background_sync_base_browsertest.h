@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,7 +8,7 @@
 #include <memory>
 #include <string>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/task/single_thread_task_runner.h"
@@ -62,19 +62,17 @@ class BackgroundSyncBaseBrowserTest : public ContentBrowserTest {
   // (assertion failure) if the tag isn't registered.
   bool RegistrationPending(const std::string& tag);
 
-  bool CompleteDelayedSyncEvent();
+  void CompleteDelayedSyncEvent();
 
   void SetTestClock(base::SimpleTestClock* clock);
 
   void ClearStoragePartitionData();
 
-  std::string PopConsoleString();
-  bool PopConsole(const std::string& expected_msg);
-  bool RegisterServiceWorker();
+  EvalJsResult PopConsoleString();
+  void RegisterServiceWorker();
   void SetIncognitoMode(bool incognito);
   WebContents* web_contents();
-  bool LoadTestPage(const std::string& path);
-  std::string RunScript(const std::string& script);
+  void LoadTestPage(const std::string& path);
   net::EmbeddedTestServer* https_server() { return https_server_.get(); }
 
  private:
@@ -102,7 +100,7 @@ class BackgroundSyncBaseBrowserTest : public ContentBrowserTest {
       base::OnceCallback<void(bool)> callback);
   StoragePartitionImpl* GetStorage();
 
-  raw_ptr<Shell> shell_ = nullptr;
+  raw_ptr<Shell, DanglingUntriaged> shell_ = nullptr;
   std::unique_ptr<net::EmbeddedTestServer> https_server_;
   base::test::ScopedFeatureList scoped_feature_list_;
 };

@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -17,7 +17,9 @@
 #include "ui/accessibility/platform/ax_platform_node_win.h"
 
 namespace content {
+
 class BrowserAccessibilityWin;
+class WebAXPlatformTreeManagerDelegate;
 
 using UiaRaiseActiveTextPositionChangedEventFunction =
     HRESULT(WINAPI*)(IRawElementProviderSimple*, ITextRangeProvider*);
@@ -27,7 +29,7 @@ class CONTENT_EXPORT BrowserAccessibilityManagerWin
     : public BrowserAccessibilityManager {
  public:
   BrowserAccessibilityManagerWin(const ui::AXTreeUpdate& initial_tree,
-                                 BrowserAccessibilityDelegate* delegate);
+                                 WebAXPlatformTreeManagerDelegate* delegate);
 
   BrowserAccessibilityManagerWin(const BrowserAccessibilityManagerWin&) =
       delete;
@@ -44,16 +46,15 @@ class CONTENT_EXPORT BrowserAccessibilityManagerWin
 
   // BrowserAccessibilityManager methods
   void UserIsReloading() override;
-  BrowserAccessibility* GetFocus() const override;
   bool IsIgnoredChangedNode(const BrowserAccessibility* node) const;
   bool CanFireEvents() const override;
 
-  void FireFocusEvent(BrowserAccessibility* node) override;
+  void FireFocusEvent(ui::AXNode* node) override;
   void FireBlinkEvent(ax::mojom::Event event_type,
                       BrowserAccessibility* node,
                       int action_request_id) override;
   void FireGeneratedEvent(ui::AXEventGenerator::Event event_type,
-                          BrowserAccessibility* node) override;
+                          const ui::AXNode* node) override;
 
   void FireWinAccessibilityEvent(LONG win_event, BrowserAccessibility* node);
   void FireUiaAccessibilityEvent(LONG uia_event, BrowserAccessibility* node);
@@ -68,14 +69,6 @@ class CONTENT_EXPORT BrowserAccessibilityManagerWin
 
   // Do event post-processing
   void FinalizeAccessibilityEvents() override;
-
-  // Track this object and post a VISIBLE_DATA_CHANGED notification when
-  // its container scrolls.
-  // TODO(dmazzoni): remove once http://crbug.com/113483 is fixed.
-  void TrackScrollingObject(BrowserAccessibilityWin* node);
-
-  // Called when |accessible_hwnd_| is deleted by its parent.
-  void OnAccessibleHwndDeleted();
 
  protected:
   // AXTreeObserver methods.
@@ -139,7 +132,7 @@ class CONTENT_EXPORT BrowserAccessibilityManagerWin
 
   // Since there could be duplicate selection changed events on a node raised
   // from both EventType::DOCUMENT_SELECTION_CHANGED and
-  // EventType::SELECTION_IN_TEXT_FIELD_CHANGED, we keep track of the unique
+  // EventType::TEXT_SELECTION_CHANGED, we keep track of the unique
   // nodes so we only fire the event once for every node.
   std::set<BrowserAccessibility*> selection_changed_nodes_;
 

@@ -1,27 +1,26 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #import "ios/chrome/browser/policy/cloud/user_policy_switch.h"
 
-#include "base/command_line.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
+#import "base/feature_list.h"
+#import "ios/chrome/browser/policy/cloud/user_policy_constants.h"
 
 namespace policy {
 
-const char kEnableUserPolicy[] = "enable-user-policy-for-ios";
-
-void EnableUserPolicy() {
-  base::CommandLine* command_line = base::CommandLine::ForCurrentProcess();
-  command_line->AppendSwitch(kEnableUserPolicy);
+bool IsUserPolicyEnabledForSigninOrSyncConsentLevel() {
+  return base::FeatureList::IsEnabled(kUserPolicyForSigninOrSyncConsentLevel);
 }
 
-bool IsUserPolicyEnabled() {
-  base::CommandLine* command_line = base::CommandLine::ForCurrentProcess();
-  return command_line->HasSwitch(kEnableUserPolicy);
+bool IsUserPolicyEnabledForSigninAndNoSyncConsentLevel() {
+  return base::FeatureList::IsEnabled(
+      kUserPolicyForSigninAndNoSyncConsentLevel);
+}
+
+bool IsAnyUserPolicyFeatureEnabled() {
+  return IsUserPolicyEnabledForSigninOrSyncConsentLevel() ||
+         IsUserPolicyEnabledForSigninAndNoSyncConsentLevel();
 }
 
 }  // namespace policy

@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,15 +7,15 @@
 
 #import <UIKit/UIKit.h>
 
+#import "ios/chrome/browser/shared/ui/table_view/legacy_chrome_table_view_controller.h"
 #import "ios/chrome/browser/ui/authentication/signin/consistency_promo_signin/consistency_account_chooser/consistency_account_chooser_consumer.h"
-#import "ios/chrome/browser/ui/table_view/chrome_table_view_controller.h"
 
 @protocol ConsistencyAccountChooserTableViewControllerActionDelegate;
 @protocol ConsistencyAccountChooserTableViewControllerModelDelegate;
 
 // View controller for ConsistencyAccountChooserCoordinator.
 @interface ConsistencyAccountChooserTableViewController
-    : ChromeTableViewController <ConsistencyAccountChooserConsumer>
+    : LegacyChromeTableViewController <ConsistencyAccountChooserConsumer>
 
 @property(nonatomic, weak)
     id<ConsistencyAccountChooserTableViewControllerActionDelegate>

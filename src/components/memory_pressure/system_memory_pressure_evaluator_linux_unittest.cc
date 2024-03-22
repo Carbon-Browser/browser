@@ -1,10 +1,10 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "components/memory_pressure/system_memory_pressure_evaluator_linux.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/run_loop.h"
 #include "base/test/task_environment.h"
 #include "build/build_config.h"
@@ -147,7 +147,6 @@ TEST_F(LinuxSystemMemoryPressureEvaluatorTest,
 // for the correct behavior on event reposting as well as state updates.
 TEST_F(LinuxSystemMemoryPressureEvaluatorTest, CheckMemoryPressure) {
   MultiSourceMemoryPressureMonitor monitor;
-  monitor.ResetSystemEvaluatorForTesting();
 
   // Large-memory.
   testing::StrictMock<TestSystemMemoryPressureEvaluator> evaluator(

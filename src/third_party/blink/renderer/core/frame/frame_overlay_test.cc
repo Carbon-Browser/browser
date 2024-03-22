@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -71,7 +71,8 @@ class FrameOverlayTest : public testing::Test, public PaintTestConfigurations {
   FrameOverlay* CreateSolidYellowOverlay() {
     return MakeGarbageCollected<FrameOverlay>(
         GetWebView()->MainFrameImpl()->GetFrame(),
-        std::make_unique<SolidColorOverlay>(SK_ColorYELLOW));
+        std::make_unique<SolidColorOverlay>(
+            Color::FromSkColor(SK_ColorYELLOW)));
   }
 
   template <typename OverlayType>
@@ -104,7 +105,7 @@ TEST_P(FrameOverlayTest, AcceleratedCompositing) {
 
   auto* builder = MakeGarbageCollected<PaintRecordBuilder>();
   frame_overlay->Paint(builder->Context());
-  builder->EndRecording()->Playback(&canvas);
+  builder->EndRecording().Playback(&canvas);
   frame_overlay->Destroy();
 }
 
@@ -124,7 +125,7 @@ TEST_P(FrameOverlayTest, DeviceEmulationScale) {
                         ->GetPage()
                         ->GetVisualViewport()
                         .GetDeviceEmulationTransformNode();
-  EXPECT_EQ(TransformationMatrix().Scale(1.5), transform->Matrix());
+  EXPECT_EQ(gfx::Transform::MakeScale(1.5), transform->Matrix());
   const auto& state = frame_overlay->DefaultPropertyTreeState();
   EXPECT_EQ(transform, &state.Transform());
   EXPECT_EQ(&ClipPaintPropertyNode::Root(), &state.Clip());

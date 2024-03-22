@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,6 +7,7 @@
 
 #include "base/files/file.h"
 #include "base/files/file_path.h"
+#include "base/memory/raw_ref.h"
 #include "base/memory/weak_ptr.h"
 #include "mojo/public/cpp/bindings/receiver.h"
 #include "mojo/public/cpp/system/data_pipe.h"
@@ -46,7 +47,7 @@ class StoreFileTask : public blink::mojom::BlobReaderClient {
 
   base::FilePath filename_;
   blink::mojom::SharedFilePtr file_;
-  uint64_t& available_space_;
+  const raw_ref<uint64_t, ExperimentalAsh> available_space_;
   blink::mojom::ShareService::ShareCallback callback_;
   base::File output_file_;
 

@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,7 +10,7 @@
 #include <string>
 
 #include "base/memory/raw_ptr.h"
-#include "base/memory/ref_counted.h"
+#include "base/memory/scoped_refptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/threading/thread_checker.h"
 #include "base/values.h"
@@ -100,7 +100,7 @@ class Me2MeNativeMessagingHost : public extensions::NativeMessageHost {
   // These methods fill in the |response| dictionary from the other parameters,
   // and pass it to SendResponse().
   void SendConfigResponse(base::Value::Dict response,
-                          absl::optional<base::Value::Dict> config);
+                          std::optional<base::Value::Dict> config);
   void SendPairedClientsResponse(base::Value::Dict response,
                                  base::Value::List pairings);
   void SendUsageStatsConsentResponse(
@@ -112,7 +112,7 @@ class Me2MeNativeMessagingHost : public extensions::NativeMessageHost {
   void SendCredentialsResponse(base::Value::Dict response,
                                const std::string& user_email,
                                const std::string& refresh_token);
-  void SendMessageToClient(base::Value message) const;
+  void SendMessageToClient(base::Value::Dict message) const;
 
   void OnError(const std::string& error_message);
 

@@ -1,5 +1,5 @@
 #!/usr/bin/env vpython3
-# Copyright 2021 The Chromium Authors. All rights reserved.
+# Copyright 2021 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -11,13 +11,13 @@ import six
 if six.PY3:
     import unittest.mock as mock
 
-from pyfakefs import fake_filesystem_unittest
+from pyfakefs import fake_filesystem_unittest, fake_filesystem
 
 from blinkpy.web_tests.stale_expectation_removal import constants
 from blinkpy.web_tests.stale_expectation_removal import expectations
 
 
-def CreateFile(fs, *args, **kwargs):
+def CreateFile(fs: fake_filesystem.FakeFilesystem, *args, **kwargs) -> None:
     # TODO(crbug.com/1156806): Remove this and just use fs.create_file() when
     # Catapult is updated to a newer version of pyfakefs that is compatible
     # with Chromium's version.
@@ -27,9 +27,8 @@ def CreateFile(fs, *args, **kwargs):
         fs.CreateFile(*args, **kwargs)
 
 
-@unittest.skip('Skipped due to crbug/1305104')
 class GetExpectationFilepathsUnittest(fake_filesystem_unittest.TestCase):
-    def setUp(self):
+    def setUp(self) -> None:
         self.setUpPyfakefs()
         self.instance = expectations.WebTestExpectations()
         CreateFile(
@@ -37,7 +36,7 @@ class GetExpectationFilepathsUnittest(fake_filesystem_unittest.TestCase):
             os.path.join(constants.WEB_TEST_ROOT_DIR, 'FlagExpectations',
                          'README.txt'))
 
-    def testRealFilesCanBeFound(self):
+    def testRealFilesCanBeFound(self) -> None:
         """Tests that real files are returned."""
         with fake_filesystem_unittest.Pause(self):
             filepaths = self.instance.GetExpectationFilepaths()
@@ -45,15 +44,16 @@ class GetExpectationFilepathsUnittest(fake_filesystem_unittest.TestCase):
             for f in filepaths:
                 self.assertTrue(os.path.exists(f))
 
-    def testTopLevelFiles(self):
+    def testTopLevelFiles(self) -> None:
         """Tests that top-level expectation files are properly returned."""
+        top_level_filepath = os.path.join(constants.WEB_TEST_ROOT_DIR, 'foo')
         with mock.patch.object(self.instance,
                                '_GetTopLevelExpectationFiles',
-                               return_value=['/foo']):
+                               return_value=['foo']):
             filepaths = self.instance.GetExpectationFilepaths()
-        self.assertEqual(filepaths, ['/foo'])
+        self.assertEqual(filepaths, [top_level_filepath])
 
-    def testFlagSpecificFiles(self):
+    def testFlagSpecificFiles(self) -> None:
         """Tests that flag-specific files are properly returned."""
         flag_filepath = os.path.join(constants.WEB_TEST_ROOT_DIR,
                                      'FlagExpectations', 'foo-flag')
@@ -64,25 +64,25 @@ class GetExpectationFilepathsUnittest(fake_filesystem_unittest.TestCase):
             filepaths = self.instance.GetExpectationFilepaths()
         self.assertEqual(filepaths, [flag_filepath])
 
-    def testAllExpectationFiles(self):
+    def testAllExpectationFiles(self) -> None:
         """Tests that both top level and flag-specific files are returned."""
+        top_level_filepath = os.path.join(constants.WEB_TEST_ROOT_DIR, 'foo')
         flag_filepath = os.path.join(constants.WEB_TEST_ROOT_DIR,
                                      'FlagExpectations', 'foo-flag')
         CreateFile(self.fs, flag_filepath)
         with mock.patch.object(self.instance,
                                '_GetTopLevelExpectationFiles',
-                               return_value=['/foo']):
+                               return_value=['foo']):
             filepaths = self.instance.GetExpectationFilepaths()
-        self.assertEqual(filepaths, ['/foo', flag_filepath])
+        self.assertEqual(filepaths, [top_level_filepath, flag_filepath])
 
 
-@unittest.skip('Skipped due to crbug/1305104')
 class GetExpectationFileTagHeaderUnittest(fake_filesystem_unittest.TestCase):
-    def setUp(self):
+    def setUp(self) -> None:
         self.setUpPyfakefs()
         self.instance = expectations.WebTestExpectations()
 
-    def testRealContentsCanBeLoaded(self):
+    def testRealContentsCanBeLoaded(self) -> None:
         """Tests that some sort of valid content can be read from the file."""
         with fake_filesystem_unittest.Pause(self):
             header = self.instance._GetExpectationFileTagHeader(
@@ -90,7 +90,7 @@ class GetExpectationFileTagHeaderUnittest(fake_filesystem_unittest.TestCase):
         self.assertIn('tags', header)
         self.assertIn('results', header)
 
-    def testContentLoading(self):
+    def testContentLoading(self) -> None:
         """Tests that the header is properly loaded."""
         header_contents = """\
 
@@ -112,6 +112,28 @@ not a comment
 # baz
 """
         self.assertEqual(header, expected_header)
+
+
+class GetKnownTagsUnittest(fake_filesystem_unittest.TestCase):
+    def setUp(self) -> None:
+        self.setUpPyfakefs()
+        self.instance = expectations.WebTestExpectations()
+
+    def testTagsLowerCased(self) -> None:
+        """Tests that capitalized tags are made lower case."""
+        header_contents = """\
+# tags: [ Mac Win Linux ]
+# results: [ Failure Skip ]
+"""
+        CreateFile(self.fs, expectations.MAIN_EXPECTATION_FILE)
+        with open(expectations.MAIN_EXPECTATION_FILE, 'w') as f:
+            f.write(header_contents)
+        with mock.patch.object(
+                self.instance,
+                'GetExpectationFilepaths',
+                return_value=[expectations.MAIN_EXPECTATION_FILE]):
+            self.assertEqual(self.instance._GetKnownTags(),
+                             {'mac', 'win', 'linux'})
 
 
 if __name__ == '__main__':

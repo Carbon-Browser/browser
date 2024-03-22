@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,36 +8,63 @@
 #include <memory>
 #include <vector>
 
+#import "base/functional/callback.h"
 #import "ios/web/public/ui/java_script_dialog_presenter.h"
 
 namespace web {
 
-struct FakeJavaScriptDialog {
-  FakeJavaScriptDialog();
-  ~FakeJavaScriptDialog();
+struct FakeJavaScriptAlertDialog {
+  FakeJavaScriptAlertDialog();
+  ~FakeJavaScriptAlertDialog();
   WebState* web_state = nullptr;
   GURL origin_url;
-  JavaScriptDialogType java_script_dialog_type;
+  NSString* message_text;
+  base::OnceClosure callback;
+};
+
+struct FakeJavaScriptConfirmDialog {
+  FakeJavaScriptConfirmDialog();
+  ~FakeJavaScriptConfirmDialog();
+  WebState* web_state = nullptr;
+  GURL origin_url;
+  NSString* message_text;
+  base::OnceCallback<void(bool success)> callback;
+};
+
+struct FakeJavaScriptPromptDialog {
+  FakeJavaScriptPromptDialog();
+  ~FakeJavaScriptPromptDialog();
+  WebState* web_state = nullptr;
+  GURL origin_url;
   NSString* message_text;
   NSString* default_prompt_text;
-  DialogClosedCallback callback;
+  base::OnceCallback<void(NSString* user_input)> callback;
 };
 
 // Fake presenter to check that the JavaScriptDialogPresenter methods are called
-// as expected. |RunJavaScriptDialog| always calls |callback| with
-// |callback_success_argument| and |callback_user_input_argument| values.
+// as expected. `RunJavaScriptDialog` always calls `callback` with
+// `callback_success_argument` and `callback_user_input_argument` values.
 class FakeJavaScriptDialogPresenter : public JavaScriptDialogPresenter {
  public:
   FakeJavaScriptDialogPresenter();
   ~FakeJavaScriptDialogPresenter() override;
 
   // JavaScriptDialogPresenter overrides:
-  void RunJavaScriptDialog(WebState* web_state,
-                           const GURL& origin_url,
-                           JavaScriptDialogType java_script_dialog_type,
-                           NSString* message_text,
-                           NSString* default_prompt_text,
-                           DialogClosedCallback callback) override;
+  void RunJavaScriptAlertDialog(WebState* web_state,
+                                const GURL& origin_url,
+                                NSString* message_text,
+                                base::OnceClosure callback) override;
+  void RunJavaScriptConfirmDialog(
+      WebState* web_state,
+      const GURL& origin_url,
+      NSString* message_text,
+      base::OnceCallback<void(bool success)> callback) override;
+  void RunJavaScriptPromptDialog(
+      WebState* web_state,
+      const GURL& origin_url,
+      NSString* message_text,
+      NSString* default_prompt_text,
+      base::OnceCallback<void(NSString* user_input)> callback) override;
   void CancelDialogs(WebState* web_state) override;
 
   // Whether callback execution is paused.  If a dialog presentation is
@@ -55,30 +82,45 @@ class FakeJavaScriptDialogPresenter : public JavaScriptDialogPresenter {
   bool cancel_dialogs_called() const { return cancel_dialogs_called_; }
 
   // Returns a vector of requested dialogs.
-  const std::vector<std::unique_ptr<FakeJavaScriptDialog>>& requested_dialogs()
-      const {
-    return requested_dialogs_;
+  const std::vector<std::unique_ptr<FakeJavaScriptAlertDialog>>&
+  requested_alert_dialogs() const {
+    return requested_alert_dialogs_;
+  }
+  const std::vector<std::unique_ptr<FakeJavaScriptConfirmDialog>>&
+  requested_confirm_dialogs() const {
+    return requested_confirm_dialogs_;
+  }
+  const std::vector<std::unique_ptr<FakeJavaScriptPromptDialog>>&
+  requested_prompt_dialogs() const {
+    return requested_prompt_dialogs_;
   }
 
-  // Sets |success| argument to be used for RunJavaScriptDialog callback.
+  // Sets `success` argument to be used for RunJavaScriptDialog callback.
   void set_callback_success_argument(bool success) {
     callback_success_argument_ = success;
   }
 
-  // Sets |user_input| argument to be used for RunJavaScriptDialog callback.
+  // Sets `user_input` argument to be used for RunJavaScriptDialog callback.
   void set_callback_user_input_argument(NSString* user_input) {
     callback_user_input_argument_ = user_input;
   }
 
  private:
-  // Executes all non-executed callbacks in |requested_dialogs_|.
+  // Executes all non-executed callbacks in `requested_dialogs_`.
   void ExecuteAllDialogCallbacks();
-  // Executes the callback for |dialog|.
-  void ExecuteDialogCallback(FakeJavaScriptDialog* dialog);
+  // Executes the callback for `dialog`.
+  void ExecuteAlertDialogCallback(FakeJavaScriptAlertDialog* dialog);
+  void ExecuteConfirmDialogCallback(FakeJavaScriptConfirmDialog* dialog);
+  void ExecutePromptDialogCallback(FakeJavaScriptPromptDialog* dialog);
 
   bool callback_execution_paused_ = false;
   bool cancel_dialogs_called_ = false;
-  std::vector<std::unique_ptr<FakeJavaScriptDialog>> requested_dialogs_;
+  std::vector<std::unique_ptr<FakeJavaScriptAlertDialog>>
+      requested_alert_dialogs_;
+  std::vector<std::unique_ptr<FakeJavaScriptConfirmDialog>>
+      requested_confirm_dialogs_;
+  std::vector<std::unique_ptr<FakeJavaScriptPromptDialog>>
+      requested_prompt_dialogs_;
   bool callback_success_argument_ = false;
   NSString* callback_user_input_argument_;
 };

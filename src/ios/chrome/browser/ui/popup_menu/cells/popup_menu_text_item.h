@@ -1,12 +1,12 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef IOS_CHROME_BROWSER_UI_POPUP_MENU_CELLS_POPUP_MENU_TEXT_ITEM_H_
 #define IOS_CHROME_BROWSER_UI_POPUP_MENU_CELLS_POPUP_MENU_TEXT_ITEM_H_
 
+#import "ios/chrome/browser/shared/ui/table_view/cells/table_view_item.h"
 #import "ios/chrome/browser/ui/popup_menu/public/cells/popup_menu_item.h"
-#import "ios/chrome/browser/ui/table_view/cells/table_view_item.h"
 
 // A non interactable textual item. The text wraps a leading image and
 // description message.

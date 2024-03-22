@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,10 +7,10 @@
 
 #include <memory>
 
+#include <optional>
 #include "gpu/command_buffer/service/shared_image/android_image_backing.h"
 #include "gpu/gpu_gles2_export.h"
 #include "gpu/ipc/common/vulkan_ycbcr_info.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace viz {
 class VulkanContextProvider;
@@ -19,14 +19,11 @@ class VulkanContextProvider;
 namespace gpu {
 struct Mailbox;
 struct VulkanYCbCrInfo;
+class AbstractTextureAndroid;
 class RefCountedLock;
 class StreamTextureSharedImageInterface;
 class SharedContextState;
 class TextureOwner;
-
-namespace gles2 {
-class AbstractTexture;
-}  // namespace gles2
 
 // Implementation of SharedImageBacking that renders MediaCodec buffers to a
 // TextureOwner or overlay as needed in order to draw them.
@@ -44,7 +41,7 @@ class GPU_GLES2_EXPORT AndroidVideoImageBacking : public AndroidImageBacking {
 
   // Returns ycbcr information. This is only valid in vulkan context and
   // nullopt for other context.
-  static absl::optional<VulkanYCbCrInfo> GetYcbcrInfo(
+  static std::optional<VulkanYCbCrInfo> GetYcbcrInfo(
       TextureOwner* texture_owner,
       viz::VulkanContextProvider* vulkan_context_provider);
 
@@ -59,7 +56,6 @@ class GPU_GLES2_EXPORT AndroidVideoImageBacking : public AndroidImageBacking {
   gfx::Rect ClearedRect() const override;
   void SetClearedRect(const gfx::Rect& cleared_rect) override;
   void Update(std::unique_ptr<gfx::GpuFence> in_fence) override;
-  bool ProduceLegacyMailbox(MailboxManager* mailbox_manager) override;
 
  protected:
   AndroidVideoImageBacking(const Mailbox& mailbox,
@@ -69,7 +65,7 @@ class GPU_GLES2_EXPORT AndroidVideoImageBacking : public AndroidImageBacking {
                            SkAlphaType alpha_type,
                            bool is_thread_safe);
 
-  std::unique_ptr<gles2::AbstractTexture> GenAbstractTexture(
+  std::unique_ptr<AbstractTextureAndroid> GenAbstractTexture(
       const bool passthrough);
 };
 

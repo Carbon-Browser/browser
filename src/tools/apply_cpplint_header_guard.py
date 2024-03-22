@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Copyright 2021 The Chromium Authors. All rights reserved.
+# Copyright 2021 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 """Applies cpplint build/header_guard recommendations.
@@ -28,6 +28,10 @@ def process_cpplint_recommendations(cpplint_data):
   root = "_".join(root.upper().strip(r'[/]+').split('/'))+"_"
   for entry in cpplint_data:
     entry = entry.split(':')
+    # The length of the entry may be less than 3,
+    # e.g the last line of text 'Total errors found: xx'.
+    if len(entry) < 3:
+      continue
     header = entry[0]
     line = entry[1]
     index = int(line) - 1

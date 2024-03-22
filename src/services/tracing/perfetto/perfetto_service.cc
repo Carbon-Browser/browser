@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,17 +6,19 @@
 
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/no_destructor.h"
 #include "base/process/process_handle.h"
 #include "base/strings/strcat.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/string_util.h"
+#include "base/task/sequenced_task_runner.h"
 #include "build/build_config.h"
 #include "mojo/public/cpp/bindings/message.h"
 #include "services/tracing/perfetto/consumer_host.h"
 #include "services/tracing/perfetto/producer_host.h"
+#include "services/tracing/public/cpp/perfetto/custom_event_recorder.h"
 #include "services/tracing/public/cpp/perfetto/shared_memory.h"
 #include "third_party/perfetto/include/perfetto/ext/tracing/core/tracing_service.h"
 
@@ -65,9 +67,10 @@ PerfettoService* PerfettoService::GetInstance() {
 
 PerfettoService::PerfettoService(
     scoped_refptr<base::SequencedTaskRunner> task_runner_for_testing)
-    : perfetto_task_runner_(task_runner_for_testing
-                                ? std::move(task_runner_for_testing)
-                                : base::SequencedTaskRunnerHandle::Get()) {
+    : perfetto_task_runner_(
+          task_runner_for_testing
+              ? std::move(task_runner_for_testing)
+              : base::SequencedTaskRunner::GetCurrentDefault()) {
   service_ = perfetto::TracingService::CreateInstance(
       std::make_unique<ChromeBaseSharedMemory::Factory>(),
       &perfetto_task_runner_);
@@ -79,6 +82,10 @@ PerfettoService::PerfettoService(
       &PerfettoService::OnServiceDisconnect, base::Unretained(this)));
   producer_receivers_.set_disconnect_handler(base::BindRepeating(
       &PerfettoService::OnProducerHostDisconnect, base::Unretained(this)));
+
+  CustomEventRecorder::GetInstance()->SetActiveProcessesCallback(
+      base::BindRepeating(&PerfettoService::active_service_pids,
+                          base::Unretained(this)));
 }
 
 PerfettoService::~PerfettoService() = default;
@@ -111,8 +118,8 @@ void PerfettoService::ConnectToProducerHost(
                     base::NumberToString(producer_pid)}),
       std::move(shared_memory), shared_memory_buffer_page_size_bytes);
 
-  base::UmaHistogramEnumeration("Tracing.ProducerHostInitializationResult",
-                                result);
+  // There used to be a histogram that recorded failures, but as of 2022
+  // failures were extremely rare, so we removed it.
 
   if (result == ProducerHost::InitializationResult::kSmbNotAdopted) {
     // When everything else succeeds, but the SMB was not accepted, the producer
@@ -137,14 +144,20 @@ void PerfettoService::ConnectToProducerHost(
 }
 
 void PerfettoService::AddActiveServicePid(base::ProcessId pid) {
-  active_service_pids_.insert(pid);
+  {
+    base::AutoLock lock(active_service_pids_lock_);
+    active_service_pids_.insert(pid);
+  }
   for (auto* tracing_session : tracing_sessions_) {
     tracing_session->OnActiveServicePidAdded(pid);
   }
 }
 
 void PerfettoService::RemoveActiveServicePid(base::ProcessId pid) {
-  active_service_pids_.erase(pid);
+  {
+    base::AutoLock lock(active_service_pids_lock_);
+    active_service_pids_.erase(pid);
+  }
   num_active_connections_.erase(pid);
   for (auto* tracing_session : tracing_sessions_) {
     tracing_session->OnActiveServicePidRemoved(pid);

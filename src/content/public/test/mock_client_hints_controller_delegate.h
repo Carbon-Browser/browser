@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,6 +9,7 @@
 #include "services/network/public/cpp/network_quality_tracker.h"
 #include "third_party/blink/public/common/client_hints/enabled_client_hints.h"
 #include "third_party/blink/public/common/user_agent/user_agent_metadata.h"
+#include "ui/gfx/geometry/size_f.h"
 #include "url/origin.h"
 
 namespace content {
@@ -37,7 +38,8 @@ class MockClientHintsControllerDelegate : public ClientHintsControllerDelegate {
   bool IsJavaScriptAllowed(const GURL& url,
                            content::RenderFrameHost* parent_rfh) override;
 
-  bool AreThirdPartyCookiesBlocked(const GURL& url) override;
+  bool AreThirdPartyCookiesBlocked(const GURL& url,
+                                   content::RenderFrameHost* rfh) override;
 
   blink::UserAgentMetadata GetUserAgentMetadata() override;
   void PersistClientHints(
@@ -53,10 +55,15 @@ class MockClientHintsControllerDelegate : public ClientHintsControllerDelegate {
 
   void ClearAdditionalClientHints() override;
 
+  void SetMostRecentMainFrameViewportSize(
+      const gfx::Size& viewport_size) override;
+  gfx::Size GetMostRecentMainFrameViewportSize() override;
+
  private:
   const blink::UserAgentMetadata metadata_;
   ClientHintsContainer client_hints_map_;
   std::vector<network::mojom::WebClientHintsType> additional_hints_;
+  gfx::Size viewport_size_;
 };
 }  // end namespace content
 

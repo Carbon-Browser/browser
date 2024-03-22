@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,7 +9,7 @@
 #include <memory>
 
 #include "base/base_export.h"
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "base/task/sequence_manager/associated_thread_id.h"
 
@@ -68,8 +68,7 @@ class BASE_EXPORT AtomicFlagSet {
     AtomicFlag(AtomicFlagSet* outer, Group* element, size_t flag_bit);
 
     raw_ptr<AtomicFlagSet, DanglingUntriaged> outer_ = nullptr;
-    raw_ptr<Group, DanglingUntriaged> group_ =
-        nullptr;           // Null when AtomicFlag is invalid.
+    raw_ptr<Group> group_ = nullptr;  // Null when AtomicFlag is invalid.
     size_t flag_bit_ = 0;  // This is 1 << index of this flag within the group.
   };
 

@@ -1,11 +1,11 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef GPU_COMMAND_BUFFER_SERVICE_COMMAND_BUFFER_DIRECT_H_
 #define GPU_COMMAND_BUFFER_SERVICE_COMMAND_BUFFER_DIRECT_H_
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "gpu/command_buffer/common/constants.h"
 #include "gpu/command_buffer/service/command_buffer_service.h"
@@ -38,6 +38,7 @@ class GPU_EXPORT CommandBufferDirect : public CommandBuffer,
   scoped_refptr<Buffer> CreateTransferBuffer(
       uint32_t size,
       int32_t* id,
+      uint32_t alignment = 0,
       TransferBufferAllocationOption option =
           TransferBufferAllocationOption::kLoseContextOnOOM) override;
   void DestroyTransferBuffer(int32_t id) override;
@@ -49,7 +50,9 @@ class GPU_EXPORT CommandBufferDirect : public CommandBuffer,
 
   // DecoderClient implementation
   void OnConsoleMessage(int32_t id, const std::string& message) override;
-  void CacheShader(const std::string& key, const std::string& shader) override;
+  void CacheBlob(gpu::GpuDiskCacheType type,
+                 const std::string& key,
+                 const std::string& shader) override;
   void OnFenceSyncRelease(uint64_t release) override;
   void OnDescheduleUntilFinished() override;
   void OnRescheduleAfterFinished() override;
@@ -65,7 +68,7 @@ class GPU_EXPORT CommandBufferDirect : public CommandBuffer,
 
  private:
   CommandBufferService service_;
-  raw_ptr<AsyncAPIInterface> handler_ = nullptr;
+  raw_ptr<AsyncAPIInterface, DanglingUntriaged> handler_ = nullptr;
 };
 
 }  // namespace gpu

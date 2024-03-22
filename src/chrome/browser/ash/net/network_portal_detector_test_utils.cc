@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,13 +6,13 @@
 
 #include <stddef.h>
 
-#include <algorithm>
 #include <memory>
 
 #include "base/logging.h"
 #include "base/metrics/histogram_base.h"
 #include "base/metrics/histogram_samples.h"
 #include "base/metrics/statistics_recorder.h"
+#include "base/ranges/algorithm.h"
 
 namespace ash {
 
@@ -30,8 +30,7 @@ EnumHistogramChecker* EnumHistogramChecker::Expect(int key, int value) {
 
 bool EnumHistogramChecker::Check() {
   bool empty = false;
-  size_t num_zeroes =
-      static_cast<size_t>(std::count(expect_.begin(), expect_.end(), 0));
+  size_t num_zeroes = static_cast<size_t>(base::ranges::count(expect_, 0));
   if (num_zeroes == expect_.size())
     empty = true;
   base::HistogramBase* histogram =

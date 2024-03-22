@@ -1,9 +1,8 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "remoting/base/leaky_bucket.h"
-
 
 namespace remoting {
 
@@ -19,8 +18,9 @@ bool LeakyBucket::RefillOrSpill(int drops, base::TimeTicks now) {
   UpdateLevel(now);
 
   int new_level = current_level_ + drops;
-  if (depth_ >= 0 && new_level > depth_)
+  if (depth_ >= 0 && new_level > depth_) {
     return false;
+  }
   current_level_ = new_level;
   return true;
 }

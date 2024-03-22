@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -20,7 +20,7 @@ ConnectivityChecker::ConnectivityChecker(
           base::MakeRefCounted<base::ObserverListThreadSafe<
               ConnectivityCheckFailureObserver>>()) {}
 
-ConnectivityChecker::~ConnectivityChecker() {}
+ConnectivityChecker::~ConnectivityChecker() = default;
 
 void ConnectivityChecker::AddConnectivityObserver(
     ConnectivityObserver* observer) {

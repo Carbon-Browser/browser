@@ -1,9 +1,10 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 import {CrIconButtonElement} from 'chrome-extension://mhjfbmdgcfjbbpaeojofohoefgiehjai/pdf_viewer_wrapper.js';
-import {eventToPromise, waitBeforeNextRender} from 'chrome://webui-test/test_util.js';
+import {waitBeforeNextRender} from 'chrome://webui-test/polymer_test_util.js';
+import {eventToPromise} from 'chrome://webui-test/test_util.js';
 
 function createToolbar() {
   document.body.innerHTML = '';
@@ -40,6 +41,17 @@ const tests = [
       chrome.test.succeed();
     });
     toolbar.toggleAnnotation();
+  },
+  function testEnteringAnnotationsModeDisablesPresentationMode() {
+    const toolbar = createToolbar();
+    chrome.test.assertFalse(toolbar.annotationMode);
+
+    toolbar.toggleAnnotation();
+    // This is normally done by the parent in response to the event fired by
+    // toggleAnnotation().
+    toolbar.annotationMode = true;
+    chrome.test.assertTrue(toolbar.$['present-button'].disabled);
+    chrome.test.succeed();
   },
   function testEnteringAnnotationsModeDisablesTwoUp() {
     const toolbar = createToolbar();

@@ -1,4 +1,4 @@
-# Copyright 2020 The Chromium Authors. All rights reserved.
+# Copyright 2020 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 import("//build/config/chromeos/ui_mode.gni")
@@ -18,6 +18,8 @@ source_set("soda") {
     "soda_client.h",
     "soda_test_paths.h",
   ]
+
+  configs += [ "//build/config/compiler:wexit_time_destructors" ]
 
   deps = [
     ":soda_api_proto",
@@ -41,7 +43,7 @@ source_set("soda") {
 source_set("unit_tests") {
   testonly = true
 
-  if (enable_soda) {
+  if (enable_soda_integration_tests) {
     sources = [ "soda_client_unittest.cc" ]
 
     if (is_mac) {

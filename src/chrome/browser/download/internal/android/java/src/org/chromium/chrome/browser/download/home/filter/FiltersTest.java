@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -18,17 +18,23 @@ import org.chromium.components.offline_items_collection.OfflineItemFilter;
 public class FiltersTest {
     @Test
     public void testFilterConversions() {
-        Assert.assertEquals(Integer.valueOf(Filters.FilterType.SITES),
+        Assert.assertEquals(
+                Integer.valueOf(Filters.FilterType.SITES),
                 Filters.fromOfflineItem(OfflineItemFilter.PAGE));
-        Assert.assertEquals(Integer.valueOf(Filters.FilterType.VIDEOS),
+        Assert.assertEquals(
+                Integer.valueOf(Filters.FilterType.VIDEOS),
                 Filters.fromOfflineItem(OfflineItemFilter.VIDEO));
-        Assert.assertEquals(Integer.valueOf(Filters.FilterType.MUSIC),
+        Assert.assertEquals(
+                Integer.valueOf(Filters.FilterType.MUSIC),
                 Filters.fromOfflineItem(OfflineItemFilter.AUDIO));
-        Assert.assertEquals(Integer.valueOf(Filters.FilterType.IMAGES),
+        Assert.assertEquals(
+                Integer.valueOf(Filters.FilterType.IMAGES),
                 Filters.fromOfflineItem(OfflineItemFilter.IMAGE));
-        Assert.assertEquals(Integer.valueOf(Filters.FilterType.OTHER),
+        Assert.assertEquals(
+                Integer.valueOf(Filters.FilterType.OTHER),
                 Filters.fromOfflineItem(OfflineItemFilter.OTHER));
-        Assert.assertEquals(Integer.valueOf(Filters.FilterType.OTHER),
+        Assert.assertEquals(
+                Integer.valueOf(Filters.FilterType.OTHER),
                 Filters.fromOfflineItem(OfflineItemFilter.DOCUMENT));
     }
 }

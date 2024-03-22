@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -24,9 +24,6 @@ class ToolbarActionViewDelegate {
   // Shows the context menu for the action as a fallback for performing another
   // action.
   virtual void ShowContextMenuAsFallback() = 0;
-
-  // Whether the container supports showing extensions outside of the menu.
-  virtual bool CanShowIconInToolbar() const;
 
   // Called when a popup is shown. If |by_user| is true, then this was through
   // a direct user action (as oppposed to, e.g., an API call).

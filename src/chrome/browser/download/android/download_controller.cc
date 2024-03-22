@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,13 +10,12 @@
 
 #include "base/android/jni_android.h"
 #include "base/android/jni_string.h"
-#include "base/bind.h"
 #include "base/check_op.h"
 #include "base/feature_list.h"
+#include "base/functional/bind.h"
 #include "base/lazy_instance.h"
 #include "base/memory/raw_ptr.h"
 #include "base/metrics/field_trial_params.h"
-#include "base/metrics/histogram_macros.h"
 #include "base/notreached.h"
 #include "base/synchronization/lock.h"
 #include "chrome/android/chrome_jni_headers/DownloadController_jni.h"
@@ -36,8 +35,7 @@
 #include "chrome/browser/permissions/permission_update_message_controller_android.h"
 #include "chrome/browser/ui/android/tab_model/tab_model.h"
 #include "chrome/browser/ui/android/tab_model/tab_model_list.h"
-#include "chrome/browser/vr/vr_tab_helper.h"
-#include "chrome/grit/chromium_strings.h"
+#include "chrome/grit/branded_strings.h"
 #include "components/download/content/public/context_menu_download.h"
 #include "components/download/public/common/auto_resumption_handler.h"
 #include "components/download/public/common/download_features.h"
@@ -82,9 +80,6 @@ void CreateContextMenuDownloadInternal(
     return;
 
   if (!web_contents) {
-    DownloadController::RecordStoragePermission(
-        DownloadController::StoragePermissionType::
-            STORAGE_PERMISSION_NO_WEB_CONTENTS);
     return;
   }
 
@@ -164,14 +159,6 @@ void OnStoragePermissionDecided(
     bool granted) {
   DCHECK_CURRENTLY_ON(BrowserThread::UI);
 
-  if (granted) {
-    DownloadController::RecordStoragePermission(
-        DownloadController::StoragePermissionType::STORAGE_PERMISSION_GRANTED);
-  } else {
-    DownloadController::RecordStoragePermission(
-        DownloadController::StoragePermissionType::STORAGE_PERMISSION_DENIED);
-  }
-
   std::move(cb).Run(granted);
 }
 
@@ -216,12 +203,6 @@ void DownloadControllerBase::SetDownloadControllerBase(
     DownloadControllerBase* download_controller) {
   base::AutoLock lock(g_download_controller_lock_.Get());
   DownloadControllerBase::download_controller_ = download_controller;
-}
-
-// static
-void DownloadController::RecordStoragePermission(StoragePermissionType type) {
-  UMA_HISTOGRAM_ENUMERATION("MobileDownload.StoragePermission", type,
-                            STORAGE_PERMISSION_MAX);
 }
 
 // static
@@ -300,22 +281,11 @@ void DownloadController::AcquireFileAccessPermission(
   bool has_file_access_permission =
       Java_DownloadController_hasFileAccess(env, jwindow_android);
   if (has_file_access_permission) {
-    RecordStoragePermission(
-        StoragePermissionType::STORAGE_PERMISSION_REQUESTED);
-    RecordStoragePermission(
-        StoragePermissionType::STORAGE_PERMISSION_NO_ACTION_NEEDED);
     content::GetUIThreadTaskRunner({})->PostTask(
         FROM_HERE, base::BindOnce(std::move(cb), true));
     return;
-  } else if (vr::VrTabHelper::IsUiSuppressedInVr(
-                 web_contents,
-                 vr::UiSuppressedElement::kFileAccessPermission)) {
-    content::GetUIThreadTaskRunner({})->PostTask(
-        FROM_HERE, base::BindOnce(std::move(cb), false));
-    return;
   }
 
-  RecordStoragePermission(StoragePermissionType::STORAGE_PERMISSION_REQUESTED);
   AcquirePermissionCallback callback(base::BindOnce(
       &OnRequestFileAccessResult, web_contents_getter,
       base::BindOnce(&OnStoragePermissionDecided, std::move(cb))));
@@ -332,27 +302,6 @@ void DownloadController::CreateAndroidDownload(
   content::GetUIThreadTaskRunner({})->PostTask(
       FROM_HERE, base::BindOnce(&DownloadController::StartAndroidDownload,
                                 base::Unretained(this), wc_getter, info));
-}
-
-void DownloadController::AboutToResumeDownload(DownloadItem* download_item) {
-  download_item->RemoveObserver(this);
-  download_item->AddObserver(this);
-
-  // If a download is resumed from an interrupted state, record its strong
-  // validators so we know whether the resumption causes a restart.
-  if (download_item->GetState() == DownloadItem::IN_PROGRESS ||
-      download_item->GetLastReason() ==
-          download::DOWNLOAD_INTERRUPT_REASON_NONE) {
-    return;
-  }
-  if (download_item->GetETag().empty() &&
-      download_item->GetLastModifiedTime().empty()) {
-    return;
-  }
-  strong_validators_map_.emplace(
-      download_item->GetGuid(),
-      std::make_pair(download_item->GetETag(),
-                     download_item->GetLastModifiedTime()));
 }
 
 void DownloadController::StartAndroidDownload(
@@ -388,8 +337,8 @@ void DownloadController::StartAndroidDownloadInternal(
       ConvertUTF8ToJavaString(env, info.original_mime_type);
   ScopedJavaLocalRef<jstring> jcookie =
       ConvertUTF8ToJavaString(env, info.cookie);
-  ScopedJavaLocalRef<jstring> jreferer =
-      ConvertUTF8ToJavaString(env, info.referer);
+  ScopedJavaLocalRef<jobject> jreferer =
+      url::GURLAndroid::FromNativeGURL(env, info.referer);
   ScopedJavaLocalRef<jstring> jfile_name =
       base::android::ConvertUTF16ToJavaString(env, file_name);
   Java_DownloadController_enqueueAndroidDownloadManagerRequest(
@@ -434,38 +383,15 @@ void DownloadController::OnDownloadUpdated(DownloadItem* item) {
     return;
   }
 
-  JNIEnv* env = base::android::AttachCurrentThread();
-  ScopedJavaLocalRef<jobject> j_item =
-      DownloadManagerService::CreateJavaDownloadInfo(env, item);
-  switch (item->GetState()) {
-    case DownloadItem::IN_PROGRESS: {
-      Java_DownloadController_onDownloadUpdated(env, j_item);
-      break;
-    }
-    case DownloadItem::COMPLETE:
-      strong_validators_map_.erase(item->GetGuid());
-      // Multiple OnDownloadUpdated() notifications may be issued while the
-      // download is in the COMPLETE state. Only handle one.
-      item->RemoveObserver(this);
-
-      // Call onDownloadCompleted
-      Java_DownloadController_onDownloadCompleted(env, j_item);
-      break;
-    case DownloadItem::CANCELLED:
-      strong_validators_map_.erase(item->GetGuid());
-      Java_DownloadController_onDownloadCancelled(env, j_item);
-      break;
-    case DownloadItem::INTERRUPTED:
-      if (item->IsDone())
-        strong_validators_map_.erase(item->GetGuid());
-      // When device loses/changes network, we get a NETWORK_TIMEOUT,
-      // NETWORK_FAILED or NETWORK_DISCONNECTED error. Download should auto
-      // resume in this case.
-      Java_DownloadController_onDownloadInterrupted(
-          env, j_item, IsInterruptedDownloadAutoResumable(item));
-      break;
-    case DownloadItem::MAX_DOWNLOAD_STATE:
-      NOTREACHED();
+  if (item->GetState() == DownloadItem::COMPLETE) {
+    JNIEnv* env = base::android::AttachCurrentThread();
+    ScopedJavaLocalRef<jobject> j_item =
+        DownloadManagerService::CreateJavaDownloadInfo(env, item);
+    // Multiple OnDownloadUpdated() notifications may be issued while the
+    // download is in the COMPLETE state. Only handle one.
+    item->RemoveObserver(this);
+    // Call onDownloadCompleted
+    Java_DownloadController_onDownloadCompleted(env, j_item);
   }
 }
 
@@ -507,44 +433,6 @@ void DownloadController::StartContextMenuDownload(
   AcquireFileAccessPermission(
       wc_getter, base::BindOnce(&CreateContextMenuDownloadInternal, wc_getter,
                                 params, is_link));
-}
-
-bool DownloadController::IsInterruptedDownloadAutoResumable(
-    download::DownloadItem* download_item) {
-  if (!download_item->GetURL().SchemeIsHTTPOrHTTPS())
-    return false;
-  static int size_limit = DownloadUtils::GetAutoResumptionSizeLimit();
-  bool exceeds_size_limit = download_item->GetReceivedBytes() > size_limit;
-  std::string etag = download_item->GetETag();
-  std::string last_modified = download_item->GetLastModifiedTime();
-
-  if (exceeds_size_limit && etag.empty() && last_modified.empty() &&
-      !base::FeatureList::IsEnabled(
-          download::features::
-              kAllowDownloadResumptionWithoutStrongValidators)) {
-    return false;
-  }
-
-  // If the download has strong validators, but it caused a restart, stop auto
-  // resumption as the server may always send new strong validators on
-  // resumption.
-  auto strong_validator = strong_validators_map_.find(download_item->GetGuid());
-  if (strong_validator != strong_validators_map_.end()) {
-    if (exceeds_size_limit &&
-        (strong_validator->second.first != etag ||
-         strong_validator->second.second != last_modified)) {
-      return false;
-    }
-  }
-
-  int interrupt_reason = download_item->GetLastReason();
-  DCHECK_NE(interrupt_reason, download::DOWNLOAD_INTERRUPT_REASON_NONE);
-  return interrupt_reason ==
-             download::DOWNLOAD_INTERRUPT_REASON_NETWORK_TIMEOUT ||
-         interrupt_reason ==
-             download::DOWNLOAD_INTERRUPT_REASON_NETWORK_FAILED ||
-         interrupt_reason ==
-             download::DOWNLOAD_INTERRUPT_REASON_NETWORK_DISCONNECTED;
 }
 
 ProfileKey* DownloadController::GetProfileKey(DownloadItem* download_item) {

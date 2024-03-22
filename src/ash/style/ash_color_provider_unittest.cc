@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,19 +8,20 @@
 
 #include "ash/public/cpp/style/dark_light_mode_controller.h"
 #include "ash/test/ash_test_helper.h"
+#include "base/memory/raw_ptr.h"
 #include "base/strings/stringprintf.h"
 #include "base/test/scoped_feature_list.h"
 #include "base/test/task_environment.h"
 #include "chromeos/constants/chromeos_features.h"
 #include "testing/gtest/include/gtest/gtest-param-test.h"
 #include "testing/gtest/include/gtest/gtest.h"
-#include "ui/color/color_provider_manager.h"
+#include "ui/color/color_provider_key.h"
 
 namespace ash {
 
 namespace {
 
-using ColorMode = ui::ColorProviderManager::ColorMode;
+using ColorMode = ui::ColorProviderKey::ColorMode;
 
 template <class LayerType>
 struct ColorsTestCase {
@@ -58,8 +59,11 @@ class AshColorProviderBase
     : public testing::TestWithParam<ColorsTestCase<LayerType>> {
  public:
   AshColorProviderBase()
-      : scoped_feature_list_({chromeos::features::kDarkLightMode}),
-        task_environment_(base::test::TaskEnvironment::MainThreadType::UI) {}
+      : task_environment_(base::test::TaskEnvironment::MainThreadType::UI) {
+    // Disable when Jelly is enabled since it changes all the colors (and
+    // this test verifies the old colors).
+    features_.InitAndDisableFeature(chromeos::features::kJelly);
+  }
 
   void SetUp() override {
     ash_test_helper_.SetUp();
@@ -72,10 +76,11 @@ class AshColorProviderBase
   }
 
  protected:
-  base::test::ScopedFeatureList scoped_feature_list_;
+  base::test::ScopedFeatureList features_;
   base::test::TaskEnvironment task_environment_;
   AshTestHelper ash_test_helper_;
-  AshColorProvider* color_provider_;
+  raw_ptr<AshColorProvider, DanglingUntriaged | ExperimentalAsh>
+      color_provider_;
 };
 
 using AshColorProviderBaseLayerTest =
@@ -97,35 +102,41 @@ INSTANTIATE_TEST_SUITE_P(
     testing::ValuesIn<ColorsTestCase<ColorProvider::BaseLayerType>>(
         {// Light mode values
          {ColorMode::kLight, ColorProvider::BaseLayerType::kTransparent20,
-          SkColorSetARGB(0x33, 0xFF, 0xFF, 0xFF)},
+          SkColorSetARGB(0x33, 0xF8, 0xF8, 0xF8)},
          {ColorMode::kLight, ColorProvider::BaseLayerType::kTransparent40,
-          SkColorSetARGB(0x66, 0xFF, 0xFF, 0xFF)},
+          SkColorSetARGB(0x66, 0xF8, 0xF8, 0xF8)},
          {ColorMode::kLight, ColorProvider::BaseLayerType::kTransparent60,
-          SkColorSetARGB(0x99, 0xFF, 0xFF, 0xFF)},
+          SkColorSetARGB(0x99, 0xF8, 0xF8, 0xF8)},
          {ColorMode::kLight, ColorProvider::BaseLayerType::kTransparent80,
-          SkColorSetARGB(0xCC, 0xFF, 0xFF, 0xFF)},
+          SkColorSetARGB(0xCC, 0xF8, 0xF8, 0xF8)},
+         {ColorMode::kLight,
+          ColorProvider::BaseLayerType::kInvertedTransparent80,
+          SkColorSetARGB(0xCC, 0x07, 0x07, 0x07)},
          {ColorMode::kLight, ColorProvider::BaseLayerType::kTransparent90,
-          SkColorSetARGB(0xE6, 0xFF, 0xFF, 0xFF)},
+          SkColorSetARGB(0xE5, 0xF8, 0xF8, 0xF8)},
          {ColorMode::kLight, ColorProvider::BaseLayerType::kTransparent95,
-          SkColorSetARGB(0xF2, 0xFF, 0xFF, 0xFF)},
+          SkColorSetARGB(0xF2, 0xF8, 0xF8, 0xF8)},
          {ColorMode::kLight, ColorProvider::BaseLayerType::kOpaque,
-          SkColorSetARGB(0xFF, 0xFF, 0xFF, 0xFF)},
+          SkColorSetARGB(0xFF, 0xF8, 0xF8, 0xF8)},
 
          // Dark mode values
          {ColorMode::kDark, ColorProvider::BaseLayerType::kTransparent20,
-          SkColorSetARGB(0x33, 0x20, 0x21, 0x24)},
+          SkColorSetARGB(0x33, 0x5A, 0x5A, 0x5A)},
          {ColorMode::kDark, ColorProvider::BaseLayerType::kTransparent40,
-          SkColorSetARGB(0x66, 0x20, 0x21, 0x24)},
+          SkColorSetARGB(0x66, 0x5A, 0x5A, 0x5A)},
          {ColorMode::kDark, ColorProvider::BaseLayerType::kTransparent60,
-          SkColorSetARGB(0x99, 0x20, 0x21, 0x24)},
+          SkColorSetARGB(0x99, 0x5A, 0x5A, 0x5A)},
          {ColorMode::kDark, ColorProvider::BaseLayerType::kTransparent80,
-          SkColorSetARGB(0xCC, 0x20, 0x21, 0x24)},
+          SkColorSetARGB(0xCC, 0x5A, 0x5A, 0x5A)},
+         {ColorMode::kDark,
+          ColorProvider::BaseLayerType::kInvertedTransparent80,
+          SkColorSetARGB(0xCC, 0xA5, 0xA5, 0xA5)},
          {ColorMode::kDark, ColorProvider::BaseLayerType::kTransparent90,
-          SkColorSetARGB(0xE6, 0x20, 0x21, 0x24)},
+          SkColorSetARGB(0xE5, 0x5A, 0x5A, 0x5A)},
          {ColorMode::kDark, ColorProvider::BaseLayerType::kTransparent95,
-          SkColorSetARGB(0xF2, 0x20, 0x21, 0x24)},
+          SkColorSetARGB(0xF2, 0x5A, 0x5A, 0x5A)},
          {ColorMode::kDark, ColorProvider::BaseLayerType::kOpaque,
-          SkColorSetARGB(0xFF, 0x20, 0x21, 0x24)}}));
+          SkColorSetARGB(0xFF, 0x5A, 0x5A, 0x5A)}}));
 
 using AshColorProviderControlsLayerTest =
     AshColorProviderBase<ColorProvider::ControlsLayerType>;
@@ -167,18 +178,6 @@ INSTANTIATE_TEST_SUITE_P(
           SkColorSetARGB(0x3D, 0x8A, 0xB4, 0xF8)},
          {ColorMode::kDark, ColorProvider::ControlsLayerType::kFocusRingColor,
           SkColorSetRGB(0x8A, 0xB4, 0xF8)},
-         {ColorMode::kDark, ColorProvider::ControlsLayerType::kHighlightColor1,
-          SkColorSetARGB(0x14, 0xFF, 0xFF, 0xFF)},
-         {ColorMode::kDark, ColorProvider::ControlsLayerType::kHighlightColor2,
-          SkColorSetARGB(0x0F, 0xFF, 0xFF, 0xFF)},
-         {ColorMode::kDark, ColorProvider::ControlsLayerType::kHighlightColor3,
-          SkColorSetARGB(0x14, 0xFF, 0xFF, 0xFF)},
-         {ColorMode::kDark, ColorProvider::ControlsLayerType::kBorderColor1,
-          SkColorSetARGB(0xCC, 0x20, 0x21, 0x24)},
-         {ColorMode::kDark, ColorProvider::ControlsLayerType::kBorderColor2,
-          SkColorSetARGB(0x99, 0x20, 0x21, 0x24)},
-         {ColorMode::kDark, ColorProvider::ControlsLayerType::kBorderColor3,
-          SkColorSetARGB(0x0F, 0x0, 0x0, 0x0)},
 
          // Light mode
          {ColorMode::kLight,
@@ -195,26 +194,14 @@ INSTANTIATE_TEST_SUITE_P(
           SkColorSetRGB(0xD9, 0x30, 0x25)},
          {ColorMode::kLight,
           ColorProvider::ControlsLayerType::kControlBackgroundColorWarning,
-          SkColorSetRGB(0xF9, 0xAB, 0x0)},
+          SkColorSetRGB(0xE3, 0x74, 0x0)},
          {ColorMode::kLight,
           ColorProvider::ControlsLayerType::kControlBackgroundColorPositive,
-          SkColorSetRGB(0x1E, 0x8E, 0x3E)},
+          SkColorSetRGB(0x18, 0x80, 0x38)},
          {ColorMode::kLight, ColorProvider::ControlsLayerType::kFocusAuraColor,
           SkColorSetARGB(0x3D, 0x1A, 0x73, 0xE8)},
          {ColorMode::kLight, ColorProvider::ControlsLayerType::kFocusRingColor,
-          SkColorSetRGB(0x1A, 0x73, 0xE8)},
-         {ColorMode::kLight, ColorProvider::ControlsLayerType::kHighlightColor1,
-          SkColorSetARGB(0x4C, 0xFF, 0xFF, 0xFF)},
-         {ColorMode::kLight, ColorProvider::ControlsLayerType::kHighlightColor2,
-          SkColorSetARGB(0x33, 0xFF, 0xFF, 0xFF)},
-         {ColorMode::kLight, ColorProvider::ControlsLayerType::kHighlightColor3,
-          SkColorSetARGB(0x4C, 0xFF, 0xFF, 0xFF)},
-         {ColorMode::kLight, ColorProvider::ControlsLayerType::kBorderColor1,
-          SkColorSetARGB(0x0F, 0x0, 0x0, 0x0)},
-         {ColorMode::kLight, ColorProvider::ControlsLayerType::kBorderColor2,
-          SkColorSetARGB(0x0F, 0x0, 0x0, 0x0)},
-         {ColorMode::kLight, ColorProvider::ControlsLayerType::kBorderColor3,
-          SkColorSetARGB(0x0F, 0x0, 0x0, 0x0)}}));
+          SkColorSetRGB(0x1A, 0x73, 0xE8)}}));
 
 class AshColorProviderContentTest
     : public AshColorProviderBase<ColorProvider::ContentLayerType> {};
@@ -242,6 +229,9 @@ INSTANTIATE_TEST_SUITE_P(
          {ColorMode::kLight, ColorProvider::ContentLayerType::kTextColorPrimary,
           SkColorSetRGB(0x20, 0x21, 0x24)},
          {ColorMode::kLight,
+          ColorProvider::ContentLayerType::kInvertedTextColorPrimary,
+          SkColorSetRGB(0xE8, 0xEA, 0xED)},
+         {ColorMode::kLight,
           ColorProvider::ContentLayerType::kTextColorSecondary,
           SkColorSetRGB(0x5F, 0x63, 0x68)},
          {ColorMode::kLight, ColorProvider::ContentLayerType::kTextColorAlert,
@@ -250,7 +240,7 @@ INSTANTIATE_TEST_SUITE_P(
           SkColorSetRGB(0xE3, 0x74, 0x0)},
          {ColorMode::kLight,
           ColorProvider::ContentLayerType::kTextColorPositive,
-          SkColorSetRGB(0x1E, 0x8E, 0x3E)},
+          SkColorSetRGB(0x18, 0x80, 0x38)},
          {ColorMode::kLight, ColorProvider::ContentLayerType::kTextColorURL,
           SkColorSetRGB(0x1A, 0x73, 0xE8)},
 
@@ -258,14 +248,14 @@ INSTANTIATE_TEST_SUITE_P(
           SkColorSetRGB(0x20, 0x21, 0x24)},
          {ColorMode::kLight,
           ColorProvider::ContentLayerType::kIconColorSecondary,
-          SkColorSetRGB(0x9A, 0xA0, 0xA6)},
+          SkColorSetRGB(0x5F, 0x63, 0x68)},
          {ColorMode::kLight, ColorProvider::ContentLayerType::kIconColorAlert,
           SkColorSetRGB(0xD9, 0x30, 0x25)},
          {ColorMode::kLight, ColorProvider::ContentLayerType::kIconColorWarning,
           SkColorSetRGB(0xE3, 0x74, 0x0)},
          {ColorMode::kLight,
           ColorProvider::ContentLayerType::kIconColorPositive,
-          SkColorSetRGB(0x1E, 0x8E, 0x3E)},
+          SkColorSetRGB(0x18, 0x80, 0x38)},
          {ColorMode::kLight,
           ColorProvider::ContentLayerType::kIconColorProminent,
           SkColorSetRGB(0x1A, 0x73, 0xE8)},
@@ -276,6 +266,9 @@ INSTANTIATE_TEST_SUITE_P(
 
          {ColorMode::kLight, ColorProvider::ContentLayerType::kButtonLabelColor,
           SkColorSetRGB(0x20, 0x21, 0x24)},
+         {ColorMode::kLight,
+          ColorProvider::ContentLayerType::kInvertedButtonLabelColor,
+          SkColorSetRGB(0xE8, 0xEA, 0xED)},
          {ColorMode::kLight,
           ColorProvider::ContentLayerType::kButtonLabelColorPrimary,
           SkColorSetRGB(0xE8, 0xEA, 0xED)},
@@ -295,10 +288,7 @@ INSTANTIATE_TEST_SUITE_P(
           SkColorSetRGB(0x20, 0x21, 0x24)},
          {ColorMode::kLight,
           ColorProvider::ContentLayerType::kAppStateIndicatorColorInactive,
-          SkColorSetARGB(0x61, 0x20, 0x21, 0x24)},
-
-         {ColorMode::kLight, ColorProvider::ContentLayerType::kShelfHandleColor,
-          SkColorSetARGB(0x24, 0x0, 0x0, 0x0)},
+          SkColorSetARGB(0x60, 0x20, 0x21, 0x24)},
 
          {ColorMode::kLight,
           ColorProvider::ContentLayerType::kSliderColorActive,
@@ -321,10 +311,10 @@ INSTANTIATE_TEST_SUITE_P(
           SkColorSetRGB(0xFF, 0xFF, 0xFF)},
          {ColorMode::kLight,
           ColorProvider::ContentLayerType::kSwitchTrackColorActive,
-          SkColorSetARGB(0x4D, 0x1A, 0x73, 0xE8)},
+          SkColorSetARGB(0x4C, 0x1A, 0x73, 0xE8)},
          {ColorMode::kLight,
           ColorProvider::ContentLayerType::kSwitchTrackColorInactive,
-          SkColorSetARGB(0x4D, 0x5F, 0x63, 0x68)},
+          SkColorSetARGB(0x4C, 0x5F, 0x63, 0x68)},
 
          {ColorMode::kLight, ColorProvider::ContentLayerType::kCurrentDeskColor,
           SkColorSetRGB(0x0, 0x0, 0x0)},
@@ -353,7 +343,7 @@ INSTANTIATE_TEST_SUITE_P(
 
          {ColorMode::kLight,
           ColorProvider::ContentLayerType::kBatterySystemInfoBackgroundColor,
-          SkColorSetRGB(0x1E, 0x8E, 0x3E)},
+          SkColorSetRGB(0x18, 0x80, 0x38)},
 
          {ColorMode::kLight,
           ColorProvider::ContentLayerType::kBatterySystemInfoIconColor,
@@ -372,6 +362,9 @@ INSTANTIATE_TEST_SUITE_P(
          {ColorMode::kDark, ColorProvider::ContentLayerType::kTextColorPrimary,
           SkColorSetRGB(0xE8, 0xEA, 0xED)},
          {ColorMode::kDark,
+          ColorProvider::ContentLayerType::kInvertedTextColorPrimary,
+          SkColorSetRGB(0x20, 0x21, 0x24)},
+         {ColorMode::kDark,
           ColorProvider::ContentLayerType::kTextColorSecondary,
           SkColorSetRGB(0xBD, 0xC1, 0xC6)},
          {ColorMode::kDark, ColorProvider::ContentLayerType::kTextColorAlert,
@@ -387,7 +380,7 @@ INSTANTIATE_TEST_SUITE_P(
           SkColorSetRGB(0xE8, 0xEA, 0xED)},
          {ColorMode::kDark,
           ColorProvider::ContentLayerType::kIconColorSecondary,
-          SkColorSetRGB(0x9A, 0xA0, 0xA6)},
+          SkColorSetRGB(0xBD, 0xC1, 0xC6)},
          {ColorMode::kDark, ColorProvider::ContentLayerType::kIconColorAlert,
           SkColorSetRGB(0xF2, 0x8B, 0x82)},
          {ColorMode::kDark, ColorProvider::ContentLayerType::kIconColorWarning,
@@ -404,6 +397,9 @@ INSTANTIATE_TEST_SUITE_P(
 
          {ColorMode::kDark, ColorProvider::ContentLayerType::kButtonLabelColor,
           SkColorSetRGB(0xE8, 0xEA, 0xED)},
+         {ColorMode::kDark,
+          ColorProvider::ContentLayerType::kInvertedButtonLabelColor,
+          SkColorSetRGB(0x20, 0x21, 0x24)},
          {ColorMode::kDark,
           ColorProvider::ContentLayerType::kButtonLabelColorPrimary,
           SkColorSetRGB(0x20, 0x21, 0x24)},
@@ -423,10 +419,7 @@ INSTANTIATE_TEST_SUITE_P(
           SkColorSetRGB(0xE8, 0xEA, 0xED)},
          {ColorMode::kDark,
           ColorProvider::ContentLayerType::kAppStateIndicatorColorInactive,
-          SkColorSetARGB(0x61, 0xE8, 0xEA, 0xED)},
-
-         {ColorMode::kDark, ColorProvider::ContentLayerType::kShelfHandleColor,
-          SkColorSetARGB(0x24, 0xFF, 0xFF, 0xFF)},
+          SkColorSetARGB(0x60, 0xE8, 0xEA, 0xED)},
 
          {ColorMode::kDark, ColorProvider::ContentLayerType::kSliderColorActive,
           SkColorSetRGB(0x8A, 0xB4, 0xF8)},
@@ -448,10 +441,10 @@ INSTANTIATE_TEST_SUITE_P(
           SkColorSetRGB(0xBD, 0xC1, 0xC6)},
          {ColorMode::kDark,
           ColorProvider::ContentLayerType::kSwitchTrackColorActive,
-          SkColorSetARGB(0x4D, 0x8A, 0xB4, 0xF8)},
+          SkColorSetARGB(0x4C, 0x8A, 0xB4, 0xF8)},
          {ColorMode::kDark,
           ColorProvider::ContentLayerType::kSwitchTrackColorInactive,
-          SkColorSetARGB(0x4D, 0xE8, 0xEA, 0xED)},
+          SkColorSetARGB(0x4C, 0xE8, 0xEA, 0xED)},
 
          {ColorMode::kDark, ColorProvider::ContentLayerType::kCurrentDeskColor,
           SkColorSetRGB(0xFF, 0xFF, 0xFF)},

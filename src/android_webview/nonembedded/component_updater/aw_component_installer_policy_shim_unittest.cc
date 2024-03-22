@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -43,13 +43,15 @@ class MockComponentInstallerPolicy
       delete;
 
   MOCK_METHOD2(OnCustomInstall,
-               update_client::CrxInstaller::Result(const base::Value&,
+               update_client::CrxInstaller::Result(const base::Value::Dict&,
                                                    const base::FilePath&));
   MOCK_METHOD0(OnCustomUninstall, void());
   MOCK_METHOD3(ComponentReady,
-               void(const base::Version&, const base::FilePath&, base::Value));
+               void(const base::Version&,
+                    const base::FilePath&,
+                    base::Value::Dict));
   MOCK_CONST_METHOD2(VerifyInstallation,
-                     bool(const base::Value& manifest,
+                     bool(const base::Value::Dict& manifest,
                           const base::FilePath& dir));
   MOCK_CONST_METHOD0(SupportsGroupPolicyEnabledComponentUpdates, bool());
   MOCK_CONST_METHOD0(RequiresNetworkEncryption, bool());
@@ -91,10 +93,8 @@ TEST_F(AwComponentInstallerPolicyShimTest, TestDelegatedFunctions) {
   EXPECT_CALL(*mock_policy_ptr, GetInstallerAttributes()).Times(1);
   EXPECT_CALL(*mock_policy_ptr, GetHash).Times(testing::AtLeast(1));
 
-  shim->OnCustomInstall(base::Value(base::Value::Type::DICTIONARY),
-                        base::FilePath());
-  shim->VerifyInstallation(base::Value(base::Value::Type::DICTIONARY),
-                           base::FilePath());
+  shim->OnCustomInstall(base::Value::Dict(), base::FilePath());
+  shim->VerifyInstallation(base::Value::Dict(), base::FilePath());
   shim->SupportsGroupPolicyEnabledComponentUpdates();
   shim->RequiresNetworkEncryption();
   shim->GetRelativeInstallDir();

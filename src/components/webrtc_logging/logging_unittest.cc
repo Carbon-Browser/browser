@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,14 +9,16 @@
 
 // We must include Chromium headers before including the overrides header
 // since webrtc's logging.h file may conflict with chromium.
+
 #include "base/logging.h"
-#include "base/command_line.h"
 #include "base/files/file_util.h"
 #include "base/files/scoped_temp_dir.h"
-#include "base/test/scoped_feature_list.h"
 #include "build/build_config.h"
+#include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "third_party/webrtc_overrides/rtc_base/logging.h"
+
+namespace {
 
 static const int kDefaultVerbosity = 0;
 
@@ -37,11 +39,6 @@ static const char* AsString(rtc::LoggingSeverity severity) {
   }
 }
 
-static bool ContainsString(const std::string& original,
-                           const char* string_to_match) {
-  return original.find(string_to_match) != std::string::npos;
-}
-
 class WebRtcTextLogTest : public testing::Test {
  public:
   void SetUp() override {
@@ -51,15 +48,6 @@ class WebRtcTextLogTest : public testing::Test {
 
  protected:
   bool Initialize(int verbosity_level) {
-    if (verbosity_level != kDefaultVerbosity) {
-      // Update the command line with specified verbosity level for this file.
-      base::CommandLine* command_line = base::CommandLine::ForCurrentProcess();
-      std::ostringstream value_stream;
-      value_stream << "logging_unittest=" << verbosity_level;
-      const std::string& value = value_stream.str();
-      command_line->AppendSwitchASCII("vmodule", value);
-    }
-
     // The command line flags are parsed here and the log file name is set.
     logging::LoggingSettings settings;
     settings.logging_dest = logging::LOG_TO_FILE;
@@ -69,13 +57,9 @@ class WebRtcTextLogTest : public testing::Test {
     if (!logging::InitLogging(settings)) {
       return false;
     }
+    logging::SetMinLogLevel(-verbosity_level);
 
-#if BUILDFLAG(USE_RUNTIME_VLOG)
     EXPECT_TRUE(VLOG_IS_ON(verbosity_level));
-#else
-    // VLOGs default to off when not using runtime vlog.
-    EXPECT_FALSE(VLOG_IS_ON(verbosity_level));
-#endif  // BUILDFLAG(USE_RUNTIME_VLOG)
 
     EXPECT_FALSE(VLOG_IS_ON(verbosity_level + 1));
     return true;
@@ -100,11 +84,16 @@ TEST_F(WebRtcTextLogTest, DefaultConfiguration) {
   base::ReadFileToString(log_file_path_, &contents_of_file);
 
   // Make sure string contains the expected values.
-  EXPECT_TRUE(ContainsString(contents_of_file, AsString(rtc::LS_ERROR)));
-  EXPECT_TRUE(ContainsString(contents_of_file, AsString(rtc::LS_WARNING)));
-  EXPECT_FALSE(ContainsString(contents_of_file, AsString(rtc::LS_INFO)));
-  EXPECT_FALSE(ContainsString(contents_of_file, AsString(rtc::LS_VERBOSE)));
-  EXPECT_FALSE(ContainsString(contents_of_file, AsString(rtc::LS_SENSITIVE)));
+  EXPECT_THAT(contents_of_file, ::testing::HasSubstr(AsString(rtc::LS_ERROR)));
+  EXPECT_THAT(contents_of_file,
+              ::testing::HasSubstr(AsString(rtc::LS_WARNING)));
+  EXPECT_THAT(contents_of_file,
+              ::testing::Not(::testing::HasSubstr(AsString(rtc::LS_INFO))));
+  EXPECT_THAT(contents_of_file,
+              ::testing::Not(::testing::HasSubstr(AsString(rtc::LS_VERBOSE))));
+  EXPECT_THAT(
+      contents_of_file,
+      ::testing::Not(::testing::HasSubstr(AsString(rtc::LS_SENSITIVE))));
 }
 
 TEST_F(WebRtcTextLogTest, InfoConfiguration) {
@@ -123,16 +112,23 @@ TEST_F(WebRtcTextLogTest, InfoConfiguration) {
   base::ReadFileToString(log_file_path_, &contents_of_file);
 
   // Make sure string contains the expected values.
-  EXPECT_TRUE(ContainsString(contents_of_file, AsString(rtc::LS_ERROR)));
-  EXPECT_TRUE(ContainsString(contents_of_file, AsString(rtc::LS_WARNING)));
-  EXPECT_FALSE(ContainsString(contents_of_file, AsString(rtc::LS_INFO)));
-  EXPECT_FALSE(ContainsString(contents_of_file, AsString(rtc::LS_VERBOSE)));
-  EXPECT_FALSE(ContainsString(contents_of_file, AsString(rtc::LS_SENSITIVE)));
+  EXPECT_THAT(contents_of_file, ::testing::HasSubstr(AsString(rtc::LS_ERROR)));
+  EXPECT_THAT(contents_of_file,
+              ::testing::HasSubstr(AsString(rtc::LS_WARNING)));
+  EXPECT_THAT(contents_of_file,
+              ::testing::Not(::testing::HasSubstr(AsString(rtc::LS_INFO))));
+  EXPECT_THAT(contents_of_file,
+              ::testing::Not(::testing::HasSubstr(AsString(rtc::LS_VERBOSE))));
+  EXPECT_THAT(
+      contents_of_file,
+      ::testing::Not(::testing::HasSubstr(AsString(rtc::LS_SENSITIVE))));
 
   // Also check that the log is proper.
-  EXPECT_TRUE(ContainsString(contents_of_file, "logging_unittest.cc"));
-  EXPECT_FALSE(ContainsString(contents_of_file, "logging.h"));
-  EXPECT_FALSE(ContainsString(contents_of_file, "logging.cc"));
+  EXPECT_THAT(contents_of_file, ::testing::HasSubstr("logging_unittest.cc"));
+  EXPECT_THAT(contents_of_file,
+              ::testing::Not(::testing::HasSubstr("logging.h")));
+  EXPECT_THAT(contents_of_file,
+              ::testing::Not(::testing::HasSubstr("logging.cc")));
 }
 
 TEST_F(WebRtcTextLogTest, LogEverythingConfiguration) {
@@ -153,37 +149,51 @@ TEST_F(WebRtcTextLogTest, LogEverythingConfiguration) {
   base::ReadFileToString(log_file_path_, &contents_of_file);
 
   // Make sure string contains the expected values.
-  EXPECT_TRUE(ContainsString(contents_of_file, AsString(rtc::LS_ERROR)));
-  EXPECT_TRUE(ContainsString(contents_of_file, AsString(rtc::LS_WARNING)));
+  EXPECT_THAT(contents_of_file, ::testing::HasSubstr(AsString(rtc::LS_ERROR)));
+  EXPECT_THAT(contents_of_file,
+              ::testing::HasSubstr(AsString(rtc::LS_WARNING)));
 
-#if BUILDFLAG(USE_RUNTIME_VLOG)
-  EXPECT_TRUE(ContainsString(contents_of_file, AsString(rtc::LS_INFO)));
+  EXPECT_THAT(contents_of_file, ::testing::HasSubstr(AsString(rtc::LS_INFO)));
   // RTC_LOG_E
-  EXPECT_TRUE(ContainsString(contents_of_file, strerror(kFakeError)));
-  EXPECT_TRUE(ContainsString(contents_of_file, AsString(rtc::LS_VERBOSE)));
-  EXPECT_TRUE(ContainsString(contents_of_file, AsString(rtc::LS_SENSITIVE)));
-#endif  // BUILDFLAG(USE_RUNTIME_VLOG)
+  EXPECT_THAT(contents_of_file, ::testing::HasSubstr(strerror(kFakeError)));
+  EXPECT_THAT(contents_of_file,
+              ::testing::HasSubstr(AsString(rtc::LS_VERBOSE)));
+  EXPECT_THAT(contents_of_file,
+              ::testing::HasSubstr(AsString(rtc::LS_SENSITIVE)));
 }
 
-TEST_F(WebRtcTextLogTest, SuppressLogEverythingWithFlag) {
-  base::test::ScopedFeatureList scoped_feature(blink::kSuppressAllWebRtcLogs);
-
-  // Verbosity at level 2 normally allows LS_SENSITIVE (as per above test), but
-  // the kSuppressAllWebRtcLogs flag should suppress them.
+TEST_F(WebRtcTextLogTest, LogIf) {
   ASSERT_TRUE(Initialize(2));
 
-  RTC_LOG_V(rtc::LS_ERROR) << AsString(rtc::LS_ERROR);
-  RTC_LOG_V(rtc::LS_WARNING) << AsString(rtc::LS_WARNING);
-  RTC_LOG(LS_INFO) << AsString(rtc::LS_INFO);
-  RTC_LOG_V(rtc::LS_VERBOSE) << AsString(rtc::LS_VERBOSE);
-  RTC_LOG_V(rtc::LS_SENSITIVE) << AsString(rtc::LS_SENSITIVE);
+  RTC_LOG_IF(LS_INFO, true) << "IfTrue";
+  RTC_LOG_IF(LS_INFO, false) << "IfFalse";
+  RTC_LOG_IF_F(LS_INFO, true) << "LogF";
+  RTC_LOG_IF_F(LS_INFO, false) << "NoLogF";
 
+  RTC_DLOG_IF(LS_INFO, true) << "DebugIfTrue";
+  RTC_DLOG_IF(LS_INFO, false) << "DebugIfFalse";
+  RTC_DLOG_IF_F(LS_INFO, true) << "DebugLogF";
+  RTC_DLOG_IF_F(LS_INFO, false) << "DebugNotLogF";
+
+  // Read file to string.
   std::string contents_of_file;
   base::ReadFileToString(log_file_path_, &contents_of_file);
 
-  EXPECT_FALSE(ContainsString(contents_of_file, AsString(rtc::LS_ERROR)));
-  EXPECT_FALSE(ContainsString(contents_of_file, AsString(rtc::LS_WARNING)));
-  EXPECT_FALSE(ContainsString(contents_of_file, AsString(rtc::LS_INFO)));
-  EXPECT_FALSE(ContainsString(contents_of_file, AsString(rtc::LS_VERBOSE)));
-  EXPECT_FALSE(ContainsString(contents_of_file, AsString(rtc::LS_SENSITIVE)));
+  EXPECT_THAT(contents_of_file, ::testing::HasSubstr("IfTrue"));
+  EXPECT_THAT(contents_of_file,
+              ::testing::Not(::testing::HasSubstr("IfFalse")));
+  EXPECT_THAT(contents_of_file, ::testing::HasSubstr(__FUNCTION__));
+  EXPECT_THAT(contents_of_file, ::testing::HasSubstr("LogF"));
+  EXPECT_THAT(contents_of_file, ::testing::Not(::testing::HasSubstr("NoLogF")));
+
+#if RTC_DLOG_IS_ON
+  EXPECT_THAT(contents_of_file, ::testing::HasSubstr("DebugIfTrue"));
+  EXPECT_THAT(contents_of_file,
+              ::testing::Not(::testing::HasSubstr("DebugIfFalse")));
+  EXPECT_THAT(contents_of_file, ::testing::HasSubstr("DebugLogF"));
+  EXPECT_THAT(contents_of_file,
+              ::testing::Not(::testing::HasSubstr("DebugNoLogF")));
+#endif  // RTC_DLOG_IF_ON
 }
+
+}  // namespace

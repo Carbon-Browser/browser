@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,10 +10,10 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/cancelable_callback.h"
 #include "base/command_line.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/location.h"
 #include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
@@ -23,7 +23,6 @@
 #include "base/task/single_thread_task_runner.h"
 #include "base/test/simple_test_clock.h"
 #include "base/test/test_timeouts.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "base/values.h"
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
@@ -69,7 +68,7 @@ class CountingPolicyTest : public testing::Test {
     test_user_manager_.reset();
 #endif
     base::RunLoop().RunUntilIdle();
-    profile_.reset(NULL);
+    profile_.reset();
     base::RunLoop().RunUntilIdle();
   }
 
@@ -106,21 +105,22 @@ class CountingPolicyTest : public testing::Test {
     // Submit a request to the policy to read back some data, and call the
     // checker function when results are available.  This will happen on the
     // database thread.
+    base::RunLoop run_loop;
     policy->ReadFilteredData(
         extension_id, type, api_name, page_url, arg_url, day,
         base::BindOnce(&CountingPolicyTest::CheckWrapper, std::move(checker),
-                       base::RunLoop::QuitCurrentWhenIdleClosureDeprecated()));
+                       run_loop.QuitClosure()));
 
     // Set up a timeout for receiving results; if we haven't received anything
     // when the timeout triggers then assume that the test is broken.
     base::CancelableOnceClosure timeout(
         base::BindOnce(&CountingPolicyTest::TimeoutCallback));
-    base::ThreadTaskRunnerHandle::Get()->PostDelayedTask(
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostDelayedTask(
         FROM_HERE, timeout.callback(), TestTimeouts::action_timeout());
 
     // Wait for results; either the checker or the timeout callbacks should
     // cause the main loop to exit.
-    base::RunLoop().Run();
+    run_loop.Run();
 
     timeout.Cancel();
   }
@@ -271,8 +271,8 @@ class CountingPolicyTest : public testing::Test {
   static void CheckDuplicates(std::unique_ptr<Action::ActionVector> actions) {
     ASSERT_EQ(2u, actions->size());
     int total_count = 0;
-    for (size_t i = 0; i < actions->size(); i++) {
-      total_count += actions->at(i)->count();
+    for (const auto& action : *actions) {
+      total_count += action->count();
     }
     ASSERT_EQ(3, total_count);
   }
@@ -382,7 +382,7 @@ class CountingPolicyTest : public testing::Test {
 
  protected:
   base::SimpleTestClock mock_clock_;
-  raw_ptr<ExtensionService> extension_service_;
+  raw_ptr<ExtensionService, DanglingUntriaged> extension_service_;
   std::unique_ptr<TestingProfile> profile_;
   content::BrowserTaskEnvironment task_environment_;
 
@@ -397,11 +397,10 @@ TEST_F(CountingPolicyTest, Construct) {
   policy->Init();
   scoped_refptr<const Extension> extension =
       ExtensionBuilder()
-          .SetManifest(DictionaryBuilder()
+          .SetManifest(base::Value::Dict()
                            .Set("name", "Test extension")
                            .Set("version", "1.0.0")
-                           .Set("manifest_version", 2)
-                           .Build())
+                           .Set("manifest_version", 2))
           .Build();
   extension_service_->AddExtension(extension.get());
   scoped_refptr<Action> action = new Action(extension->id(),
@@ -418,16 +417,14 @@ TEST_F(CountingPolicyTest, LogWithStrippedArguments) {
   policy->Init();
   scoped_refptr<const Extension> extension =
       ExtensionBuilder()
-          .SetManifest(DictionaryBuilder()
+          .SetManifest(base::Value::Dict()
                            .Set("name", "Test extension")
                            .Set("version", "1.0.0")
-                           .Set("manifest_version", 2)
-                           .Build())
+                           .Set("manifest_version", 2))
           .Build();
   extension_service_->AddExtension(extension.get());
 
-  base::Value::List args;
-  args.Append("hello");
+  auto args = base::Value::List().Append("hello");
   args.Append("world");
   scoped_refptr<Action> action = new Action(extension->id(),
                                             base::Time::Now(),
@@ -539,11 +536,10 @@ TEST_F(CountingPolicyTest, LogAndFetchFilteredActions) {
   policy->Init();
   scoped_refptr<const Extension> extension =
       ExtensionBuilder()
-          .SetManifest(DictionaryBuilder()
+          .SetManifest(base::Value::Dict()
                            .Set("name", "Test extension")
                            .Set("version", "1.0.0")
-                           .Set("manifest_version", 2)
-                           .Build())
+                           .Set("manifest_version", 2))
           .Build();
   extension_service_->AddExtension(extension.get());
   GURL gurl("http://www.google.com");

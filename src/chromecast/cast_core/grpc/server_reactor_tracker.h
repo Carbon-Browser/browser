@@ -1,9 +1,11 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CHROMECAST_CAST_CORE_GRPC_SERVER_REACTOR_TRACKER_H_
 #define CHROMECAST_CAST_CORE_GRPC_SERVER_REACTOR_TRACKER_H_
+
+#include <string>
 
 #include "base/containers/flat_map.h"
 #include "base/synchronization/lock.h"
@@ -15,7 +17,7 @@ namespace utils {
 // Tracks number of currently active reactors per server and allows to quickly
 // diagnose the rpc names of the reactors that are left pending via ostream
 // operator.
-class ServerReactorTracker {
+class ServerReactorTracker final {
  public:
   ServerReactorTracker();
   ~ServerReactorTracker();

@@ -1,10 +1,11 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef COMPONENTS_EXO_TOAST_SURFACE_H_
 #define COMPONENTS_EXO_TOAST_SURFACE_H_
 
+#include "base/memory/raw_ptr.h"
 #include "components/exo/client_controlled_shell_surface.h"
 #include "components/exo/surface_delegate.h"
 #include "components/exo/surface_observer.h"
@@ -29,7 +30,7 @@ class ToastSurface : public ClientControlledShellSurface {
   void OnSurfaceCommit() override;
 
  private:
-  ToastSurfaceManager* const manager_;
+  const raw_ptr<ToastSurfaceManager, ExperimentalAsh> manager_;
   bool added_to_manager_ = false;
 };
 

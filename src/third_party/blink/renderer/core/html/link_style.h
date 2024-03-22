@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -45,7 +45,7 @@ class LinkStyle final : public LinkResource, ResourceClient {
   void SetSheetTitle(const String&);
 
   bool StyleSheetIsLoading() const;
-  bool HasSheet() const { return sheet_; }
+  bool HasSheet() const { return sheet_ != nullptr; }
   bool IsDisabled() const { return disabled_state_ == kDisabled; }
   bool IsEnabledViaScript() const {
     return disabled_state_ == kEnabledViaScript;

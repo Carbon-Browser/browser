@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -150,6 +150,7 @@ class FilterGroup {
   const int num_channels_;
   const std::string name_;
   base::Value prerender_filter_list_;
+  base::flat_map<std::string, std::string> post_processing_configs_;
   PostProcessingPipelineFactory* const ppp_factory_;
   int prerender_creation_count_ = 0;
   const scoped_refptr<FilterGroupTag> tag_;

@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -32,15 +32,15 @@ Node* LayoutShiftAttribution::node() const {
 }
 
 Node* LayoutShiftAttribution::rawNodeForInspector() const {
-  return node_;
+  return node_.Get();
 }
 
 DOMRectReadOnly* LayoutShiftAttribution::previousRect() const {
-  return previous_rect_;
+  return previous_rect_.Get();
 }
 
 DOMRectReadOnly* LayoutShiftAttribution::currentRect() const {
-  return current_rect_;
+  return current_rect_.Get();
 }
 
 ScriptValue LayoutShiftAttribution::toJSONForBinding(

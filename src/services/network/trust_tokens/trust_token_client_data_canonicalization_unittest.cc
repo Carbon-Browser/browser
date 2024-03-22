@@ -1,11 +1,10 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "services/network/trust_tokens/trust_token_client_data_canonicalization.h"
 
 #include "base/containers/span.h"
-#include "base/strings/string_piece.h"
 #include "base/test/task_environment.h"
 #include "base/time/time.h"
 #include "components/cbor/reader.h"
@@ -19,7 +18,7 @@ namespace network {
 TEST(TrustTokenClientDataCanonicalization, TimeBeforeUnixEpoch) {
   EXPECT_FALSE(CanonicalizeTrustTokenClientDataForRedemption(
       base::Time::UnixEpoch() - base::Seconds(1),
-      url::Origin::Create(GURL("https://topframe.example")), "public key"));
+      url::Origin::Create(GURL("https://topframe.example"))));
 }
 
 TEST(TrustTokenClientDataCanonicalization, SerializeThenDeserialize) {
@@ -29,7 +28,7 @@ TEST(TrustTokenClientDataCanonicalization, SerializeThenDeserialize) {
   absl::optional<std::vector<uint8_t>> maybe_serialization =
       CanonicalizeTrustTokenClientDataForRedemption(
           base::Time::Now(),
-          url::Origin::Create(GURL("https://topframe.example")), "public key");
+          url::Origin::Create(GURL("https://topframe.example")));
 
   ASSERT_TRUE(maybe_serialization);
 
@@ -49,10 +48,6 @@ TEST(TrustTokenClientDataCanonicalization, SerializeThenDeserialize) {
   ASSERT_EQ(map.at(cbor::Value("redeeming-origin", cbor::Value::Type::STRING))
                 .GetString(),
             "https://topframe.example");
-
-  ASSERT_EQ(map.at(cbor::Value("key-hash", cbor::Value::Type::STRING))
-                .GetBytestringAsString(),
-            crypto::SHA256HashString("public key"));
 }
 
 }  // namespace network

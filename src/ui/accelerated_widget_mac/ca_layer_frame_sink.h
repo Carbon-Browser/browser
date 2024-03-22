@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,10 +12,10 @@
 namespace ui {
 
 // An interface to an NSView that will embed content described by CALayerParams
-// in its heirarchy.
+// in its hierarchy.
 class ACCELERATED_WIDGET_MAC_EXPORT CALayerFrameSink {
  public:
-  virtual ~CALayerFrameSink() {}
+  virtual ~CALayerFrameSink() = default;
 
   // Translate from a gfx::AcceleratedWidget to the gfx::CALayerFrameSink
   // interface through which frames may be submitted. This may return nullptr.

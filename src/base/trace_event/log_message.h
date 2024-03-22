@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -26,7 +26,7 @@ class BASE_EXPORT LogMessage : public ConvertableToTraceFormat {
 
   // ConvertableToTraceFormat class implementation.
   void AppendAsTraceFormat(std::string* out) const override;
-  bool AppendToProto(ProtoAppender* appender) override;
+  bool AppendToProto(ProtoAppender* appender) const override;
 
   void EstimateTraceMemoryOverhead(TraceEventMemoryOverhead* overhead) override;
 

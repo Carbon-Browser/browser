@@ -1,10 +1,11 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef THIRD_PARTY_BLINK_PUBLIC_COMMON_ORIGIN_TRIALS_ORIGIN_TRIAL_POLICY_H_
 #define THIRD_PARTY_BLINK_PUBLIC_COMMON_ORIGIN_TRIALS_ORIGIN_TRIAL_POLICY_H_
 
+#include <set>
 #include <vector>
 
 #include "base/strings/string_piece.h"
@@ -31,6 +32,10 @@ class OriginTrialPolicy {
     return false;
   }
   virtual bool IsOriginSecure(const GURL& url) const { return false; }
+
+  virtual const std::set<std::string>* GetDisabledTokensForTesting() const {
+    return nullptr;
+  }
 };
 
 }  // namespace blink

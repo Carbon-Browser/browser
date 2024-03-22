@@ -38,35 +38,75 @@
 #include "base/memory/ptr_util.h"
 #include "base/sys_byteorder.h"
 #include "build/build_config.h"
+#include "skia/ext/font_utils.h"
 #include "third_party/blink/renderer/platform/font_family_names.h"
 #include "third_party/blink/renderer/platform/fonts/font_description.h"
+#include "third_party/blink/renderer/platform/fonts/opentype/open_type_baseline_metrics.h"
+#include "third_party/blink/renderer/platform/fonts/opentype/open_type_vertical_data.h"
 #include "third_party/blink/renderer/platform/fonts/shaping/harfbuzz_face.h"
 #include "third_party/blink/renderer/platform/fonts/skia/skia_text_metrics.h"
 #include "third_party/blink/renderer/platform/wtf/allocator/partitions.h"
 #include "third_party/blink/renderer/platform/wtf/math_extras.h"
 #include "third_party/blink/renderer/platform/wtf/text/character_names.h"
 #include "third_party/blink/renderer/platform/wtf/text/unicode.h"
+#include "third_party/freetype_buildflags.h"
+#include "third_party/skia/include/core/SkFont.h"
 #include "third_party/skia/include/core/SkFontMetrics.h"
 #include "third_party/skia/include/core/SkPath.h"
 #include "third_party/skia/include/core/SkTypeface.h"
 #include "third_party/skia/include/core/SkTypes.h"
 #include "ui/gfx/geometry/rect_f.h"
 #include "ui/gfx/geometry/skia_conversions.h"
+#include "v8/include/v8.h"
+
+#if !BUILDFLAG(USE_SYSTEM_FREETYPE)
+#include "third_party/freetype/src/src/autofit/afws-decl.h"
+#endif
 
 namespace blink {
 
 constexpr float kSmallCapsFontSizeMultiplier = 0.7f;
 constexpr float kEmphasisMarkFontSizeMultiplier = 0.5f;
 
+#if !BUILDFLAG(USE_SYSTEM_FREETYPE)
+constexpr int32_t kFontObjectsMemoryConsumption =
+    std::max(sizeof(AF_LatinMetricsRec), sizeof(AF_CJKMetricsRec));
+#else
+// sizeof(AF_LatinMetricsRec) = 2128
+constexpr int32_t kFontObjectsMemoryConsumption = 2128;
+#endif
+
 SimpleFontData::SimpleFontData(const FontPlatformData& platform_data,
                                scoped_refptr<CustomFontData> custom_data,
                                bool subpixel_ascent_descent,
                                const FontMetricsOverride& metrics_override)
     : platform_data_(platform_data),
-      font_(platform_data_.size() ? platform_data.CreateSkFont() : SkFont()),
+      font_(platform_data_.size() ? platform_data.CreateSkFont()
+                                  : skia::DefaultFont()),
       custom_font_data_(std::move(custom_data)) {
+  // Every time new SimpleFontData instance is created, Skia will ask
+  // FreeType to get the metrics for glyphs by invoking
+  // af_face_globals_get_metrics. There FT will allocate style_metrics_size
+  // bytes of memory on the metrics. Depending on the used script,
+  // style_metrics_size is equal to sizeof(AF_LatinMetricsRec) or to
+  // sizeof(AF_CJKMetricsRec). GC is not aware of this allocation. So in
+  // situations when we create a lot of Font objects in the small period of
+  // time, memory usage will grow unboundedly without GC kicking in. To prevent
+  // that we are informing GC about external allocated memory using
+  // style_metrics_size as the font memory consumption.
+  if (v8::Isolate* isolate = v8::Isolate::TryGetCurrent()) {
+    isolate->AdjustAmountOfExternalAllocatedMemory(
+        kFontObjectsMemoryConsumption);
+  }
   PlatformInit(subpixel_ascent_descent, metrics_override);
   PlatformGlyphInit();
+}
+
+SimpleFontData::~SimpleFontData() {
+  if (v8::Isolate* isolate = v8::Isolate::TryGetCurrent()) {
+    isolate->AdjustAmountOfExternalAllocatedMemory(
+        -kFontObjectsMemoryConsumption);
+  }
 }
 
 void SimpleFontData::PlatformInit(bool subpixel_ascent_descent,
@@ -93,6 +133,7 @@ void SimpleFontData::PlatformInit(bool subpixel_ascent_descent,
 
   font_metrics_.SetAscent(ascent);
   font_metrics_.SetDescent(descent);
+  font_metrics_.SetCapHeight(metrics.fCapHeight);
 
   float skia_underline_value;
   if (metrics.hasUnderlinePosition(&skia_underline_value))
@@ -103,7 +144,7 @@ void SimpleFontData::PlatformInit(bool subpixel_ascent_descent,
   float x_height;
   if (metrics.fXHeight) {
     x_height = metrics.fXHeight;
-#if BUILDFLAG(IS_MAC)
+#if BUILDFLAG(IS_APPLE)
     // Mac OS CTFontGetXHeight reports the bounding box height of x,
     // including parts extending below the baseline and apparently no x-height
     // value from the OS/2 table. However, the CSS ex unit
@@ -144,7 +185,7 @@ void SimpleFontData::PlatformInit(bool subpixel_ascent_descent,
   // arbitrary but comes pretty close to the expected value in most cases.
   if (max_char_width_ < 1)
     max_char_width_ = ascent * 2;
-#elif BUILDFLAG(IS_MAC)
+#elif BUILDFLAG(IS_APPLE)
   // FIXME: The current avg/max character width calculation is not ideal,
   // it should check either the OS2 table or, better yet, query FontMetrics.
   // Sadly FontMetrics provides incorrect data on Mac at the moment.
@@ -157,7 +198,7 @@ void SimpleFontData::PlatformInit(bool subpixel_ascent_descent,
 
 #endif
 
-#if !BUILDFLAG(IS_MAC)
+#if !BUILDFLAG(IS_APPLE)
   if (metrics.fAvgCharWidth) {
     avg_char_width_ = SkScalarToFloat(metrics.fAvgCharWidth);
   } else {
@@ -167,7 +208,7 @@ void SimpleFontData::PlatformInit(bool subpixel_ascent_descent,
     if (x_glyph) {
       avg_char_width_ = WidthForGlyph(x_glyph);
     }
-#if !BUILDFLAG(IS_MAC)
+#if !BUILDFLAG(IS_APPLE)
   }
 #endif
 
@@ -176,15 +217,22 @@ void SimpleFontData::PlatformInit(bool subpixel_ascent_descent,
   if (int units_per_em = face->getUnitsPerEm())
     font_metrics_.SetUnitsPerEm(units_per_em);
 
+  // Read baselines value from OpenType Table.
+  OpenTypeBaselineMetrics m(PlatformData().GetHarfBuzzFace(),
+                            PlatformData().Orientation());
+  font_metrics_.SetIdeographicBaseline(m.OpenTypeIdeographicBaseline());
+  font_metrics_.SetAlphabeticBaseline(m.OpenTypeAlphabeticBaseline());
+  font_metrics_.SetHangingBaseline(m.OpenTypeHangingBaseline());
 }
 
 void SimpleFontData::PlatformGlyphInit() {
-  SkTypeface* typeface = PlatformData().Typeface();
+  const FontPlatformData& platform_data = PlatformData();
+  SkTypeface* typeface = platform_data.Typeface();
+
   if (!typeface->countGlyphs()) {
     space_glyph_ = 0;
     space_width_ = 0;
     zero_glyph_ = 0;
-    font_metrics_.SetIdeographicFullWidth(absl::nullopt);
     return;
   }
 
@@ -196,18 +244,6 @@ void SimpleFontData::PlatformGlyphInit() {
   space_width_ = width;
   zero_glyph_ = GlyphForCharacter('0');
   font_metrics_.SetZeroWidth(WidthForGlyph(zero_glyph_));
-
-  // Use the advance of the CJK water character U+6C34 as the approximated
-  // advance of fullwidth ideographic characters, as specified at
-  // https://drafts.csswg.org/css-values-4/#ic.
-  //
-  // It should be computed without shaping; i.e., it doesn't include font
-  // features, ligatures/kerning, nor `letter-spacing`.
-  // https://github.com/w3c/csswg-drafts/issues/5498#issuecomment-686902802
-  if (const Glyph cjk_water_glyph = GlyphForCharacter(kCjkWaterCharacter))
-    font_metrics_.SetIdeographicFullWidth(WidthForGlyph(cjk_water_glyph));
-  else
-    font_metrics_.SetIdeographicFullWidth(absl::nullopt);
 }
 
 const SimpleFontData* SimpleFontData::FontDataForCharacter(UChar32) const {
@@ -234,7 +270,6 @@ bool SimpleFontData::IsSegmented() const {
 
 scoped_refptr<SimpleFontData> SimpleFontData::SmallCapsFontData(
     const FontDescription& font_description) const {
-  AutoLockForParallelTextShaping guard(derived_font_data_lock_);
   if (!derived_font_data_)
     derived_font_data_ = std::make_unique<DerivedFontData>();
   if (!derived_font_data_->small_caps) {
@@ -247,7 +282,6 @@ scoped_refptr<SimpleFontData> SimpleFontData::SmallCapsFontData(
 
 scoped_refptr<SimpleFontData> SimpleFontData::EmphasisMarkFontData(
     const FontDescription& font_description) const {
-  AutoLockForParallelTextShaping guard(derived_font_data_lock_);
   if (!derived_font_data_)
     derived_font_data_ = std::make_unique<DerivedFontData>();
   if (!derived_font_data_->emphasis_mark) {
@@ -382,6 +416,52 @@ LayoutUnit SimpleFontData::VerticalPosition(
   }
   NOTREACHED();
   return LayoutUnit();
+}
+
+const absl::optional<float>& SimpleFontData::IdeographicInlineSize() const {
+  std::call_once(ideographic_inline_size_once_, [this] {
+    // Use the advance of the CJK water character U+6C34 as the approximated
+    // advance of fullwidth ideographic characters, as specified at
+    // https://drafts.csswg.org/css-values-4/#ic.
+    const Glyph cjk_water_glyph = GlyphForCharacter(kCjkWaterCharacter);
+    if (!cjk_water_glyph) {
+      return;
+    }
+
+    // It should be computed without shaping; i.e., it doesn't include font
+    // features, ligatures/kerning, nor `letter-spacing`.
+    // https://github.com/w3c/csswg-drafts/issues/5498#issuecomment-686902802
+    if (PlatformData().Orientation() != FontOrientation::kVerticalUpright) {
+      ideographic_inline_size_ = WidthForGlyph(cjk_water_glyph);
+      return;
+    }
+
+    // Compute vertical advance if the orientation is `kVerticalUpright`.
+    const HarfBuzzFace* hb_face = platform_data_.GetHarfBuzzFace();
+    const OpenTypeVerticalData& vertical_data = hb_face->VerticalData();
+    ideographic_inline_size_ = vertical_data.AdvanceHeight(cjk_water_glyph);
+  });
+  return ideographic_inline_size_;
+}
+
+const HanKerning::FontData& SimpleFontData::HanKerningData(
+    const LayoutLocale& locale,
+    bool is_horizontal) const {
+  for (const HanKerningCacheEntry& entry : han_kerning_cache_) {
+    if (entry.locale == &locale && entry.is_horizontal == is_horizontal) {
+      return entry.data;
+    }
+  }
+
+  // The cache didn't hit. Shift the list and create a new entry at `[0]`.
+  for (wtf_size_t i = 1; i < std::size(han_kerning_cache_); ++i) {
+    han_kerning_cache_[i] = std::move(han_kerning_cache_[i - 1]);
+  }
+  HanKerningCacheEntry& new_entry = han_kerning_cache_[0];
+  new_entry = {.locale = &locale,
+               .is_horizontal = is_horizontal,
+               .data = HanKerning::FontData(*this, locale, is_horizontal)};
+  return new_entry.data;
 }
 
 gfx::RectF SimpleFontData::PlatformBoundsForGlyph(Glyph glyph) const {

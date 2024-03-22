@@ -1,4 +1,4 @@
-# Copyright 2021 The Chromium Authors. All rights reserved.
+# Copyright 2021 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -15,8 +15,13 @@ import win32serviceutil
 
 import rpc_handler
 
-# TODO(crbug.com/1233612): Use portpick to choose an available port, and
-# propagate the port to clients (for example, via a pre-defined registry key).
+# Ideally we should pick an unused port instead of the hard-coded value. But a
+# dynamic service port number means:
+#    1. We need to bring dependencies on some python libraries, say portpicker.
+#    2. We need to broadcast the port number to clients.
+#    3. The port number probably changes every time the service is restarted.
+# Those additional complexity seems outweigh the benefits it brings. And
+# empirical results show that a pre-defined port works well enough.
 _XML_RPC_SERVER_PORT = 9090
 
 

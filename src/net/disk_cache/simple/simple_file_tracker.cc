@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -331,8 +331,10 @@ SimpleFileTracker::FileHandle::FileHandle(FileHandle&& other) {
 }
 
 SimpleFileTracker::FileHandle::~FileHandle() {
-  if (entry_)
-    file_tracker_->Release(entry_, subfile_);
+  file_ = nullptr;
+  if (entry_) {
+    file_tracker_->Release(entry_.ExtractAsDangling(), subfile_);
+  }
 }
 
 SimpleFileTracker::FileHandle& SimpleFileTracker::FileHandle::operator=(

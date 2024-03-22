@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -50,10 +50,6 @@ class Rect;
 class RectF;
 }  // namespace gfx
 
-namespace network {
-class SharedURLLoaderFactory;
-}  // namespace network
-
 namespace content {
 
 class RenderAccessibility;
@@ -71,10 +67,6 @@ class AXTreeSnapshotter {
   // Return in |accessibility_tree| a snapshot of the accessibility tree
   // for the frame with the given accessibility mode.
   //
-  // - |exclude_offscreen| excludes a subtree if a node is entirely offscreen,
-  //   but note that this heuristic is imperfect, and an aboslute-positioned
-  //   node that's visible, but whose ancestors are entirely offscreen, may
-  //   get excluded.
   // - |max_nodes_count| specifies the maximum number of nodes to snapshot
   //   before exiting early. Note that this is not a hard limit; once this limit
   //   is reached a few more nodes may be added in order to ensure a
@@ -83,8 +75,7 @@ class AXTreeSnapshotter {
   //   (per frame), specified in milliseconds. Like max_node_count, this is not
   //   a hard limit, and once this/ limit is reached a few more nodes may
   //   be added in order to ensure a well-formed tree. Use 0 for no timeout.
-  virtual void Snapshot(bool exclude_offscreen,
-                        size_t max_node_count,
+  virtual void Snapshot(size_t max_node_count,
                         base::TimeDelta timeout,
                         ui::AXTreeUpdate* accessibility_tree) = 0;
 
@@ -98,29 +89,6 @@ class CONTENT_EXPORT RenderFrame : public IPC::Listener,
                                    public IPC::Sender,
                                    public base::SupportsUserData {
  public:
-  // These numeric values are used in UMA logs; do not change them.
-  enum PeripheralContentStatus {
-    // Content is peripheral, and should be throttled, but is not tiny.
-    CONTENT_STATUS_PERIPHERAL = 0,
-    // Content is essential because it's same-origin with the top-level frame.
-    CONTENT_STATUS_ESSENTIAL_SAME_ORIGIN = 1,
-    // Content is essential even though it's cross-origin, because it's large.
-    CONTENT_STATUS_ESSENTIAL_CROSS_ORIGIN_BIG = 2,
-    // Content is essential because there's large content from the same origin.
-    CONTENT_STATUS_ESSENTIAL_CROSS_ORIGIN_ALLOWLISTED = 3,
-    // Content is tiny in size. These are usually blocked.
-    CONTENT_STATUS_TINY = 4,
-    // Deprecated, as now entirely obscured content is treated as tiny.
-    DEPRECATED_CONTENT_STATUS_UNKNOWN_SIZE = 5,
-    // Must be last.
-    CONTENT_STATUS_NUM_ITEMS
-  };
-
-  enum RecordPeripheralDecision {
-    DONT_RECORD_DECISION = 0,
-    RECORD_DECISION = 1
-  };
-
   // Returns the RenderFrame given a WebLocalFrame.
   static RenderFrame* FromWebFrame(blink::WebLocalFrame* web_frame);
 
@@ -202,13 +170,6 @@ class CONTENT_EXPORT RenderFrame : public IPC::Listener,
   virtual blink::AssociatedInterfaceProvider*
   GetRemoteAssociatedInterfaces() = 0;
 
-#if BUILDFLAG(ENABLE_PLUGINS)
-  // Used by plugins that load data in this RenderFrame to update the loading
-  // notifications.
-  virtual void PluginDidStartLoading() = 0;
-  virtual void PluginDidStopLoading() = 0;
-#endif
-
   // Notifies the browser of text selection changes made.
   virtual void SetSelectedText(const std::u16string& selection_text,
                                size_t offset,
@@ -237,8 +198,7 @@ class CONTENT_EXPORT RenderFrame : public IPC::Listener,
 
   // Returns true in between the time that Blink requests navigation until the
   // browser responds with the result.
-  // TODO(ahemery): Rename this to be more explicit.
-  virtual bool IsBrowserSideNavigationPending() = 0;
+  virtual bool IsRequestingNavigation() = 0;
 
   // Renderer scheduler frame-specific task queues handles.
   // See third_party/WebKit/Source/platform/WebFrameScheduler.h for details.
@@ -251,9 +211,6 @@ class CONTENT_EXPORT RenderFrame : public IPC::Listener,
 
   // Set the accessibility mode to force creation of RenderAccessibility.
   virtual void SetAccessibilityModeForTest(ui::AXMode new_mode) = 0;
-
-  virtual scoped_refptr<network::SharedURLLoaderFactory>
-  GetURLLoaderFactory() = 0;
 
   // Per-frame media playback options passed to each WebMediaPlayer.
   virtual const RenderFrameMediaPlaybackOptions&

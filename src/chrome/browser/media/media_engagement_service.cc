@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,7 @@
 #include <functional>
 #include <vector>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/time/clock.h"
 #include "base/time/default_clock.h"
 #include "base/time/time.h"
@@ -325,20 +325,19 @@ bool MediaEngagementService::ShouldRecordEngagement(
 
 std::vector<MediaEngagementScore> MediaEngagementService::GetAllStoredScores()
     const {
-  ContentSettingsForOneType content_settings;
   std::vector<MediaEngagementScore> data;
 
   HostContentSettingsMap* settings =
       HostContentSettingsMapFactory::GetForProfile(profile_);
-  settings->GetSettingsForOneType(ContentSettingsType::MEDIA_ENGAGEMENT,
-                                  &content_settings);
 
   // `GetSettingsForOneType` mixes incognito and non-incognito results in
   // incognito profiles creating duplicates. The incognito results are first so
   // we should discard the results following.
   std::map<url::Origin, const ContentSettingPatternSource*> filtered_results;
 
-  for (const auto& site : content_settings) {
+  ContentSettingsForOneType content_settings =
+      settings->GetSettingsForOneType(ContentSettingsType::MEDIA_ENGAGEMENT);
+  for (const ContentSettingPatternSource& site : content_settings) {
     url::Origin origin =
         url::Origin::Create(GURL(site.primary_pattern.ToString()));
     if (origin.opaque()) {
@@ -364,12 +363,11 @@ std::vector<MediaEngagementScore> MediaEngagementService::GetAllStoredScores()
     const auto& origin = it.first;
     auto* const site = it.second;
 
-    std::unique_ptr<base::Value> clone =
-        base::Value::ToUniquePtrValue(site->setting_value.Clone());
+    base::Value clone = site->setting_value.Clone();
+    DCHECK(clone.is_dict());
 
-    data.push_back(MediaEngagementScore(
-        clock_, origin, base::DictionaryValue::From(std::move(clone)),
-        settings));
+    data.push_back(MediaEngagementScore(clock_, origin,
+                                        std::move(clone).TakeDict(), settings));
   }
 
   return data;

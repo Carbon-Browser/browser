@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,6 +8,7 @@
 #include "third_party/blink/renderer/core/frame/local_dom_window.h"
 #include "third_party/blink/renderer/core/html/parser/text_resource_decoder.h"
 #include "third_party/blink/renderer/core/loader/threadable_loader.h"
+#include "third_party/blink/renderer/platform/loader/fetch/fetch_initiator_type_names.h"
 #include "third_party/blink/renderer/platform/loader/fetch/resource_fetcher.h"
 
 namespace blink {
@@ -35,6 +36,8 @@ void ManifestFetcher::Start(LocalDOMWindow& window,
                                  : network::mojom::CredentialsMode::kOmit);
 
   ResourceLoaderOptions resource_loader_options(window.GetCurrentWorld());
+  resource_loader_options.initiator_info.name =
+      fetch_initiator_type_names::kLink;
   resource_loader_options.data_buffering_policy = kDoNotBufferData;
 
   loader_ = MakeGarbageCollected<ThreadableLoader>(
@@ -65,7 +68,7 @@ void ManifestFetcher::DidReceiveData(const char* data, unsigned length) {
     String encoding = response_.TextEncodingName();
     decoder_ = std::make_unique<TextResourceDecoder>(TextResourceDecoderOptions(
         TextResourceDecoderOptions::kPlainTextContent,
-        encoding.IsEmpty() ? UTF8Encoding() : WTF::TextEncoding(encoding)));
+        encoding.empty() ? UTF8Encoding() : WTF::TextEncoding(encoding)));
   }
 
   data_.Append(decoder_->Decode(data, length));

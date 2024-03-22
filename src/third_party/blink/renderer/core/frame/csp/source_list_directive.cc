@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -52,7 +52,7 @@ bool IsStyleDirective(CSPDirectiveName directive_type) {
 
 }  // namespace
 
-bool CSPSourceListAllows(
+CSPCheckResult CSPSourceListAllows(
     const network::mojom::blink::CSPSourceList& source_list,
     const network::mojom::blink::CSPSource& self_source,
     const KURL& url,
@@ -63,21 +63,30 @@ bool CSPSourceListAllows(
   // schemes, including custom schemes, must be explicitly listed in a source
   // list.
   if (source_list.allow_star) {
-    if (url.ProtocolIsInHTTPFamily() || url.ProtocolIs("ftp") ||
-        url.ProtocolIs("ws") || url.ProtocolIs("wss") ||
-        (!url.Protocol().IsEmpty() &&
-         EqualIgnoringASCIICase(url.Protocol(), self_source.scheme)))
-      return true;
+    if (url.ProtocolIsInHTTPFamily() ||
+        (!url.Protocol().empty() &&
+         EqualIgnoringASCIICase(url.Protocol(), self_source.scheme))) {
+      return CSPCheckResult::Allowed();
+    }
 
-    return HasSourceMatchInList(source_list.sources, self_source.scheme, url,
-                                redirect_status);
+    if (HasSourceMatchInList(source_list.sources, self_source.scheme, url,
+                             redirect_status)) {
+      return CSPCheckResult::Allowed();
+    }
+
+    if (url.ProtocolIs("ws") || url.ProtocolIs("wss")) {
+      return CSPCheckResult::AllowedOnlyIfWildcardMatchesWs();
+    }
+    if (url.ProtocolIs("ftp")) {
+      return CSPCheckResult::AllowedOnlyIfWildcardMatchesFtp();
+    }
   }
   if (source_list.allow_self && CSPSourceMatchesAsSelf(self_source, url)) {
-    return true;
+    return CSPCheckResult::Allowed();
   }
 
-  return HasSourceMatchInList(source_list.sources, self_source.scheme, url,
-                              redirect_status);
+  return CSPCheckResult(HasSourceMatchInList(
+      source_list.sources, self_source.scheme, url, redirect_status));
 }
 
 bool CSPSourceListAllowNonce(
@@ -121,7 +130,7 @@ bool CSPSourceListIsSelf(
 
 bool CSPSourceListIsHashOrNoncePresent(
     const network::mojom::blink::CSPSourceList& source_list) {
-  return !source_list.nonces.IsEmpty() || !source_list.hashes.IsEmpty();
+  return !source_list.nonces.empty() || !source_list.hashes.empty();
 }
 
 bool CSPSourceListAllowsURLBasedMatching(
@@ -133,16 +142,21 @@ bool CSPSourceListAllowsURLBasedMatching(
 
 bool CSPSourceListAllowAllInline(
     CSPDirectiveName directive_type,
+    ContentSecurityPolicy::InlineType inline_type,
     const network::mojom::blink::CSPSourceList& source_list) {
   if (!IsScriptDirective(directive_type) &&
       !IsStyleDirective(directive_type)) {
     return false;
   }
 
-  return source_list.allow_inline &&
-         !CSPSourceListIsHashOrNoncePresent(source_list) &&
-         (!IsScriptDirective(directive_type) ||
-          !source_list.allow_dynamic);
+  bool allow_inline = source_list.allow_inline;
+  if (inline_type ==
+      ContentSecurityPolicy::InlineType::kScriptSpeculationRules) {
+    allow_inline |= source_list.allow_inline_speculation_rules;
+  }
+
+  return allow_inline && !CSPSourceListIsHashOrNoncePresent(source_list) &&
+         (!IsScriptDirective(directive_type) || !source_list.allow_dynamic);
 }
 
 }  // namespace blink

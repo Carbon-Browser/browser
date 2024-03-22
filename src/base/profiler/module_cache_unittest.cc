@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,9 +8,11 @@
 #include <utility>
 #include <vector>
 
-#include "base/callback.h"
-#include "base/callback_helpers.h"
+#include "base/containers/adapters.h"
+#include "base/functional/callback.h"
+#include "base/functional/callback_helpers.h"
 #include "base/profiler/module_cache.h"
+#include "base/ranges/algorithm.h"
 #include "base/strings/string_piece.h"
 #include "base/test/bind.h"
 #include "build/build_config.h"
@@ -19,6 +21,11 @@
 #if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS) || BUILDFLAG(IS_ANDROID)
 #include "base/debug/proc_maps_linux.h"
 #endif
+
+// Note: The special-case IS_CHROMEOS code inside GetDebugBasenameForModule to
+// handle the interaction between that function and
+// SetProcessTitleFromCommandLine() is tested in
+// content/common/set_process_title_linux_unittest.cc due to dependency issues.
 
 namespace base {
 namespace {
@@ -94,7 +101,7 @@ const ModuleCache::Module* AddNonNativeModule(
 }
 
 #if (BUILDFLAG(IS_POSIX) && !BUILDFLAG(IS_IOS) && !defined(ARCH_CPU_ARM64)) || \
-    (BUILDFLAG(IS_FUCHSIA) && !defined(ARCH_CPU_ARM64)) || BUILDFLAG(IS_WIN)
+    BUILDFLAG(IS_FUCHSIA) || BUILDFLAG(IS_WIN)
 #define MAYBE_TEST(TestSuite, TestName) TEST(TestSuite, TestName)
 #else
 #define MAYBE_TEST(TestSuite, TestName) TEST(TestSuite, DISABLED_##TestName)
@@ -351,9 +358,8 @@ TEST(ModuleCacheTest, CheckAgainstProcMaps) {
     path_regions[region.path].push_back(&region);
 
   const auto find_last_executable_region = [](const RegionVector& regions) {
-    const auto rloc = std::find_if(
-        regions.rbegin(), regions.rend(),
-        [](const debug::MappedMemoryRegion* region) {
+    const auto rloc = base::ranges::find_if(
+        base::Reversed(regions), [](const debug::MappedMemoryRegion* region) {
           return static_cast<bool>(region->permissions &
                                    debug::MappedMemoryRegion::EXECUTE);
         });
@@ -474,11 +480,11 @@ TEST(ModuleCacheTest, UnregisterAuxiliaryModuleProvider) {
   EXPECT_EQ(nullptr, cache.GetModuleForAddress(1));
 }
 
-#if BUILDFLAG(IS_ANDROID) || BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)
-TEST(ModuleCacheTest, TransformELFModuleIDToBreakpadFormat) {
+#if BUILDFLAG(IS_ANDROID) || BUILDFLAG(IS_LINUX)
+TEST(ModuleCacheTest, TransformELFToSymbolServerFormat) {
   // See explanation for the module_id mangling in
-  // base::TransformModuleIDToBreakpadFormat implementation.
-  EXPECT_EQ(TransformModuleIDToBreakpadFormat(
+  // base::TransformModuleIDToSymbolServerFormat implementation.
+  EXPECT_EQ(TransformModuleIDToSymbolServerFormat(
                 "7F0715C286F8B16C10E4AD349CDA3B9B56C7A773"),
             "C215077FF8866CB110E4AD349CDA3B9B0");
 }

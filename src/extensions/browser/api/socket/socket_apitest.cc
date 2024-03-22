@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -23,11 +23,10 @@ IN_PROC_BROWSER_TEST_F(SocketApiTest, SocketUDPCreateGood) {
   socket_create_function->set_extension(empty_extension.get());
   socket_create_function->set_has_callback(true);
 
-  std::unique_ptr<base::Value> result(RunFunctionAndReturnSingleResult(
+  std::optional<base::Value> result(RunFunctionAndReturnSingleResult(
       socket_create_function.get(), "[\"udp\"]", browser_context()));
-  base::DictionaryValue* value = NULL;
-  ASSERT_TRUE(result->GetAsDictionary(&value));
-  absl::optional<int> socket_id = value->FindIntKey("socketId");
+  const base::Value::Dict& value = result->GetDict();
+  std::optional<int> socket_id = value.FindInt("socketId");
   ASSERT_TRUE(socket_id);
   EXPECT_GT(*socket_id, 0);
 }
@@ -41,11 +40,10 @@ IN_PROC_BROWSER_TEST_F(SocketApiTest, SocketTCPCreateGood) {
   socket_create_function->set_extension(empty_extension.get());
   socket_create_function->set_has_callback(true);
 
-  std::unique_ptr<base::Value> result(RunFunctionAndReturnSingleResult(
+  std::optional<base::Value> result(RunFunctionAndReturnSingleResult(
       socket_create_function.get(), "[\"tcp\"]", browser_context()));
-  base::DictionaryValue* value = NULL;
-  ASSERT_TRUE(result->GetAsDictionary(&value));
-  absl::optional<int> socket_id = value->FindIntKey("socketId");
+  const base::Value::Dict& value = result->GetDict();
+  std::optional<int> socket_id = value.FindInt("socketId");
   ASSERT_TRUE(socket_id);
   ASSERT_GT(*socket_id, 0);
 }
@@ -59,7 +57,7 @@ IN_PROC_BROWSER_TEST_F(SocketApiTest, GetNetworkList) {
   socket_function->set_extension(empty_extension.get());
   socket_function->set_has_callback(true);
 
-  std::unique_ptr<base::Value> result(RunFunctionAndReturnSingleResult(
+  std::optional<base::Value> result(RunFunctionAndReturnSingleResult(
       socket_function.get(), "[]", browser_context()));
 
   // If we're invoking socket tests, all we can confirm is that we have at

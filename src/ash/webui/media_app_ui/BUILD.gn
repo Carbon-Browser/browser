@@ -1,4 +1,4 @@
-# Copyright 2019 The Chromium Authors. All rights reserved.
+# Copyright 2019 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -6,7 +6,6 @@ import("//ash/webui/media_app_ui/media_app_ui.gni")
 import("//ash/webui/web_applications/system_apps.gni")
 import("//build/buildflag_header.gni")
 import("//build/config/chromeos/ui_mode.gni")
-import("//chrome/test/base/js2gtest.gni")
 import("//mojo/public/tools/bindings/mojom.gni")
 import("//third_party/closure_compiler/compile_js.gni")
 
@@ -30,10 +29,13 @@ static_library("media_app_ui") {
   deps = [
     ":mojo_bindings",
     ":mojo_bindings_js",
+    ":mojo_bindings_untrusted",
     "//ash/constants:constants",
     "//ash/webui/media_app_ui:buildflags",
     "//ash/webui/resources:media_app_bundle_resources",
     "//ash/webui/resources:media_app_resources",
+    "//ash/webui/system_apps/public:system_web_app_config",
+    "//ash/webui/system_apps/public:system_web_app_type",
     "//ash/webui/web_applications",
     "//chromeos/constants",
     "//chromeos/strings",
@@ -43,21 +45,8 @@ static_library("media_app_ui") {
     "//mojo/public/cpp/platform",
     "//third_party/blink/public/common",
     "//ui/file_manager:resources",
+    "//ui/gfx/geometry/mojom",
     "//ui/webui",
-  ]
-}
-
-js2gtest("browser_tests_js") {
-  test_type = "mojo_lite_webui"
-
-  sources = [ "test/media_app_ui_gtest_browsertest.js" ]
-
-  defines = [ "HAS_OUT_OF_PROC_TEST_RUNNER" ]
-
-  deps = [
-    ":browser_test_support",
-    "//ash/constants",
-    "//chromeos/constants",
   ]
 }
 
@@ -72,6 +61,7 @@ source_set("browser_test_support") {
 
   deps = [
     ":media_app_ui",
+    "//ash/public/cpp:cpp",
     "//ash/webui/web_applications/test:test_support",
     "//chrome/test:test_support_ui",
   ]
@@ -100,6 +90,11 @@ group("closure_compile") {
 mojom("mojo_bindings") {
   sources = [ "media_app_ui.mojom" ]
   deps = [ "//third_party/blink/public/mojom:mojom_platform" ]
+}
+
+mojom("mojo_bindings_untrusted") {
+  sources = [ "media_app_ui_untrusted.mojom" ]
+  deps = [ "//ui/gfx/geometry/mojom:mojom" ]
 }
 
 media_test_lib_closure_flags = system_app_closure_flags_strict + [
@@ -138,7 +133,6 @@ js_type_check("closure_compile_browsertests") {
   deps = [
     ":test_media_app_guest_ui_browsertest_js",
     ":test_media_app_ui_browsertest_js",
-    ":test_media_app_ui_gtest_browsertest_js",
   ]
 }
 
@@ -163,7 +157,7 @@ js_library("test_guest_query_receiver_js") {
 js_library("test_driver_js") {
   testonly = true
   sources = [ "test/driver.js" ]
-  externs_list = [ "//third_party/chaijs/externs/chai-3.5.js" ]
+  externs_list = [ "//third_party/closure_compiler/externs/chai-3.5.js" ]
   deps = [
     ":test_driver_api_js",
     "//ash/webui/media_app_ui/resources/js:launch",
@@ -174,13 +168,6 @@ js_library("test_driver_js") {
 js_library("test_worker_js") {
   testonly = true
   sources = [ "test/test_worker.js" ]
-}
-
-js_library("test_media_app_ui_gtest_browsertest_js") {
-  testonly = true
-  sources = [ "test/media_app_ui_gtest_browsertest.js" ]
-  externs_list = [ "//ash/webui/web_applications/js2gtest_support.externs.js" ]
-  deps = [ ":test_media_app_ui_browsertest_js" ]
 }
 
 js_library("test_media_app_ui_browsertest_js") {

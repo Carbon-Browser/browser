@@ -1,26 +1,23 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include "ios/chrome/browser/ui/webui/ukm_internals_ui.h"
+#import "ios/chrome/browser/ui/webui/ukm_internals_ui.h"
 
-#include "base/bind.h"
-#include "base/memory/ref_counted_memory.h"
-#include "components/metrics_services_manager/metrics_services_manager.h"
-#include "components/ukm/debug/ukm_debug_data_extractor.h"
-#include "components/ukm/ukm_service.h"
-#include "ios/chrome/browser/application_context.h"
-#include "ios/chrome/browser/browser_state/chrome_browser_state.h"
-#include "ios/chrome/browser/chrome_url_constants.h"
-#include "ios/chrome/grit/ios_resources.h"
-#include "ios/web/public/webui/url_data_source_ios.h"
-#include "ios/web/public/webui/web_ui_ios.h"
-#include "ios/web/public/webui/web_ui_ios_data_source.h"
-#include "ios/web/public/webui/web_ui_ios_message_handler.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
+#import "base/functional/bind.h"
+#import "base/memory/ref_counted_memory.h"
+#import "components/grit/ukm_resources.h"
+#import "components/grit/ukm_resources_map.h"
+#import "components/metrics_services_manager/metrics_services_manager.h"
+#import "components/ukm/debug/ukm_debug_data_extractor.h"
+#import "components/ukm/ukm_service.h"
+#import "ios/chrome/browser/shared/model/application_context/application_context.h"
+#import "ios/chrome/browser/shared/model/browser_state/chrome_browser_state.h"
+#import "ios/chrome/browser/shared/model/url/chrome_url_constants.h"
+#import "ios/web/public/webui/url_data_source_ios.h"
+#import "ios/web/public/webui/web_ui_ios.h"
+#import "ios/web/public/webui/web_ui_ios_data_source.h"
+#import "ios/web/public/webui/web_ui_ios_message_handler.h"
 
 namespace {
 
@@ -28,8 +25,8 @@ web::WebUIIOSDataSource* CreateUkmInternalsUIHTMLSource() {
   web::WebUIIOSDataSource* source =
       web::WebUIIOSDataSource::Create(kChromeUIURLKeyedMetricsHost);
 
-  source->AddResourcePath("ukm_internals.js", IDR_IOS_UKM_INTERNALS_JS);
-  source->SetDefaultResource(IDR_IOS_UKM_INTERNALS_HTML);
+  source->AddResourcePaths(base::make_span(kUkmResources, kUkmResourcesSize));
+  source->SetDefaultResource(IDR_UKM_UKM_INTERNALS_HTML);
   return source;
 }
 

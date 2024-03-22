@@ -1,409 +1,497 @@
 <?xml version="1.0" ?>
 <!DOCTYPE translationbundle>
 <translationbundle lang="fi">
-<translation id="1001534784610492198">Asennusohjelman arkistotiedosto on vioittunut tai se ei kelpaa. Lataa Carbon Browser Browser uudelleen.</translation>
+<translation id="1001534784610492198">Asennusohjelman arkistotiedosto on vioittunut tai se ei kelpaa. Lataa Carbon Browser uudelleen.</translation>
 <translation id="1026101648481255140">Jatka asennusta</translation>
-<translation id="102763973188675173">Muokkaa ja hallinnoi Carbon Browser Browsera. Päivitys on saatavilla.</translation>
-<translation id="1051826050538111504">Tietokoneellasi on haitallinen ohjelmisto. Carbon Browser Browser voi poistaa sen, palauttaa asetuksesi ja poistaa laajennukset käytöstä, jotta selaimesi toimii taas normaalisti.</translation>
+<translation id="102763973188675173">Muokkaa ja hallinnoi Carbon Browsera. Päivitys on saatavilla.</translation>
 <translation id="1065672644894730302">Asetuksiasi ei voi lukea. Kaikkia toimintoja ei voi välttämättä käyttää eikä asetuksiin tehtäviä muutoksia tallenneta.</translation>
-<translation id="1088300314857992706"><ph name="USER_EMAIL_ADDRESS" /> käytti aiemmin Carbon Browser Browsera</translation>
-<translation id="110877069173485804">Tämä on oma Carbon Browser Browsersi</translation>
-<translation id="1125124144982679672">Kuka käyttää Carbon Browser Browsera?</translation>
-<translation id="1142745911746664600">Carbon Browser Browsern päivitys epäonnistui</translation>
-<translation id="1152920704813762236">Tietoa Carbon Browser Browser-käyttöjärjestelmästä</translation>
+<translation id="1088300314857992706"><ph name="USER_EMAIL_ADDRESS" /> käytti aiemmin Carbon Browsera</translation>
+<translation id="110877069173485804">Tämä on oma Carbon Browsersi</translation>
+<translation id="1125124144982679672">Kuka käyttää Carbon Browsera?</translation>
+<translation id="1142745911746664600">Carbon Browsern päivitys epäonnistui</translation>
+<translation id="1149651794389918149">Kirjaudu Carbon Browseren. Jos haluat kirjautua tilille vain kerran, voit <ph name="GUEST_LINK_BEGIN" />käyttää laitetta vieraana<ph name="GUEST_LINK_END" />.</translation>
+<translation id="1152920704813762236">Tietoa Carbon BrowserOS:stä</translation>
 <translation id="1154147086299354128">Avaa Chr&amp;omessa</translation>
-<translation id="1178374936842835197">Jos asetus ei näy tällä sivulla, siirry <ph name="LINK_BEGIN" />
-    Carbon Browser BrowserOS Flexin asetuksiin<ph name="LINK_END" />.</translation>
+<translation id="1194807384646768652">Carbon Browser on estänyt tämän latauksen, koska tiedostotyyppiä ei ladata usein, ja se saattaa olla haitallinen</translation>
 <translation id="1203500561924088507">Kiitos asennuksesta. Selain pitää käynnistää uudelleen ennen kuin <ph name="BUNDLE_NAME" /> otetaan käyttöön.</translation>
-<translation id="1278833599417554002">Päivitä &amp;Carbon Browser Browser käynnistämällä se uudelleen</translation>
-<translation id="1302523850133262269">Odota hetki, Carbon Browser Browser asentaa uusimpia järjestelmäpäivityksiä.</translation>
-<translation id="1335640173511558774"><ph name="MANAGER" /> edellyttää, että luet ja hyväksyt seuraavat käyttöehdot ennen tämän laitteen käyttöä. Nämä ehdot eivät laajenna, muokkaa tai rajoita Carbon Browser BrowserOS Flexin ehtoja.</translation>
-<translation id="1363996462118479832">Carbon Browser Browser-käyttöjärjestelmä ei voi synkronoida dataa sisäänkirjautumisvirheen vuoksi.</translation>
-<translation id="137466361146087520">Carbon Browser Browsern betaversio</translation>
-<translation id="1399397803214730675">Tietokoneessa on jo Carbon Browser Browsern uudempi versio. Jos sovellus ei toimi, poista Carbon Browser Browser ja yritä uudelleen.</translation>
-<translation id="139993653570221430">Voit muuttaa tämän milloin tahansa Carbon Browser Browsern asetuksista. Kokeilut ovat voimassa mainosten nykyisen näyttötavan ohessa, joten et heti näe muutoksia.</translation>
-<translation id="1434626383986940139">Carbon Browser Browser Canary -sovellukset</translation>
-<translation id="1507198376417198979">Muokkaa uusi Carbon Browser Browser-profiili näköiseksesi</translation>
-<translation id="1516530951338665275">Carbon Browser Browser tarvitsee Bluetoothia jatkaakseen
+<translation id="1278833599417554002">Päivitä &amp;Carbon Browser käynnistämällä se uudelleen</translation>
+<translation id="1302523850133262269">Odota hetki, Carbon Browser asentaa uusimpia järjestelmäpäivityksiä.</translation>
+<translation id="1335640173511558774"><ph name="MANAGER" /> edellyttää, että luet ja hyväksyt seuraavat käyttöehdot ennen tämän laitteen käyttöä. Nämä ehdot eivät laajenna, muokkaa tai rajoita Carbon BrowserOS Flexin ehtoja.</translation>
+<translation id="1341711321000856656">Voit vaihtaa profiilia nähdäksesi toisen Carbon Browser-profiilin salasanat</translation>
+<translation id="1363996462118479832">Carbon Browser-käyttöjärjestelmä ei voi synkronoida dataa sisäänkirjautumisvirheen vuoksi.</translation>
+<translation id="137466361146087520">Carbon Browsern betaversio</translation>
+<translation id="1399397803214730675">Tietokoneessa on jo Carbon Browsern uudempi versio. Jos sovellus ei toimi, poista Carbon Browser ja yritä uudelleen.</translation>
+<translation id="139993653570221430">Voit muuttaa tämän milloin tahansa Carbon Browsern asetuksista. Kokeilut ovat voimassa mainosten nykyisen näyttötavan ohessa, joten et heti näe muutoksia.</translation>
+<translation id="1425903838053942728">{COUNT,plural, =0{Carbon Browsern päivitys on valmis. Voit käyttää uusinta versiota heti, kun käynnistät sovelluksen uudelleen. Sen jälkeen nykyiset välilehdet avautuvat uudelleen.}=1{Carbon Browsern päivitys on valmis. Voit käyttää uusinta versiota heti, kun käynnistät sovelluksen uudelleen. Sen jälkeen nykyiset välilehdet avautuvat uudelleen. private-ikkunaasi ei avata uudelleen.}other{Carbon Browsern päivitys on valmis. Voit käyttää uusinta versiota heti, kun käynnistät sovelluksen uudelleen. Sen jälkeen nykyiset välilehdet avautuvat uudelleen. # private-ikkunaasi ei avata uudelleen.}}</translation>
+<translation id="1434626383986940139">Carbon Browser Canary -sovellukset</translation>
+<translation id="146866447420868597">Haluatko kirjautua Carbon Browseren?</translation>
+<translation id="1492280395845991349">Viimeistele Carbon Browser-päivitys käynnistämällä se uudelleen</translation>
+<translation id="1497802159252041924">Asennusvirhe: <ph name="INSTALL_ERROR" /></translation>
+<translation id="1507198376417198979">Muokkaa uusi Carbon Browser-profiili näköiseksesi</translation>
+<translation id="1516530951338665275">Carbon Browser tarvitsee Bluetoothia jatkaakseen
  laiteparin muodostusta. <ph name="IDS_BLUETOOTH_DEVICE_CHOOSER_AUTHORIZE_BLUETOOTH_LINK" /></translation>
-<translation id="1547295885616600893">Toinen <ph name="BEGIN_LINK_CROS_OSS" />avoimen lähdekoodin ohjelmisto<ph name="END_LINK_CROS_OSS" /> tukee Carbon Browser Browser-käyttöjärjestelmää.</translation>
-<translation id="1553358976309200471">Päivitä Carbon Browser Browser</translation>
-<translation id="1583073672411044740"><ph name="EXISTING_USER" /> on jo kirjautunut tähän Carbon Browser Browser-profiiliin. Tämä luo uuden Carbon Browser Browser-profiilin: <ph name="USER_EMAIL_ADDRESS" /></translation>
-<translation id="1587223624401073077">Carbon Browser Browser käyttää kameraasi.</translation>
-<translation id="1587325591171447154"><ph name="FILE_NAME" /> on vaarallinen, joten Carbon Browser Browser on estänyt sen.</translation>
-<translation id="1597911401261118146">Jos haluat tarkistaa, ovatko salasanasi turvassa tietosuojaloukkauksilta ja muilta tietoturvaongelmilta, <ph name="BEGIN_LINK" />kirjaudu Carbon Browser Browseren<ph name="END_LINK" />.</translation>
-<translation id="1619887657840448962">Paransimme Carbon Browser Browsern turvallisuutta poistamalla käytöstä sovelluksia, joita <ph name="IDS_EXTENSION_WEB_STORE_TITLE" /> ei tarjoa ja jotka on voitu lisätä ilman lupaasi.</translation>
-<translation id="1627304841979541023"><ph name="BEGIN_BOLD" />Miten voit vaikuttaa dataasi:<ph name="END_BOLD" /> Yksityisyytesi suojaamiseksi poistamme automaattisesti yli neljä viikkoa vanhat kiinnostuksen kohteet. Kun jatkat selaamista, kiinnostuksen kohde voi näkyä listalla uudelleen. Voit myös poistaa kiinnostuksen kohteet, joita et halua Carbon Browser Browsern ottavan huomioon.</translation>
-<translation id="1628000112320670027">Ohjeita Carbon Browser Browsern käyttöön</translation>
+<translation id="1547295885616600893">Toinen <ph name="BEGIN_LINK_CROS_OSS" />avoimen lähdekoodin ohjelmisto<ph name="END_LINK_CROS_OSS" /> tukee Carbon Browser-käyttöjärjestelmää.</translation>
+<translation id="1553358976309200471">Päivitä Carbon Browser</translation>
+<translation id="1583073672411044740"><ph name="EXISTING_USER" /> on jo kirjautunut tähän Carbon Browser-profiiliin. Tämä luo uuden Carbon Browser-profiilin: <ph name="USER_EMAIL_ADDRESS" /></translation>
+<translation id="1587223624401073077">Carbon Browser käyttää kameraasi.</translation>
+<translation id="1587325591171447154"><ph name="FILE_NAME" /> on vaarallinen, joten Carbon Browser on estänyt sen.</translation>
+<translation id="1597911401261118146">Jos haluat tarkistaa, ovatko salasanasi turvassa tietosuojaloukkauksilta ja muilta tietoturvaongelmilta, <ph name="BEGIN_LINK" />kirjaudu Carbon Browseren<ph name="END_LINK" />.</translation>
+<translation id="1619887657840448962">Paransimme Carbon Browsern turvallisuutta poistamalla käytöstä sovelluksia, joita <ph name="IDS_EXTENSION_WEB_STORE_TITLE" /> ei tarjoa ja jotka on voitu lisätä ilman lupaasi.</translation>
+<translation id="1627304841979541023"><ph name="BEGIN_BOLD" />Miten voit vaikuttaa dataasi:<ph name="END_BOLD" /> Yksityisyytesi suojaamiseksi poistamme automaattisesti yli neljä viikkoa vanhat kiinnostuksen kohteet. Kun jatkat selaamista, kiinnostuksen kohde voi näkyä listalla uudelleen. Voit myös poistaa kiinnostuksen kohteet, joita et halua Carbon Browsern ottavan huomioon.</translation>
+<translation id="1628000112320670027">Ohjeita Carbon Browsern käyttöön</translation>
 <translation id="1640672724030957280">Ladataan...</translation>
-<translation id="1662146548738125461">Tietoa Carbon Browser BrowserOS Flexistä</translation>
-<translation id="1674870198290878346">Avaa linkki Carbon Browser Browsern inco&amp;gnito-ikkunassa</translation>
-<translation id="1682634494516646069">Carbon Browser Browser ei voi lukea tietohakemistoaan <ph name="USER_DATA_DIRECTORY" /> tai kirjoittaa siihen</translation>
-<translation id="1698376642261615901">Carbon Browser Browser on verkkoselain, jolla voit avata verkkosivuja ja sovelluksia salamannopeasti. Se on nopea, vakaa ja helppokäyttöinen. Selaa verkkoa turvallisemmin Carbon Browser Browsern haittaohjelma- ja tietojenkalastelusuojauksen avulla.</translation>
-<translation id="1713301662689114961">{0,plural, =1{Carbon Browser Browser käynnistetään uudelleen tunnin kuluttua}other{Carbon Browser Browser käynnistetään uudelleen # tunnin kuluttua}}</translation>
-<translation id="1734234790201236882">Carbon Browser Browser tallentaa tämän salasanan Google-tilillesi. Sinun ei tarvitse muistaa sitä.</translation>
-<translation id="1759842336958782510">Carbon Browser Browser</translation>
-<translation id="1786003790898721085">Varmista, että olet kirjautunut Carbon Browser Browseren laitteellasi (<ph name="TARGET_DEVICE_NAME" />) ja yritä sitten lähettämistä uudelleen.</translation>
-<translation id="1812689907177901597">Poistamalla tämän käytöstä voit kirjautua Google-sivustoille, esim. Gmailiin, kirjautumatta Carbon Browser Browseren.</translation>
-<translation id="1860536484129686729">Carbon Browser Browser tarvitsee oikeuden käyttää kameraasi tällä sivustolla.</translation>
-<translation id="1873233029667955273">Carbon Browser Browser ei ole oletusselain.</translation>
-<translation id="1874309113135274312">Carbon Browser Browsern betaversio (saapuva mDNS)</translation>
-<translation id="1877026089748256423">Carbon Browser Browser on vanhentunut</translation>
-<translation id="1919130412786645364">Salli Carbon Browser Browser-kirjautuminen</translation>
-<translation id="1952239763774043237">Jotta saat tulevia Carbon Browser Browsern päivityksiä, sinulla on oltava macOS 10.13 tai uudempi. Tällä tietokoneella on macOS 10.12.</translation>
+<translation id="1642309806724967937">Asetuksista riippuen Carbon Browser voi myös lähettää evästeitä ja nykyisen URL-osoitteesi</translation>
+<translation id="1662146548738125461">Tietoa Carbon BrowserOS Flexistä</translation>
+<translation id="1674870198290878346">Avaa linkki Carbon Browsern inco&amp;gnito-ikkunassa</translation>
+<translation id="1682634494516646069">Carbon Browser ei voi lukea tietohakemistoaan <ph name="USER_DATA_DIRECTORY" /> tai kirjoittaa siihen</translation>
+<translation id="1698376642261615901">Carbon Browser on verkkoselain, jolla voit avata verkkosivuja ja sovelluksia salamannopeasti. Se on nopea, vakaa ja helppokäyttöinen. Selaa verkkoa turvallisemmin Carbon Browsern haittaohjelma- ja tietojenkalastelusuojauksen avulla.</translation>
+<translation id="1713301662689114961">{0,plural, =1{Carbon Browser käynnistetään uudelleen tunnin kuluttua}other{Carbon Browser käynnistetään uudelleen # tunnin kuluttua}}</translation>
+<translation id="1734234790201236882">Carbon Browser tallentaa tämän salasanan Google-tilillesi. Sinun ei tarvitse muistaa sitä.</translation>
+<translation id="1786003790898721085">Varmista, että olet kirjautunut Carbon Browseren laitteellasi (<ph name="TARGET_DEVICE_NAME" />) ja yritä sitten lähettämistä uudelleen.</translation>
+<translation id="1812689907177901597">Poistamalla tämän käytöstä voit kirjautua Google-sivustoille, esim. Gmailiin, kirjautumatta Carbon Browseren.</translation>
+<translation id="1860536484129686729">Carbon Browser tarvitsee oikeuden käyttää kameraasi tällä sivustolla.</translation>
+<translation id="1873233029667955273">Carbon Browser ei ole oletusselain.</translation>
+<translation id="1874309113135274312">Carbon Browsern betaversio (saapuva mDNS)</translation>
+<translation id="1877026089748256423">Carbon Browser on vanhentunut</translation>
+<translation id="1919130412786645364">Salli Carbon Browser-kirjautuminen</translation>
 <translation id="1953553007165777902">Ladataan… <ph name="MINUTE" /> minuuttia jäljellä</translation>
-<translation id="2018528049276128029">Jokainen profiili sisältää omat Carbon Browser Browser-tietonsa, esim. kirjanmerkit, historian ja salasanat</translation>
+<translation id="2018528049276128029">Jokainen profiili sisältää omat Carbon Browser-tietonsa, esim. kirjanmerkit, historian ja salasanat</translation>
 <translation id="2018879682492276940">Asennus epäonnistui. Yritä uudelleen.</translation>
-<translation id="2071318482926839249">Toinen tili on jo kirjautunut sisään. Carbon Browser Browser voi luoda sinulle oman profiilin, jotta selaamisesi pysyy erillään.</translation>
-<translation id="207902854391093810">Kokeilujen aikana käyttämäsi sivustot voivat pyytää Carbon Browser Browserlta mainosten mittaamisen avulla tietoja, jotka auttavat mittaamaan sivustoilla näkyvien mainosten suoriutumista. Mainosten mittaaminen rajoittaa sivustojen välistä seurantaa siirtämällä mahdollisimman vähän tietoja sivustojen välillä.</translation>
-<translation id="2094648590148273905">Carbon Browser BrowserOS Flexin ehdot</translation>
-<translation id="2094919256425865063">Suljetaanko Carbon Browser Browser silti?</translation>
-<translation id="2106831557840787829">Toinen <ph name="BEGIN_LINK_CROS_OSS" />avoimen lähdekoodin ohjelmisto<ph name="END_LINK_CROS_OSS" /> tukee Carbon Browser BrowserOS Flexiä, kuten myös <ph name="BEGIN_LINK_LINUX_OSS" />Linux-kehitysympäristöä<ph name="END_LINK_LINUX_OSS" />.</translation>
-<translation id="2120620239521071941"><ph name="ITEMS_COUNT" /> kohdetta poistetaan pysyvästi tältä laitteelta. Jos haluat palauttaa tiedot myöhemmin, kirjaudu Carbon Browser Browseren käyttäjänä <ph name="USER_EMAIL" />.</translation>
-<translation id="2121284319307530122">Päivitä &amp;Carbon Browser Browser käynnistämällä se uudelleen</translation>
-<translation id="2123055963409958220">Auta parantamaan Carbon Browser Browsera ilmoittamalla <ph name="BEGIN_LINK" />nykyiset asetukset<ph name="END_LINK" />.</translation>
-<translation id="2131230230468101642">Yksityisyytesi suojaamiseksi poistamme automaattisesti yli neljä viikkoa vanhat kiinnostuksen kohteet. Kun jatkat selaamista, kiinnostuksen kohde voi näkyä listalla uudelleen. Voit myös poistaa kiinnostuksen kohteet, joita et halua Carbon Browser Browsern ottavan huomioon.</translation>
-<translation id="2139300032719313227">Käynnistä Carbon Browser Browser-käyttöjärjestelmä uudelleen</translation>
-<translation id="2151406531797534936">Käynnistä Carbon Browser Browser uudelleen nyt</translation>
+<translation id="2071318482926839249">Toinen tili on jo kirjautunut sisään. Carbon Browser voi luoda sinulle oman profiilin, jotta selaamisesi pysyy erillään.</translation>
+<translation id="207902854391093810">Kokeilujen aikana käyttämäsi sivustot voivat pyytää Carbon Browserlta mainosten mittaamisen avulla tietoja, jotka auttavat mittaamaan sivustoilla näkyvien mainosten suoriutumista. Mainosten mittaaminen rajoittaa sivustojen välistä seurantaa siirtämällä mahdollisimman vähän tietoja sivustojen välillä.</translation>
+<translation id="2091012649849228750">Jotta saat tulevia Carbon Browsern päivityksiä, sinulla on oltava Windows 10 tai uudempi. Tietokoneen käyttöjärjestelmä on Windows 8.</translation>
+<translation id="2094648590148273905">Carbon BrowserOS Flexin ehdot</translation>
+<translation id="2094919256425865063">Suljetaanko Carbon Browser silti?</translation>
+<translation id="2106831557840787829">Toinen <ph name="BEGIN_LINK_CROS_OSS" />avoimen lähdekoodin ohjelmisto<ph name="END_LINK_CROS_OSS" /> tukee Carbon BrowserOS Flexiä, kuten myös <ph name="BEGIN_LINK_LINUX_OSS" />Linux-kehitysympäristöä<ph name="END_LINK_LINUX_OSS" />.</translation>
+<translation id="2120620239521071941"><ph name="ITEMS_COUNT" /> kohdetta poistetaan pysyvästi tältä laitteelta. Jos haluat palauttaa tiedot myöhemmin, kirjaudu Carbon Browseren käyttäjänä <ph name="USER_EMAIL" />.</translation>
+<translation id="2121284319307530122">Päivitä &amp;Carbon Browser käynnistämällä se uudelleen</translation>
+<translation id="2123055963409958220">Auta parantamaan Carbon Browsera ilmoittamalla <ph name="BEGIN_LINK" />nykyiset asetukset<ph name="END_LINK" />.</translation>
+<translation id="2126108037660393668">Ladattua tiedostoa ei voitu vahvistaa.</translation>
+<translation id="2130870084309816036">Internetyhteyttä ei voi muodostaa. Jos käytät palomuuria, lisää <ph name="PRODUCT_EXE_NAME" /> sallittujen listalle.</translation>
+<translation id="2131230230468101642">Yksityisyytesi suojaamiseksi poistamme automaattisesti yli neljä viikkoa vanhat kiinnostuksen kohteet. Kun jatkat selaamista, kiinnostuksen kohde voi näkyä listalla uudelleen. Voit myös poistaa kiinnostuksen kohteet, joita et halua Carbon Browsern ottavan huomioon.</translation>
+<translation id="2139300032719313227">Käynnistä Carbon Browser-käyttöjärjestelmä uudelleen</translation>
+<translation id="2146761408396054429">Tämä tiedosto voi olla vaarallinen<ph name="LINE_BREAK" />Carbon Browser voi tarkistaa latauksen puolestasi, jos annat salasanan – salasana pysyy laitteellasi</translation>
+<translation id="2151406531797534936">Käynnistä Carbon Browser uudelleen nyt</translation>
 <translation id="2174917724755363426">Asennus ei ole valmis. Haluatko varmasti perua sen?</translation>
-<translation id="223889379102603431">Tietoa siitä, miten Carbon Browser Browser hallinnoi juurivarmenteitaan</translation>
-<translation id="2258103955319320201">Jos haluat pääsyn Carbon Browser Browsern selainsisältöön kaikilla laitteilla, kirjaudu sisään ja laita sitten synkronointi päälle.</translation>
-<translation id="2290014774651636340">Googlen sovellusliittymän avaimet puuttuvat. Jotkin Carbon Browser Browsern toiminnoista poistetaan käytöstä.</translation>
-<translation id="2290095356545025170">Haluatko varmasti poistaa Carbon Browser Browsern?</translation>
-<translation id="2309047409763057870">Tämä on Carbon Browser Browsern toissijainen asennus, eikä sitä voi asettaa oletusselaimeksi.</translation>
-<translation id="2345992953227471816">Carbon Browser Browser havaitsi, että näissä laajennuksissa on haittaohjelmia:</translation>
-<translation id="2348335408836342058">Carbon Browser Browser tarvitsee oikeuden käyttää kameraasi ja mikrofoniasi tällä sivustolla.</translation>
-<translation id="234869673307233423">Carbon Browser Browser ei voi tarkistaa salasanojasi. Yritä myöhemmin uudelleen.</translation>
-<translation id="235650106824528204">Työprofiilin järjestelmänvalvoja voi poistaa tämän profiilin käytön aikana luotua Carbon Browser Browser-dataa (esim. kirjanmerkit, historia, salasanat ja muut asetukset). <ph name="LEARN_MORE" /></translation>
+<translation id="2190166659037789668">Virhe päivityksiä tarkistettaessa: <ph name="UPDATE_CHECK_ERROR" />.</translation>
+<translation id="223889379102603431">Tietoa siitä, miten Carbon Browser hallinnoi juurivarmenteitaan</translation>
+<translation id="2258103955319320201">Jos haluat pääsyn Carbon Browsern selainsisältöön kaikilla laitteilla, kirjaudu sisään ja laita sitten synkronointi päälle.</translation>
+<translation id="2290014774651636340">Googlen sovellusliittymän avaimet puuttuvat. Jotkin Carbon Browsern toiminnoista poistetaan käytöstä.</translation>
+<translation id="2290095356545025170">Haluatko varmasti poistaa Carbon Browsern?</translation>
+<translation id="2298849085402457754">Jos haluat tyhjentää selausdatan vain tältä laitteelta, mutta säilyttää sen Google-tililläsi, <ph name="BEGIN_LINK" />kirjaudu ulos Carbon Browsersta<ph name="END_LINK" />.</translation>
+<translation id="2309047409763057870">Tämä on Carbon Browsern toissijainen asennus, eikä sitä voi asettaa oletusselaimeksi.</translation>
+<translation id="2345992953227471816">Carbon Browser havaitsi, että näissä laajennuksissa on haittaohjelmia:</translation>
+<translation id="2348335408836342058">Carbon Browser tarvitsee oikeuden käyttää kameraasi ja mikrofoniasi tällä sivustolla.</translation>
+<translation id="234869673307233423">Carbon Browser ei voi tarkistaa salasanojasi. Yritä myöhemmin uudelleen.</translation>
+<translation id="235650106824528204">Työprofiilin järjestelmänvalvoja voi poistaa tämän profiilin käytön aikana luotua Carbon Browser-dataa (esim. kirjanmerkit, historia, salasanat ja muut asetukset). <ph name="LEARN_MORE" /></translation>
 <translation id="2359808026110333948">Jatka</translation>
-<translation id="2401189691232800402">Carbon Browser Browser-käyttöjärjestelmä</translation>
-<translation id="2467438592969358367">Carbon Browser Browser yrittää viedä salasanojasi tiedostoon. Salli tämä kirjoittamalla Windows-salasanasi.</translation>
+<translation id="2401189691232800402">Carbon Browser-käyttöjärjestelmä</translation>
+<translation id="2409816192575564775">{NUM_DEVICES,plural, =0{Yhdellä tai useammalla Carbon Browser-laajennuksella oli pääsy yhdelle HID-laitteelle}=1{Yhdellä tai useammalla Carbon Browser-laajennuksella on pääsy yhdelle HID-laitteelle}other{Yhdellä tai useammalla Carbon Browser-laajennuksella on pääsy # HID-laitteelle}}</translation>
+<translation id="2424440923901031101">Tämä laajennus rikkoo Carbon Browser Web Storen käytäntöä ja saattaa olla vaarallinen. Poista se Carbon Browsersta, jotta se ei enää voi nähdä tai muuttaa dataasi sivustoilla, joilla vierailet, mukaan lukien henkilökohtaisia tietojasi.</translation>
+<translation id="2467438592969358367">Carbon Browser yrittää viedä salasanojasi tiedostoon. Salli tämä kirjoittamalla Windows-salasanasi.</translation>
+<translation id="2472092250898121027">Tämä laajennus sisältää haittaohjelmia, ja se ei ole turvallinen. Poista se Carbon Browsersta, jotta se ei enää voi nähdä tai muuttaa dataasi sivustoilla, joilla vierailet, mukaan lukien henkilökohtaisia tietojasi.</translation>
+<translation id="2472163211318554013">Saat eniten irti Carbon Browsersta kirjautumalla sisään</translation>
 <translation id="2485422356828889247">Poista</translation>
-<translation id="2494974097748878569">Carbon Browser Browsern Google Assistant</translation>
-<translation id="2534507159460261402">Google Pay (kopioitu Carbon Browser Browseren)</translation>
-<translation id="2559253115192232574">Sivustot, joilla käyt, voivat myöhemmin pyytää Carbon Browser Browserlta tietoa kiinnostuksen kohteistasi ja personoida näkemiäsi mainoksia. Carbon Browser Browser voi jakaa enintään kolme kiinnostuksen kohdetta.</translation>
-<translation id="2563121210305478421">Käynnistetäänkö Carbon Browser Browser uudelleen?</translation>
-<translation id="2574930892358684005"><ph name="EXISTING_USER" /> on jo kirjautunut tähän Carbon Browser Browser-profiiliin. Carbon Browser Browser voi luoda sinulle oman profiilin, jotta selaamisesi pysyy erillään.</translation>
-<translation id="2580411288591421699">Ei voi asentaa samaa Carbon Browser Browsern versiota, joka tällä hetkellä on käytössä. Sulje Carbon Browser Browser ja yritä uudelleen.</translation>
-<translation id="2586406160782125153">Selaustiedot poistetaan tältä laitteelta. Jos haluat palauttaa tiedot myöhemmin, kirjaudu Carbon Browser Browseren käyttäjänä <ph name="USER_EMAIL" />.</translation>
-<translation id="2597976513418770460">Käytä tililtä <ph name="ACCOUNT_EMAIL" /> löytyvää Carbon Browser Browser-selaimen sisältöä</translation>
-<translation id="2622559029861875898">Carbon Browser Browser ei voi tarkistaa päivityksiä. Tarkista internetyhteytesi.</translation>
-<translation id="2645435784669275700">Carbon Browser Browser-käyttöjärjestelmä</translation>
-<translation id="2652691236519827073">Avaa linkki uudella Carbon Browser Browsern välilehdellä</translation>
-<translation id="2665296953892887393">Auta parantamaan Carbon Browser Browsera lähettämällä kaatumisilmoitukset ja <ph name="UMA_LINK" /> Googlelle</translation>
-<translation id="2689103672227170538">Tämä laajennus on vaihtanut Carbon Browser Browsern aloitussivun.</translation>
-<translation id="2742320827292110288">Varoitus: Carbon Browser Browser ei voi estää laajennuksia tallentamasta selaushistoriaasi. Voit poistaa tämän laajennuksen käytöstä private-tilassa poistamalla tämän valinnan.</translation>
-<translation id="2765403129283291972">Carbon Browser Browser tarvitsee oikeuden käyttää mikrofoniasi tällä sivustolla.</translation>
+<translation id="2513154137948333830">Uudelleenkäynnistys vaaditaan: <ph name="INSTALL_SUCCESS" /></translation>
+<translation id="2534365042754120737">Datasi suojaamiseksi salli Carbon Browsern poistaa luvat sivustoilta, joilla et ole käynyt viime aikoina. Tämä ei estä ilmoituksia.</translation>
+<translation id="2534507159460261402">Google Pay (kopioitu Carbon Browseren)</translation>
+<translation id="2556847002339236023">Kun Carbon Browser on ollut käyttämättömänä <ph name="TIMEOUT_DURATION" />, organisaatiosi sulkee sen. Selausdata on poistettu. Data voi sisältää historian, automaattisen täytön ja lataukset.</translation>
+<translation id="2559253115192232574">Sivustot, joilla käyt, voivat myöhemmin pyytää Carbon Browserlta tietoa kiinnostuksen kohteistasi ja personoida näkemiäsi mainoksia. Carbon Browser voi jakaa enintään kolme kiinnostuksen kohdetta.</translation>
+<translation id="2563121210305478421">Käynnistetäänkö Carbon Browser uudelleen?</translation>
+<translation id="2569974318947988067">Carbon Browser yrittää päivittää siirtymiset HTTPS:ään</translation>
+<translation id="2574930892358684005"><ph name="EXISTING_USER" /> on jo kirjautunut tähän Carbon Browser-profiiliin. Carbon Browser voi luoda sinulle oman profiilin, jotta selaamisesi pysyy erillään.</translation>
+<translation id="2580411288591421699">Ei voi asentaa samaa Carbon Browsern versiota, joka tällä hetkellä on käytössä. Sulje Carbon Browser ja yritä uudelleen.</translation>
+<translation id="2586406160782125153">Selaustiedot poistetaan tältä laitteelta. Jos haluat palauttaa tiedot myöhemmin, kirjaudu Carbon Browseren käyttäjänä <ph name="USER_EMAIL" />.</translation>
+<translation id="2597976513418770460">Käytä tililtä <ph name="ACCOUNT_EMAIL" /> löytyvää Carbon Browser-selaimen sisältöä</translation>
+<translation id="259935314519650377">Ladatun asennusohjelman siirtäminen välimuistiin epäonnistui. Virhe: <ph name="UNPACK_CACHING_ERROR_CODE" />.</translation>
+<translation id="2622559029861875898">Carbon Browser ei voi tarkistaa päivityksiä. Tarkista internetyhteytesi.</translation>
+<translation id="2645435784669275700">Carbon Browser-käyttöjärjestelmä</translation>
+<translation id="2649768380733403658">Carbon Browser tarkistaa säännöllisesti, että selaimen asetukset ovat mahdollisimman turvalliset. Ilmoitamme, jos jotain on tarkistettava.</translation>
+<translation id="2652691236519827073">Avaa linkki uudella Carbon Browsern välilehdellä</translation>
+<translation id="2665296953892887393">Auta parantamaan Carbon Browsera lähettämällä kaatumisilmoitukset ja <ph name="UMA_LINK" /> Googlelle</translation>
+<translation id="2712234843277364121">Päivitä käynnistämällä uudelleen – Välilehdet avataan uudelleen</translation>
+<translation id="2738871930057338499">Internetyhteyden muodostaminen ei onnistu. HTTP 403 (kielletty). Tarkista välityspalvelimen asetukset.</translation>
+<translation id="2742320827292110288">Varoitus: Carbon Browser ei voi estää laajennuksia tallentamasta selaushistoriaasi. Voit poistaa tämän laajennuksen käytöstä private-tilassa poistamalla tämän valinnan.</translation>
+<translation id="2765403129283291972">Carbon Browser tarvitsee oikeuden käyttää mikrofoniasi tällä sivustolla.</translation>
 <translation id="2770231113462710648">Vaihda oletusselaimeksi:</translation>
-<translation id="2775140325783767197">Carbon Browser Browser ei voi tarkistaa salasanojasi. Tarkista internetyhteytesi.</translation>
+<translation id="2775140325783767197">Carbon Browser ei voi tarkistaa salasanojasi. Tarkista internetyhteytesi.</translation>
 <translation id="2799223571221894425">Käynnistä uudelleen</translation>
-<translation id="2847461019998147611">Näytä Carbon Browser Browser tällä kielellä</translation>
-<translation id="2857540653560290388">Käynnistetään Carbon Browser Browsera…</translation>
-<translation id="2857972467023607093">Tällä tilillä on jo Carbon Browser Browser-profiili</translation>
-<translation id="2861074815332034794">Päivitetään Carbon Browser Browsera (<ph name="PROGRESS_PERCENT" />)</translation>
-<translation id="2871893339301912279">Olet kirjautunut Carbon Browser Browseren!</translation>
+<translation id="2846251086934905009">Asennusvirhe: Asennusohjelmaa ei suoritettu loppuun. Asennus on keskeytetty.</translation>
+<translation id="2847461019998147611">Näytä Carbon Browser tällä kielellä</translation>
+<translation id="2853415089995957805">Carbon Browser esilataa sivut, joilla todennäköisesti käyt, jotta ne latautuisivat avatessa nopeammin</translation>
+<translation id="2857540653560290388">Käynnistetään Carbon Browsera…</translation>
+<translation id="2857972467023607093">Tällä tilillä on jo Carbon Browser-profiili</translation>
+<translation id="286025080868315611">Miksi Carbon Browser estää joitakin latauksia</translation>
+<translation id="2861074815332034794">Päivitetään Carbon Browsera (<ph name="PROGRESS_PERCENT" />)</translation>
+<translation id="2871893339301912279">Olet kirjautunut Carbon Browseren!</translation>
+<translation id="2876628302275096482">Lue lisää siitä, <ph name="BEGIN_LINK" />miten Carbon Browser pitää datasi yksityisenä<ph name="END_LINK" /></translation>
 <translation id="2885378588091291677">Tehtävänhallinta</translation>
-<translation id="2888126860611144412">Tietoja Carbon Browser Browsersta</translation>
+<translation id="2888126860611144412">Tietoja Carbon Browsersta</translation>
 <translation id="2915996080311180594">Uudelleenkäynnistä myöhemmin</translation>
-<translation id="2926676257163822632">Heikko salasana on helppo arvata. Carbon Browser Browser voi <ph name="BEGIN_LINK" />luoda ja muistaa vahvoja salasanoja puolestasi<ph name="END_LINK" />.</translation>
-<translation id="2926952073016206995">Carbon Browser Browser tarvitsee kameran luvan tällä sivustolla</translation>
+<translation id="2926676257163822632">Heikko salasana on helppo arvata. Carbon Browser voi <ph name="BEGIN_LINK" />luoda ja muistaa vahvoja salasanoja puolestasi<ph name="END_LINK" />.</translation>
+<translation id="2926952073016206995">Carbon Browser tarvitsee kameran luvan tällä sivustolla</translation>
 <translation id="2928420929544864228">Asennus valmis</translation>
-<translation id="2929907241665500097">Carbon Browser Browsera ei päivitetty, vaan jotain meni pieleen. <ph name="BEGIN_LINK" />Korjaa Carbon Browser Browsern päivitysongelmat ja epäonnistuneet päivitykset<ph name="END_LINK" />.</translation>
-<translation id="2969728957078202736"><ph name="PAGE_TITLE" /> – Kirjautuminen verkkoon – Carbon Browser Browser</translation>
-<translation id="3019382870990049182">Päivitä &amp;Carbon Browser BrowserOS Flex käynnistämällä se uudelleen</translation>
-<translation id="303514781271618814">Carbon Browser Browser kokeilee uusia ominaisuuksia, joiden avulla sivustot voivat tarjota saman selauskokemuksen vähemmällä datalla.</translation>
-<translation id="3037838751736561277">Carbon Browser Browser on käynnissä taustalla.</translation>
+<translation id="2929907241665500097">Carbon Browsera ei päivitetty, vaan jotain meni pieleen. <ph name="BEGIN_LINK" />Korjaa Carbon Browsern päivitysongelmat ja epäonnistuneet päivitykset<ph name="END_LINK" />.</translation>
+<translation id="2945997411976714835">Asennusvirhe: Asennusprosessin aloittaminen ei onnistunut.</translation>
+<translation id="2969728957078202736"><ph name="PAGE_TITLE" /> – Kirjautuminen verkkoon – Carbon Browser</translation>
+<translation id="3018957014024118866">Poista data myös Carbon Browsersta (<ph name="URL" />)</translation>
+<translation id="3019382870990049182">Päivitä &amp;Carbon BrowserOS Flex käynnistämällä se uudelleen</translation>
+<translation id="303514781271618814">Carbon Browser kokeilee uusia ominaisuuksia, joiden avulla sivustot voivat tarjota saman selauskokemuksen vähemmällä datalla.</translation>
+<translation id="3037838751736561277">Carbon Browser on käynnissä taustalla.</translation>
 <translation id="3038232873781883849">Asennetaan…</translation>
-<translation id="3059710691562604940">Selaussuoja on pois päältä. Carbon Browser Browser suosittelee laittamaan sen päälle.</translation>
-<translation id="3065168410429928842">Carbon Browser Browser-välilehti</translation>
-<translation id="3069821012350118710">Avaamasi sivustot muistavat tietosi, kunnes suljet Carbon Browser Browsern</translation>
-<translation id="3080151273017101988">Jätä taustaohjelmat käyntiin, kun Carbon Browser Browser suljetaan</translation>
-<translation id="3089968997497233615">Carbon Browser Browsersta on saatavillaa uusi, turvallisempi versio.</translation>
-<translation id="3100998948628680988">Nimeä Carbon Browser Browser-profiilisi</translation>
-<translation id="3103390129666310801">Tarkista <ph name="LINK_BEGIN" />Carbon Browser BrowserOS Flexin asetuksista<ph name="LINK_END" />, onko laitteesi ajan tasalla</translation>
-<translation id="3114643501466072395">Jos haluat tarkistaa, ovatko muut salasanasi turvassa tietosuojaloukkauksilta ja muilta tietoturvaongelmilta, <ph name="BEGIN_LINK" />kirjaudu Carbon Browser Browseren<ph name="END_LINK" />.</translation>
-<translation id="3140883423282498090">Muutokset tulevat voimaan, kun käynnistät Carbon Browser Browsern seuraavan kerran.</translation>
-<translation id="3149510190863420837">Carbon Browser Browser-sovellukset</translation>
-<translation id="3169523567916669830">Kokeilujen aikana voit katsella ja poistaa kiinnostuksen kohteita, joita sivustot käyttävät mainosten näyttämiseen. Carbon Browser Browser arvioi viimeaikaisen selaushistoriasi perusteella, mikä saattaisi kiinnostaa sinua.</translation>
-<translation id="3245429137663807393">Jos jaat myös Carbon Browser Browsern käyttöraportteja, avaamasi URL-osoitteet näkyvät niissä</translation>
-<translation id="3282568296779691940">Kirjaudu Carbon Browser Browseren</translation>
+<translation id="3059710691562604940">Selaussuoja on pois päältä. Carbon Browser suosittelee laittamaan sen päälle.</translation>
+<translation id="306179102415443347">Käytä Google Salasanoja nopeasti pikakuvakkeen avulla. Voit siirtää pikakuvakkeen tietokoneen aloitusnäytölle tai sovelluksien käynnistysohjelmaan.</translation>
+<translation id="3065168410429928842">Carbon Browser-välilehti</translation>
+<translation id="3080151273017101988">Jätä taustaohjelmat käyntiin, kun Carbon Browser suljetaan</translation>
+<translation id="3089968997497233615">Carbon Browsersta on saatavillaa uusi, turvallisempi versio.</translation>
+<translation id="3100998948628680988">Nimeä Carbon Browser-profiilisi</translation>
+<translation id="3112458742631356345">Carbon Browser on estänyt tämän latauksen, koska tiedostoa ei ladata usein, ja se saattaa olla haitallinen</translation>
+<translation id="3114643501466072395">Jos haluat tarkistaa, ovatko muut salasanasi turvassa tietosuojaloukkauksilta ja muilta tietoturvaongelmilta, <ph name="BEGIN_LINK" />kirjaudu Carbon Browseren<ph name="END_LINK" />.</translation>
+<translation id="3140883423282498090">Muutokset tulevat voimaan, kun käynnistät Carbon Browsern seuraavan kerran.</translation>
+<translation id="3149510190863420837">Carbon Browser-sovellukset</translation>
+<translation id="3169523567916669830">Kokeilujen aikana voit katsella ja poistaa kiinnostuksen kohteita, joita sivustot käyttävät mainosten näyttämiseen. Carbon Browser arvioi viimeaikaisen selaushistoriasi perusteella, mikä saattaisi kiinnostaa sinua.</translation>
+<translation id="3196187562065225381">Carbon Browser on estänyt tämän latauksen, koska tiedosto on haitallinen</translation>
+<translation id="3226612997184048185">Jos tallennat kirjanmerkit myös Google-tilillesi, voit seurata tuotteiden hintoja Carbon Browserssa ja saada ilmoituksen, kun hinta laskee</translation>
+<translation id="3245429137663807393">Jos jaat myös Carbon Browsern käyttöraportteja, avaamasi URL-osoitteet näkyvät niissä</translation>
+<translation id="3282568296779691940">Kirjaudu Carbon Browseren</translation>
 <translation id="3286538390144397061">Käynnistä uudelleen</translation>
-<translation id="3360895254066713204">Carbon Browser Browser Helper</translation>
-<translation id="3379938682270551431">{0,plural, =0{Carbon Browser Browser käynnistetään uudelleen nyt}=1{Carbon Browser Browser käynnistetään uudelleen 1 sekunnin kuluttua}other{Carbon Browser Browser käynnistetään uudelleen # sekunnin kuluttua.}}</translation>
-<translation id="3396977131400919238">Asennuksessa havaittiin käyttöjärjestelmävirhe. Lataa Carbon Browser Browser uudelleen.</translation>
-<translation id="3428747202529429621">Pitää sinut turvassa Carbon Browser Browserssa ja voi parantaa suojaustasi muissa Google-sovelluksissa, kun olet sisäänkirjautuneena</translation>
-<translation id="3434246496373299699">Carbon Browser Browser voi tarkistaa salasanasi, kun kirjaudut sisään Google-tililläsi.</translation>
-<translation id="3451115285585441894">Lisätään Carbon Browser Browseren...</translation>
-<translation id="345171907106878721">Lisää itsesi Carbon Browser Browseren</translation>
-<translation id="3453763134178591239">Carbon Browser Browser-käyttöjärjestelmän käyttöehdot</translation>
-<translation id="34857402635545079">Poista data myös Carbon Browser Browsersta (<ph name="URL" />)</translation>
-<translation id="3503306920980160878">Carbon Browser Browser tarvitsee oikeuden käyttää sijaintiasi, jotta se voidaan jakaa tämän sivuston kanssa.</translation>
-<translation id="3533694711092285624">Ei tallennettuja salasanoja. Carbon Browser Browser voi tarkistaa salasanasi, kun tallennat niitä.</translation>
-<translation id="3541482654983822893">Carbon Browser Browser ei voi tarkistaa salasanojasi. Yritä uudelleen 24 tunnin päästä.</translation>
-<translation id="3576528680708590453">Järjestelmänvalvojasi on määrittänyt Carbon Browser Browsern käynnistämään vaihtoehtoisen selaimen, kun <ph name="TARGET_URL_HOSTNAME" /> avataan.</translation>
-<translation id="3582972582564653026">Voit synkronoida Carbon Browser Browsern ja tehdä siitä yksilöllisemmän kaikilla laitteilla.</translation>
-<translation id="3596080736082218006">{COUNT,plural, =0{Ylläpitäjä vaatii Carbon Browser Browsern uudelleenkäynnistystä, jotta päivitys voidaan ottaa käyttöön.}=1{Ylläpitäjä vaatii Carbon Browser Browsern uudelleenkäynnistystä, jotta päivitys voidaan ottaa käyttöön. private-ikkunaasi ei avata uudelleen.}other{Ylläpitäjä vaatii Carbon Browser Browsern uudelleenkäynnistystä, jotta päivitys voidaan ottaa käyttöön. # private-ikkunaasi ei avata uudelleen.}}</translation>
-<translation id="3622797965165704966">Nyt voit helpommin käyttää Carbon Browser Browsera Google-tililläsi ja jaetuilla tietokoneilla.</translation>
-<translation id="3673813398384385993">Carbon Browser Browser havaitsi, että "<ph name="EXTENSION_NAME" />" sisältää haittaohjelmia</translation>
-<translation id="3703994572283698466">Toinen <ph name="BEGIN_LINK_CROS_OSS" />avoimen lähdekoodin ohjelmisto<ph name="END_LINK_CROS_OSS" /> tukee Carbon Browser Browser-käyttöjärjestelmää, kuten myös <ph name="BEGIN_LINK_LINUX_OSS" />Linux-kehitysympäristöä<ph name="END_LINK_LINUX_OSS" />.</translation>
-<translation id="3716540481907974026">Carbon Browser BrowserOS Flexin versio</translation>
-<translation id="3718181793972440140">Yksi kohde poistetaan pysyvästi  tältä laitteelta. Jos haluat palauttaa tiedot myöhemmin, kirjaudu Carbon Browser Browseren käyttäjänä <ph name="USER_EMAIL" />.</translation>
-<translation id="3735758079232443276">Laajennus <ph name="EXTENSION_NAME" /> on vaihtanut Carbon Browser Browsern aloitussivun.</translation>
-<translation id="3744202345691150878">Ohjeita Carbon Browser Browser-käyttöjärjestelmän käyttöön</translation>
-<translation id="3780814664026482060">Carbon Browser Browser – <ph name="PAGE_TITLE" /></translation>
-<translation id="3785324443014631273">Carbon Browser BrowserOS Flex ei voinut synkronoida tietoja kirjautumisvirheen vuoksi.</translation>
-<translation id="3795971588916395511">Carbon Browser Browser ‑käyttöjärjestelmä</translation>
-<translation id="3835168907083856002">Tämä luo uuden Carbon Browser Browser-profiilin: <ph name="USER_EMAIL_ADDRESS" /></translation>
-<translation id="386202838227397562">Sulje kaikki Carbon Browser Browser-ikkunat ja yritä uudelleen.</translation>
-<translation id="3865754807470779944">Carbon Browser Browsern versio <ph name="PRODUCT_VERSION" /> asennettu</translation>
-<translation id="3873044882194371212">Avaa linkki Carbon Browser Browsern inco&amp;gnito-ikkunassa</translation>
-<translation id="3889417619312448367">Poista Carbon Browser Browsern asennus</translation>
-<translation id="3999683152997576765">Voit tarkistaa ja poistaa kiinnostuksen kohteita, joita sivustot käyttävät mainosten näyttämiseen. Carbon Browser Browser arvioi viimeaikaisen selaushistoriasi perusteella, mikä saattaisi kiinnostaa sinua.</translation>
-<translation id="4035053306113201399">Carbon Browser Browser-käyttöjärjestelmä täytyy käynnistää uudelleen, jotta päivitys voidaan ottaa käyttöön.</translation>
+<translation id="3293912612584488930">Tee enemmän Carbon Browserlla</translation>
+<translation id="3360895254066713204">Carbon Browser Helper</translation>
+<translation id="3379938682270551431">{0,plural, =0{Carbon Browser käynnistetään uudelleen nyt}=1{Carbon Browser käynnistetään uudelleen 1 sekunnin kuluttua}other{Carbon Browser käynnistetään uudelleen # sekunnin kuluttua.}}</translation>
+<translation id="3396977131400919238">Asennuksessa havaittiin käyttöjärjestelmävirhe. Lataa Carbon Browser uudelleen.</translation>
+<translation id="3426646014273736870">Muistinsäästö nopeuttaa Carbon Browsera</translation>
+<translation id="3428747202529429621">Pitää sinut turvassa Carbon Browserssa ja voi parantaa suojaustasi muissa Google-sovelluksissa, kun olet sisäänkirjautuneena</translation>
+<translation id="3434246496373299699">Carbon Browser voi tarkistaa salasanasi, kun kirjaudut sisään Google-tililläsi.</translation>
+<translation id="3451115285585441894">Lisätään Carbon Browseren...</translation>
+<translation id="345171907106878721">Lisää itsesi Carbon Browseren</translation>
+<translation id="3453763134178591239">Carbon Browser-käyttöjärjestelmän käyttöehdot</translation>
+<translation id="3503306920980160878">Carbon Browser tarvitsee oikeuden käyttää sijaintiasi, jotta se voidaan jakaa tämän sivuston kanssa.</translation>
+<translation id="3533694711092285624">Ei tallennettuja salasanoja. Carbon Browser voi tarkistaa salasanasi, kun tallennat niitä.</translation>
+<translation id="3541482654983822893">Carbon Browser ei voi tarkistaa salasanojasi. Yritä uudelleen 24 tunnin päästä.</translation>
+<translation id="3576528680708590453">Järjestelmänvalvojasi on määrittänyt Carbon Browsern käynnistämään vaihtoehtoisen selaimen, kun <ph name="TARGET_URL_HOSTNAME" /> avataan.</translation>
+<translation id="3582972582564653026">Voit synkronoida Carbon Browsern ja tehdä siitä yksilöllisemmän kaikilla laitteilla.</translation>
+<translation id="3596080736082218006">{COUNT,plural, =0{Ylläpitäjä vaatii Carbon Browsern uudelleenkäynnistystä, jotta päivitys voidaan ottaa käyttöön.}=1{Ylläpitäjä vaatii Carbon Browsern uudelleenkäynnistystä, jotta päivitys voidaan ottaa käyttöön. private-ikkunaasi ei avata uudelleen.}other{Ylläpitäjä vaatii Carbon Browsern uudelleenkäynnistystä, jotta päivitys voidaan ottaa käyttöön. # private-ikkunaasi ei avata uudelleen.}}</translation>
+<translation id="3622797965165704966">Nyt voit helpommin käyttää Carbon Browsera Google-tililläsi ja jaetuilla tietokoneilla.</translation>
+<translation id="3635073343384702370">Carbon Browser voi tarkistaa salasanasi, kun tallennat niitä</translation>
+<translation id="3667616615096815454">Asennus ei onnistu, palvelin ei tunnista sovellusta.</translation>
+<translation id="3673813398384385993">Carbon Browser havaitsi, että "<ph name="EXTENSION_NAME" />" sisältää haittaohjelmia</translation>
+<translation id="3703994572283698466">Toinen <ph name="BEGIN_LINK_CROS_OSS" />avoimen lähdekoodin ohjelmisto<ph name="END_LINK_CROS_OSS" /> tukee Carbon Browser-käyttöjärjestelmää, kuten myös <ph name="BEGIN_LINK_LINUX_OSS" />Linux-kehitysympäristöä<ph name="END_LINK_LINUX_OSS" />.</translation>
+<translation id="3716540481907974026">Carbon BrowserOS Flexin versio</translation>
+<translation id="3718181793972440140">Yksi kohde poistetaan pysyvästi  tältä laitteelta. Jos haluat palauttaa tiedot myöhemmin, kirjaudu Carbon Browseren käyttäjänä <ph name="USER_EMAIL" />.</translation>
+<translation id="3744202345691150878">Ohjeita Carbon Browser-käyttöjärjestelmän käyttöön</translation>
+<translation id="3780814664026482060">Carbon Browser – <ph name="PAGE_TITLE" /></translation>
+<translation id="3785324443014631273">Carbon BrowserOS Flex ei voinut synkronoida tietoja kirjautumisvirheen vuoksi.</translation>
+<translation id="3795971588916395511">Carbon Browser ‑käyttöjärjestelmä</translation>
+<translation id="3809772425479558446">Carbon Browser edellyttää Windows 10:tä tai uudempaa versiota.</translation>
+<translation id="3835168907083856002">Tämä luo uuden Carbon Browser-profiilin: <ph name="USER_EMAIL_ADDRESS" /></translation>
+<translation id="386202838227397562">Sulje kaikki Carbon Browser-ikkunat ja yritä uudelleen.</translation>
+<translation id="3865754807470779944">Carbon Browsern versio <ph name="PRODUCT_VERSION" /> asennettu</translation>
+<translation id="3873044882194371212">Avaa linkki Carbon Browsern inco&amp;gnito-ikkunassa</translation>
+<translation id="3889417619312448367">Poista Carbon Browsern asennus</translation>
+<translation id="3941890832296813527">Asennusvirhe: Asennusohjelman tiedostonimi on virheellinen, tai sitä ei tueta.</translation>
+<translation id="3999683152997576765">Voit tarkistaa ja poistaa kiinnostuksen kohteita, joita sivustot käyttävät mainosten näyttämiseen. Carbon Browser arvioi viimeaikaisen selaushistoriasi perusteella, mikä saattaisi kiinnostaa sinua.</translation>
+<translation id="4035053306113201399">Carbon Browser-käyttöjärjestelmä täytyy käynnistää uudelleen, jotta päivitys voidaan ottaa käyttöön.</translation>
 <translation id="4050175100176540509">Uusimmassa versiossa on käytettävissä tärkeitä turvallisuusparannuksia ja uusia ominaisuuksia.</translation>
-<translation id="4053720452172726777">Carbon Browser Browsern muokkaaminen ja hallinta</translation>
-<translation id="4106587138345390261">Carbon Browser Browser kokeilee uusia ominaisuuksia, joiden avulla sivustot voivat tarjota saman selauskokemuksen vähemmillä tiedoilla.</translation>
-<translation id="4110895483821904099">Luo uusi Carbon Browser Browser-profiili</translation>
-<translation id="4147555960264124640">Olet kirjautumassa sisään hallinnoidulla tilillä ja antamassa tilin järjestelmänvalvojalle oikeuden hallita Carbon Browser Browser -profiiliasi. Carbon Browser Browser-tietosi, kuten sovelluksesi, kirjanmerkkisi, historiasi, salasanasi ja muut asetuksesi, yhdistetään pysyvästi käyttäjätiliin <ph name="USER_NAME" />. Voit poistaa nämä tiedot Google-tilien Hallintapaneelissa, mutta et voi liittää tietoja toiseen tiliin. <ph name="LEARN_MORE" /></translation>
+<translation id="4053720452172726777">Carbon Browsern muokkaaminen ja hallinta</translation>
+<translation id="4106587138345390261">Carbon Browser kokeilee uusia ominaisuuksia, joiden avulla sivustot voivat tarjota saman selauskokemuksen vähemmillä tiedoilla.</translation>
+<translation id="4110895483821904099">Luo uusi Carbon Browser-profiili</translation>
+<translation id="4147555960264124640">Olet kirjautumassa sisään hallinnoidulla tilillä ja antamassa tilin järjestelmänvalvojalle oikeuden hallita Carbon Browser -profiiliasi. Carbon Browser-tietosi, kuten sovelluksesi, kirjanmerkkisi, historiasi, salasanasi ja muut asetuksesi, yhdistetään pysyvästi käyttäjätiliin <ph name="USER_NAME" />. Voit poistaa nämä tiedot Google-tilien Hallintapaneelissa, mutta et voi liittää tietoja toiseen tiliin. <ph name="LEARN_MORE" /></translation>
 <translation id="4148957013307229264">Asennetaan...</translation>
-<translation id="4149882025268051530">Asennusohjelma ei pystynyt purkamaan arkistotiedostoa. Lataa Carbon Browser Browser uudelleen.</translation>
-<translation id="4191857738314598978">{0,plural, =1{Käynnistä Carbon Browser Browser uudelleen vuorokauden kuluessa}other{Käynnistä Carbon Browser Browser uudelleen # vuorokauden kuluessa}}</translation>
-<translation id="4205939740494406371">Carbon Browser Browser ei voi tarkistaa salasanojasi. Yritä uudelleen 24 tunnin kuluttua tai <ph name="BEGIN_LINK" />tarkista salasanat Google-tililtä<ph name="END_LINK" />.</translation>
+<translation id="4149882025268051530">Asennusohjelma ei pystynyt purkamaan arkistotiedostoa. Lataa Carbon Browser uudelleen.</translation>
+<translation id="4153934450158521343">Carbon Browser suljetaan ja data poistetaan pian</translation>
+<translation id="4175922240926474352">Carbon Browser on estänyt tämän latauksen, koska sivusto ei käytä suojattua yhteyttä ja tiedostoa on ehkä peukaloitu</translation>
+<translation id="4191857738314598978">{0,plural, =1{Käynnistä Carbon Browser uudelleen vuorokauden kuluessa}other{Käynnistä Carbon Browser uudelleen # vuorokauden kuluessa}}</translation>
+<translation id="4205939740494406371">Carbon Browser ei voi tarkistaa salasanojasi. Yritä uudelleen 24 tunnin kuluttua tai <ph name="BEGIN_LINK" />tarkista salasanat Google-tililtä<ph name="END_LINK" />.</translation>
 <translation id="4222932583846282852">Peruutetaan…</translation>
-<translation id="4242034826641750751">Carbon Browser Browser tarvitsee kameran ja mikrofonin luvan tällä sivustolla</translation>
-<translation id="424864128008805179">Kirjaudutaanko ulos Carbon Browser Browsersta?</translation>
-<translation id="4251615635259297716">Linkitetäänkö Carbon Browser Browser-tiedot tähän tiliin?</translation>
-<translation id="4262915912852657291"><ph name="BEGIN_BOLD" />Mitä dataa käytetään:<ph name="END_BOLD" /> Selaushistoriaasi ja listaa sivuista, joilla olet käynyt Carbon Browser Browserlla tällä laitteella</translation>
+<translation id="4242034826641750751">Carbon Browser tarvitsee kameran ja mikrofonin luvan tällä sivustolla</translation>
+<translation id="424864128008805179">Kirjaudutaanko ulos Carbon Browsersta?</translation>
+<translation id="4251615635259297716">Linkitetäänkö Carbon Browser-tiedot tähän tiliin?</translation>
+<translation id="4262915912852657291"><ph name="BEGIN_BOLD" />Mitä dataa käytetään:<ph name="END_BOLD" /> Selaushistoriaasi ja listaa sivuista, joilla olet käynyt Carbon Browserlla tällä laitteella</translation>
 <translation id="4281844954008187215">Käyttöehdot</translation>
-<translation id="4293420128516039005">Kirjaudu sisään, niin voit synkronoida Carbon Browser Browsern ja tehdä siitä yksilöllisemmän kaikilla laitteilla.</translation>
-<translation id="4328355335528187361">Carbon Browser Browsern kehittäjäversio (saapuva mDNS)</translation>
+<translation id="4293420128516039005">Kirjaudu sisään, niin voit synkronoida Carbon Browsern ja tehdä siitä yksilöllisemmän kaikilla laitteilla.</translation>
+<translation id="430327780270213103">Salli laajennuksen näyttää pääsyoikeuspyyntöjä Carbon Browser-työkalupalkissa</translation>
+<translation id="4328355335528187361">Carbon Browsern kehittäjäversio (saapuva mDNS)</translation>
 <translation id="4334294535648607276">Lataus on valmis.</translation>
-<translation id="4335235004908507846">Carbon Browser Browser voi auttaa suojaamaan sinua tietosuojaloukkauksilta, haitallisilta laajennuksilta ja muilta</translation>
-<translation id="4343195214584226067"><ph name="EXTENSION_NAME" /> on lisätty Carbon Browser Browseren</translation>
-<translation id="4384570495110188418">Carbon Browser Browser ei voi tarkistaa salasanojasi, koska et ole kirjautuneena sisään</translation>
+<translation id="4335235004908507846">Carbon Browser voi auttaa suojaamaan sinua tietosuojaloukkauksilta, haitallisilta laajennuksilta ja muilta</translation>
+<translation id="4343195214584226067"><ph name="EXTENSION_NAME" /> on lisätty Carbon Browseren</translation>
+<translation id="4384570495110188418">Carbon Browser ei voi tarkistaa salasanojasi, koska et ole kirjautuneena sisään</translation>
+<translation id="4389991535395284064">Kun selaat private-tilassa, Carbon Browser varoittaa sinua ennen kuin sivusto ladataan suojaamattomalla yhteydellä</translation>
+<translation id="4393248995085527349">Sinulla on oltava macOS 10.15 tai uudempi, jotta saat tulevia Carbon Browsern päivityksiä. Tällä tietokoneella on macOS 10.13.</translation>
 <translation id="4427306783828095590">Parannettu suojaus torjuu tietojenkalastelua ja haittaohjelmia entistä tehokkaammin</translation>
-<translation id="4450664632294415862">Carbon Browser Browser – Kirjautuminen verkkoon – <ph name="PAGE_TITLE" /></translation>
-<translation id="4458462641685292929">Toinen Carbon Browser Browser ‑prosessi on jo käynnissä. Yritä myöhemmin uudelleen.</translation>
-<translation id="4459234553906210702">Mainosten mittaamisen avulla käyttämäsi sivustot voivat pyytää Carbon Browser Browserlta tietoja, jotka auttavat mittaamaan sivustoilla näkyvien mainosten suoriutumista. Mainosten mittaaminen rajoittaa sivustojen välistä seurantaa siirtämällä mahdollisimman vähän tietoja sivustojen välillä.</translation>
-<translation id="4561051373932531560">Carbon Browser Browsern avulla voit klikata puhelinnumeroa verkossa ja soittaa siihen Skypellä!</translation>
-<translation id="4567424176335768812">Olet kirjautunut Carbon Browser Browseren tilillä <ph name="USER_EMAIL_ADDRESS" />. Nyt voit käyttää kirjanmerkkejäsi, historiaa ja muita asetuksia kaikilla laitteilla, joihin olet kirjautunut.</translation>
-<translation id="4571503333518166079">Siirry Carbon Browser Browsern ilmoitusasetuksiin</translation>
-<translation id="459622048091363950">Kun Carbon Browser Browserlla on käyttöoikeus, sivustot voivat pyytää sitä sinulta.</translation>
-<translation id="4600710005438004015">Carbon Browser Browsera ei voitu päivittää uusimpaan versioon, joten sinulta puuttuu joitakin uusia ominaisuuksia ja tietoturvakorjauksia.</translation>
-<translation id="4627412468266359539">Valinnainen: Auta parantamaan Carbon Browser BrowserOS Flexin ominaisuuksia ja suorituskykyä lähettämällä diagnostiikka- ja käyttödataa automaattisesti Googlelle.</translation>
-<translation id="4633000520311261472">Paransimme Carbon Browser Browsern turvallisuutta poistamalla käytöstä sovelluksia, joita ei löydy kohteesta <ph name="IDS_EXTENSION_WEB_STORE_TITLE" /> ja jotka on voitu lisätä ilman lupaasi.</translation>
+<translation id="4450664632294415862">Carbon Browser – Kirjautuminen verkkoon – <ph name="PAGE_TITLE" /></translation>
+<translation id="4458462641685292929">Toinen Carbon Browser ‑prosessi on jo käynnissä. Yritä myöhemmin uudelleen.</translation>
+<translation id="4459234553906210702">Mainosten mittaamisen avulla käyttämäsi sivustot voivat pyytää Carbon Browserlta tietoja, jotka auttavat mittaamaan sivustoilla näkyvien mainosten suoriutumista. Mainosten mittaaminen rajoittaa sivustojen välistä seurantaa siirtämällä mahdollisimman vähän tietoja sivustojen välillä.</translation>
+<translation id="4501471624619070934">Asentaminen epäonnistui, koska pääsyä on rajoitettu tässä maassa.</translation>
+<translation id="4561051373932531560">Carbon Browsern avulla voit klikata puhelinnumeroa verkossa ja soittaa siihen Skypellä!</translation>
+<translation id="4567424176335768812">Olet kirjautunut Carbon Browseren tilillä <ph name="USER_EMAIL_ADDRESS" />. Nyt voit käyttää kirjanmerkkejäsi, historiaa ja muita asetuksia kaikilla laitteilla, joihin olet kirjautunut.</translation>
+<translation id="4571503333518166079">Siirry Carbon Browsern ilmoitusasetuksiin</translation>
+<translation id="459622048091363950">Kun Carbon Browserlla on käyttöoikeus, sivustot voivat pyytää sitä sinulta.</translation>
+<translation id="4600710005438004015">Carbon Browsera ei voitu päivittää uusimpaan versioon, joten sinulta puuttuu joitakin uusia ominaisuuksia ja tietoturvakorjauksia.</translation>
+<translation id="4624065194742029982">Carbon Browsern private-tila</translation>
+<translation id="4627412468266359539">Valinnainen: Auta parantamaan Carbon BrowserOS Flexin ominaisuuksia ja suorituskykyä lähettämällä diagnostiikka- ja käyttödataa automaattisesti Googlelle.</translation>
+<translation id="4633000520311261472">Paransimme Carbon Browsern turvallisuutta poistamalla käytöstä sovelluksia, joita ei löydy kohteesta <ph name="IDS_EXTENSION_WEB_STORE_TITLE" /> ja jotka on voitu lisätä ilman lupaasi.</translation>
 <translation id="4680828127924988555">Peru asennus</translation>
-<translation id="469553575393225953">Jos laajennukset, sovellukset ja teemat ovat tuntemattomista lähteistä, ne voivat vahingoittaa laitetta. Carbon Browser Browser suosittelee niiden asentamista vain Carbon Browser Browser Web Storesta</translation>
-<translation id="4728575227883772061">Asennus epäonnistui tuntemattoman virheen takia. Jos Carbon Browser Browser on tällä hetkellä käynnissä, sulje ohjelma ja yritä uudelleen.</translation>
-<translation id="4747730611090640388">Carbon Browser Browser voi arvioida sinua kiinnostavia aiheita.  Sivut, joilla käyt, voivat myöhemmin pyytää Carbon Browser Browserlta tietoa kiinnostuksen kohteistasi ja personoida näkemiäsi mainoksia.</translation>
-<translation id="4754614261631455953">Carbon Browser Browser Canary (saapuva mDNS)</translation>
-<translation id="4771048833395599659">Tämä tiedosto voi olla vaarallinen, joten Carbon Browser Browser on estänyt sen.</translation>
+<translation id="469553575393225953">Jos laajennukset, sovellukset ja teemat ovat tuntemattomista lähteistä, ne voivat vahingoittaa laitetta. Carbon Browser suosittelee niiden asentamista vain Carbon Browser Web Storesta</translation>
+<translation id="4724676981607797757">Asennus epäonnistui, koska protokollaa ei tueta.</translation>
+<translation id="4728575227883772061">Asennus epäonnistui tuntemattoman virheen takia. Jos Carbon Browser on tällä hetkellä käynnissä, sulje ohjelma ja yritä uudelleen.</translation>
+<translation id="4747730611090640388">Carbon Browser voi arvioida sinua kiinnostavia aiheita.  Sivut, joilla käyt, voivat myöhemmin pyytää Carbon Browserlta tietoa kiinnostuksen kohteistasi ja personoida näkemiäsi mainoksia.</translation>
+<translation id="4754614261631455953">Carbon Browser Canary (saapuva mDNS)</translation>
+<translation id="4771048833395599659">Tämä tiedosto voi olla vaarallinen, joten Carbon Browser on estänyt sen.</translation>
 <translation id="479167709087336770">Tämä käyttää samaa oikeinkirjoituksen tarkistusta kuin Google Haku. Selaimeen kirjoittamasi teksti lähetetään Googlelle. Voit vaihtaa valintasi milloin tahansa asetuksista.</translation>
-<translation id="4842397268809523050">Carbon Browser BrowserOS Flex ei voinut synkronoida dataa, koska synkronointi ei ole käytettävissä verkkotunnuksessasi.</translation>
-<translation id="4873783916118289636">Tarkista Carbon Browser Browsern tärkeimmät yksityisyys‑ ja turvallisuusasetukset</translation>
-<translation id="4891791193823137474">Jätä Carbon Browser Browser käyntiin taustalle</translation>
-<translation id="4895437082222824641">Avaa linkki uudella Carbon Browser Browsern välilehdellä</translation>
-<translation id="4953650215774548573">Aseta Carbon Browser Browser oletusselaimeksi</translation>
-<translation id="495931528404527476">Carbon Browser Browserssa</translation>
-<translation id="4969674060580488087">Carbon Browser BrowserOS Flex ei voinut synkronoida dataa, koska tilin kirjautumistiedot ovat vanhentuneet.</translation>
-<translation id="4970761609246024540">Tervetuloa Carbon Browser Browser-profiileihin</translation>
-<translation id="4970880042055371251">Carbon Browser Browser-käyttöjärjestelmän versio</translation>
-<translation id="4970947549776831107">Carbon Browser Browser on estänyt tiedoston, koska tämäntyyppiset tiedostot ovat vaarallisia</translation>
-<translation id="4990567037958725628">Carbon Browser Browser Canary</translation>
-<translation id="5037581483200764584">Jotta saat tulevia Carbon Browser Browsern päivityksiä, sinulla on oltava macOS 10.13 tai uudempi. Tällä tietokoneella on OS X 10.11.</translation>
-<translation id="5098668839038261629">Kun tämä on päällä, sinut kirjataan ulos myös Carbon Browser Browsersta</translation>
-<translation id="5112116809696021727">Tarkista <ph name="LINK_BEGIN" />Carbon Browser Browser-käyttöjärjestelmän asetuksista<ph name="LINK_END" />, onko laitteesi ajan tasalla</translation>
-<translation id="5132929315877954718">Löydät hienoja sovelluksia, pelejä ja teemoja Carbon Browser Browserlle.</translation>
-<translation id="5139423532931106058">Muokkaa Carbon Browser Browser-profiiliasi</translation>
-<translation id="5163087008893166964">Tervetuloa Carbon Browser Browseren, uusi selainikkuna avattu</translation>
-<translation id="5170938038195470297">Profiiliasi ei voi käyttää, koska se on peräisin uudemmasta Carbon Browser Browsern versiosta. Kaikkia toimintoja ei välttämättä voi käyttää. Määritä toinen profiilihakemisto tai käytä uudempaa Carbon Browser Browsern versiota.</translation>
-<translation id="521447420733633466">Jos käytät jaettua laitetta, kaverisi ja perheenjäsenesi voivat selata verkkoa erillään ja räätälöidä Carbon Browser Browsersta juuri itselleen sopivan</translation>
-<translation id="5251420635869119124">Vierailijat voivat käyttää Carbon Browser Browsera jälkiä jättämättä.</translation>
-<translation id="5334309298019785904">Carbon Browser Browser-käyttöjärjestelmä ei voinut synkronoida dataa, koska synkronointi ei ole käytettävissä verkkotunnuksessasi.</translation>
-<translation id="5334487786912937552">Carbon Browser Browser tarvitsee tallennustilan pääsyoikeudet tiedostojen lataamiseen</translation>
-<translation id="5337648990166757586">Valinnainen: Auta parantamaan Carbon Browser Browser-käyttöjärjestelmän ominaisuuksia ja suorituskykyä lähettämällä diagnostiikka- ja käyttödataa Googlelle automaattisesti.</translation>
-<translation id="5357889879764279201">Apua Carbon Browser BrowserOS Flexin kanssa</translation>
-<translation id="5386244825306882791">Määrittää myös Carbon Browser Browsern ja omnibox-hakujen aloitussivun.</translation>
-<translation id="5394833366792865639">Jaa Carbon Browser Browser-välilehti</translation>
-<translation id="5412485296464121825">Sivustot voivat tallentaa Carbon Browser Browseren tietoja kiinnostuksen kohteistasi. Jos esimerkiksi käyt sivustolla, koska haluat ostaa kengät maratonia varten, sivusto voi määritellä maratonjuoksun sinua kiinnostavaksi aiheeksi. Jos myöhemmin käyt toisella sivustolla, jolla ilmoittaudut juoksukilpailuun, kyseinen sivusto voi näyttää sinulle mainoksen juoksukengistä kiinnostuksen kohteidesi perusteella.</translation>
-<translation id="5430073640787465221">Asetustiedostosi on virheellinen. Carbon Browser Browser ei voi palauttaa asetuksiasi.</translation>
-<translation id="5524761631371622910">Jos Carbon Browser Browser on sijoittanut sinut aktiiviseen kokeiluun satunnaisesti, selaushistoriasi vaikuttaa näkemiisi mainoksiin ja alla kuvatulla tavalla arvioituihin kiinnostuksen kohteisiin kokeilujen aikana. Yksityisyytesi suojaamiseksi Carbon Browser Browser poistaa kiinnostuksen kohteesi kuukausittain.</translation>
-<translation id="556024056938947818">Carbon Browser Browser yrittää näyttää salasanoja.</translation>
-<translation id="5566025111015594046">Carbon Browser Browser (saapuva mDNS)</translation>
-<translation id="565744775970812598"><ph name="FILE_NAME" /> voi olla vaarallinen, joten Carbon Browser Browser on estänyt sen.</translation>
-<translation id="5678190148303298925">{COUNT,plural, =0{Ylläpitäjä pyytää Carbon Browser Browsern uudelleenkäynnistystä, jotta tämä päivitys voidaan ottaa käyttöön.}=1{Ylläpitäjä pyytää Carbon Browser Browsern uudelleenkäynnistystä, jotta tämä päivitys voidaan ottaa käyttöön. private-ikkunaasi ei avata uudelleen.}other{Ylläpitäjä pyytää Carbon Browser Browsern uudelleenkäynnistystä, jotta tämä päivitys voidaan ottaa käyttöön. # private-ikkunaasi ei avata uudelleen.}}</translation>
-<translation id="5686916850681061684">Yksilöi ja ylläpidä Carbon Browser Browsera. Toimenpiteitä vaaditaan. Katso lisätiedot klikkaamalla.</translation>
+<translation id="4793679854893018356">Katso, miten Carbon Browser pitää sinut turvassa</translation>
+<translation id="4828579605166583682">Carbon Browser yrittää korvata nykyiset salasanat. Salli tämä kirjoittamalla Windows-salasanasi.</translation>
+<translation id="4842397268809523050">Carbon BrowserOS Flex ei voinut synkronoida dataa, koska synkronointi ei ole käytettävissä verkkotunnuksessasi.</translation>
+<translation id="4873783916118289636">Tarkista Carbon Browsern tärkeimmät yksityisyys‑ ja turvallisuusasetukset</translation>
+<translation id="4891791193823137474">Jätä Carbon Browser käyntiin taustalle</translation>
+<translation id="4895437082222824641">Avaa linkki uudella Carbon Browsern välilehdellä</translation>
+<translation id="492720062778050435">Carbon Browser suosittelee, että tarkistat tämän laajennukseen</translation>
+<translation id="4953650215774548573">Aseta Carbon Browser oletusselaimeksi</translation>
+<translation id="495931528404527476">Carbon Browserssa</translation>
+<translation id="4969674060580488087">Carbon BrowserOS Flex ei voinut synkronoida dataa, koska tilin kirjautumistiedot ovat vanhentuneet.</translation>
+<translation id="4970761609246024540">Tervetuloa Carbon Browser-profiileihin</translation>
+<translation id="4970880042055371251">Carbon Browser-käyttöjärjestelmän versio</translation>
+<translation id="4970947549776831107">Carbon Browser on estänyt tiedoston, koska tämäntyyppiset tiedostot ovat vaarallisia</translation>
+<translation id="4990567037958725628">Carbon Browser Canary</translation>
+<translation id="5003967926796347400">Valitse "Google Salasanat"</translation>
+<translation id="5126049312684316860">Carbon Browser esilataa enemmän sivuja, joilla todennäköisesti käyt, jotta ne latautuisivat avatessa nopeammin</translation>
+<translation id="5132929315877954718">Löydät hienoja sovelluksia, pelejä ja teemoja Carbon Browserlle.</translation>
+<translation id="5139423532931106058">Muokkaa Carbon Browser-profiiliasi</translation>
+<translation id="5163087008893166964">Tervetuloa Carbon Browseren, uusi selainikkuna avattu</translation>
+<translation id="5170938038195470297">Profiiliasi ei voi käyttää, koska se on peräisin uudemmasta Carbon Browsern versiosta. Kaikkia toimintoja ei välttämättä voi käyttää. Määritä toinen profiilihakemisto tai käytä uudempaa Carbon Browsern versiota.</translation>
+<translation id="5201744974236816379">Carbon Browser-päivitys</translation>
+<translation id="521447420733633466">Jos käytät jaettua laitetta, kaverisi ja perheenjäsenesi voivat selata verkkoa erillään ja räätälöidä Carbon Browsersta juuri itselleen sopivan</translation>
+<translation id="5239627039202700673">Käytä Carbon Browsera aina, kun klikkaat viesteissä, dokumenteissa ja muissa sovelluksissa olevia linkkejä</translation>
+<translation id="5251420635869119124">Vierailijat voivat käyttää Carbon Browsera jälkiä jättämättä.</translation>
+<translation id="5320351714793324716">Jos sallit evästeet, Carbon Browser voi käyttää niitä esilataamisen aikana</translation>
+<translation id="5334309298019785904">Carbon Browser-käyttöjärjestelmä ei voinut synkronoida dataa, koska synkronointi ei ole käytettävissä verkkotunnuksessasi.</translation>
+<translation id="5334487786912937552">Carbon Browser tarvitsee tallennustilan pääsyoikeudet tiedostojen lataamiseen</translation>
+<translation id="5337648990166757586">Valinnainen: Auta parantamaan Carbon Browser-käyttöjärjestelmän ominaisuuksia ja suorituskykyä lähettämällä diagnostiikka- ja käyttödataa Googlelle automaattisesti.</translation>
+<translation id="5357889879764279201">Apua Carbon BrowserOS Flexin kanssa</translation>
+<translation id="5368118228313795342">Lisäkoodi: <ph name="EXTRA_CODE" />.</translation>
+<translation id="5386118856456530849">Siirry Carbon Browser-version asetuksiin</translation>
+<translation id="5386244825306882791">Määrittää myös Carbon Browsern ja omnibox-hakujen aloitussivun.</translation>
+<translation id="5394833366792865639">Jaa Carbon Browser-välilehti</translation>
+<translation id="5412485296464121825">Sivustot voivat tallentaa Carbon Browseren tietoja kiinnostuksen kohteistasi. Jos esimerkiksi käyt sivustolla, koska haluat ostaa kengät maratonia varten, sivusto voi määritellä maratonjuoksun sinua kiinnostavaksi aiheeksi. Jos myöhemmin käyt toisella sivustolla, jolla ilmoittaudut juoksukilpailuun, kyseinen sivusto voi näyttää sinulle mainoksen juoksukengistä kiinnostuksen kohteidesi perusteella.</translation>
+<translation id="5430073640787465221">Asetustiedostosi on virheellinen. Carbon Browser ei voi palauttaa asetuksiasi.</translation>
+<translation id="5468572406162360320">Carbon Browser lähettää toimintasi Googlelle näiden ominaisuuksien parantamiseksi. Tarkastajat voivat lukea, käsitellä ja tehdä merkintöjä dataan.</translation>
+<translation id="5524761631371622910">Jos Carbon Browser on sijoittanut sinut aktiiviseen kokeiluun satunnaisesti, selaushistoriasi vaikuttaa näkemiisi mainoksiin ja alla kuvatulla tavalla arvioituihin kiinnostuksen kohteisiin kokeilujen aikana. Yksityisyytesi suojaamiseksi Carbon Browser poistaa kiinnostuksen kohteesi kuukausittain.</translation>
+<translation id="5530733413481476019">Carbon Browsern nopeuttaminen</translation>
+<translation id="5566025111015594046">Carbon Browser (saapuva mDNS)</translation>
+<translation id="5572786658631721382">Jos tämä on pois päältä, näet edelleen Carbon Browsern paikallisesti tarjoamia ehdotuksia</translation>
+<translation id="565744775970812598"><ph name="FILE_NAME" /> voi olla vaarallinen, joten Carbon Browser on estänyt sen.</translation>
+<translation id="5678190148303298925">{COUNT,plural, =0{Ylläpitäjä pyytää Carbon Browsern uudelleenkäynnistystä, jotta tämä päivitys voidaan ottaa käyttöön.}=1{Ylläpitäjä pyytää Carbon Browsern uudelleenkäynnistystä, jotta tämä päivitys voidaan ottaa käyttöön. private-ikkunaasi ei avata uudelleen.}other{Ylläpitäjä pyytää Carbon Browsern uudelleenkäynnistystä, jotta tämä päivitys voidaan ottaa käyttöön. # private-ikkunaasi ei avata uudelleen.}}</translation>
+<translation id="5686916850681061684">Yksilöi ja ylläpidä Carbon Browsera. Toimenpiteitä vaaditaan. Katso lisätiedot klikkaamalla.</translation>
 <translation id="5690427481109656848">Carbon X Labs</translation>
-<translation id="5715063361988620182">{SECONDS,plural, =1{Carbon Browser Browser käynnistyy uudelleen 1 sekunnin kuluttua}other{Carbon Browser Browser käynnistyy uudelleen # sekunnin kuluttua}}</translation>
-<translation id="5727531838415286053">Jos Carbon Browser Browser on sijoittanut sinut aktiiviseen kokeiluun satunnaisesti, selaushistoriasi vaikuttaa näkemiisi mainoksiin ja alla kuvatulla tavalla arvioituihin kiinnostuksen kohteisiin. Yksityisyytesi suojaamiseksi Carbon Browser Browser poistaa kiinnostuksen kohteesi kuukausittain. Kiinnostuksen kohteet päivittyvät, ellet poista niitä.</translation>
-<translation id="5736850870166430177">Jos sivusto yrittää varastaa salasanaasi tai jos lataat haitallisen tiedoston, Carbon Browser Browser voi myös lähettää Selaussuojan tarkistettavaksi URL-osoitteita, mukaan lukien osia sivujen sisällöstä</translation>
-<translation id="5756509061973259733">Tämän tilin Carbon Browser Browser-profiili on jo tällä laitteella</translation>
-<translation id="5795887333006832406"><ph name="PAGE_TITLE" /> – Carbon Browser Browser Canary</translation>
-<translation id="5804318322022881572">Carbon Browser Browsern käynnistäminen epäonnistui. Yritä uudelleen.</translation>
-<translation id="5867197326698922595">Carbon Browser Browser yrittää muuttaa salasanoja.</translation>
+<translation id="569897634095159764">Internetyhteyden muodostaminen ei onnistu. Välityspalvelin edellyttää todennusta.</translation>
+<translation id="570005089986962444">Kun tämä on päällä, Carbon Browser vapauttaa muistia ei-aktiivisilta välilehdiltä. Näin aktiiviset välilehdet ja muut sovellukset voivat käyttää enemmän tietokoneen resursseja ja Carbon Browser pysyy nopeana. Ei-aktiiviset välilehdet aktivoituvat automaattisesti, kun palaat niihin.</translation>
+<translation id="5709557627224531708">Aseta Carbon Browser oletusselaimeksi</translation>
+<translation id="5727531838415286053">Jos Carbon Browser on sijoittanut sinut aktiiviseen kokeiluun satunnaisesti, selaushistoriasi vaikuttaa näkemiisi mainoksiin ja alla kuvatulla tavalla arvioituihin kiinnostuksen kohteisiin. Yksityisyytesi suojaamiseksi Carbon Browser poistaa kiinnostuksen kohteesi kuukausittain. Kiinnostuksen kohteet päivittyvät, ellet poista niitä.</translation>
+<translation id="5736850870166430177">Jos sivusto yrittää varastaa salasanaasi tai jos lataat haitallisen tiedoston, Carbon Browser voi myös lähettää Selaussuojan tarkistettavaksi URL-osoitteita, mukaan lukien osia sivujen sisällöstä</translation>
+<translation id="5756509061973259733">Tämän tilin Carbon Browser-profiili on jo tällä laitteella</translation>
+<translation id="5795887333006832406"><ph name="PAGE_TITLE" /> – Carbon Browser Canary</translation>
+<translation id="5804318322022881572">Carbon Browsern käynnistäminen epäonnistui. Yritä uudelleen.</translation>
+<translation id="5809516625706423866">Internetyhteyden muodostaminen ei onnistu. HTTP 401 (ei lupaa). Tarkista välityspalvelimen asetukset.</translation>
+<translation id="586971344380992563"><ph name="BEGIN_LINK" />Carbon Browser varoittaa sinua<ph name="END_LINK" /> vaarallisista sivustoista ja latauksista</translation>
 <translation id="5895138241574237353">Käynnistä uudelleen</translation>
-<translation id="5901850848447342934">Kun suljet Carbon Browser Browsern, sinut <ph name="BEGIN_BOLD" />kirjataan ulos useimmilta sivustoilta<ph name="END_BOLD" />. Jos synkronointi on pois päältä, sinut <ph name="BEGIN_BOLD" />kirjataan ulos myös Googlen palveluista ja Carbon Browser Browsersta<ph name="END_BOLD" />.</translation>
 <translation id="5903106910045431592"><ph name="PAGE_TITLE" /> – Kirjautuminen verkkoon</translation>
 <translation id="5924017743176219022">Muodostetaan internetyhteyttä…</translation>
-<translation id="5940385492829620908">Tämä on verkkosi, kirjanmerkkiesi ja muun Carbon Browser Browser-sisältösi koti.</translation>
+<translation id="5932997892801542621">Kun kirjoitat osoitepalkkiin tai hakukenttään, Carbon Browser lähettää kirjoittamasi tekstin Google Driveen, niin saat parempia ehdotuksia. Tämä on poissa päältä private-tilassa.</translation>
+<translation id="5940385492829620908">Tämä on verkkosi, kirjanmerkkiesi ja muun Carbon Browser-sisältösi koti.</translation>
 <translation id="5941711191222866238">Pienennä</translation>
-<translation id="5941830788786076944">Tee Carbon Browser Browsersta oletusselain</translation>
-<translation id="5959292945051687759">Jos asetus ei näy tällä sivulla, siirry <ph name="LINK_BEGIN" />
-        Carbon Browser Browser-käyttöjärjestelmän asetuksiin<ph name="LINK_END" /></translation>
+<translation id="5941830788786076944">Tee Carbon Browsersta oletusselain</translation>
 <translation id="6003112304606738118">Ladataan… <ph name="HOURS" /> tuntia jäljellä</translation>
+<translation id="6010556343189461180">Sinulla on oltava macOS 10.15 tai uudempi, jotta saat tulevia Carbon Browsern päivityksiä. Tällä tietokoneella on macOS 10.14.</translation>
+<translation id="6014316319780893079"><ph name="BEGIN_LINK" />Carbon Browsern työkaluilla<ph name="END_LINK" /> voit selata turvallisesti ja pitää ohjat omissa käsissäsi</translation>
+<translation id="6022659036123304283">Tee Carbon Browsersta näköisesi</translation>
+<translation id="6025087594896450715">Carbon Browser käynnistyy uudelleen, kun <ph name="REMAINING_TIME" /> on kulunut</translation>
 <translation id="6040143037577758943">Sulje</translation>
-<translation id="6070348360322141662">Carbon Browser Browser lisää suojausta salaamalla tietosi</translation>
+<translation id="6070348360322141662">Carbon Browser lisää suojausta salaamalla tietosi</translation>
 <translation id="608006075545470555">Lisää työprofiili tähän selaimeen</translation>
-<translation id="6113794647360055231">Carbon Browser Browser on nyt entistä parempi</translation>
-<translation id="6145313976051292476">Avaa PDF-tiedostot Carbon Browser Browserssa</translation>
-<translation id="6169866489629082767"><ph name="PAGE_TITLE" /> - Carbon Browser Browser</translation>
-<translation id="6173637689840186878"><ph name="PAGE_TITLE" /> – Carbon Browser Browser Beta</translation>
-<translation id="6235018212288296708">Carbon Browser Browsern saapuvien yhteyksien sääntö, joka sallii mDNS-liikenteen.</translation>
+<translation id="6113794647360055231">Carbon Browser on nyt entistä parempi</translation>
+<translation id="6145313976051292476">Avaa PDF-tiedostot Carbon Browserssa</translation>
+<translation id="6155960517327665396">Muistinsäästö nopeuttaa Carbon Browsera</translation>
+<translation id="6157638032135951407">Kun Carbon Browser-data on ollut käyttämättömänä <ph name="TIMEOUT_DURATION" />, organisaatiosi poistaa sen. Data voi sisältää historian, automaattisen täytön ja lataukset.</translation>
+<translation id="6169866489629082767"><ph name="PAGE_TITLE" /> - Carbon Browser</translation>
+<translation id="6173637689840186878"><ph name="PAGE_TITLE" /> – Carbon Browser Beta</translation>
+<translation id="6182736845697986886">Asennus epäonnistui päivityspalvelimen sisäisen virheen takia.</translation>
+<translation id="6235018212288296708">Carbon Browsern saapuvien yhteyksien sääntö, joka sallii mDNS-liikenteen.</translation>
+<translation id="624230925347970731">Carbon Browser suljetaan pian</translation>
 <translation id="6247557882553405851">Googlen Salasanojen ylläpito</translation>
+<translation id="6251759518630934363">Varoittaa vaarallisista sivustoista, myös niistä, joista Google ei ole tiennyt aiemmin, analysoimalla enemmän dataa sivustoilta kuin perustason suojaus. Voit ohittaa Carbon Browsern varoitukset.</translation>
 <translation id="6273793429163604305">Paikoillanne…</translation>
-<translation id="6291089322031436445">Carbon Browser Browsern kehittäjäversion sovellukset</translation>
-<translation id="6291549208091401781">Carbon Browser Browser on jo asennettuna kaikille tietokoneen käyttäjille.</translation>
+<translation id="6277547788421725101">Vanhempasi on laittanut Carbon Browsern "Sivustojen, sovellusten ja laajennusten käyttöluvat" pois päältä</translation>
+<translation id="6291089322031436445">Carbon Browsern kehittäjäversion sovellukset</translation>
+<translation id="6291549208091401781">Carbon Browser on jo asennettuna kaikille tietokoneen käyttäjille.</translation>
+<translation id="6326175484149238433">Poista Carbon Browsersta</translation>
 <translation id="6327105987658262776">Päivityksiä ei ole saatavilla.</translation>
-<translation id="6412673304250309937">Tarkistaa URL-osoitteet Carbon Browser Browseren tallennetun vaarallisten sivustojen luettelon avulla. Jos sivusto yrittää varastaa salasanaasi tai jos lataat haitallisen tiedoston, Carbon Browser Browser voi myös lähettää Selaussuojan tarkistettavaksi URL-osoitteita, mukaan lukien osia sivujen sisällöstä.</translation>
-<translation id="6418662306461808273">Vaihdetaanko nykyiseen Carbon Browser Browser-profiiliin?</translation>
-<translation id="6506909944137591434">Carbon Browser Browser tarvitsee kameran luvan, jotta se voi luoda 3D-kartan ympäristöstäsi</translation>
-<translation id="6515495397637126556"><ph name="PAGE_TITLE" /> – Carbon Browser Browser Dev</translation>
+<translation id="6360449101159168105">Kun tämä välilehti ei ollut aktiivinen, muistia vapautettiin Carbon Browsern pitämiseksi nopeana. Voit halutessasi valita, että tämä sivusto ei ole koskaan ei-aktiivinen.</translation>
+<translation id="6412673304250309937">Tarkistaa URL-osoitteet Carbon Browseren tallennetun vaarallisten sivustojen luettelon avulla. Jos sivusto yrittää varastaa salasanaasi tai jos lataat haitallisen tiedoston, Carbon Browser voi myös lähettää Selaussuojan tarkistettavaksi URL-osoitteita, mukaan lukien osia sivujen sisällöstä.</translation>
+<translation id="6417690341895039567">{COUNT,plural, =1{Organisaatiosi sulkee Carbon Browsern automaattisesti, kun sitä ei ole käytetty 1 minuuttiin. Selausdata poistetaan. Tämä voi sisältää historian, automaattisen täytön ja lataukset.}other{Organisaatiosi sulkee Carbon Browsern automaattisesti, kun sitä ei ole käytetty # minuuttiin. Selausdata poistetaan. Tämä voi sisältää historian, automaattisen täytön ja lataukset.}}</translation>
+<translation id="6418662306461808273">Vaihdetaanko nykyiseen Carbon Browser-profiiliin?</translation>
+<translation id="648319183876919572">Parannettu selaussuoja suojaa sinua entistä paremmin vaarallisilta sivustoilta ja latauksilta</translation>
+<translation id="6493527311031785448">Carbon Browser yrittää seuraavaa: <ph name="AUTHENTICATION_PURPOSE" /></translation>
+<translation id="6497147134301593682">Carbon Browser on suljettu automaattisesti</translation>
+<translation id="6506909944137591434">Carbon Browser tarvitsee kameran luvan, jotta se voi luoda 3D-kartan ympäristöstäsi</translation>
+<translation id="6515495397637126556"><ph name="PAGE_TITLE" /> – Carbon Browser Dev</translation>
 <translation id="659498884637196217">Googlen Salasanojen ylläpidossa tällä laitteella</translation>
-<translation id="6632473616050862500">Toinen <ph name="BEGIN_LINK_CROS_OSS" />avoimen lähdekoodin ohjelmisto<ph name="END_LINK_CROS_OSS" /> tukee Carbon Browser BrowserOS Flexiä.</translation>
+<translation id="6632473616050862500">Toinen <ph name="BEGIN_LINK_CROS_OSS" />avoimen lähdekoodin ohjelmisto<ph name="END_LINK_CROS_OSS" /> tukee Carbon BrowserOS Flexiä.</translation>
 <translation id="6676384891291319759">Käytä internetiä</translation>
-<translation id="6679975945624592337">Jätä Carbon Browser Browser käyntiin taustalle</translation>
-<translation id="6696915334902295848">Carbon Browser Browser tarvitsee mikrofonin luvan tällä sivustolla</translation>
-<translation id="6735387454586646204">Carbon Browser BrowserOS Flexin järjestelmä</translation>
-<translation id="6739177684496155661">Jatketaanko uudessa Carbon Browser Browser-profiilissa?</translation>
-<translation id="6750954913813541382">Carbon Browser Browser lähettää selaimeen kirjoittamasi tekstin Googlelle kirjoitusvirheiden korjaamiseksi</translation>
-<translation id="677276454032249905">Suljetaanko Carbon Browser Browser silti?</translation>
-<translation id="6785872064505734160">Carbon Browser Browsern Google Assistant voi tehdä puolestasi verkkotoimia eri sivustoilla</translation>
-<translation id="683440813066116847">Carbon Browser Browser Canaryn saapuvien yhteyksien sääntö, joka sallii mDNS-liikenteen.</translation>
-<translation id="6881299373831449287">Päivitetään Carbon Browser Browsera</translation>
-<translation id="6885412569789873916">Carbon Browser Browsern betaversion sovellukset</translation>
-<translation id="6933858244219479645">Carbon Browser Browser-käyttöjärjestelmä</translation>
-<translation id="6943584222992551122">Käyttäjän selaustiedot poistetaan tältä laitteelta. Jos haluat palauttaa tiedot myöhemmin, kirjaudu Carbon Browser Browseren käyttäjänä <ph name="USER_EMAIL" />.</translation>
-<translation id="6967962315388095737">Carbon Browser Browsern betaversion saapuvien yhteyksien sääntö, joka sallii mDNS-liikenteen.</translation>
-<translation id="6989339256997917931">Carbon Browser Browser on päivitetty, mutta et ole käyttänyt sitä ainakaan 30 päivään.</translation>
+<translation id="6679975945624592337">Jätä Carbon Browser käyntiin taustalle</translation>
+<translation id="6696915334902295848">Carbon Browser tarvitsee mikrofonin luvan tällä sivustolla</translation>
+<translation id="6712881677154121168">Latausvirhe: <ph name="DOWNLOAD_ERROR" />.</translation>
+<translation id="6718739135284199302">Carbon Browsern nopeuttaminen</translation>
+<translation id="6735387454586646204">Carbon BrowserOS Flexin järjestelmä</translation>
+<translation id="6739177684496155661">Jatketaanko uudessa Carbon Browser-profiilissa?</translation>
+<translation id="6750954913813541382">Carbon Browser lähettää selaimeen kirjoittamasi tekstin Googlelle kirjoitusvirheiden korjaamiseksi</translation>
+<translation id="677276454032249905">Suljetaanko Carbon Browser silti?</translation>
+<translation id="6794858689789885890">Poista laitteen sivustodata aina, kun suljet Carbon Browsern</translation>
+<translation id="683440813066116847">Carbon Browser Canaryn saapuvien yhteyksien sääntö, joka sallii mDNS-liikenteen.</translation>
+<translation id="6881299373831449287">Päivitetään Carbon Browsera</translation>
+<translation id="6885412569789873916">Carbon Browsern betaversion sovellukset</translation>
+<translation id="6933858244219479645">Carbon Browser-käyttöjärjestelmä</translation>
+<translation id="6938166777909186039">Jotta saat tulevia Carbon Browsern päivityksiä, sinulla on oltava Windows 10 tai uudempi. Tietokoneen käyttöjärjestelmä on Windows 8.1.</translation>
+<translation id="6943584222992551122">Käyttäjän selaustiedot poistetaan tältä laitteelta. Jos haluat palauttaa tiedot myöhemmin, kirjaudu Carbon Browseren käyttäjänä <ph name="USER_EMAIL" />.</translation>
+<translation id="6967962315388095737">Carbon Browsern betaversion saapuvien yhteyksien sääntö, joka sallii mDNS-liikenteen.</translation>
+<translation id="6989339256997917931">Carbon Browser on päivitetty, mutta et ole käyttänyt sitä ainakaan 30 päivään.</translation>
+<translation id="7011190694940573312">Asennus epäonnistui, koska tätä käyttöjärjestelmän versiota ei tueta.</translation>
+<translation id="7024536598735240744">Purkamisvirhe: <ph name="UNPACK_ERROR" />.</translation>
 <translation id="7025789849649390912">Asennus keskeytyi.</translation>
-<translation id="7025800014283535195">Voit vaihdella Carbon Browser Browser-profiilien välillä täällä</translation>
-<translation id="7036251913954633326">Jos haluat käyttää tiliä vain tämän kerran, voit käyttää Carbon Browser Browser-selaimen <ph name="GUEST_LINK_BEGIN" />vierastilaa<ph name="GUEST_LINK_END" />. Jos haluat lisätä tilin jollekulle toiselle, <ph name="LINK_BEGIN" />lisää uusi henkilö<ph name="LINK_END" /> <ph name="DEVICE_TYPE" />‑laitteelle.
+<translation id="7025800014283535195">Voit vaihdella Carbon Browser-profiilien välillä täällä</translation>
+<translation id="7036251913954633326">Jos haluat käyttää tiliä vain tämän kerran, voit käyttää Carbon Browser-selaimen <ph name="GUEST_LINK_BEGIN" />vierastilaa<ph name="GUEST_LINK_END" />. Jos haluat lisätä tilin jollekulle toiselle, <ph name="LINK_BEGIN" />lisää uusi henkilö<ph name="LINK_END" /> <ph name="DEVICE_TYPE" />‑laitteelle.
 
 Sivustoille ja sovelluksille myöntämäsi luvat saattavat koskea tätä tiliä. Voit ylläpitää Google-tilejä <ph name="SETTINGS_LINK_BEGIN" />asetuksissa<ph name="SETTINGS_LINK_END" />.</translation>
-<translation id="7062128746136194023">Vanhempasi ovat laittaneet Carbon Browser Browsern sivustojen, sovellusten ja laajennusten käyttöluvat pois päältä. Lisäämistä (<ph name="EXTENSION_TYPE_PARAMETER" />) ei sallita.</translation>
-<translation id="7085332316435785646">Valitse, käytetäänkö Carbon Browser Browser-historiaa personoituun kokemukseen Google-palveluissa</translation>
-<translation id="7088681679121566888">Carbon Browser Browser on ajan tasalla</translation>
-<translation id="7098166902387133879">Carbon Browser Browser käyttää mikrofoniasi.</translation>
-<translation id="7099479769133613710">Päivitä &amp;Carbon Browser Browser-käyttöjärjestelmä käynnistämällä se uudelleen</translation>
-<translation id="7106741999175697885">Tehtävänhallinta - Carbon Browser Browser</translation>
-<translation id="7140653346177713799">{COUNT,plural, =0{Uusi Carbon Browser Browser-päivitys on saatavilla, ja se otetaan käyttöön uudelleenkäynnistyksen jälkeen.}=1{Uusi Carbon Browser Browser-päivitys on saatavilla, ja se otetaan käyttöön uudelleenkäynnistyksen jälkeen. private-ikkunaasi ei avata uudelleen.}other{Uusi Carbon Browser Browser-päivitys on saatavilla, ja se otetaan käyttöön uudelleenkäynnistyksen jälkeen. # private-ikkunaasi ei avata uudelleen.}}</translation>
-<translation id="7155997830309522122">Jos vaihdoit, päivitä muutos Carbon Browser Browsern tallennettuihin salasanoihin.</translation>
-<translation id="7161904924553537242">Tervetuloa Carbon Browser Browseren</translation>
-<translation id="7177959540995930968">Voit lukea lisää näistä ominaisuuksista Carbon Browser Browsern asetuksista.</translation>
-<translation id="7242029209006116544">Olet kirjautumassa sisään hallinnoidulla tilillä ja antamassa tilin järjestelmänvalvojalle oikeuden hallita Carbon Browser Browser -profiiliasi. Carbon Browser Browser-tietosi, kuten sovelluksesi, kirjanmerkkisi, historiasi, salasanasi ja muut asetuksesi, yhdistetään pysyvästi käyttäjätiliin <ph name="USER_NAME" />. Voit poistaa nämä tiedot Google-tilien Hallintapaneelissa, mutta et voi liittää tietoja toiseen tiliin. Voit myös halutessasi luoda uuden profiilin, jos haluat pitää aiemmat Carbon Browser Browser-tietosi erillään. <ph name="LEARN_MORE" /></translation>
-<translation id="7295052994004373688">Carbon Browser Browser ‑käyttöliittymä näytetään tällä kielellä</translation>
+<translation id="7071827361006050863">Selausdata poistetaan pian Carbon Browsersta</translation>
+<translation id="7085332316435785646">Valitse, käytetäänkö Carbon Browser-historiaa personoituun kokemukseen Google-palveluissa</translation>
+<translation id="7088681679121566888">Carbon Browser on ajan tasalla</translation>
+<translation id="7098166902387133879">Carbon Browser käyttää mikrofoniasi.</translation>
+<translation id="7099479769133613710">Päivitä &amp;Carbon Browser-käyttöjärjestelmä käynnistämällä se uudelleen</translation>
+<translation id="7106741999175697885">Tehtävänhallinta - Carbon Browser</translation>
+<translation id="7140653346177713799">{COUNT,plural, =0{Uusi Carbon Browser-päivitys on saatavilla, ja se otetaan käyttöön uudelleenkäynnistyksen jälkeen.}=1{Uusi Carbon Browser-päivitys on saatavilla, ja se otetaan käyttöön uudelleenkäynnistyksen jälkeen. private-ikkunaasi ei avata uudelleen.}other{Uusi Carbon Browser-päivitys on saatavilla, ja se otetaan käyttöön uudelleenkäynnistyksen jälkeen. # private-ikkunaasi ei avata uudelleen.}}</translation>
+<translation id="7155997830309522122">Jos vaihdoit, päivitä muutos Carbon Browsern tallennettuihin salasanoihin.</translation>
+<translation id="7161904924553537242">Tervetuloa Carbon Browseren</translation>
+<translation id="7177959540995930968">Voit lukea lisää näistä ominaisuuksista Carbon Browsern asetuksista.</translation>
+<translation id="7193885263065350793">Kun Carbon Browser on ollut käyttämättömänä <ph name="TIMEOUT_DURATION" />, organisaatiosi sulkee sen.</translation>
+<translation id="7242029209006116544">Olet kirjautumassa sisään hallinnoidulla tilillä ja antamassa tilin järjestelmänvalvojalle oikeuden hallita Carbon Browser -profiiliasi. Carbon Browser-tietosi, kuten sovelluksesi, kirjanmerkkisi, historiasi, salasanasi ja muut asetuksesi, yhdistetään pysyvästi käyttäjätiliin <ph name="USER_NAME" />. Voit poistaa nämä tiedot Google-tilien Hallintapaneelissa, mutta et voi liittää tietoja toiseen tiliin. Voit myös halutessasi luoda uuden profiilin, jos haluat pitää aiemmat Carbon Browser-tietosi erillään. <ph name="LEARN_MORE" /></translation>
+<translation id="7284878711178835966">Carbon Browser lähettää kirjoittaessasi osoitepalkin tai hakukentän sisällön oletushakukoneellesi</translation>
+<translation id="7295052994004373688">Carbon Browser ‑käyttöliittymä näytetään tällä kielellä</translation>
 <translation id="7296210096911315575">Tärkeää käyttö- ja turvallisuustietoa</translation>
-<translation id="7308322188646931570">Carbon Browser Browser tarvitsee tallennustilan käyttöoikeuden tiedostojen lataamiseen.</translation>
+<translation id="7308322188646931570">Carbon Browser tarvitsee tallennustilan käyttöoikeuden tiedostojen lataamiseen.</translation>
 <translation id="7339898014177206373">Uusi ikkuna</translation>
-<translation id="7388770099345495132">Jos haluat käyttää tiliä vain tämän kerran, voit käyttää Carbon Browser Browser-selaimen vierastilaa. Jos haluat lisätä tilin jollekulle toiselle, <ph name="LINK_BEGIN" />lisää uusi henkilö<ph name="LINK_END" /> <ph name="DEVICE_TYPE" />‑laitteelle.
-
-Sivustoille ja sovelluksille myöntämäsi luvat saattavat koskea tätä tiliä. Voit ylläpitää Google-tilejä <ph name="SETTINGS_LINK_BEGIN" />asetuksissa<ph name="SETTINGS_LINK_END" />.</translation>
-<translation id="7398801000654795464">Carbon Browser Browseren kirjautunut käyttäjä: <ph name="USER_EMAIL_ADDRESS" />. Kirjaudu uudelleen sisään samalla tilillä.</translation>
-<translation id="7410958280246779049">Carbon Browser Browser esti tämän tiedoston, koska se on vaarallinen</translation>
-<translation id="7426611252293106642">Carbon Browser Browser ei välttämättä toimi oikein, koska tämä Linux-jakelu ei enää tue sitä</translation>
-<translation id="7481213027396403996">Ota Carbon Browser Browsern tehokkain suojaus käyttöön</translation>
-<translation id="7486227612705979895">Carbon Browser Browser käyttää Drivea antaakseen ehdotuksia osoitepalkissa</translation>
-<translation id="7535429826459677826">Carbon Browser Browsern kehittäjäversio</translation>
+<translation id="7398801000654795464">Carbon Browseren kirjautunut käyttäjä: <ph name="USER_EMAIL_ADDRESS" />. Kirjaudu uudelleen sisään samalla tilillä.</translation>
+<translation id="7410958280246779049">Carbon Browser esti tämän tiedoston, koska se on vaarallinen</translation>
+<translation id="7412494426921990001">Valitse Carbon Browser-valikko</translation>
+<translation id="742463671275348370">{NUM_DEVICES,plural, =0{Yhdellä tai useammalla Carbon Browser-laajennuksella oli pääsy yhdelle USB-laitteelle}=1{Yhdellä tai useammalla Carbon Browser-laajennuksella on pääsy yhdelle USB-laitteelle}other{Yhdellä tai useammalla Carbon Browser-laajennuksella on pääsy # USB-laitteelle}}</translation>
+<translation id="7426611252293106642">Carbon Browser ei välttämättä toimi oikein, koska tämä Linux-jakelu ei enää tue sitä</translation>
+<translation id="7449333426561673451">{COUNT,plural, =1{Organisaatiosi sulkee Carbon Browsern automaattisesti, kun sitä ei ole käytetty 1 minuuttiin.}other{Organisaatiosi sulkee Carbon Browsern automaattisesti, kun sitä ei ole käytetty # minuuttiin.}}</translation>
+<translation id="7452987490177144319">{COUNT,plural, =1{Organisaatiosi poistaa selausdatan automaattisesti, kun Carbon Browsera ei ole käytetty 1 minuuttiin. Tämä voi sisältää historian, automaattisen täytön ja lataukset. Välilehdet pysyvät auki.}other{Organisaatiosi poistaa selausdatan automaattisesti, kun Carbon Browsera ei ole käytetty # minuuttiin. Tämä voi sisältää historian, automaattisen täytön ja lataukset. Välilehdet pysyvät auki.}}</translation>
+<translation id="7477130805345743099">Carbon Browser varoittaa sinua ennen kuin lataat sivustoja suojaamattomalla yhteydellä</translation>
+<translation id="7481213027396403996">Ota Carbon Browsern tehokkain suojaus käyttöön</translation>
+<translation id="7535429826459677826">Carbon Browsern kehittäjäversio</translation>
 <translation id="7583399374488819119">Asennusohjelma: <ph name="COMPANY_NAME" /></translation>
-<translation id="7606334485649076285">Carbon Browser BrowserOS Flex</translation>
-<translation id="7626032353295482388">Tervetuloa Carbon Browser Browseren</translation>
-<translation id="7626072681686626474"><ph name="MANAGER" /> edellyttää, että luet ja hyväksyt seuraavat käyttöehdot ennen tämän laitteen käyttöä. Nämä ehdot eivät laajenna, muokkaa tai rajoita Carbon Browser Browser ‑käyttöjärjestelmän ehtoja.</translation>
-<translation id="7629695634924605473">Carbon Browser Browser ilmoittaa sinulle, jos salasanasi ovat vaarantuneet</translation>
-<translation id="7641148173327520642">Järjestelmänvalvojasi on määrittänyt Carbon Browser Browsern avaamaan osoitteen <ph name="TARGET_URL_HOSTNAME" /> selaimella <ph name="ALTERNATIVE_BROWSER_NAME" />.</translation>
+<translation id="7606334485649076285">Carbon BrowserOS Flex</translation>
+<translation id="7626032353295482388">Tervetuloa Carbon Browseren</translation>
+<translation id="7626072681686626474"><ph name="MANAGER" /> edellyttää, että luet ja hyväksyt seuraavat käyttöehdot ennen tämän laitteen käyttöä. Nämä ehdot eivät laajenna, muokkaa tai rajoita Carbon Browser ‑käyttöjärjestelmän ehtoja.</translation>
+<translation id="7629695634924605473">Carbon Browser ilmoittaa sinulle, jos salasanasi ovat vaarantuneet</translation>
+<translation id="7641148173327520642">Järjestelmänvalvojasi on määrittänyt Carbon Browsern avaamaan osoitteen <ph name="TARGET_URL_HOSTNAME" /> selaimella <ph name="ALTERNATIVE_BROWSER_NAME" />.</translation>
 <translation id="7649070708921625228">Ohje</translation>
-<translation id="7651907282515937834">Carbon Browser Browser Enterprise ‑logo</translation>
-<translation id="7655455401911432608">Selaushistoriaasi eli tietoa sivuista, jotka olet avannut Carbon Browser Browserssa tällä laitteella</translation>
+<translation id="7651907282515937834">Carbon Browser Enterprise ‑logo</translation>
+<translation id="76531479118467370">Carbon Browser on estänyt tämän latauksen, koska laitoit Selaussuojan pois päältä eikä tiedostoa voi vahvistaa</translation>
+<translation id="7655455401911432608">Selaushistoriaasi eli tietoa sivuista, jotka olet avannut Carbon Browserssa tällä laitteella</translation>
+<translation id="769538538642757151">Carbon Browser ilmoittaa, jos jotain on tarkistettava</translation>
 <translation id="7747138024166251722">Asennusohjelma ei pystynyt luomaan väliaikaista hakemistoa. Tarkista, että käytettävissä on riittävästi levytilaa ja että sinulla on oikeus asentaa ohjelmia.</translation>
-<translation id="7761834446675418963">Avaa Carbon Browser Browser klikkaamalla nimeäsi ja aloita selaaminen.</translation>
-<translation id="7777080907402804672">Jos kuvalla ei ole hyödyllistä kuvausta, Carbon Browser Browser yrittää luoda sellaisen. Kuvat lähetetään Googlelle kuvausten luomista varten. Voit milloin tahansa poistaa tämän käytöstä asetuksissa.</translation>
-<translation id="7781002470561365167">Carbon Browser Browsern uusi versio on saatavilla.</translation>
-<translation id="778331955594035129">Carbon Browser Browser tarvitsee sijaintiluvan tällä sivustolla</translation>
-<translation id="7787950393032327779">Profiili näyttäisi olevan toisen Carbon Browser Browser -prosessin (<ph name="PROCESS_ID" />) käytössä toisella tietokoneella (<ph name="HOST_NAME" />). Carbon Browser Browser on lukinnut profiilin, jotta se ei vioitu. Jos olet varma, että mikään toinen prosessi ei käytä tätä profiilia, voit poistaa profiilin lukituksen ja käynnistää Carbon Browser Browsern uudelleen.</translation>
-<translation id="7801699035218095297">Carbon Browser Browser yrittää kopioida salasanoja. Salli tämä kirjoittamalla Windows-salasanasi.</translation>
-<translation id="7808348361785373670">Poista Carbon Browser Browsersta…</translation>
-<translation id="7825851276765848807">Asennus epäonnistui tuntemattoman virheen vuoksi. Lataa Carbon Browser Browser uudelleen.</translation>
+<translation id="7761834446675418963">Avaa Carbon Browser klikkaamalla nimeäsi ja aloita selaaminen.</translation>
+<translation id="7777080907402804672">Jos kuvalla ei ole hyödyllistä kuvausta, Carbon Browser yrittää luoda sellaisen. Kuvat lähetetään Googlelle kuvausten luomista varten. Voit milloin tahansa poistaa tämän käytöstä asetuksissa.</translation>
+<translation id="7781002470561365167">Carbon Browsern uusi versio on saatavilla.</translation>
+<translation id="778331955594035129">Carbon Browser tarvitsee sijaintiluvan tällä sivustolla</translation>
+<translation id="7787950393032327779">Profiili näyttäisi olevan toisen Carbon Browser -prosessin (<ph name="PROCESS_ID" />) käytössä toisella tietokoneella (<ph name="HOST_NAME" />). Carbon Browser on lukinnut profiilin, jotta se ei vioitu. Jos olet varma, että mikään toinen prosessi ei käytä tätä profiilia, voit poistaa profiilin lukituksen ja käynnistää Carbon Browsern uudelleen.</translation>
+<translation id="7801699035218095297">Carbon Browser yrittää kopioida salasanoja. Salli tämä kirjoittamalla Windows-salasanasi.</translation>
+<translation id="7808348361785373670">Poista Carbon Browsersta…</translation>
+<translation id="7825851276765848807">Asennus epäonnistui tuntemattoman virheen vuoksi. Lataa Carbon Browser uudelleen.</translation>
 <translation id="7845233973568007926">Kiitos asennuksesta. Tietokone pitää käynnistää uudelleen ennen kuin <ph name="BUNDLE_NAME" /> otetaan käyttöön.</translation>
 <translation id="7872446069773932638">Ladataan… <ph name="SECONDS" /> sekuntia jäljellä</translation>
-<translation id="7880591377632733558">Tervetuloa Carbon Browser Browseren, <ph name="ACCOUNT_FIRST_NAME" /></translation>
-<translation id="7890208801193284374">Jos käytät jaettua tietokonetta, kaverisi ja perheenjäsenesi voivat selata verkkoa omista profiileistaan käsin ja muokata Carbon Browser Browsersta juuri itselleen sopivan.</translation>
-<translation id="7896673875602241923">Joku on jo kirjautunut tällä tietokoneella Carbon Browser Browseren käyttäjätilillä <ph name="ACCOUNT_EMAIL_LAST" />. Luo uusi Carbon Browser Browser-käyttäjä, jos haluat pitää tiedot erillään.</translation>
-<translation id="7917876797003313048">Voit ylläpitää sisäänkirjautuneita Google-tilejäsi. Google-tilejäsi käytetään Carbon Browser Browser-selaimella, Play Kaupassa ja muualla. Jos haluat lisätä tilin jollekulle toiselle, esim. perheenjäsenelle, lisää tämän sijasta uusi henkilö laitteelle (<ph name="DEVICE_TYPE" />). <ph name="LINK_BEGIN" />Lue lisää<ph name="LINK_END" /></translation>
-<translation id="7930071585467473040">Carbon Browser Browser yrittää kopioida salasanoja.</translation>
-<translation id="7951272445806340501">Carbon Browser BrowserOS Flex täytyy käynnistää uudelleen, jotta päivitys voidaan ottaa käyttöön.</translation>
-<translation id="7962410387636238736">Tämän tietokoneen Carbon Browser Browsera ei enää päivitetä, koska Windows XP:tä ja Windows Vistaa ei enää tueta.</translation>
+<translation id="7880591377632733558">Tervetuloa Carbon Browseren, <ph name="ACCOUNT_FIRST_NAME" /></translation>
+<translation id="7890208801193284374">Jos käytät jaettua tietokonetta, kaverisi ja perheenjäsenesi voivat selata verkkoa omista profiileistaan käsin ja muokata Carbon Browsersta juuri itselleen sopivan.</translation>
+<translation id="7896673875602241923">Joku on jo kirjautunut tällä tietokoneella Carbon Browseren käyttäjätilillä <ph name="ACCOUNT_EMAIL_LAST" />. Luo uusi Carbon Browser-käyttäjä, jos haluat pitää tiedot erillään.</translation>
+<translation id="7917876797003313048">Voit ylläpitää sisäänkirjautuneita Google-tilejäsi. Google-tilejäsi käytetään Carbon Browser-selaimella, Play Kaupassa ja muualla. Jos haluat lisätä tilin jollekulle toiselle, esim. perheenjäsenelle, lisää tämän sijasta uusi henkilö laitteelle (<ph name="DEVICE_TYPE" />). <ph name="LINK_BEGIN" />Lue lisää<ph name="LINK_END" /></translation>
+<translation id="7936702483636872823">Carbon Browser on estänyt tämän latauksen, koska tiedosto on harhaanjohtava ja se voi tehdä odottamattomia muutoksia laitteellesi</translation>
+<translation id="7951272445806340501">Carbon BrowserOS Flex täytyy käynnistää uudelleen, jotta päivitys voidaan ottaa käyttöön.</translation>
+<translation id="7962368738413920945">Sivustot toimivat todennäköisesti odotetulla tavalla, mutta ne eivät muista sinua suljettuasi kaikki Carbon Browser-ikkunat</translation>
+<translation id="7962410387636238736">Tämän tietokoneen Carbon Browsera ei enää päivitetä, koska Windows XP:tä ja Windows Vistaa ei enää tueta.</translation>
 <translation id="8005666035647241369">Googlen Salasanojen ylläpitoon tällä laitteella</translation>
-<translation id="8008534537613507642">Asenna Carbon Browser Browser uudelleen</translation>
-<translation id="8013993649590906847">Jos kuvalla ei ole hyödyllistä kuvausta, Carbon Browser Browser yrittää luoda sellaisen. Kuvat lähetetään Googlelle kuvausten luomista varten.</translation>
+<translation id="8008534537613507642">Asenna Carbon Browser uudelleen</translation>
+<translation id="8009904340233602924">Käytä Carbon Browsera ilman tiliä</translation>
+<translation id="8013993649590906847">Jos kuvalla ei ole hyödyllistä kuvausta, Carbon Browser yrittää luoda sellaisen. Kuvat lähetetään Googlelle kuvausten luomista varten.</translation>
+<translation id="8019103195866286235">Kehittäjä on perunut laajennuksen julkaisun, joten se voi olla vaarallinen. Poista se Carbon Browsersta, jotta se ei enää voi nähdä tai muuttaa dataasi sivustoilla, joilla vierailet, mukaan lukien henkilökohtaisia tietojasi.</translation>
 <translation id="80471789339884597">Kiitos asennuksesta. Kaikki selaimet pitää käynnistää uudelleen ennen kuin <ph name="BUNDLE_NAME" /> otetaan käyttöön.</translation>
-<translation id="8064015586118426197">Carbon Browser BrowserOS Flex</translation>
-<translation id="808089508890593134">Google</translation>
-<translation id="8129812357326543296">Tietoja &amp;Carbon Browser Browsersta</translation>
+<translation id="8064015586118426197">Carbon BrowserOS Flex</translation>
+<translation id="8086881907087796310">Asennus epäonnistui, koska tietokoneesi ei täytä laitteiston vähimmäisvaatimuksia.</translation>
+<translation id="8129812357326543296">Tietoja &amp;Carbon Browsersta</translation>
 <translation id="813913629614996137">Käynnistetään…</translation>
-<translation id="8255190535488645436">Carbon Browser Browser käyttää kameraasi ja mikrofoniasi.</translation>
-<translation id="8270775718612349140">Carbon Browser Browsern hallinnoimat varmenteet</translation>
-<translation id="8286862437124483331">Carbon Browser Browser yrittää näyttää salasanoja. Salli tämä kirjoittamalla Windows-salasanasi.</translation>
-<translation id="828798499196665338">Vanhempasi ovat laittaneet Carbon Browser Browsern sivustojen, sovellusten ja laajennusten käyttöluvat pois päältä. Käyttöönottoa (<ph name="EXTENSION_TYPE_PARAMETER" />) ei sallita.</translation>
-<translation id="8290100596633877290">Hups! Carbon Browser Browser kaatui. Käynnistetäänkö uudelleen?</translation>
-<translation id="8342675569599923794">Tämä tiedosto on vaarallinen, joten Carbon Browser Browser on estänyt sen.</translation>
-<translation id="8349795646647783032"><ph name="BEGIN_BOLD" />Miten käytämme tätä dataa:<ph name="END_BOLD" /> Sivustot voivat tallentaa Carbon Browser Browseren tietoja kiinnostuksen kohteistasi. Jos esimerkiksi käyt sivustolla, koska haluat ostaa kengät maratonia varten, sivusto voi määritellä maratonjuoksun sinua kiinnostavaksi aiheeksi. Jos myöhemmin käyt toisella sivustolla, jolla ilmoittaudut juoksukilpailuun, kyseinen sivusto voi näyttää sinulle mainoksen juoksukengistä kiinnostuksen kohteidesi perusteella.</translation>
+<translation id="8255190535488645436">Carbon Browser käyttää kameraasi ja mikrofoniasi.</translation>
+<translation id="8267953129876836456">Carbon Browser on löytänyt turvallisuussuosituksia, jotka sinun täytyy tarkistaa</translation>
+<translation id="8270775718612349140">Carbon Browsern hallinnoimat varmenteet</translation>
+<translation id="8286862437124483331">Carbon Browser yrittää näyttää salasanoja. Salli tämä kirjoittamalla Windows-salasanasi.</translation>
+<translation id="8290100596633877290">Hups! Carbon Browser kaatui. Käynnistetäänkö uudelleen?</translation>
+<translation id="829923460755755423">Lisää pikakuvake Google Salasanoihin</translation>
+<translation id="8336463659890584292">Kun sivusto pyytää lupaa esiladata sen sivulla olevia linkkejä yksityisesti, Carbon Browser käyttää Googlen palvelimia. Henkilöllisyytesi piilotetaan esiladatulta sivustolta, mutta Google oppii, mitä sivustoja esiladataan.</translation>
+<translation id="8342675569599923794">Tämä tiedosto on vaarallinen, joten Carbon Browser on estänyt sen.</translation>
+<translation id="8349795646647783032"><ph name="BEGIN_BOLD" />Miten käytämme tätä dataa:<ph name="END_BOLD" /> Sivustot voivat tallentaa Carbon Browseren tietoja kiinnostuksen kohteistasi. Jos esimerkiksi käyt sivustolla, koska haluat ostaa kengät maratonia varten, sivusto voi määritellä maratonjuoksun sinua kiinnostavaksi aiheeksi. Jos myöhemmin käyt toisella sivustolla, jolla ilmoittaudut juoksukilpailuun, kyseinen sivusto voi näyttää sinulle mainoksen juoksukengistä kiinnostuksen kohteidesi perusteella.</translation>
 <translation id="8370517070665726704">Copyright <ph name="YEAR" /> Carbon X Labs. Kaikki oikeudet pidätetään.</translation>
-<translation id="8383226135083126309"><ph name="BEGIN_BOLD" />Miten käytämme tätä dataa:<ph name="END_BOLD" /> Carbon Browser Browser voi rakentaa kuvaa kiinnostuksen kohteistasi. Sivut, joilla käyt, voivat myöhemmin pyytää Carbon Browser Browserlta tietoa kiinnostuksen kohteistasi ja personoida näkemiäsi mainoksia.</translation>
-<translation id="8394720698884623075">Tarkistaa URL-osoitteet Carbon Browser Browseren tallennetun vaarallisten sivustojen listan avulla</translation>
-<translation id="840084489713044809">Carbon Browser Browser yrittää viedä salasanojasi tiedostoon.</translation>
-<translation id="8416347857511542594">Lue lisää mainosten personoinnista Carbon Browser Browserssa</translation>
-<translation id="8418845734693287262">Carbon Browser Browser-käyttöjärjestelmä ei voinut synkronoida dataa, koska tilin kirjautumistiedot ovat vanhentuneet.</translation>
-<translation id="8433638294851456451">Jos haluat lähettää numeron täältä Android-puhelimeesi, kirjaudu Carbon Browser Browseren molemmilla laitteilla.</translation>
-<translation id="8451192282033883849"><ph name="MANAGER_NAME" /> ylläpitää tiliäsi. Järjestelmänvalvoja voi nähdä tämän Carbon Browser Browser-selainprofiilin ja sen datan (esim. kirjanmerkit, historian ja salasanat) sekä muokata niitä.</translation>
-<translation id="8498858610309223613">Carbon Browser Browsern tärkeä tietoturvapäivitys on asennettu. Käynnistä selain uudelleen – palautamme avoimet välilehdet.</translation>
-<translation id="8504220326736535258">Carbon Browser Browser on estänyt tämän tiedoston, koska se sisältää haittaohjelmia</translation>
-<translation id="8516431725144212809">Carbon Browser Browsern arvio siitä, mitkä ovat kiinnostuksen kohteitasi</translation>
-<translation id="8521348052903287641">Carbon Browser Browsern kehittäjäversion saapuvien yhteyksien sääntö, joka sallii mDNS-liikenteen.</translation>
-<translation id="8540666473246803645">Carbon Browser Browser</translation>
+<translation id="8383226135083126309"><ph name="BEGIN_BOLD" />Miten käytämme tätä dataa:<ph name="END_BOLD" /> Carbon Browser voi rakentaa kuvaa kiinnostuksen kohteistasi. Sivut, joilla käyt, voivat myöhemmin pyytää Carbon Browserlta tietoa kiinnostuksen kohteistasi ja personoida näkemiäsi mainoksia.</translation>
+<translation id="8387459386171870978">Jatka Carbon Browsern käyttöä</translation>
+<translation id="8394720698884623075">Tarkistaa URL-osoitteet Carbon Browseren tallennetun vaarallisten sivustojen listan avulla</translation>
+<translation id="8403038600646341038">Carbon Browser-logo tietokoneen näytöllä.</translation>
+<translation id="8416347857511542594">Lue lisää mainosten personoinnista Carbon Browserssa</translation>
+<translation id="8418845734693287262">Carbon Browser-käyttöjärjestelmä ei voinut synkronoida dataa, koska tilin kirjautumistiedot ovat vanhentuneet.</translation>
+<translation id="842386925677997438">Carbon Browsern turvallisuustyökalut</translation>
+<translation id="8433638294851456451">Jos haluat lähettää numeron täältä Android-puhelimeesi, kirjaudu Carbon Browseren molemmilla laitteilla.</translation>
+<translation id="8451192282033883849"><ph name="MANAGER_NAME" /> ylläpitää tiliäsi. Järjestelmänvalvoja voi nähdä tämän Carbon Browser-selainprofiilin ja sen datan (esim. kirjanmerkit, historian ja salasanat) sekä muokata niitä.</translation>
+<translation id="8496177819998570653">Google S&amp;alasanat</translation>
+<translation id="8498858610309223613">Carbon Browsern tärkeä tietoturvapäivitys on asennettu. Käynnistä selain uudelleen – palautamme avoimet välilehdet.</translation>
+<translation id="8504220326736535258">Carbon Browser on estänyt tämän tiedoston, koska se sisältää haittaohjelmia</translation>
+<translation id="8516431725144212809">Carbon Browsern arvio siitä, mitkä ovat kiinnostuksen kohteitasi</translation>
+<translation id="8521348052903287641">Carbon Browsern kehittäjäversion saapuvien yhteyksien sääntö, joka sallii mDNS-liikenteen.</translation>
 <translation id="8550334526674375523">Tämä työprofiili on täysin erillinen henkilökohtaisesta profiilistasi.</translation>
-<translation id="8556340503434111824">Carbon Browser Browsersta on saatavissa uusi versio, joka on entistäkin nopeampi.</translation>
-<translation id="8571790202382503603">Kun käytät Carbon Browser Browser-profiileja, voit pitää kaiken Carbon Browser Browser-sisällön erillään. Näin työ ja hauskanpito on helpompi erottaa toisistaan.</translation>
-<translation id="8614913330719544658">Carbon Browser Browser ei vastaa. Käynnistetäänkö uudelleen?</translation>
-<translation id="861702415419836452">Carbon Browser Browser tarvitsee luvan käyttää kameraasi ympäristön 3D-kartoittamiseen</translation>
-<translation id="8625237574518804553">{0,plural, =1{Carbon Browser Browser käynnistetään uudelleen 1 minuutin kuluttua}other{Carbon Browser Browser käynnistetään uudelleen # minuutin kuluttua.}}</translation>
-<translation id="8629311577791198377">Kun suljet kaikki Carbon Browser Browser-ikkunat, evästeet ja sivustodata tyhjennetään automaattisesti</translation>
-<translation id="8641606876632989680">Carbon Browser Browser ilmoittaa, kun kirjaudut sisään vaarantuneella salasanalla</translation>
-<translation id="8649026945479135076">On tavallista, että avaamasi sivustot muistavat sinua kiinnostavat asiat personoidakseen käyttökokemustasi. Sivustot voivat myös tallentaa Carbon Browser Browseren tietoja kiinnostuksen kohteistasi.</translation>
-<translation id="8669527147644353129">Carbon Browser Browser Helper</translation>
-<translation id="8679801911857917785">Määrittää myös Carbon Browser Browsern aloitussivun.</translation>
-<translation id="8684875378076460854">Carbon Browser Browser suosittelee tiedoston skannaamista, koska se voi olla vaarallinen</translation>
-<translation id="8686817260976772516">Kun käytät Carbon Browser Browser-profiileja, voit pitää kaiken Carbon Browser Browser-sisällön erillään. Luo profiileja kavereita ja perhettä varten tai tee ero työn ja hauskanpidon välille.</translation>
-<translation id="8712767363896337380">Melkein ajan tasalla. Viimeistele päivitys käynnistämällä Carbon Browser Browser uudelleen.</translation>
-<translation id="873133009373065397">Carbon Browser Browser ei voi tunnistaa tai asettaa oletusselainta.</translation>
-<translation id="8823341990149967727">Carbon Browser Browser on vanhentunut</translation>
-<translation id="8825634023950448068">Yksityisyytesi suojaamiseksi poistamme automaattisesti yli neljä viikkoa vanhat kiinnostuksen kohteet. Kun jatkat selaamista, kiinnostuksen kohde voi näkyä listalla uudelleen. Jos Carbon Browser Browsern arvio menee pieleen tai jos et halua nähdä tiettyjä mainoksia, voit poistaa tietyn kiinnostuksen kohteen.</translation>
-<translation id="8834965163890861871">Carbon Browser Browser yrittää muuttaa salasanoja. Salli tämä kirjoittamalla Windows-salasanasi.</translation>
-<translation id="884296878221830158">Määrittää myös Carbon Browser Browsern aloitussivun ja Etusivu-painikkeella avattavan sivun.</translation>
+<translation id="8555465886620020932">Palveluvirhe: <ph name="SERVICE_ERROR" />.</translation>
+<translation id="8556340503434111824">Carbon Browsersta on saatavissa uusi versio, joka on entistäkin nopeampi.</translation>
+<translation id="8571790202382503603">Kun käytät Carbon Browser-profiileja, voit pitää kaiken Carbon Browser-sisällön erillään. Näin työ ja hauskanpito on helpompi erottaa toisistaan.</translation>
+<translation id="8614913330719544658">Carbon Browser ei vastaa. Käynnistetäänkö uudelleen?</translation>
+<translation id="861702415419836452">Carbon Browser tarvitsee luvan käyttää kameraasi ympäristön 3D-kartoittamiseen</translation>
+<translation id="8625237574518804553">{0,plural, =1{Carbon Browser käynnistetään uudelleen 1 minuutin kuluttua}other{Carbon Browser käynnistetään uudelleen # minuutin kuluttua.}}</translation>
+<translation id="8641606876632989680">Carbon Browser ilmoittaa, kun kirjaudut sisään vaarantuneella salasanalla</translation>
+<translation id="8649026945479135076">On tavallista, että avaamasi sivustot muistavat sinua kiinnostavat asiat personoidakseen käyttökokemustasi. Sivustot voivat myös tallentaa Carbon Browseren tietoja kiinnostuksen kohteistasi.</translation>
+<translation id="8669527147644353129">Carbon Browser Helper</translation>
+<translation id="8679801911857917785">Määrittää myös Carbon Browsern aloitussivun.</translation>
+<translation id="8686817260976772516">Kun käytät Carbon Browser-profiileja, voit pitää kaiken Carbon Browser-sisällön erillään. Luo profiileja kavereita ja perhettä varten tai tee ero työn ja hauskanpidon välille.</translation>
+<translation id="8712767363896337380">Melkein ajan tasalla. Viimeistele päivitys käynnistämällä Carbon Browser uudelleen.</translation>
+<translation id="873133009373065397">Carbon Browser ei voi tunnistaa tai asettaa oletusselainta.</translation>
+<translation id="8765470054473112089">Kun kirjoitat osoitepalkkiin tai hakukenttään, Carbon Browser lähettää kirjoittamasi tekstin oletushakukoneellesi, niin saat parempia ehdotuksia. Tämä on poissa päältä private-tilassa.</translation>
+<translation id="878572486461146056">Asennusvirhe: Verkon järjestelmänvalvojan käyttämä ryhmäkäytäntö estää asennuksen: <ph name="INSTALL_ERROR" /></translation>
+<translation id="8821043148920470810">Jotta saat tulevia Carbon Browsern päivityksiä, sinulla on oltava Windows 10 tai uudempi. Tietokoneen käyttöjärjestelmä on Windows 7.</translation>
+<translation id="8823341990149967727">Carbon Browser on vanhentunut</translation>
+<translation id="8825634023950448068">Yksityisyytesi suojaamiseksi poistamme automaattisesti yli neljä viikkoa vanhat kiinnostuksen kohteet. Kun jatkat selaamista, kiinnostuksen kohde voi näkyä listalla uudelleen. Jos Carbon Browsern arvio menee pieleen tai jos et halua nähdä tiettyjä mainoksia, voit poistaa tietyn kiinnostuksen kohteen.</translation>
+<translation id="8834965163890861871">Carbon Browser yrittää muuttaa salasanoja. Salli tämä kirjoittamalla Windows-salasanasi.</translation>
 <translation id="8862326446509486874">Sinulla ei ole käyttöoikeuksia järjestelmätason asennukseen. Kokeile asennusohjelman suorittamista uudelleen järjestelmänvalvojana.</translation>
-<translation id="8914504000324227558">Käynnistä Carbon Browser Browser uudelleen</translation>
-<translation id="8922193594870374009">Jos haluat lähettää numeron osoitteesta <ph name="ORIGIN" /> Android-puhelimeesi, kirjaudu Carbon Browser Browseren molemmilla laitteilla.</translation>
-<translation id="8983720963221508955">Olet laittanut Parannetun selaussuojan päälle tililläsi. Käytä selaussuojaa myös Carbon Browser Browser.</translation>
+<translation id="8914504000324227558">Käynnistä Carbon Browser uudelleen</translation>
+<translation id="8922193594870374009">Jos haluat lähettää numeron osoitteesta <ph name="ORIGIN" /> Android-puhelimeesi, kirjaudu Carbon Browseren molemmilla laitteilla.</translation>
 <translation id="8986207147630327271">Olet lisäämässä työprofiilia tähän selaimeen ja antamassa järjestelmänvalvojalle oikeuden hallita pelkkää työprofiilia.</translation>
-<translation id="8989968390305463310">Selaushistoria vaikuttaa näkemiisi mainoksiin ja alla kuvatulla tavalla arvioituihin kiinnostuksen kohteisiisi. Yksityisyyden suojaamiseksi Carbon Browser Browser poistaa kiinnostuksen kohteesi automaattisesti kuukausittain. Kiinnostuksen kohteet voivat päivittyä, ellet poista niitä.</translation>
-<translation id="8999208279178790196">{0,plural, =0{Carbon Browser Browser-päivitys on saatavilla}=1{Carbon Browser Browser-päivitys on saatavilla}other{Carbon Browser Browser-päivitys on ollut saatavilla # vuorokauden ajan}}</translation>
-<translation id="9053892488859122171">Carbon Browser BrowserOS Flexin järjestelmä</translation>
-<translation id="9067395829937117663">Carbon Browser Browser edellyttää Windows 7:ää tai uudempaa versiota.</translation>
+<translation id="8989968390305463310">Selaushistoria vaikuttaa näkemiisi mainoksiin ja alla kuvatulla tavalla arvioituihin kiinnostuksen kohteisiisi. Yksityisyyden suojaamiseksi Carbon Browser poistaa kiinnostuksen kohteesi automaattisesti kuukausittain. Kiinnostuksen kohteet voivat päivittyä, ellet poista niitä.</translation>
+<translation id="8999117580775242387">Kun HTTPS ei ole käytettävissä, Carbon Browser käyttää suojaamatonta yhteyttä ilman erillistä varoitusta</translation>
+<translation id="8999208279178790196">{0,plural, =0{Carbon Browser-päivitys on saatavilla}=1{Carbon Browser-päivitys on saatavilla}other{Carbon Browser-päivitys on ollut saatavilla # vuorokauden ajan}}</translation>
+<translation id="9053892488859122171">Carbon BrowserOS Flexin järjestelmä</translation>
+<translation id="9054037008353851982">Päivitä käynnistämällä uudelleen – Välilehdet avataan uudelleen</translation>
+<translation id="9090566250983691233">Lue lisää siitä, miksi Carbon Browser estää joitakin tiedostoja</translation>
 <translation id="911206726377975832">Poistetaanko myös selailutiedot?</translation>
-<translation id="9138603949443464873">Ota muutokset käyttöön käynnistämällä Carbon Browser Browser uudelleen</translation>
-<translation id="9195993889682885387">Carbon Browser Browser voi arvioida kiinnostuksen kohteitasi muutaman viime viikon selaushistoriasi perusteella. Tiedot pysyvät laitteellasi.</translation>
-<translation id="919706545465235479">Aloita synkronointi päivittämällä Carbon Browser Browser.</translation>
-<translation id="922152298093051471">Yksilöi Carbon Browser Browsera</translation>
-<translation id="93760716455950538">Käynnistä Carbon Browser BrowserOS Flex uudelleen</translation>
-<translation id="940313311831216333">Jos haluat pääsyn Carbon Browser Browser-sisältöösi kaikilla laitteilla, kirjaudu sisään ja laita sitten synkronointi päälle.</translation>
-<translation id="989369509083708165">Carbon Browser Browser on oletusselaimesi.</translation>
-<translation id="989816563149873169">Valitsemalla <ph name="SHORTCUT" /> voit vaihdella eri Carbon Browser Browser-profiilien välillä</translation>
+<translation id="9138603949443464873">Ota muutokset käyttöön käynnistämällä Carbon Browser uudelleen</translation>
+<translation id="9195993889682885387">Carbon Browser voi arvioida kiinnostuksen kohteitasi muutaman viime viikon selaushistoriasi perusteella. Tiedot pysyvät laitteellasi.</translation>
+<translation id="919706545465235479">Aloita synkronointi päivittämällä Carbon Browser.</translation>
+<translation id="922152298093051471">Yksilöi Carbon Browsera</translation>
+<translation id="92460355979482493">Kun tämä on päällä, Carbon Browser esilataa sivuja, mikä nopeuttaa selaamista ja hakemista.</translation>
+<translation id="93760716455950538">Käynnistä Carbon BrowserOS Flex uudelleen</translation>
+<translation id="940313311831216333">Jos haluat pääsyn Carbon Browser-sisältöösi kaikilla laitteilla, kirjaudu sisään ja laita sitten synkronointi päälle.</translation>
+<translation id="943390475793766444">Carbon Browser suosittelee tiedoston skannaamista, koska se voi olla vaarallinen.</translation>
+<translation id="963650557422347554">Kun se on päällä, Carbon Browser säästää akkua rajoittamalla taustatoimintaa ja visuaalisia tehosteita, esim. sujuvaa vierittämistä ja videon kuvanopeutta.</translation>
+<translation id="983803489796659991">Asennus epäonnistui, koska päivityspalvelimella ei ole tiivistedataa sovelluksesta.</translation>
+<translation id="989369509083708165">Carbon Browser on oletusselaimesi.</translation>
+<translation id="989816563149873169">Valitsemalla <ph name="SHORTCUT" /> voit vaihdella eri Carbon Browser-profiilien välillä</translation>
 </translationbundle>

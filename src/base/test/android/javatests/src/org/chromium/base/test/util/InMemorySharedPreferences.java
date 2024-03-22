@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -103,8 +103,7 @@ public class InMemorySharedPreferences implements SharedPreferences {
 
     @Override
     public void registerOnSharedPreferenceChangeListener(
-            SharedPreferences.OnSharedPreferenceChangeListener
-                    listener) {
+            SharedPreferences.OnSharedPreferenceChangeListener listener) {
         synchronized (mObservers) {
             mObservers.add(listener);
         }
@@ -237,5 +236,4 @@ public class InMemorySharedPreferences implements SharedPreferences {
             }
         }
     }
-
 }

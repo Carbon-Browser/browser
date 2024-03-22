@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -20,13 +20,13 @@ static base::LazyInstance<drive::EventLogger>::DestructorAtExit g_logger =
 
 const char* LogSeverityToString(logging::LogSeverity level) {
   switch (level) {
-    case logging::LOG_ERROR:
+    case logging::LOGGING_ERROR:
       return "ERROR";
-    case logging::LOG_WARNING:
+    case logging::LOGGING_WARNING:
       return "WARNING";
-    case logging::LOG_INFO:
+    case logging::LOGGING_INFO:
       return "INFO";
-    case logging::LOG_VERBOSE:
+    case logging::LOGGING_VERBOSE:
       return "VERBOSE";
   }
 

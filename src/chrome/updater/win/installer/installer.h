@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,9 +7,15 @@
 
 #include <windows.h>
 
+#include <optional>
+
 #include "base/command_line.h"
 #include "chrome/updater/win/installer/exit_code.h"
 #include "chrome/updater/win/installer/string.h"
+
+namespace base {
+class FilePath;
+}  // namespace base
 
 namespace updater {
 
@@ -29,6 +35,8 @@ struct ProcessExitResult {
 // A stack-based string large enough to hold an executable to run
 // (which is a path), plus a few extra arguments.
 using CommandString = StackString<MAX_PATH * 4>;
+
+std::optional<base::FilePath> FindOfflineDir(const base::FilePath& unpack_path);
 
 // Handles elevating the installer, waiting for the installer process, and
 // returning the resulting process exit code.

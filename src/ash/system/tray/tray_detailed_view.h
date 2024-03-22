@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,8 +8,9 @@
 #include <memory>
 
 #include "ash/ash_export.h"
-#include "ash/system/tray/tray_constants.h"
 #include "ash/system/tray/view_click_listener.h"
+#include "base/memory/raw_ptr.h"
+#include "ui/base/metadata/metadata_header_macros.h"
 #include "ui/views/controls/button/button.h"
 #include "ui/views/view.h"
 
@@ -20,8 +21,6 @@ struct VectorIcon;
 namespace views {
 class BoxLayout;
 class Button;
-class ImageView;
-class Label;
 class ProgressBar;
 class ScrollView;
 }  // namespace views
@@ -30,12 +29,12 @@ namespace ash {
 
 class DetailedViewDelegate;
 class HoverHighlightView;
-class ScrollBorder;
 class TriView;
 
 class ASH_EXPORT TrayDetailedView : public views::View,
                                     public ViewClickListener {
  public:
+  METADATA_HEADER(TrayDetailedView);
   explicit TrayDetailedView(DetailedViewDelegate* delegate);
 
   TrayDetailedView(const TrayDetailedView&) = delete;
@@ -50,65 +49,47 @@ class ASH_EXPORT TrayDetailedView : public views::View,
   // Setter for `progress_bar_` accessibility label.
   void OverrideProgressBarAccessibleName(const std::u16string& name);
 
+  views::ScrollView* scroll_view_for_testing() { return scroller_; }
+
  protected:
   // views::View:
   void Layout() override;
   int GetHeightForWidth(int width) const override;
-  const char* GetClassName() const override;
-  void OnThemeChanged() override;
 
   // Exposes the layout manager of this view to give control to subclasses.
   views::BoxLayout* box_layout() { return box_layout_; }
 
-  // Creates the row containing the back button and title. For material design
-  // this appears at the top of the view, for non-material design it appears
-  // at the bottom.
+  // Creates the row containing the back button and title.
   void CreateTitleRow(int string_id);
 
   // Creates a scrollable list. The list has a border at the bottom if there is
   // any other view between the list and the footer row at the bottom.
   void CreateScrollableList();
 
-  // Adds a targetable row to |scroll_content_| containing |icon| and |text|.
-  HoverHighlightView* AddScrollListItem(const gfx::VectorIcon& icon,
+  // Adds a targetable row to `container` containing `icon` and `text`.
+  // The `container` should be a RoundedContainer.
+  HoverHighlightView* AddScrollListItem(views::View* container,
+                                        const gfx::VectorIcon& icon,
                                         const std::u16string& text);
 
-  // Add a child view to the scroll list.
-  void AddScrollListChild(std::unique_ptr<views::View> child);
-
-  // Adds a targetable row to |scroll_content_| containing |icon|, |text|, and a
-  // checkbox. |checked| determines whether the checkbox is checked or not.
-  // |enterprise_managed| determines whether or not there will be an enterprise
+  // Adds a targetable row to `container` containing `icon`, `text`, and a
+  // checkbox. `checked` determines whether the checkbox is checked or not.
+  // `enterprise_managed` determines whether or not there will be an enterprise
   // managed icon for that item.
+  // The `container` should be a RoundedContainer.
   HoverHighlightView* AddScrollListCheckableItem(
+      views::View* container,
       const gfx::VectorIcon& icon,
       const std::u16string& text,
       bool checked,
       bool enterprise_managed = false);
 
-  // Adds a targetable row to |scroll_content_| containing |text| and a
-  // checkbox. |checked| determines whether the checkbox is checked or not.
-  // |enterprise_managed| determines whether or not there will be an enterprise
-  // managed icon for that item.
-  HoverHighlightView* AddScrollListCheckableItem(
-      const std::u16string& text,
-      bool checked,
-      bool enterprise_managed = false);
-
-  // Adds a sticky sub header to |scroll_content_| containing |icon| and a text
-  // represented by |text_id| resource id.
-  TriView* AddScrollListSubHeader(const gfx::VectorIcon& icon, int text_id);
-
-  // Adds a sticky sub header to |scroll_content_| containing a text represented
-  // by |text_id| resource id.
-  TriView* AddScrollListSubHeader(int text_id);
-
   // Removes (and destroys) all child views.
   void Reset();
 
   // Shows or hides the progress bar below the title row. It occupies the same
-  // space as the separator, so when shown the separator is hidden. If
-  // |progress_bar_| doesn't already exist it will be created.
+  // space as the created placeholder. If `progress_bar_` doesn't already exist
+  // it will be created.
   void ShowProgress(double value, bool visible);
 
   // Helper functions which create and return the settings and help buttons,
@@ -129,16 +110,16 @@ class ASH_EXPORT TrayDetailedView : public views::View,
   views::ScrollView* scroller() const { return scroller_; }
   views::View* scroll_content() const { return scroll_content_; }
 
-  // Gets called in the constructor of the `CalendarView`, or any other views in
-  // the future that don't have a separator to modify the value of
-  // `has_separator` to false.
-  void IgnoreSeparator();
-
  private:
   friend class TrayDetailedViewTest;
 
   // Overridden to handle clicks on subclass-specific views.
   virtual void HandleViewClicked(views::View* view);
+
+  // Returns the TriView used for the title row. A label with `string_id` is
+  // added to the CENTER view. Left aligns the label contained in the CENTER
+  // view.
+  std::unique_ptr<TriView> CreateTitleTriView(int string_id);
 
   // Creates and adds subclass-specific buttons to the title row.
   virtual void CreateExtraTitleRowButtons();
@@ -146,30 +127,25 @@ class ASH_EXPORT TrayDetailedView : public views::View,
   // Transition to main view from detailed view.
   void TransitionToMainView();
 
-  DetailedViewDelegate* const delegate_;
-  views::BoxLayout* box_layout_ = nullptr;
-  views::ScrollView* scroller_ = nullptr;
-  views::View* scroll_content_ = nullptr;
-  views::ProgressBar* progress_bar_ = nullptr;
+  const raw_ptr<DetailedViewDelegate, DanglingUntriaged | ExperimentalAsh>
+      delegate_;
+  raw_ptr<views::BoxLayout, DanglingUntriaged | ExperimentalAsh> box_layout_ =
+      nullptr;
+  raw_ptr<views::ScrollView, DanglingUntriaged | ExperimentalAsh> scroller_ =
+      nullptr;
+  raw_ptr<views::View, DanglingUntriaged | ExperimentalAsh> scroll_content_ =
+      nullptr;
+  raw_ptr<views::ProgressBar, ExperimentalAsh> progress_bar_ = nullptr;
 
-  ScrollBorder* scroll_border_ = nullptr;  // Weak reference
+  // The container view for the top-most title row. Owned by views hierarchy.
+  raw_ptr<TriView, DanglingUntriaged | ExperimentalAsh> tri_view_ = nullptr;
 
-  // The container view for the top-most title row in material design.
-  TriView* tri_view_ = nullptr;
-
-  // The back button that appears in the material design title row. Not owned.
-  views::Button* back_button_ = nullptr;
-
-  views::Label* sub_header_label_ = nullptr;
-  views::ImageView* sub_header_image_view_ = nullptr;
-  const gfx::VectorIcon* sub_header_icon_ = nullptr;
-
-  // Gets modified to false in the constructor of the view if it doesn't have a
-  // separator.
-  bool has_separator_ = true;
+  // The back button that appears in the title row. Owned by views hierarchy.
+  raw_ptr<views::Button, DanglingUntriaged | ExperimentalAsh> back_button_ =
+      nullptr;
 
   // The accessible name for the `progress_bar_`.
-  absl::optional<std::u16string> progress_bar_accessible_name_;
+  std::optional<std::u16string> progress_bar_accessible_name_;
 };
 
 }  // namespace ash

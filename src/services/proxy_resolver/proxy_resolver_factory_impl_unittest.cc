@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,8 +6,8 @@
 
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
 #include "base/strings/utf_string_conversions.h"
@@ -43,12 +43,13 @@ class FakeProxyResolver : public ProxyResolverV8Tracing {
 
  private:
   // ProxyResolverV8Tracing overrides.
-  void GetProxyForURL(const GURL& url,
-                      const net::NetworkIsolationKey& network_isolation_key,
-                      net::ProxyInfo* results,
-                      net::CompletionOnceCallback callback,
-                      std::unique_ptr<net::ProxyResolver::Request>* request,
-                      std::unique_ptr<Bindings> bindings) override {}
+  void GetProxyForURL(
+      const GURL& url,
+      const net::NetworkAnonymizationKey& network_anonymization_key,
+      net::ProxyInfo* results,
+      net::CompletionOnceCallback callback,
+      std::unique_ptr<net::ProxyResolver::Request>* request,
+      std::unique_ptr<Bindings> bindings) override {}
 
   base::OnceClosure on_destruction_;
 };
@@ -63,7 +64,9 @@ enum Event {
 class TestProxyResolverFactory : public ProxyResolverV8TracingFactory {
  public:
   struct PendingRequest {
-    raw_ptr<std::unique_ptr<ProxyResolverV8Tracing>> resolver;
+    raw_ptr<std::unique_ptr<ProxyResolverV8Tracing>,
+            AcrossTasksDanglingUntriaged>
+        resolver;
     net::CompletionOnceCallback callback;
   };
 
@@ -148,7 +151,7 @@ class ProxyResolverFactoryImplTest
   void ResolveDns(
       const std::string& hostname,
       net::ProxyResolveDnsOperation operation,
-      const net::NetworkIsolationKey& network_isolation_key,
+      const net::NetworkAnonymizationKey& network_anonymization_key,
       mojo::PendingRemote<mojom::HostResolverRequestClient> client) override {}
 
   void set_idle_callback(base::OnceClosure callback) {

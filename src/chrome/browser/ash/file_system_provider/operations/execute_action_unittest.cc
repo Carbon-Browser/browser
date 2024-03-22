@@ -1,16 +1,15 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/ash/file_system_provider/operations/execute_action.h"
 
-#include <memory>
 #include <string>
 #include <vector>
 
-#include "base/bind.h"
 #include "base/files/file.h"
 #include "base/files/file_path.h"
+#include "base/functional/bind.h"
 #include "chrome/browser/ash/file_system_provider/icon_set.h"
 #include "chrome/browser/ash/file_system_provider/operations/test_util.h"
 #include "chrome/browser/ash/file_system_provider/provided_file_system_interface.h"
@@ -63,11 +62,8 @@ TEST_F(FileSystemProviderOperationsExecuteActionTest, Execute) {
   util::StatusCallbackLog callback_log;
 
   ExecuteAction execute_action(
-      NULL, file_system_info_, entry_paths_, kActionId,
+      &dispatcher, file_system_info_, entry_paths_, kActionId,
       base::BindOnce(&util::LogStatusCallback, &callback_log));
-  execute_action.SetDispatchEventImplForTesting(
-      base::BindRepeating(&util::LoggingDispatchEventImpl::OnDispatchEventImpl,
-                          base::Unretained(&dispatcher)));
 
   EXPECT_TRUE(execute_action.Execute(kRequestId));
 
@@ -82,15 +78,15 @@ TEST_F(FileSystemProviderOperationsExecuteActionTest, Execute) {
   const base::Value* options_as_value = &event_args[0];
   ASSERT_TRUE(options_as_value->is_dict());
 
-  ExecuteActionRequestedOptions options;
-  ASSERT_TRUE(
-      ExecuteActionRequestedOptions::Populate(*options_as_value, &options));
-  EXPECT_EQ(kFileSystemId, options.file_system_id);
-  EXPECT_EQ(kRequestId, options.request_id);
-  ASSERT_EQ(entry_paths_.size(), options.entry_paths.size());
-  EXPECT_EQ(entry_paths_[0].value(), options.entry_paths[0]);
-  EXPECT_EQ(entry_paths_[1].value(), options.entry_paths[1]);
-  EXPECT_EQ(kActionId, options.action_id);
+  auto options =
+      ExecuteActionRequestedOptions::FromValue(options_as_value->GetDict());
+  ASSERT_TRUE(options);
+  EXPECT_EQ(kFileSystemId, options->file_system_id);
+  EXPECT_EQ(kRequestId, options->request_id);
+  ASSERT_EQ(entry_paths_.size(), options->entry_paths.size());
+  EXPECT_EQ(entry_paths_[0].value(), options->entry_paths[0]);
+  EXPECT_EQ(entry_paths_[1].value(), options->entry_paths[1]);
+  EXPECT_EQ(kActionId, options->action_id);
 }
 
 TEST_F(FileSystemProviderOperationsExecuteActionTest, Execute_NoListener) {
@@ -98,11 +94,8 @@ TEST_F(FileSystemProviderOperationsExecuteActionTest, Execute_NoListener) {
   util::StatusCallbackLog callback_log;
 
   ExecuteAction execute_action(
-      NULL, file_system_info_, entry_paths_, kActionId,
+      &dispatcher, file_system_info_, entry_paths_, kActionId,
       base::BindOnce(&util::LogStatusCallback, &callback_log));
-  execute_action.SetDispatchEventImplForTesting(
-      base::BindRepeating(&util::LoggingDispatchEventImpl::OnDispatchEventImpl,
-                          base::Unretained(&dispatcher)));
 
   EXPECT_FALSE(execute_action.Execute(kRequestId));
 }
@@ -112,16 +105,12 @@ TEST_F(FileSystemProviderOperationsExecuteActionTest, OnSuccess) {
   util::StatusCallbackLog callback_log;
 
   ExecuteAction execute_action(
-      NULL, file_system_info_, entry_paths_, kActionId,
+      &dispatcher, file_system_info_, entry_paths_, kActionId,
       base::BindOnce(&util::LogStatusCallback, &callback_log));
-  execute_action.SetDispatchEventImplForTesting(
-      base::BindRepeating(&util::LoggingDispatchEventImpl::OnDispatchEventImpl,
-                          base::Unretained(&dispatcher)));
 
   EXPECT_TRUE(execute_action.Execute(kRequestId));
 
-  execute_action.OnSuccess(kRequestId, std::make_unique<RequestValue>(),
-                           false /* has_more */);
+  execute_action.OnSuccess(kRequestId, RequestValue(), false /* has_more */);
   ASSERT_EQ(1u, callback_log.size());
   EXPECT_EQ(base::File::FILE_OK, callback_log[0]);
 }
@@ -131,15 +120,12 @@ TEST_F(FileSystemProviderOperationsExecuteActionTest, OnError) {
   util::StatusCallbackLog callback_log;
 
   ExecuteAction execute_action(
-      NULL, file_system_info_, entry_paths_, kActionId,
+      &dispatcher, file_system_info_, entry_paths_, kActionId,
       base::BindOnce(&util::LogStatusCallback, &callback_log));
-  execute_action.SetDispatchEventImplForTesting(
-      base::BindRepeating(&util::LoggingDispatchEventImpl::OnDispatchEventImpl,
-                          base::Unretained(&dispatcher)));
 
   EXPECT_TRUE(execute_action.Execute(kRequestId));
 
-  execute_action.OnError(kRequestId, std::make_unique<RequestValue>(),
+  execute_action.OnError(kRequestId, RequestValue(),
                          base::File::FILE_ERROR_TOO_MANY_OPENED);
   ASSERT_EQ(1u, callback_log.size());
   EXPECT_EQ(base::File::FILE_ERROR_TOO_MANY_OPENED, callback_log[0]);

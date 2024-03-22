@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,11 +9,10 @@ import 'chrome://resources/cr_components/localized_link/localized_link.js';
 import {App} from 'chrome://resources/cr_components/app_management/app_management.mojom-webui.js';
 import {BrowserProxy} from 'chrome://resources/cr_components/app_management/browser_proxy.js';
 import {AppManagementFileHandlingItemElement} from 'chrome://resources/cr_components/app_management/file_handling_item.js';
-import {loadTimeData} from 'chrome://resources/js/load_time_data.m.js';
+import {loadTimeData} from 'chrome://resources/js/load_time_data.js';
 import {flush} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 import {assertEquals, assertTrue} from 'chrome://webui-test/chai_assert.js';
-import {flushTasks} from 'chrome://webui-test/test_util.js';
-import {waitAfterNextRender} from 'chrome://webui-test/test_util.js';
+import {flushTasks, waitAfterNextRender} from 'chrome://webui-test/polymer_test_util.js';
 
 import {createTestApp, TestAppManagementBrowserProxy} from './app_management_test_support.js';
 
@@ -23,8 +22,8 @@ suite('AppManagementFileHandlingItemTest', function() {
   let app: App;
 
   setup(async function() {
-    document.body.innerHTML = '';
-    app = createTestApp();
+    document.body.innerHTML = window.trustedTypes!.emptyHTML;
+    app = createTestApp('app');
     testProxy = new TestAppManagementBrowserProxy();
     BrowserProxy.setInstance(testProxy);
 
@@ -50,7 +49,7 @@ suite('AppManagementFileHandlingItemTest', function() {
     assertTrue(!link);
 
     // Overflow link present.
-    const app2 = createTestApp();
+    const app2 = createTestApp('app');
     app2.fileHandlingState!.userVisibleTypesLabel =
         'TXT, CSV, MD, DOC (<a href="#">and 1 more</a>)';
     fileHandlingItem.app = app2;
@@ -76,16 +75,16 @@ suite('AppManagementFileHandlingItemTest', function() {
     const learnMore =
         fileHandlingItem.shadowRoot!.querySelector<HTMLElement>('#learn-more')!;
     assertTrue(!!learnMore);
-    let link = learnMore.shadowRoot!.querySelector<HTMLLinkElement>('a');
+    let link = learnMore.shadowRoot!.querySelector<HTMLAnchorElement>('a');
     assertTrue(!!link);
     assertEquals(link.href, app.fileHandlingState!.learnMoreUrl!.url);
 
     // Clear the learn more url; it should now be handled by the browser proxy.
-    const app2 = createTestApp();
+    const app2 = createTestApp('app');
     app2.fileHandlingState!.learnMoreUrl = undefined;
     fileHandlingItem.app = app2;
     await flushTasks();
-    link = learnMore.shadowRoot!.querySelector<HTMLLinkElement>('a');
+    link = learnMore.shadowRoot!.querySelector<HTMLAnchorElement>('a');
     assertTrue(!!link);
     assertEquals(link.getAttribute('href'), '#');
 

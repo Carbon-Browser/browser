@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,6 +11,7 @@
 #include "chrome/test/base/ui_test_utils.h"
 #include "content/public/common/content_features.h"
 #include "content/public/test/browser_test.h"
+#include "extensions/common/utils/content_script_utils.h"
 #include "net/base/filename_util.h"
 #include "net/dns/mock_host_resolver.h"
 #include "third_party/blink/public/common/features.h"
@@ -133,6 +134,14 @@ IN_PROC_BROWSER_TEST_P(ExecuteScriptApiTest, RemovedFrames) {
   ASSERT_TRUE(RunExtensionTest("executescript/removed_frames")) << message_;
 }
 
+// Tests that tabs.executeScript called with files exceeding the max size limit
+// will return an error and not execute.
+IN_PROC_BROWSER_TEST_P(ExecuteScriptApiTest, ExecuteScriptSizeLimit) {
+  auto single_scripts_limit_reset =
+      script_parsing::CreateScopedMaxScriptLengthForTesting(700u);
+  ASSERT_TRUE(RunExtensionTest("executescript/script_size_limit")) << message_;
+}
+
 // Ensure that an extension can inject a script in a file frame provided it has
 // access to file urls enabled and the necessary host permissions.
 IN_PROC_BROWSER_TEST_P(ExecuteScriptApiTest, InjectScriptInFileFrameAllowed) {
@@ -173,12 +182,12 @@ class DestructiveScriptTest : public ExecuteScriptApiTestBase,
  protected:
   // The test extension selects the sub test based on the host name.
   bool RunSubtest(const std::string& test_host) {
-    const std::string page_url =
+    const std::string extension_url =
         "test.html?" + test_host + "#bucketcount=" +
         base::NumberToString(kDestructiveScriptTestBucketCount) +
         "&bucketindex=" + base::NumberToString(GetParam());
     return RunExtensionTest("executescript/destructive",
-                            {.page_url = page_url.c_str()});
+                            {.extension_url = extension_url.c_str()});
   }
 };
 
@@ -269,15 +278,13 @@ INSTANTIATE_TEST_SUITE_P(ExecuteScriptApiTest,
                          ::testing::Range(0,
                                           kDestructiveScriptTestBucketCount));
 
-class ExecuteScriptApiFencedFrameTest
-    : public ExecuteScriptApiTestBase,
-      public testing::WithParamInterface<bool /* shadow_dom_fenced_frame */> {
+class ExecuteScriptApiFencedFrameTest : public ExecuteScriptApiTestBase {
  protected:
   ExecuteScriptApiFencedFrameTest() {
     feature_list_.InitWithFeaturesAndParameters(
-        /*enabled_features=*/{{blink::features::kFencedFrames,
-                               {{"implementation_type",
-                                 GetParam() ? "shadow_dom" : "mparch"}}},
+        /*enabled_features=*/{{blink::features::kFencedFrames, {}},
+                              {blink::features::kFencedFramesAPIChanges, {}},
+                              {blink::features::kFencedFramesDefaultMode, {}},
                               {features::kPrivacySandboxAdsAPIsOverride, {}}},
         /*disabled_features=*/{features::kSpareRendererForSitePerProcess});
     // Fenced frames are only allowed in secure contexts.
@@ -289,12 +296,8 @@ class ExecuteScriptApiFencedFrameTest
   base::test::ScopedFeatureList feature_list_;
 };
 
-IN_PROC_BROWSER_TEST_P(ExecuteScriptApiFencedFrameTest, Load) {
+IN_PROC_BROWSER_TEST_F(ExecuteScriptApiFencedFrameTest, Load) {
   ASSERT_TRUE(RunExtensionTest("executescript/fenced_frames")) << message_;
 }
-
-INSTANTIATE_TEST_SUITE_P(ExecuteScriptApiFencedFrameTest,
-                         ExecuteScriptApiFencedFrameTest,
-                         testing::Bool());
 
 }  // namespace extensions

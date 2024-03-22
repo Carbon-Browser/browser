@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,6 +10,7 @@
 #include "base/timer/timer.h"
 #include "content/common/content_export.h"
 #include "media/capture/video/video_capture_device.h"
+#include "ui/gfx/geometry/rect.h"
 #include "ui/gfx/mac/io_surface.h"
 
 namespace content {
@@ -29,10 +30,14 @@ class CONTENT_EXPORT IOSurfaceCaptureDeviceBase
   // OnStop is called by StopAndDeAllocate.
   virtual void OnStop() = 0;
 
+  // media::VideoCaptureDevice overrides.
+  void RequestRefreshFrame() override;
+
  protected:
   void OnReceivedIOSurfaceFromStream(
       gfx::ScopedInUseIOSurface io_surface,
-      const media::VideoCaptureFormat& capture_format);
+      const media::VideoCaptureFormat& capture_format,
+      const gfx::Rect& visible_rect);
   void SendLastReceivedIOSurfaceToClient();
 
   // Given a source frame size `source_size`, and `capture_params_`, compute the
@@ -68,15 +73,7 @@ class CONTENT_EXPORT IOSurfaceCaptureDeviceBase
   // frames come in, then this will be repeatedly sent at `min_frame_rate_`.
   gfx::ScopedInUseIOSurface last_received_io_surface_;
   media::VideoCaptureFormat last_received_capture_format_;
-
-  // The minimum frame rate.
-  float min_frame_rate_ = 1.f;
-
-  // Timer to enforce `min_frame_rate_` by repeatedly calling
-  // SendLastReceivedIOSurfaceToClient.
-  // TODO(https://crbug.com/1171127): Remove the need for the capture device
-  // to re-submit static content.
-  std::unique_ptr<base::RepeatingTimer> min_frame_rate_enforcement_timer_;
+  gfx::Rect last_visible_rect_;
 
   base::WeakPtrFactory<IOSurfaceCaptureDeviceBase> weak_factory_base_{this};
 };

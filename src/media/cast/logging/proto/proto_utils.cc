@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -28,8 +28,7 @@ proto::EventType ToProtoEventType(CastLoggingEvent event) {
     TO_PROTO_ENUM(PACKET_RTX_REJECTED);
     TO_PROTO_ENUM(PACKET_RECEIVED);
   }
-  NOTREACHED();
-  return proto::UNKNOWN;
+  NOTREACHED_NORETURN();
 }
 
 }  // namespace cast

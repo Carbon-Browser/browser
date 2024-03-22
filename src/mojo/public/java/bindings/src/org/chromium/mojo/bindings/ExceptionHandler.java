@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -35,23 +35,17 @@ public interface ExceptionHandler {
 
         private DefaultExceptionHandler() {}
 
-        /**
-         * Static class that implements the initialization-on-demand holder idiom.
-         */
+        /** Static class that implements the initialization-on-demand holder idiom. */
         private static class LazyHolder {
             static final DefaultExceptionHandler INSTANCE = new DefaultExceptionHandler();
         }
 
-        /**
-         * Gets the singleton instance for the DefaultExceptionHandler.
-         */
+        /** Gets the singleton instance for the DefaultExceptionHandler. */
         public static DefaultExceptionHandler getInstance() {
             return LazyHolder.INSTANCE;
         }
 
-        /**
-         * Sets a delegate ExceptionHandler, in case throwing an exception is not desirable.
-         */
+        /** Sets a delegate ExceptionHandler, in case throwing an exception is not desirable. */
         public void setDelegate(ExceptionHandler exceptionHandler) {
             mDelegate = exceptionHandler;
         }

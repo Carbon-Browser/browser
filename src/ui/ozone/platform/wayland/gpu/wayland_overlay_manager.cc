@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -58,26 +58,7 @@ void WaylandOverlayManager::CheckOverlaySupport(
 bool WaylandOverlayManager::CanHandleCandidate(
     const OverlaySurfaceCandidate& candidate,
     gfx::AcceleratedWidget widget) const {
-  if (candidate.buffer_size.IsEmpty())
-    return false;
-
-  // Setting the OverlayCandidate::|uv_rect| will eventually result in setting
-  // the |crop_rect_| in wayland. If this results in an empty pixel scale the
-  // wayland connection will be terminated. See: wayland_surface.cc
-  // 'ApplyPendingState'
-  // Because of the device scale factor (kMaxDeviceScaleFactor) we check against
-  // a rect who's size is empty when converted to fixed point number.
-  // TODO(https://crbug.com/1218678) : Move and generalize this fix in wayland
-  // host.
-  auto viewport_src =
-      gfx::ScaleRect(candidate.crop_rect, candidate.buffer_size.width(),
-                     candidate.buffer_size.height());
-
-  constexpr int kAssumedMaxDeviceScaleFactor = 8;
-  if (wl_fixed_from_double(viewport_src.width() /
-                           kAssumedMaxDeviceScaleFactor) == 0 ||
-      wl_fixed_from_double(viewport_src.height() /
-                           kAssumedMaxDeviceScaleFactor) == 0)
+  if (!manager_gpu_->SupportsFormat(candidate.format))
     return false;
 
   // Passing an empty surface size through wayland will actually clear the size
@@ -86,17 +67,34 @@ bool WaylandOverlayManager::CanHandleCandidate(
   // protocol error but interprets this as a clear.
   // TODO(https://crbug.com/1306230) : Move and generalize this fix in wayland
   // host.
+  constexpr int kAssumedMaxDeviceScaleFactor = 8;
   if (wl_fixed_from_double(candidate.display_rect.width() /
                            kAssumedMaxDeviceScaleFactor) == 0 ||
       wl_fixed_from_double(candidate.display_rect.height() /
                            kAssumedMaxDeviceScaleFactor) == 0)
     return false;
 
-  if (candidate.transform == gfx::OVERLAY_TRANSFORM_INVALID)
+  if (absl::holds_alternative<gfx::OverlayTransform>(candidate.transform)) {
+    if (absl::get<gfx::OverlayTransform>(candidate.transform) ==
+        gfx::OVERLAY_TRANSFORM_INVALID) {
+      return false;
+    }
+  } else if (!manager_gpu_->supports_affine_transform() ||
+             absl::get<gfx::Transform>(candidate.transform).HasPerspective()) {
+    // Wayland supports only 2d matrix transforms.
     return false;
+  }
 
   if (candidate.background_color.has_value() &&
       !manager_gpu_->supports_surface_background_color()) {
+    return false;
+  }
+
+  // If clipping isn't supported, reject candidates with a clip rect, unless
+  // that clip wouldn't have any effect.
+  if (!manager_gpu_->supports_clip_rect() && candidate.clip_rect &&
+      !candidate.clip_rect->Contains(
+          gfx::ToNearestRect(candidate.display_rect))) {
     return false;
   }
 
@@ -113,11 +111,6 @@ bool WaylandOverlayManager::CanHandleCandidate(
   // Reject candidates that don't fall on a pixel boundary.
   if (!gfx::IsNearestRectWithinDistance(candidate.display_rect, 0.01f))
     return false;
-
-  if (candidate.clip_rect && !candidate.clip_rect->Contains(
-                                 gfx::ToNearestRect(candidate.display_rect))) {
-    return false;
-  }
 
   return true;
 }

@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -22,9 +22,9 @@ namespace media {
 // associated with their type, and return a null/empty value for other getters.
 class MEDIA_EXPORT MediaResource {
  public:
-  enum Type {
-    STREAM,  // Indicates GetAllStreams() or GetFirstStream() should be used
-    URL,     // Indicates GetUrl() should be used
+  enum class Type {
+    kStream,  // Indicates GetAllStreams() or GetFirstStream() should be used
+    KUrl,     // Indicates GetUrl() should be used
   };
 
   MediaResource();

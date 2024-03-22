@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -39,14 +39,17 @@ class NetworkServiceDevToolsObserver : public network::mojom::DevToolsObserver {
       const net::CookieAccessResultList& request_cookie_list,
       std::vector<network::mojom::HttpRawHeaderPairPtr> request_headers,
       const base::TimeTicks timestamp,
-      network::mojom::ClientSecurityStatePtr security_state) override;
+      network::mojom::ClientSecurityStatePtr security_state,
+      network::mojom::OtherPartitionInfoPtr other_partition_info) override;
   void OnRawResponse(
       const std::string& devtools_request_id,
       const net::CookieAndLineAccessResultList& response_cookie_list,
       std::vector<network::mojom::HttpRawHeaderPairPtr> response_headers,
       const absl::optional<std::string>& response_headers_text,
       network::mojom::IPAddressSpace resource_address_space,
-      int32_t http_status_code) override;
+      int32_t http_status_code,
+      const absl::optional<net::CookiePartitionKey>& cookie_partition_key)
+      override;
   void OnTrustTokenOperationDone(
       const std::string& devtools_request_id,
       network::mojom::TrustTokenOperationResultPtr result) override;
@@ -75,6 +78,8 @@ class NetworkServiceDevToolsObserver : public network::mojom::DevToolsObserver {
                    const GURL& url,
                    const network::CorsErrorStatus& status,
                    bool is_warning) override;
+  void OnCorbError(const absl::optional<std::string>& devtools_request_id,
+                   const GURL& url) override;
   void OnSubresourceWebBundleMetadata(const std::string& devtools_request_id,
                                       const std::vector<GURL>& urls) override;
   void OnSubresourceWebBundleMetadataError(

@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -15,6 +15,10 @@ DevicePosturePlatformProviderAndroid::~DevicePosturePlatformProviderAndroid() =
 device::mojom::DevicePostureType
 DevicePosturePlatformProviderAndroid::GetDevicePosture() {
   return device::mojom::DevicePostureType::kContinuous;
+}
+const std::vector<gfx::Rect>&
+DevicePosturePlatformProviderAndroid::GetViewportSegments() {
+  return current_viewport_segments_;
 }
 
 void DevicePosturePlatformProviderAndroid::StartListening() {}

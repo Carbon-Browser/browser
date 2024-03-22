@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,8 +11,8 @@
 #include "ash/shell.h"
 #include "ash/system/accessibility/autoclick_scroll_bubble_controller.h"
 #include "ash/test/ash_test_base.h"
-#include "base/callback_helpers.h"
 #include "base/command_line.h"
+#include "base/functional/callback_helpers.h"
 #include "base/i18n/rtl.h"
 
 namespace ash {
@@ -63,7 +63,8 @@ class AutoclickMenuBubbleControllerTest : public AshTestBase {
   }
 
   AutoclickMenuView* GetMenuView() {
-    return GetBubbleController() ? GetBubbleController()->menu_view_ : nullptr;
+    return GetBubbleController() ? GetBubbleController()->menu_view_.get()
+                                 : nullptr;
   }
 
   views::View* GetMenuButton(AutoclickMenuView::ButtonId view_id) {
@@ -81,7 +82,8 @@ class AutoclickMenuBubbleControllerTest : public AshTestBase {
 
   AutoclickScrollView* GetScrollView() {
     return GetBubbleController()->scroll_bubble_controller_
-               ? GetBubbleController()->scroll_bubble_controller_->scroll_view_
+               ? GetBubbleController()
+                     ->scroll_bubble_controller_->scroll_view_.get()
                : nullptr;
   }
 

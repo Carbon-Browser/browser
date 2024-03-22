@@ -1,15 +1,14 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/sync_file_system/local/local_file_sync_service.h"
 
-#include "base/bind.h"
 #include "base/containers/contains.h"
+#include "base/functional/bind.h"
 #include "base/memory/ptr_util.h"
 #include "base/observer_list.h"
 #include "base/task/single_thread_task_runner.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/sync_file_system/file_change.h"
 #include "chrome/browser/sync_file_system/local/local_file_change_tracker.h"
@@ -190,7 +189,7 @@ void LocalFileSyncService::HasPendingLocalChanges(
     const FileSystemURL& url,
     HasPendingLocalChangeCallback callback) {
   if (!base::Contains(origin_to_contexts_, url.origin().GetURL())) {
-    base::ThreadTaskRunnerHandle::Get()->PostTask(
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE, base::BindOnce(std::move(callback),
                                   SYNC_FILE_ERROR_INVALID_URL, false));
     return;
@@ -241,7 +240,7 @@ void LocalFileSyncService::PrepareForProcessRemoteChange(
             .GetAppByURL(url.origin().GetURL());
     if (!extension) {
       util::Log(
-          logging::LOG_WARNING, FROM_HERE,
+          logging::LOGGING_WARNING, FROM_HERE,
           "PrepareForProcessRemoteChange called for non-existing origin: %s",
           url.origin().GetURL().spec().c_str());
 
@@ -276,10 +275,9 @@ void LocalFileSyncService::ApplyRemoteChange(const FileChange& change,
                                              const FileSystemURL& url,
                                              SyncStatusCallback callback) {
   DCHECK(base::Contains(origin_to_contexts_, url.origin().GetURL()));
-  util::Log(logging::LOG_VERBOSE, FROM_HERE,
+  util::Log(logging::LOGGING_VERBOSE, FROM_HERE,
             "[Remote -> Local] ApplyRemoteChange: %s on %s",
-            change.DebugString().c_str(),
-            url.DebugString().c_str());
+            change.DebugString().c_str(), url.DebugString().c_str());
 
   sync_context_->ApplyRemoteChange(
       origin_to_contexts_[url.origin().GetURL()], change, local_path, url,
@@ -401,7 +399,7 @@ void LocalFileSyncService::DidInitializeForRemoteSync(
 
 void LocalFileSyncService::DidApplyRemoteChange(SyncStatusCallback callback,
                                                 SyncStatusCode status) {
-  util::Log(logging::LOG_VERBOSE, FROM_HERE,
+  util::Log(logging::LOGGING_VERBOSE, FROM_HERE,
             "[Remote -> Local] ApplyRemoteChange finished --> %s",
             SyncStatusCodeToString(status));
   std::move(callback).Run(status);

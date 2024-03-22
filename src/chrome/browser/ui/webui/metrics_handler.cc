@@ -1,11 +1,11 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/ui/webui/metrics_handler.h"
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/metrics/user_metrics.h"
@@ -16,12 +16,9 @@
 #include "content/public/browser/web_contents.h"
 #include "content/public/browser/web_ui.h"
 
-using base::ListValue;
-using base::UserMetricsAction;
-using content::WebContents;
+MetricsHandler::MetricsHandler() = default;
 
-MetricsHandler::MetricsHandler() {}
-MetricsHandler::~MetricsHandler() {}
+MetricsHandler::~MetricsHandler() = default;
 
 void MetricsHandler::RegisterMessages() {
   web_ui()->RegisterMessageCallback(

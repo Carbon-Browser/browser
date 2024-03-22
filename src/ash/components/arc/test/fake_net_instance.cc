@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -53,5 +53,7 @@ void FakeNetInstance::PingTest(const std::string& transport_name,
   result_ptr->duration_ms = ping_test_result_.duration_ms;
   std::move(callback).Run(std::move(result_ptr));
 }
+
+void FakeNetInstance::SetUpFlag(mojom::Flag flag, bool value) {}
 
 }  // namespace arc

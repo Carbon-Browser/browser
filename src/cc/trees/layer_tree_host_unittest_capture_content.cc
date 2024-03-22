@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,6 +8,8 @@
 #include "cc/test/fake_picture_layer.h"
 #include "cc/test/layer_tree_test.h"
 #include "cc/trees/transform_node.h"
+#include "skia/ext/font_utils.h"
+#include "third_party/skia/include/core/SkFont.h"
 #include "third_party/skia/include/core/SkTextBlob.h"
 
 namespace cc {
@@ -37,8 +39,9 @@ class FakeCaptureContentLayerClient : public FakeContentLayerClient {
     auto display_list = base::MakeRefCounted<DisplayItemList>();
     for (auto& holder : holders_) {
       display_list->StartPaint();
+      SkFont font = skia::DefaultFont();
       display_list->push<DrawTextBlobOp>(
-          SkTextBlob::MakeFromString(holder.text().data(), SkFont()),
+          SkTextBlob::MakeFromString(holder.text().data(), font),
           static_cast<float>(holder.rect().x()),
           static_cast<float>(holder.rect().y()), holder.node_id(),
           PaintFlags());

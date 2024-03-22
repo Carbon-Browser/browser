@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -224,9 +224,8 @@ TEST(RTreeTest, Payload) {
 
   RTree<float> rtree;
   rtree.Build(
-      data,
-      [](const Container& items, size_t index) { return items[index].first; },
-      [](const Container& items, size_t index) { return items[index].second; });
+      data.size(), [&data](size_t index) { return data[index].first; },
+      [&data](size_t index) { return data[index].second; });
 
   std::vector<float> results;
   SearchAndVerifyRefs(rtree, gfx::Rect(0, 0, 1, 1), &results);

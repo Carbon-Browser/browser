@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,9 +6,10 @@
 
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/logging.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "chromeos/ash/components/dbus/upstart/fake_upstart_client.h"
 #include "dbus/bus.h"
@@ -26,17 +27,12 @@ constexpr char kRestartMethod[] = "Restart";
 constexpr char kStopMethod[] = "Stop";
 
 constexpr char kUpstartJobsPath[] = "/com/ubuntu/Upstart/jobs/";
-constexpr char kAuthPolicyJob[] = "authpolicyd";
 constexpr char kMediaAnalyticsJob[] = "rtanalytics";
 // "wilco_5fdtc_5fdispatcher" below refers to the "wilco_dtc_dispatcher" upstart
 // job. Upstart escapes characters that aren't valid in D-Bus object paths
 // using underscore as the escape character, followed by the character code in
 // hex.
 constexpr char kWilcoDtcDispatcherJob[] = "wilco_5fdtc_5fdispatcher";
-// "arc_2ddata_2dsnapshotd" below refers to the "arc-data-snapshotd" upstart
-// job. Upstart escapes characters that aren't valid in D-Bus object paths using
-// underscore as the escape character, followed by the character code in hex.
-constexpr char kArcDataSnapshotdJob[] = "arc_2ddata_2dsnapshotd";
 
 UpstartClient* g_instance = nullptr;
 
@@ -52,7 +48,7 @@ class UpstartClientImpl : public UpstartClient {
   // UpstartClient overrides:
   void StartJob(const std::string& job,
                 const std::vector<std::string>& upstart_env,
-                VoidDBusMethodCallback callback) override {
+                chromeos::VoidDBusMethodCallback callback) override {
     CallJobMethod(job, kStartMethod, upstart_env,
                   base::BindOnce(&UpstartClientImpl::OnVoidMethod,
                                  weak_ptr_factory_.GetWeakPtr(), job, "start",
@@ -71,35 +67,20 @@ class UpstartClientImpl : public UpstartClient {
 
   void StopJob(const std::string& job,
                const std::vector<std::string>& upstart_env,
-               VoidDBusMethodCallback callback) override {
+               chromeos::VoidDBusMethodCallback callback) override {
     CallJobMethod(job, kStopMethod, upstart_env,
                   base::BindOnce(&UpstartClientImpl::OnVoidMethod,
                                  weak_ptr_factory_.GetWeakPtr(), job, "stop",
                                  std::move(callback)));
   }
 
-  void StartAuthPolicyService() override {
-    StartJob(kAuthPolicyJob, {}, base::DoNothing());
-  }
-
-  void RestartAuthPolicyService() override {
-    CallJobMethod(kAuthPolicyJob, kRestartMethod, {}, base::DoNothing());
-  }
-
-  void StartLacrosChrome(const std::vector<std::string>& upstart_env) override {
-    // TODO(lacros): Remove logging.
-    StartJob("lacros_2dchrome", upstart_env, base::BindOnce([](bool result) {
-               LOG(WARNING) << (result ? "success" : "fail")
-                            << " starting lacros-chrome";
-             }));
-  }
-
   void StartMediaAnalytics(const std::vector<std::string>& upstart_env,
-                           VoidDBusMethodCallback callback) override {
+                           chromeos::VoidDBusMethodCallback callback) override {
     StartJob(kMediaAnalyticsJob, upstart_env, std::move(callback));
   }
 
-  void RestartMediaAnalytics(VoidDBusMethodCallback callback) override {
+  void RestartMediaAnalytics(
+      chromeos::VoidDBusMethodCallback callback) override {
     CallJobMethod(
         kMediaAnalyticsJob, kRestartMethod, {},
         base::BindOnce(&UpstartClientImpl::OnVoidMethod,
@@ -113,25 +94,17 @@ class UpstartClientImpl : public UpstartClient {
     StopJob(kMediaAnalyticsJob, {}, base::DoNothing());
   }
 
-  void StopMediaAnalytics(VoidDBusMethodCallback callback) override {
+  void StopMediaAnalytics(chromeos::VoidDBusMethodCallback callback) override {
     StopJob(kMediaAnalyticsJob, {}, std::move(callback));
   }
 
-  void StartWilcoDtcService(VoidDBusMethodCallback callback) override {
+  void StartWilcoDtcService(
+      chromeos::VoidDBusMethodCallback callback) override {
     StartJob(kWilcoDtcDispatcherJob, {}, std::move(callback));
   }
 
-  void StopWilcoDtcService(VoidDBusMethodCallback callback) override {
+  void StopWilcoDtcService(chromeos::VoidDBusMethodCallback callback) override {
     StopJob(kWilcoDtcDispatcherJob, {}, std::move(callback));
-  }
-
-  void StartArcDataSnapshotd(const std::vector<std::string>& upstart_env,
-                             VoidDBusMethodCallback callback) override {
-    StartJob(kArcDataSnapshotdJob, upstart_env, std::move(callback));
-  }
-
-  void StopArcDataSnapshotd(VoidDBusMethodCallback callback) override {
-    StopJob(kArcDataSnapshotdJob, {}, std::move(callback));
   }
 
  private:
@@ -152,7 +125,7 @@ class UpstartClientImpl : public UpstartClient {
 
   void OnVoidMethod(const std::string& job_for_logging,
                     const std::string& action_for_logging,
-                    VoidDBusMethodCallback callback,
+                    chromeos::VoidDBusMethodCallback callback,
                     dbus::Response* response,
                     dbus::ErrorResponse* error_response) {
     if (!response)
@@ -196,7 +169,7 @@ class UpstartClientImpl : public UpstartClient {
                << ": " << error_name << ": " << error_message;
   }
 
-  dbus::Bus* bus_ = nullptr;
+  raw_ptr<dbus::Bus, ExperimentalAsh> bus_ = nullptr;
 
   // Note: This should remain the last member so it'll be destroyed and
   // invalidate its weak pointers before any other members are destroyed.

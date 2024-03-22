@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,16 +6,16 @@
 
 #include <stddef.h>
 #include <stdint.h>
+#include <string.h>
 
 #include <iterator>
 #include <string>
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/check.h"
 #include "base/containers/circular_deque.h"
-#include "base/memory/ptr_util.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/test/mock_callback.h"
@@ -27,7 +27,6 @@
 #include "net/websockets/websocket_deflate_predictor.h"
 #include "net/websockets/websocket_deflater.h"
 #include "net/websockets/websocket_frame.h"
-#include "net/websockets/websocket_inflater.h"
 #include "net/websockets/websocket_stream.h"
 #include "net/websockets/websocket_test_util.h"
 #include "testing/gmock/include/gmock/gmock.h"

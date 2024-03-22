@@ -1,9 +1,13 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef UI_VIEWS_CONTROLS_LINK_FRAGMENT_H_
 #define UI_VIEWS_CONTROLS_LINK_FRAGMENT_H_
+
+#include <functional>
+#include <type_traits>
+#include <utility>
 
 #include "base/memory/raw_ptr.h"
 #include "ui/views/controls/link.h"
@@ -29,6 +33,22 @@ class VIEWS_EXPORT LinkFragment : public Link {
   LinkFragment& operator=(const LinkFragment&) = delete;
 
  private:
+  // Returns the short-circuiting logical-"or" of invoking `f` on all linked
+  // fragments, beginning with `initial_fragment`.
+  template <
+      typename F,
+      typename Fragment,  // Templated to allow const or non-const LinkFragments
+      typename = std::enable_if_t<std::is_invocable_r_v<bool, F, Fragment*>>>
+  static bool InvokeOnFragments(F&& f, Fragment* initial_fragment) {
+    Fragment* fragment = initial_fragment;
+    bool result = false;
+    do {
+      result = std::invoke(std::forward<F>(f), fragment);
+      fragment = fragment->next_fragment_;
+    } while (!result && fragment != initial_fragment);
+    return result;
+  }
+
   // Returns whether this fragment indicates that the entire link represented
   // by it should be underlined.
   bool IsUnderlined() const;

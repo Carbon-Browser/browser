@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -80,10 +80,10 @@ void UkmObserver::PauseOrResumeObservation(bool pause) {
   paused_ = pause;
 }
 
-void UkmObserver::OnUkmAllowedStateChanged(bool allowed) {
+void UkmObserver::OnUkmAllowedStateChanged(ukm::UkmConsentState state) {
   base::Time most_recent_allowed = LocalStateHelper::GetInstance().GetPrefTime(
       kSegmentationUkmMostRecentAllowedTimeKey);
-  if (!allowed) {
+  if (!state.Has(ukm::MSBB)) {
     if (most_recent_allowed != base::Time::Max()) {
       LocalStateHelper::GetInstance().SetPrefTime(
           kSegmentationUkmMostRecentAllowedTimeKey, base::Time::Max());

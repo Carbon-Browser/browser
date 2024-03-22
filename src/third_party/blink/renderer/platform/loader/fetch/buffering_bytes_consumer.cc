@@ -1,13 +1,16 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "third_party/blink/renderer/platform/loader/fetch/buffering_bytes_consumer.h"
 
+#include "base/debug/crash_logging.h"
 #include "base/feature_list.h"
 #include "base/metrics/field_trial_params.h"
 #include "base/numerics/safe_conversions.h"
+#include "base/task/single_thread_task_runner.h"
 #include "third_party/blink/renderer/platform/heap/garbage_collected.h"
+#include "third_party/blink/renderer/platform/wtf/text/string_builder.h"
 
 namespace blink {
 
@@ -70,7 +73,7 @@ BytesConsumer::Result BufferingBytesConsumer::BeginRead(const char** buffer,
   // drain the underlying |bytes_consumer_| anyway.
   MaybeStartBuffering();
 
-  if (buffer_.IsEmpty()) {
+  if (buffer_.empty()) {
     if (buffering_state_ != BufferingState::kStarted)
       return bytes_consumer_->BeginRead(buffer, available);
 
@@ -87,7 +90,7 @@ BytesConsumer::Result BufferingBytesConsumer::BeginRead(const char** buffer,
     if (has_seen_error_)
       return Result::kError;
 
-    if (buffer_.IsEmpty())
+    if (buffer_.empty())
       return has_seen_end_of_data_ ? Result::kDone : Result::kShouldWait;
   }
 
@@ -98,7 +101,7 @@ BytesConsumer::Result BufferingBytesConsumer::BeginRead(const char** buffer,
 }
 
 BytesConsumer::Result BufferingBytesConsumer::EndRead(size_t read_size) {
-  if (buffer_.IsEmpty()) {
+  if (buffer_.empty()) {
     if (buffering_state_ != BufferingState::kStarted)
       return bytes_consumer_->EndRead(read_size);
 
@@ -118,7 +121,7 @@ BytesConsumer::Result BufferingBytesConsumer::EndRead(size_t read_size) {
     buffer_.pop_front();
   }
 
-  if (buffer_.IsEmpty() && has_seen_end_of_data_) {
+  if (buffer_.empty() && has_seen_end_of_data_) {
     ClearClient();
     return Result::kDone;
   }
@@ -157,13 +160,21 @@ void BufferingBytesConsumer::Cancel() {
 }
 
 BytesConsumer::PublicState BufferingBytesConsumer::GetPublicState() const {
-  if (buffer_.IsEmpty())
+  if (buffer_.empty())
     return bytes_consumer_->GetPublicState();
   return PublicState::kReadableOrWaiting;
 }
 
 BytesConsumer::Error BufferingBytesConsumer::GetError() const {
   return bytes_consumer_->GetError();
+}
+
+String BufferingBytesConsumer::DebugName() const {
+  StringBuilder builder;
+  builder.Append("BufferingBytesConsumer(");
+  builder.Append(bytes_consumer_->DebugName());
+  builder.Append(")");
+  return builder.ToString();
 }
 
 void BufferingBytesConsumer::Trace(Visitor* visitor) const {
@@ -180,6 +191,7 @@ void BufferingBytesConsumer::OnTimerFired(TimerBase*) {
 }
 
 void BufferingBytesConsumer::OnStateChange() {
+  SCOPED_CRASH_KEY_BOOL("BBC_OnStateChange", "client", client_ != nullptr);
   BytesConsumer::Client* client = client_;
   BufferData();
   if (client)
@@ -187,9 +199,12 @@ void BufferingBytesConsumer::OnStateChange() {
 }
 
 void BufferingBytesConsumer::BufferData() {
+  SCOPED_CRASH_KEY_NUMBER("BBC_BufferData", "buffering_state",
+                          static_cast<int>(buffering_state_));
   if (buffering_state_ != BufferingState::kStarted)
     return;
 
+  DCHECK(bytes_consumer_);
   while (true) {
     const char* p = nullptr;
     size_t available = 0;

@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,7 +10,8 @@
 #include <utility>
 #include <vector>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
+#include "base/memory/raw_ptr.h"
 #include "extensions/common/extension.h"
 #include "extensions/common/manifest_handlers/file_handler_info.h"
 
@@ -56,7 +57,7 @@ class WebAppFileHandlerMatch {
   bool DoMatch(const EntryInfo& entry);
 
  private:
-  const apps::FileHandler* const file_handler_;
+  const raw_ptr<const apps::FileHandler> file_handler_;
   bool matched_mime_type_ = false;
   bool matched_file_extension_ = false;
 };

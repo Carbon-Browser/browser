@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,14 +6,17 @@
 
 #include "base/strings/string_util.h"
 #include "base/strings/stringprintf.h"
+#include "components/signin/public/base/consent_level.h"
 #include "components/signin/public/identity_manager/access_token_info.h"
 #include "components/signin/public/identity_manager/identity_manager.h"
 #include "components/version_info/channel.h"
 #include "google_apis/gaia/gaia_urls.h"
 #include "google_apis/google_api_keys.h"
+#include "net/http/http_status_code.h"
 #include "services/network/public/cpp/resource_request.h"
 #include "services/network/public/cpp/shared_url_loader_factory.h"
 #include "services/network/public/cpp/simple_url_loader.h"
+#include "services/network/public/mojom/url_response_head.mojom.h"
 
 namespace {
 const char kContentTypeKey[] = "Content-Type";
@@ -32,7 +35,8 @@ EndpointFetcher::EndpointFetcher(
     int64_t timeout_ms,
     const std::string& post_data,
     const net::NetworkTrafficAnnotationTag& annotation_tag,
-    signin::IdentityManager* const identity_manager)
+    signin::IdentityManager* identity_manager,
+    signin::ConsentLevel consent_level)
     : EndpointFetcher(oauth_consumer_name,
                       url,
                       http_method,
@@ -42,7 +46,8 @@ EndpointFetcher::EndpointFetcher(
                       post_data,
                       annotation_tag,
                       url_loader_factory,
-                      identity_manager) {}
+                      identity_manager,
+                      consent_level) {}
 
 EndpointFetcher::EndpointFetcher(
     const scoped_refptr<network::SharedURLLoaderFactory>& url_loader_factory,
@@ -64,6 +69,7 @@ EndpointFetcher::EndpointFetcher(
       annotation_tag_(annotation_tag),
       url_loader_factory_(url_loader_factory),
       identity_manager_(nullptr),
+      consent_level_(absl::nullopt),
       sanitize_response_(true),
       is_stable_channel_(is_stable_channel) {}
 
@@ -80,6 +86,7 @@ EndpointFetcher::EndpointFetcher(
       annotation_tag_(annotation_tag),
       url_loader_factory_(url_loader_factory),
       identity_manager_(nullptr),
+      consent_level_(absl::nullopt),
       sanitize_response_(false) {}
 
 EndpointFetcher::EndpointFetcher(
@@ -92,7 +99,8 @@ EndpointFetcher::EndpointFetcher(
     const std::string& post_data,
     const net::NetworkTrafficAnnotationTag& annotation_tag,
     const scoped_refptr<network::SharedURLLoaderFactory>& url_loader_factory,
-    signin::IdentityManager* const identity_manager)
+    signin::IdentityManager* identity_manager,
+    signin::ConsentLevel consent_level)
     : auth_type_(OAUTH),
       oauth_consumer_name_(oauth_consumer_name),
       url_(url),
@@ -103,6 +111,7 @@ EndpointFetcher::EndpointFetcher(
       annotation_tag_(annotation_tag),
       url_loader_factory_(url_loader_factory),
       identity_manager_(identity_manager),
+      consent_level_(consent_level),
       sanitize_response_(true) {
   for (auto scope : scopes) {
     oauth_scopes_.insert(scope);
@@ -119,7 +128,7 @@ EndpointFetcher::EndpointFetcher(
     const std::vector<std::string>& cors_exempt_headers,
     const net::NetworkTrafficAnnotationTag& annotation_tag,
     const scoped_refptr<network::SharedURLLoaderFactory>& url_loader_factory,
-    const bool is_oauth_fetch)
+    bool is_oauth_fetch)
     : auth_type_(is_oauth_fetch ? OAUTH : CHROME_API_KEY),
       url_(url),
       http_method_(http_method),
@@ -131,6 +140,7 @@ EndpointFetcher::EndpointFetcher(
       annotation_tag_(annotation_tag),
       url_loader_factory_(url_loader_factory),
       identity_manager_(nullptr),
+      consent_level_(absl::nullopt),
       sanitize_response_(true) {}
 
 EndpointFetcher::EndpointFetcher(
@@ -138,6 +148,7 @@ EndpointFetcher::EndpointFetcher(
     : timeout_ms_(kDefaultTimeOutMs),
       annotation_tag_(annotation_tag),
       identity_manager_(nullptr),
+      consent_level_(absl::nullopt),
       sanitize_response_(true) {}
 
 EndpointFetcher::~EndpointFetcher() = default;
@@ -146,12 +157,15 @@ void EndpointFetcher::Fetch(EndpointFetcherCallback endpoint_fetcher_callback) {
   DCHECK(!access_token_fetcher_);
   DCHECK(!simple_url_loader_);
   DCHECK(identity_manager_);
-  // Check if we have a primary account with the default consent level "sync"
-  // before attempting to fetch a token.
-  if (!identity_manager_->HasPrimaryAccount(signin::ConsentLevel::kSync)) {
+  DCHECK(consent_level_);
+  // Check if we have a primary account with the consent level provided to the
+  // constructor.
+  if (!identity_manager_->HasPrimaryAccount(*consent_level_)) {
     auto response = std::make_unique<EndpointResponse>();
     VLOG(1) << __func__ << " No primary accounts found";
     response->response = "No primary accounts found";
+    response->error_type =
+        absl::make_optional<FetchErrorType>(FetchErrorType::kAuthError);
     // TODO(crbug.com/993393) Add more detailed error messaging
     std::move(endpoint_fetcher_callback).Run(std::move(response));
     return;
@@ -166,7 +180,8 @@ void EndpointFetcher::Fetch(EndpointFetcherCallback endpoint_fetcher_callback) {
       std::make_unique<signin::PrimaryAccountAccessTokenFetcher>(
           oauth_consumer_name_, identity_manager_, oauth_scopes_,
           std::move(token_callback),
-          signin::PrimaryAccountAccessTokenFetcher::Mode::kWaitUntilAvailable);
+          signin::PrimaryAccountAccessTokenFetcher::Mode::kWaitUntilAvailable,
+          *consent_level_);
 }
 
 void EndpointFetcher::OnAuthTokenFetched(
@@ -177,6 +192,8 @@ void EndpointFetcher::OnAuthTokenFetched(
   if (error.state() != GoogleServiceAuthError::NONE) {
     auto response = std::make_unique<EndpointResponse>();
     response->response = "There was an authentication error";
+    response->error_type =
+        absl::make_optional<FetchErrorType>(FetchErrorType::kAuthError);
     // TODO(crbug.com/993393) Add more detailed error messaging
     std::move(endpoint_fetcher_callback).Run(std::move(response));
     return;
@@ -195,11 +212,11 @@ void EndpointFetcher::PerformRequest(
   if (base::EqualsCaseInsensitiveASCII(http_method_, "POST")) {
     resource_request->headers.SetHeader(kContentTypeKey, content_type_);
   }
-  DCHECK(headers_.size() % 2 == 0);
+  DCHECK_EQ(headers_.size() % 2, 0UL);
   for (size_t i = 0; i + 1 < headers_.size(); i += 2) {
     resource_request->headers.SetHeader(headers_[i], headers_[i + 1]);
   }
-  DCHECK(cors_exempt_headers_.size() % 2 == 0);
+  DCHECK_EQ(cors_exempt_headers_.size() % 2, 0UL);
   for (size_t i = 0; i + 1 < cors_exempt_headers_.size(); i += 2) {
     resource_request->cors_exempt_headers.SetHeaderIfMissing(
         cors_exempt_headers_[i], cors_exempt_headers_[i + 1]);
@@ -234,10 +251,10 @@ void EndpointFetcher::PerformRequest(
                                       network::SimpleURLLoader::RETRY_ON_5XX);
   simple_url_loader_->SetTimeoutDuration(base::Milliseconds(timeout_ms_));
   simple_url_loader_->SetAllowHttpErrorResults(true);
-  network::SimpleURLLoader::BodyAsStringCallback body_as_string_callback =
-      base::BindOnce(&EndpointFetcher::OnResponseFetched,
-                     weak_ptr_factory_.GetWeakPtr(),
-                     std::move(endpoint_fetcher_callback));
+  network::SimpleURLLoader::BodyAsStringCallbackDeprecated
+      body_as_string_callback = base::BindOnce(
+          &EndpointFetcher::OnResponseFetched, weak_ptr_factory_.GetWeakPtr(),
+          std::move(endpoint_fetcher_callback));
   simple_url_loader_->DownloadToString(
       url_loader_factory_.get(), std::move(body_as_string_callback),
       network::SimpleURLLoader::kMaxBoundedStringDownloadSize);
@@ -246,26 +263,54 @@ void EndpointFetcher::PerformRequest(
 void EndpointFetcher::OnResponseFetched(
     EndpointFetcherCallback endpoint_fetcher_callback,
     std::unique_ptr<std::string> response_body) {
+  int http_status_code = -1;
+  std::string mime_type;
+  if (simple_url_loader_->ResponseInfo() &&
+      simple_url_loader_->ResponseInfo()->headers) {
+    http_status_code =
+        simple_url_loader_->ResponseInfo()->headers->response_code();
+    mime_type = simple_url_loader_->ResponseInfo()->mime_type;
+  }
   int net_error_code = simple_url_loader_->NetError();
   // The EndpointFetcher and its members will be destroyed after
   // any of the below callbacks. Do not access The EndpointFetcher
   // or its members after the callbacks.
   simple_url_loader_.reset();
+
+  auto response = std::make_unique<EndpointResponse>();
+  response->http_status_code = http_status_code;
+  if (http_status_code == net::HTTP_UNAUTHORIZED ||
+      http_status_code == net::HTTP_FORBIDDEN) {
+    response->error_type =
+        absl::make_optional<FetchErrorType>(FetchErrorType::kAuthError);
+    // We cannot assume that the response was in JSON, and hence cannot sanitize
+    // the response. Send the respond as-is. For error cases, we may not have a
+    // valid string pointer -- if we don't, send a simple message indicating
+    // there was a response error (similar to below).
+    // TODO: Think about how to better handle different MIME-types here.
+    response->response =
+        response_body.get() ? *response_body : "There was a response error";
+    std::move(endpoint_fetcher_callback).Run(std::move(response));
+    return;
+  }
+
+  if (net_error_code != net::OK) {
+    response->error_type =
+        absl::make_optional<FetchErrorType>(FetchErrorType::kNetError);
+  }
+
   if (response_body) {
-    if (sanitize_response_) {
+    if (sanitize_response_ && mime_type == "application/json") {
       data_decoder::JsonSanitizer::Sanitize(
           std::move(*response_body),
           base::BindOnce(&EndpointFetcher::OnSanitizationResult,
-                         weak_ptr_factory_.GetWeakPtr(),
+                         weak_ptr_factory_.GetWeakPtr(), std::move(response),
                          std::move(endpoint_fetcher_callback)));
     } else {
-      auto response = std::make_unique<EndpointResponse>();
       response->response = *response_body;
       std::move(endpoint_fetcher_callback).Run(std::move(response));
     }
   } else {
-    auto response = std::make_unique<EndpointResponse>();
-    // TODO(crbug.com/993393) Add more detailed error messaging
     std::string net_error = net::ErrorToString(net_error_code);
     VLOG(1) << __func__ << " with response error: " << net_error;
     response->response = "There was a response error";
@@ -274,16 +319,16 @@ void EndpointFetcher::OnResponseFetched(
 }
 
 void EndpointFetcher::OnSanitizationResult(
+    std::unique_ptr<EndpointResponse> response,
     EndpointFetcherCallback endpoint_fetcher_callback,
     data_decoder::JsonSanitizer::Result result) {
-  auto response = std::make_unique<EndpointResponse>();
-  if (result.value.has_value())
-    response->response = result.value.value();
-  else if (result.error.has_value())
-    response->response =
-        "There was a sanitization error: " + result.error.value();
-  else
-    response->response = "There was an unknown sanitization error";
+  if (result.has_value()) {
+    response->response = result.value();
+  } else {
+    response->error_type =
+        absl::make_optional<FetchErrorType>(FetchErrorType::kResultParseError);
+    response->response = "There was a sanitization error: " + result.error();
+  }
   // The EndpointFetcher and its members will be destroyed after
   // any the below callback. Do not access The EndpointFetcher
   // or its members after the callback.

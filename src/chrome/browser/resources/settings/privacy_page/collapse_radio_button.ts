@@ -1,15 +1,17 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import 'chrome://resources/cr_elements/cr_expand_button/cr_expand_button.m.js';
-import 'chrome://resources/cr_elements/cr_radio_button/cr_radio_button_style_css.m.js';
+import 'chrome://resources/cr_elements/cr_expand_button/cr_expand_button.js';
+import 'chrome://resources/cr_elements/cr_radio_button/cr_radio_button_style.css.js';
 import 'chrome://resources/polymer/v3_0/iron-collapse/iron-collapse.js';
 import 'chrome://resources/polymer/v3_0/iron-icon/iron-icon.js';
 import '../settings_shared.css.js';
 
-import {CrExpandButtonElement} from 'chrome://resources/cr_elements/cr_expand_button/cr_expand_button.m.js';
-import {CrRadioButtonBehavior} from 'chrome://resources/cr_elements/cr_radio_button/cr_radio_button_behavior.m.js';
+import {CrExpandButtonElement} from 'chrome://resources/cr_elements/cr_expand_button/cr_expand_button.js';
+import {CrRadioButtonMixin, CrRadioButtonMixinInterface} from 'chrome://resources/cr_elements/cr_radio_button/cr_radio_button_mixin.js';
+import {assert} from 'chrome://resources/js/assert.js';
+import {PaperRippleBehavior} from 'chrome://resources/polymer/v3_0/paper-behaviors/paper-ripple-behavior.js';
 import {mixinBehaviors, PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 
 import {getTemplate} from './collapse_radio_button.html.js';
@@ -20,8 +22,11 @@ export interface SettingsCollapseRadioButtonElement {
   };
 }
 const SettingsCollapseRadioButtonElementBase =
-    mixinBehaviors([CrRadioButtonBehavior], PolymerElement) as
-    {new (): PolymerElement & CrRadioButtonBehavior};
+    mixinBehaviors([PaperRippleBehavior], CrRadioButtonMixin(PolymerElement)) as
+    {
+      new (): PolymerElement & CrRadioButtonMixinInterface &
+          PaperRippleBehavior,
+    };
 
 export class SettingsCollapseRadioButtonElement extends
     SettingsCollapseRadioButtonElementBase {
@@ -109,6 +114,22 @@ export class SettingsCollapseRadioButtonElement extends
     this.pendingUpdateCollapsed_ = false;
   }
 
+  // Overridden from CrRadioButtonMixin
+  override getPaperRipple() {
+    return this.getRipple();
+  }
+
+  // Overridden from PaperRippleBehavior
+  /* eslint-disable-next-line @typescript-eslint/naming-convention */
+  override _createRipple() {
+    this._rippleContainer = this.shadowRoot!.querySelector('.disc-wrapper');
+    const ripple = super._createRipple();
+    ripple.id = 'ink';
+    ripple.setAttribute('recenters', '');
+    ripple.classList.add('circle', 'toggle-ink');
+    return ripple;
+  }
+
   /**
    * Updates the collapsed status of this radio button to reflect
    * the user selection actions.
@@ -118,6 +139,12 @@ export class SettingsCollapseRadioButtonElement extends
       this.pendingUpdateCollapsed_ = false;
       this.expanded = this.checked;
     }
+  }
+
+  getBubbleAnchor() {
+    const anchor = this.shadowRoot!.querySelector<HTMLElement>('#button');
+    assert(anchor);
+    return anchor;
   }
 
   private onCheckedChanged_() {

@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,7 +6,7 @@
 
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "components/desks_storage/core/desk_model.h"
 #include "components/desks_storage/core/desk_sync_bridge.h"
 #include "components/sync/base/report_unrecoverable_error.h"
@@ -14,7 +14,7 @@
 #include "components/sync/model/model_type_store.h"
 
 namespace desks_storage {
-
+DeskSyncService::DeskSyncService() = default;
 DeskSyncService::DeskSyncService(
     version_info::Channel channel,
     syncer::OnceModelTypeStoreFactory create_store_callback,

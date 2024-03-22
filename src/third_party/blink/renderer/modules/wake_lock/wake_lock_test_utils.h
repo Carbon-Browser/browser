@@ -1,11 +1,11 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef THIRD_PARTY_BLINK_RENDERER_MODULES_WAKE_LOCK_WAKE_LOCK_TEST_UTILS_H_
 #define THIRD_PARTY_BLINK_RENDERER_MODULES_WAKE_LOCK_WAKE_LOCK_TEST_UTILS_H_
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "mojo/public/cpp/bindings/pending_receiver.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
 #include "mojo/public/cpp/bindings/receiver.h"
@@ -87,7 +87,7 @@ class MockWakeLockService : public mojom::blink::WakeLockService {
       const String& description,
       mojo::PendingReceiver<device::mojom::blink::WakeLock> receiver) override;
 
-  MockWakeLock mock_wake_lock_[kWakeLockTypeCount];
+  MockWakeLock mock_wake_lock_[V8WakeLockType::kEnumSize];
   mojo::ReceiverSet<mojom::blink::WakeLockService> receivers_;
 };
 
@@ -114,6 +114,12 @@ class MockPermissionService final : public mojom::blink::PermissionService {
   // mojom::blink::PermissionService implementation
   void HasPermission(mojom::blink::PermissionDescriptorPtr permission,
                      HasPermissionCallback) override;
+  void RegisterPageEmbeddedPermissionControl(
+      Vector<mojom::blink::PermissionDescriptorPtr> permissions,
+      RegisterPageEmbeddedPermissionControlCallback callback) override;
+  void RequestPageEmbeddedPermission(
+      mojom::blink::EmbeddedPermissionRequestDescriptorPtr permissions,
+      RequestPageEmbeddedPermissionCallback) override;
   void RequestPermission(mojom::blink::PermissionDescriptorPtr permission,
                          bool user_gesture,
                          RequestPermissionCallback) override;
@@ -128,14 +134,18 @@ class MockPermissionService final : public mojom::blink::PermissionService {
       mojom::blink::PermissionStatus last_known_status,
       mojo::PendingRemote<mojom::blink::PermissionObserver>) override;
 
+  void NotifyEventListener(mojom::blink::PermissionDescriptorPtr permission,
+                           const String& event_type,
+                           bool is_added) override;
+
   void OnConnectionError();
 
   mojo::Receiver<mojom::blink::PermissionService> receiver_{this};
 
   absl::optional<mojom::blink::PermissionStatus>
-      permission_responses_[kWakeLockTypeCount];
+      permission_responses_[V8WakeLockType::kEnumSize];
 
-  base::OnceClosure request_permission_callbacks_[kWakeLockTypeCount];
+  base::OnceClosure request_permission_callbacks_[V8WakeLockType::kEnumSize];
 };
 
 // Overrides requests for WakeLockService with MockWakeLockService instances.

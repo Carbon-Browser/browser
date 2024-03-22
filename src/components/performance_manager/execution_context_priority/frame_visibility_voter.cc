@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -52,13 +52,13 @@ void FrameVisibilityVoter::SetVotingChannel(VotingChannel voting_channel) {
   voting_channel_ = std::move(voting_channel);
 }
 
-void FrameVisibilityVoter::OnFrameNodeAdded(const FrameNode* frame_node) {
+void FrameVisibilityVoter::OnFrameNodeInitializing(
+    const FrameNode* frame_node) {
   const Vote vote = GetVote(frame_node->GetVisibility());
   voting_channel_.SubmitVote(GetExecutionContext(frame_node), vote);
 }
 
-void FrameVisibilityVoter::OnBeforeFrameNodeRemoved(
-    const FrameNode* frame_node) {
+void FrameVisibilityVoter::OnFrameNodeTearingDown(const FrameNode* frame_node) {
   voting_channel_.InvalidateVote(GetExecutionContext(frame_node));
 }
 

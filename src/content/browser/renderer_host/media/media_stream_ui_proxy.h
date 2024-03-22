@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,7 @@
 
 #include <memory>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/weak_ptr.h"
 #include "build/build_config.h"
 #include "content/common/content_export.h"
@@ -150,6 +150,7 @@ class CONTENT_EXPORT FakeMediaStreamUIProxy : public MediaStreamUIProxy {
   void SetAvailableDevices(const blink::MediaStreamDevices& devices);
   void SetMicAccess(bool access);
   void SetCameraAccess(bool access);
+  void SetAudioShare(bool audio_share);
 
   // MediaStreamUIProxy overrides.
   void RequestAccess(std::unique_ptr<MediaStreamRequest> request,
@@ -175,8 +176,9 @@ class CONTENT_EXPORT FakeMediaStreamUIProxy : public MediaStreamUIProxy {
   blink::MediaStreamDevices devices_;
 
   // These are used for CheckAccess().
-  bool mic_access_;
-  bool camera_access_;
+  bool mic_access_ = true;
+  bool camera_access_ = true;
+  bool audio_share_ = true;
 };
 
 }  // namespace content

@@ -1,22 +1,19 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
-GEN_INCLUDE([
-  '//chrome/browser/resources/chromeos/accessibility/chromevox/testing/chromevox_next_e2e_test_base.js',
-]);
+GEN_INCLUDE(['../../testing/chromevox_e2e_test_base.js']);
 
 /**
  * Gets the braille output and asserts that it matches expected values.
  * Annotations in the output that are primitive strings are ignored.
  */
 function checkBrailleOutput(expectedText, expectedSpans, output) {
-  const actualOutput = output.brailleOutputForTest;
+  const actualOutput = output.braille;
   // Remove string annotations.  These are tested in the speech output and
   // there's no need to clutter the tests with the corresponding braille
   // annotations.
-  const actualSpans = actualOutput.spans_.filter(function(span) {
-    return (typeof span.value !== 'string');
-  });
+  const actualSpans =
+      actualOutput.spans_.filter(span => (typeof span.value !== 'string'));
   checkOutput_(
       expectedText, expectedSpans, actualOutput.toString(), actualSpans);
 }
@@ -95,22 +92,37 @@ function checkOutput_(expectedText, expectedSpans, actualText, actualSpans) {
 /**
  * Test fixture for output.js.
  */
-ChromeVoxOutputE2ETest = class extends ChromeVoxNextE2ETest {
+ChromeVoxOutputE2ETest = class extends ChromeVoxE2ETest {
   /** @override */
   async setUpDeferred() {
     await super.setUpDeferred();
-    await importModule('FocusBounds', '/chromevox/background/focus_bounds.js');
-    await importModule('Output', '/chromevox/background/output/output.js');
-    await importModule(
-        'OutputRoleInfo', '/chromevox/background/output/output_role_info.js');
-    await importModule('CursorRange', '/common/cursors/range.js');
-    await importModule('Cursor', '/common/cursors/cursor.js');
-    await importModule(
-        ['OutputEarconAction', 'OutputNodeSpan', 'OutputSelectionSpan'],
-        '/chromevox/background/output/output_types.js');
-    await importModule('Msgs', '/chromevox/common/msgs.js');
 
-    window.Dir = AutomationUtil.Dir;
+    await Promise.all([
+      // Alphabetical based on file path.
+      importModule('ChromeVox', '/chromevox/background/chromevox.js'),
+      importModule('EventSource', '/chromevox/background/event_source.js'),
+      importModule('FocusBounds', '/chromevox/background/focus_bounds.js'),
+      importModule('Output', '/chromevox/background/output/output.js'),
+      importModule(
+          'OutputRoleInfo', '/chromevox/background/output/output_role_info.js'),
+      importModule(
+          'OutputRule', '/chromevox/background/output/output_rules.js'),
+      importModule(
+          ['OutputEarconAction', 'OutputNodeSpan', 'OutputSelectionSpan'],
+          '/chromevox/background/output/output_types.js'),
+      importModule('EarconId', '/chromevox/common/earcon_id.js'),
+      importModule('EventSourceType', '/chromevox/common/event_source_type.js'),
+      importModule('Msgs', '/chromevox/common/msgs.js'),
+      importModule('SettingsManager', '/chromevox/common/settings_manager.js'),
+      importModule('TtsCategory', '/chromevox/common/tts_types.js'),
+      importModule('AutomationPredicate', '/common/automation_predicate.js'),
+      importModule('AutomationUtil', '/common/automation_util.js'),
+      importModule('Cursor', '/common/cursors/cursor.js'),
+      importModule('CursorRange', '/common/cursors/range.js'),
+    ]);
+
+    globalThis.Dir = AutomationUtil.Dir;
+    globalThis.RoleType = chrome.automation.RoleType;
     this.forceContextualLastOutput();
   }
 };
@@ -129,7 +141,7 @@ AX_TEST_F('ChromeVoxOutputE2ETest', 'Links', async function() {
           {value: 'name', start: 0, end: 10},
 
           // Link earcon (based on the name).
-          {value: {earconId: 'LINK'}, start: 0, end: 10},
+          {value: {earcon: EarconId.LINK}, start: 0, end: 10},
 
           {value: {'delay': true}, start: 25, end: 55},
         ],
@@ -148,7 +160,7 @@ AX_TEST_F('ChromeVoxOutputE2ETest', 'Checkbox', async function() {
   checkSpeechOutput(
       '|Check box|Not checked|Press Search+Space to toggle',
       [
-        {value: new OutputEarconAction('CHECK_OFF'), start: 0, end: 0},
+        {value: new OutputEarconAction(EarconId.CHECK_OFF), start: 0, end: 0},
         {value: 'role', start: 1, end: 10},
         {value: {'delay': true}, start: 23, end: 51},
       ],
@@ -225,7 +237,7 @@ AX_TEST_F('ChromeVoxOutputE2ETest', 'Headings', async function() {
         string_: 'b|Link|Heading 1',
         'spans_': [
           {value: 'name', start: 0, end: 1},
-          {value: new OutputEarconAction('LINK'), start: 0, end: 1},
+          {value: new OutputEarconAction(EarconId.LINK), start: 0, end: 1},
           {value: 'role', start: 2, end: 6},
         ],
       },
@@ -252,7 +264,7 @@ AX_TEST_F('ChromeVoxOutputE2ETest', 'DISABLED_Audio', async function() {
   checkSpeechOutput(
       'play|Disabled|Button|audio|Tool bar',
       [
-        {value: new OutputEarconAction('BUTTON'), start: 0, end: 4},
+        {value: new OutputEarconAction(EarconId.BUTTON), start: 0, end: 4},
         {value: 'name', start: 21, end: 26},
         {value: 'role', start: 27, end: 35},
       ],
@@ -276,7 +288,7 @@ AX_TEST_F('ChromeVoxOutputE2ETest', 'DISABLED_Audio', async function() {
       '|audio time scrubber|Slider|0:00|Min 0|Max 0',
       [
         {value: 'name', start: 0, end: 0},
-        {value: new OutputEarconAction('SLIDER'), start: 0, end: 0},
+        {value: new OutputEarconAction(EarconId.SLIDER), start: 0, end: 0},
         {value: 'description', start: 1, end: 20},
         {value: 'role', start: 21, end: 27},
         {value: 'value', start: 28, end: 32},
@@ -301,14 +313,14 @@ AX_TEST_F('ChromeVoxOutputE2ETest', 'Input', async function() {
       '<input type="invalidType"</input>');
   const expectedSpansNonSearchBox = [
     {value: 'name', start: 0, end: 0},
-    {value: new OutputEarconAction('EDITABLE_TEXT'), start: 0, end: 0},
+    {value: new OutputEarconAction(EarconId.EDITABLE_TEXT), start: 0, end: 0},
     {value: new OutputSelectionSpan(0, 0, 0), start: 1, end: 1},
     {value: 'value', start: 1, end: 1},
     {value: 'inputType', start: 2},
   ];
   const expectedSpansForSearchBox = [
     {value: 'name', start: 0, end: 0},
-    {value: new OutputEarconAction('EDITABLE_TEXT'), start: 0, end: 0},
+    {value: new OutputEarconAction(EarconId.EDITABLE_TEXT), start: 0, end: 0},
     {value: new OutputSelectionSpan(0, 0, 0), start: 1, end: 1},
     {value: 'value', start: 1, end: 1},
     {value: 'role', start: 2, end: 8},
@@ -323,17 +335,17 @@ AX_TEST_F('ChromeVoxOutputE2ETest', 'Input', async function() {
       '|Spin button',
       [
         {value: 'name', start: 0, end: 0},
-        {value: new OutputEarconAction('LISTBOX'), start: 0, end: 0},
+        {value: new OutputEarconAction(EarconId.LISTBOX), start: 0, end: 0},
         {value: 'role', start: 1, end: 12},
       ],
     ],
     ['Time control', [{value: 'role', start: 0, end: 12}]],
     ['Date control', [{value: 'role', start: 0, end: 12}]],
     [
-      'No file chosen, Choose File|Button',
+      'Choose File: No file chosen|Button',
       [
         {value: 'name', start: 0, end: 27},
-        {value: new OutputEarconAction('BUTTON'), start: 0, end: 27},
+        {value: new OutputEarconAction(EarconId.BUTTON), start: 0, end: 27},
         {value: 'role', start: 28, end: 34},
       ],
     ],
@@ -350,14 +362,14 @@ AX_TEST_F('ChromeVoxOutputE2ETest', 'Input', async function() {
     {string_: 'spnbtn', spans_: []},
     {string_: 'time'},
     {string_: 'date'},
-    {string_: 'No file chosen, Choose File btn'},
+    {string_: 'Choose File: No file chosen btn'},
     ' search',
     ' ed',
   ];
   assertEquals(expectedSpeechValues.length, expectedBrailleValues.length);
 
   let el = root.firstChild.firstChild;
-  expectedSpeechValues.forEach(function(expectedValue) {
+  expectedSpeechValues.forEach(expectedValue => {
     const range = CursorRange.fromNode(el);
     const o = new Output().withoutHints().withSpeechAndBraille(
         range, null, 'navigate');
@@ -375,7 +387,7 @@ AX_TEST_F('ChromeVoxOutputE2ETest', 'Input', async function() {
   });
 
   el = root.firstChild.firstChild;
-  expectedBrailleValues.forEach(function(expectedValue) {
+  expectedBrailleValues.forEach(expectedValue => {
     const range = CursorRange.fromNode(el);
     const o = new Output().withoutHints().withBraille(range, null, 'navigate');
     if (typeof expectedValue === 'string') {
@@ -415,7 +427,7 @@ AX_TEST_F('ChromeVoxOutputE2ETest', 'List', async function() {
   checkSpeechOutput(
       'a|List item|first|List|with 3 items',
       [
-        {value: {earconId: 'LIST_ITEM'}, start: 0, end: 1},
+        {value: {earcon: EarconId.LIST_ITEM}, start: 0, end: 1},
         {value: 'name', start: 12, end: 17},
         {value: 'role', start: 18, end: 22},
       ],
@@ -563,7 +575,7 @@ AX_TEST_F('ChromeVoxOutputE2ETest', 'ListBox', async function() {
       '1|List item| 1 of 2 |Not selected|List box|with 2 items',
       [
         {value: 'name', start: 0, end: 1},
-        {value: new OutputEarconAction('LIST_ITEM'), start: 0, end: 1},
+        {value: new OutputEarconAction(EarconId.LIST_ITEM), start: 0, end: 1},
         {value: 'role', start: 34, end: 42},
       ],
       o);
@@ -636,9 +648,6 @@ AX_TEST_F('ChromeVoxOutputE2ETest', 'MessageIdAndEarconValidity', function() {
       }
       assertFalse(/[A-Z]+/.test(value.msgId));
     }
-    if (value.earconId) {
-      assertNotNullNorUndefined(Earcon[value.earconId]);
-    }
   }
   for (const key in Output.STATE_INFO_) {
     const value = Output.STATE_INFO_[key];
@@ -651,9 +660,6 @@ AX_TEST_F('ChromeVoxOutputE2ETest', 'MessageIdAndEarconValidity', function() {
       Msgs.getMsg(innerValue.msgId);
       Msgs.getMsg(innerValue.msgId + '_brl');
       assertFalse(/[A-Z]+/.test(innerValue.msgId));
-      if (innerValue.earconId) {
-        assertNotNullNorUndefined(Earcon[innerValue.earconId]);
-      }
     }
   }
   for (const key in Output.INPUT_TYPE_MESSAGE_IDS_) {
@@ -714,7 +720,7 @@ AX_TEST_F('ChromeVoxOutputE2ETest', 'Brief', async function() {
   const node = root.children[0].firstChild;
   const range = CursorRange.fromNode(node);
 
-  localStorage['useVerboseMode'] = 'false';
+  SettingsManager.set('useVerboseMode', false);
   const oWithoutPrev = new Output().withSpeech(range, null, 'navigate');
   assertEquals('inside', oWithoutPrev.speechOutputForTest.string_);
 });
@@ -759,14 +765,14 @@ AX_TEST_F('ChromeVoxOutputE2ETest', 'ToggleButton', async function() {
         string_:
             '|Subscribe|Toggle Button|Pressed|Press Search+Space to toggle',
         spans_: [
-          {value: {earconId: 'CHECK_ON'}, start: 0, end: 0},
+          {value: {earcon: EarconId.CHECK_ON}, start: 0, end: 0},
           {value: 'name', start: 1, end: 10},
           {value: 'role', start: 11, end: 24},
           {value: {'delay': true}, start: 33, end: 61},
         ],
       },
       o.speechOutputForTest);
-  assertEquals('Subscribe tgl btn =', o.brailleOutputForTest.string_);
+  assertEquals('Subscribe tgl btn =', o.braille.string_);
 });
 
 AX_TEST_F('ChromeVoxOutputE2ETest', 'JoinDescendants', async function() {
@@ -880,7 +886,7 @@ AX_TEST_F('ChromeVoxOutputE2ETest', 'RangeOutput', async function() {
       'volume|Slider|2|Min 1|Max 10',
       [
         {value: 'name', start: 0, end: 6},
-        {value: new OutputEarconAction('SLIDER'), start: 0, end: 6},
+        {value: new OutputEarconAction(EarconId.SLIDER), start: 0, end: 6},
         {value: 'role', start: 7, end: 13},
         {value: 'value', start: 14, end: 15},
       ],
@@ -914,7 +920,7 @@ AX_TEST_F('ChromeVoxOutputE2ETest', 'RangeOutput', async function() {
       'volume|Spin button|2|Min 1|Max 10',
       [
         {value: 'name', start: 0, end: 6},
-        {value: new OutputEarconAction('LISTBOX'), start: 0, end: 6},
+        {value: new OutputEarconAction(EarconId.LISTBOX), start: 0, end: 6},
         {value: 'role', start: 7, end: 18},
         {value: 'value', start: 19, end: 20},
       ],
@@ -931,7 +937,7 @@ AX_TEST_F('ChromeVoxOutputE2ETest', 'RoleDescription', async function() {
       'hi|foo',
       [
         {value: 'name', start: 0, end: 2},
-        {value: new OutputEarconAction('BUTTON'), start: 0, end: 2},
+        {value: new OutputEarconAction(EarconId.BUTTON), start: 0, end: 2},
         {value: 'role', start: 3, end: 6},
       ],
       o);
@@ -958,8 +964,8 @@ AX_TEST_F('ChromeVoxOutputE2ETest', 'ValidateCommonProperties', function() {
   let missingState = [];
   let missingRestriction = [];
   let missingDescription = [];
-  for (const key in Output.RULES.navigate) {
-    const speak = Output.RULES.navigate[key].speak;
+  for (const key in OutputRule.RULES.navigate) {
+    const speak = OutputRule.RULES.navigate[key].speak;
     if (!speak) {
       continue;
     }
@@ -1025,15 +1031,11 @@ AX_TEST_F('ChromeVoxOutputE2ETest', 'ValidateCommonProperties', function() {
     RoleType.STATIC_TEXT,
     RoleType.WINDOW,
   ];
-  missingState = missingState.filter(function(state) {
-    return notStated.indexOf(state) === -1;
-  });
-  missingRestriction = missingRestriction.filter(function(restriction) {
-    return notRestricted.indexOf(restriction) === -1;
-  });
-  missingDescription = missingDescription.filter(function(desc) {
-    return notDescribed.indexOf(desc) === -1;
-  });
+  missingState = missingState.filter(state => notStated.indexOf(state) === -1);
+  missingRestriction = missingRestriction.filter(
+      restriction => notRestricted.indexOf(restriction) === -1);
+  missingDescription =
+      missingDescription.filter(desc => notDescribed.indexOf(desc) === -1);
 
   assertEquals(
       0, missingState.length,
@@ -1076,12 +1078,12 @@ AX_TEST_F('ChromeVoxOutputE2ETest', 'ValidateRoles', function() {
     RoleType.STATIC_TEXT,
     RoleType.WINDOW,
   ];
-  for (const key in Output.RULES.navigate) {
+  for (const key in OutputRule.RULES.navigate) {
     if (allowedMissingRoles.indexOf(key) !== -1) {
       continue;
     }
-    const speak = Output.RULES.navigate[key].speak;
-    let enter = Output.RULES.navigate[key].enter;
+    const speak = OutputRule.RULES.navigate[key].speak;
+    let enter = OutputRule.RULES.navigate[key].enter;
     if (enter && enter.speak) {
       enter = enter.speak;
     }
@@ -1109,8 +1111,7 @@ AX_TEST_F('ChromeVoxOutputE2ETest', 'InlineBraille', async function() {
   const o = new Output().withRichSpeechAndBraille(CursorRange.fromNode(obj));
   assertEquals(
       'Name|row 1 column 1|Table , 1 by 3', o.speechOutputForTest.string_);
-  assertEquals(
-      'Name r1c1 Age r1c2 Address r1c3', o.brailleOutputForTest.string_);
+  assertEquals('Name r1c1 Age r1c2 Address r1c3', o.braille.string_);
 });
 
 AX_TEST_F(
@@ -1127,12 +1128,12 @@ AX_TEST_F(
 
       let o = new Output().withRichSpeechAndBraille(CursorRange.fromNode(text));
       assertEquals('|square', o.speechOutputForTest.string_);
-      assertEquals('square', o.brailleOutputForTest.string_);
+      assertEquals('square', o.braille.string_);
 
       const region = root.find({role: RoleType.REGION});
       o = new Output().withRichSpeechAndBraille(CursorRange.fromNode(region));
       assertEquals('circle', o.speechOutputForTest.string_);
-      assertEquals('circle', o.brailleOutputForTest.string_);
+      assertEquals('circle', o.braille.string_);
     });
 
 AX_TEST_F('ChromeVoxOutputE2ETest', 'NestedList', async function() {
@@ -1369,6 +1370,111 @@ AX_TEST_F('ChromeVoxOutputE2ETest', 'DelayHintVariants', async function() {
       o.speechOutputForTest);
 });
 
+AX_TEST_F(
+    'ChromeVoxOutputE2ETest', 'DelayHintWithActionLabel', async function() {
+      const site = `<button>OK</button>`;
+      const root = await this.runWithLoadedTree(site);
+      const button = root.children[0];
+      const range = CursorRange.fromNode(button);
+
+      let o = new Output().withSpeech(range, null, 'navigate');
+
+      // Force a few properties to be set so that hints are triggered.
+      Object.defineProperty(button, 'clickable', {get: () => true});
+
+      Object.defineProperty(
+          button, 'doDefaultLabel', {get: () => 'click label'});
+      o = new Output().withSpeech(range, null, 'navigate');
+      assertEqualsJSON(
+          {
+            string_: 'OK|Press Search+Space to click label',
+            spans_: [{value: {delay: true}, start: 3, end: 36}],
+          },
+          o.speechOutputForTest);
+    });
+
+AX_TEST_F(
+    'ChromeVoxOutputE2ETest', 'DelayHintVariantsWithTouch', async function() {
+      const site = `<button>OK</button>`;
+      const root = await this.runWithLoadedTree(site);
+      const button = root.children[0];
+      const range = CursorRange.fromNode(button);
+
+      // Force a few properties to be set so that hints are triggered.
+      Object.defineProperty(button, 'clickable', {get: () => true});
+      EventSource.set(EventSourceType.TOUCH_GESTURE);
+
+      o = new Output().withSpeech(range, null, 'navigate');
+      assertEqualsJSON(
+          {
+            string_: 'OK|Double tap to activate',
+            spans_: [
+              {value: {delay: true}, start: 3, end: 25},
+            ],
+          },
+          o.speechOutputForTest);
+
+      Object.defineProperty(button, 'doDefaultLabel', {get: () => 'tap label'});
+
+      o = new Output().withSpeech(range, null, 'navigate');
+      assertEqualsJSON(
+          {
+            string_: 'OK|Double tap to tap label',
+            spans_: [{value: {delay: true}, start: 3, end: 26}],
+          },
+          o.speechOutputForTest);
+    });
+
+AX_TEST_F(
+    'ChromeVoxOutputE2ETest', 'DelayHintWithLongClickLabel', async function() {
+      const site = `<button>OK</button>`;
+      const root = await this.runWithLoadedTree(site);
+      const button = root.children[0];
+      const range = CursorRange.fromNode(button);
+
+      let o = new Output().withSpeech(range, null, 'navigate');
+
+      // Force a few properties to be set so that hints are triggered.
+      Object.defineProperty(button, 'longClickable', {get: () => true});
+      Object.defineProperty(
+          button, 'longClickLabel', {get: () => 'long click label'});
+
+      o = new Output().withSpeech(range, null, 'navigate');
+      assertEqualsJSON(
+          {
+            string_: 'OK|Press Search+Shift+Space to long click label',
+            spans_: [{value: {delay: true}, start: 3, end: 47}],
+          },
+          o.speechOutputForTest);
+    });
+
+AX_TEST_F(
+    'ChromeVoxOutputE2ETest', 'DelayHintLongClickFollowsClick',
+    async function() {
+      const site = `<button>OK</button>`;
+      const root = await this.runWithLoadedTree(site);
+      const button = root.children[0];
+      const range = CursorRange.fromNode(button);
+
+      let o = new Output().withSpeech(range, null, 'navigate');
+
+      // Force a few properties to be set so that hints are triggered.
+      Object.defineProperty(button, 'clickable', {get: () => true});
+      Object.defineProperty(button, 'longClickable', {get: () => true});
+
+      o = new Output().withSpeech(range, null, 'navigate');
+      assertEqualsJSON(
+          {
+            string_: 'OK|Press Search+Space to activate|' +
+                'Press Search+Shift+Space to long click',
+            spans_: [
+              {value: {delay: true}, start: 3, end: 33},
+              {start: 34, end: 72},
+            ],
+          },
+          o.speechOutputForTest);
+    });
+
 AX_TEST_F('ChromeVoxOutputE2ETest', 'WithoutFocusRing', async function() {
   const site = `<button></button>`;
   const root = await this.runWithLoadedTree(site);
@@ -1402,7 +1508,7 @@ AX_TEST_F('ChromeVoxOutputE2ETest', 'ARCCheckbox', async function() {
   checkSpeechOutput(
       '|Check box|checked state description',
       [
-        {value: new OutputEarconAction('CHECK_OFF'), start: 0, end: 0},
+        {value: new OutputEarconAction(EarconId.CHECK_OFF), start: 0, end: 0},
         {value: 'role', start: 1, end: 10},
         {value: 'checkedStateDescription', start: 11, end: 36},
       ],
@@ -1446,4 +1552,45 @@ AX_TEST_F('ChromeVoxOutputE2ETest', 'ContextOrder', async function() {
   o = new Output().withSpeech(
       CursorRange.fromNode(menu.firstChild), CursorRange.fromNode(p));
   assertEquals('first', o.contextOrder_);
+});
+
+AX_TEST_F('ChromeVoxOutputE2ETest', 'TreeGridLevel', async function() {
+  const site = `
+    <table id="treegrid" role="treegrid" aria-label="Inbox">
+      <tbody>
+        <tr role="row" aria-level="1" aria-posinset="1" aria-setsize="1"
+            aria-expanded="true">
+          <td role="gridcell">Treegrids are awesome</td>
+          <td role="gridcell">Want to learn how to use them?</td>
+        </tr>
+      </tbody>
+    </table>
+  `;
+  const root = await this.runWithLoadedTree(site);
+  const row = root.find({role: RoleType.ROW});
+  let range = CursorRange.fromNode(row);
+  let o =
+      new Output().withoutHints().withSpeechAndBraille(range, null, 'navigate');
+
+  checkSpeechOutput(
+      ' level 1 |Expanded|Row',
+      [
+        {value: 'state', start: 10, end: 18},
+        {value: 'role', start: 19, end: 22},
+      ],
+      o);
+
+  range = CursorRange.fromNode(row.firstChild);
+  o = new Output().withoutHints().withSpeechAndBraille(range, null, 'navigate');
+
+  checkSpeechOutput(
+      'Treegrids are awesome| level 1 |row 1 column 1',
+      [{value: 'name', start: 0, end: 21}], o);
+
+  range = CursorRange.fromNode(row.lastChild);
+  o = new Output().withoutHints().withSpeechAndBraille(range, null, 'navigate');
+
+  checkSpeechOutput(
+      'Want to learn how to use them?|row 1 column 2',
+      [{value: 'name', start: 0, end: 30}], o);
 });

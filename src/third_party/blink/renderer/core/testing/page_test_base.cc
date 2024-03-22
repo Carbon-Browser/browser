@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,7 +6,7 @@
 
 #include <sstream>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/test/bind.h"
 #include "base/time/default_tick_clock.h"
 #include "third_party/blink/public/common/browser_interface_broker_proxy.h"
@@ -23,6 +23,7 @@
 #include "third_party/blink/renderer/core/layout/layout_object.h"
 #include "third_party/blink/renderer/core/layout/layout_text_fragment.h"
 #include "third_party/blink/renderer/core/testing/mock_policy_container_host.h"
+#include "third_party/blink/renderer/platform/loader/fetch/memory_cache.h"
 #include "third_party/blink/renderer/platform/testing/unit_test_helpers.h"
 #include "third_party/blink/renderer/platform/wtf/shared_buffer.h"
 #include "third_party/blink/renderer/platform/wtf/text/string_builder.h"
@@ -87,7 +88,7 @@ void PageTestBase::MockClipboardHostProvider::Install(
   interface_broker_ = &interface_broker;
   interface_broker_->SetBinderForTesting(
       blink::mojom::blink::ClipboardHost::Name_,
-      base::BindRepeating(
+      WTF::BindRepeating(
           &PageTestBase::MockClipboardHostProvider::BindClipboardHost,
           base::Unretained(this)));
 }
@@ -126,6 +127,10 @@ void PageTestBase::SetUp() {
 
   // Use desktop page scale limits by default.
   GetPage().SetDefaultPageScaleLimits(1, 4);
+
+  // We do a lot of one-offs in unit tests, so update this so that every
+  // single test doesn't have to.
+  GetStyleEngine().UpdateViewportSize();
 }
 
 void PageTestBase::SetUp(gfx::Size size) {
@@ -142,12 +147,17 @@ void PageTestBase::SetUp(gfx::Size size) {
 
   // Use desktop page scale limits by default.
   GetPage().SetDefaultPageScaleLimits(1, 4);
+
+  // We do a lot of one-offs in unit tests, so update this so that every
+  // single test doesn't have to.
+  GetStyleEngine().UpdateViewportSize();
 }
 
 void PageTestBase::SetupPageWithClients(
     ChromeClient* chrome_client,
     LocalFrameClient* local_frame_client,
-    FrameSettingOverrideFunction setting_overrider) {
+    FrameSettingOverrideFunction setting_overrider,
+    gfx::Size size) {
   DCHECK(!dummy_page_holder_) << "Page should be set up only once";
   auto setter = base::BindLambdaForTesting([&](Settings& settings) {
     if (setting_overrider)
@@ -155,19 +165,24 @@ void PageTestBase::SetupPageWithClients(
     if (enable_compositing_)
       settings.SetAcceleratedCompositingEnabled(true);
   });
-  dummy_page_holder_ = std::make_unique<DummyPageHolder>(
-      gfx::Size(800, 600), chrome_client, local_frame_client, std::move(setter),
-      GetTickClock());
+  dummy_page_holder_ =
+      std::make_unique<DummyPageHolder>(size, chrome_client, local_frame_client,
+                                        std::move(setter), GetTickClock());
 
   // Use no-quirks (ake "strict") mode by default.
   GetDocument().SetCompatibilityMode(Document::kNoQuirksMode);
 
   // Use desktop page scale limits by default.
   GetPage().SetDefaultPageScaleLimits(1, 4);
+
+  // We do a lot of one-offs in unit tests, so update this so that every
+  // single test doesn't have to.
+  GetStyleEngine().UpdateViewportSize();
 }
 
 void PageTestBase::TearDown() {
   dummy_page_holder_ = nullptr;
+  MemoryCache::Get()->EvictResources();
 }
 
 Document& PageTestBase::GetDocument() const {
@@ -191,13 +206,19 @@ void PageTestBase::LoadAhem() {
 }
 
 void PageTestBase::LoadAhem(LocalFrame& frame) {
+  LoadFontFromFile(frame, test::CoreTestDataPath("Ahem.ttf"),
+                   AtomicString("Ahem"));
+}
+
+void PageTestBase::LoadFontFromFile(LocalFrame& frame,
+                                    String font_path,
+                                    const AtomicString& family_name) {
   Document& document = *frame.DomWindow()->document();
-  scoped_refptr<SharedBuffer> shared_buffer =
-      test::ReadFromFile(test::CoreTestDataPath("Ahem.ttf"));
+  scoped_refptr<SharedBuffer> shared_buffer = test::ReadFromFile(font_path);
   auto* buffer =
       MakeGarbageCollected<V8UnionArrayBufferOrArrayBufferViewOrString>(
           DOMArrayBuffer::Create(shared_buffer));
-  FontFace* ahem = FontFace::Create(frame.DomWindow(), "Ahem", buffer,
+  FontFace* ahem = FontFace::Create(frame.DomWindow(), family_name, buffer,
                                     FontFaceDescriptors::Create());
 
   ScriptState* script_state = ToScriptStateForMainWorld(&frame);
@@ -211,20 +232,10 @@ void PageTestBase::LoadNoto() {
 }
 
 void PageTestBase::LoadNoto(LocalFrame& frame) {
-  Document& document = *frame.DomWindow()->document();
-  scoped_refptr<SharedBuffer> shared_buffer =
-      test::ReadFromFile(blink::test::PlatformTestDataPath(
-          "third_party/Noto/NotoNaskhArabic-regular.woff2"));
-  auto* buffer =
-      MakeGarbageCollected<V8UnionArrayBufferOrArrayBufferViewOrString>(
-          DOMArrayBuffer::Create(shared_buffer));
-  FontFace* noto = FontFace::Create(frame.DomWindow(), "NotoArabic", buffer,
-                                    FontFaceDescriptors::Create());
-
-  ScriptState* script_state = ToScriptStateForMainWorld(&frame);
-  DummyExceptionStateForTesting exception_state;
-  FontFaceSetDocument::From(document)->addForBinding(script_state, noto,
-                                                     exception_state);
+  LoadFontFromFile(frame,
+                   blink::test::PlatformTestDataPath(
+                       "third_party/Noto/NotoNaskhArabic-regular.woff2"),
+                   AtomicString("NotoArabic"));
 }
 
 // Both sets the inner html and runs the document lifecycle.
@@ -291,7 +302,7 @@ StyleEngine& PageTestBase::GetStyleEngine() {
 }
 
 Element* PageTestBase::GetElementById(const char* id) const {
-  return GetDocument().getElementById(id);
+  return GetDocument().getElementById(AtomicString(id));
 }
 
 AnimationClock& PageTestBase::GetAnimationClock() {
@@ -325,6 +336,10 @@ std::string PageTestBase::ToSimpleLayoutTree(
   ostream << std::endl;
   ::blink::ToSimpleLayoutTree(ostream, layout_object, 0);
   return ostream.str();
+}
+
+void PageTestBase::SetPreferCompositingToLCDText(bool enable) {
+  GetPage().GetSettings().SetPreferCompositingToLCDTextForTesting(enable);
 }
 
 }  // namespace blink

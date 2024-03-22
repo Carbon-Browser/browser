@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,7 +11,7 @@
 #include "components/services/filesystem/public/mojom/types.mojom.h"
 #include "content/browser/file_system_access/file_system_access_file_handle_impl.h"
 #include "content/browser/file_system_access/file_system_access_handle_base.h"
-#include "content/browser/file_system_access/safe_move_helper.h"
+#include "content/browser/file_system_access/file_system_access_safe_move_helper.h"
 #include "content/common/content_export.h"
 #include "mojo/public/cpp/bindings/pending_receiver.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
@@ -45,7 +45,8 @@ class CONTENT_EXPORT FileSystemAccessFileWriterImpl
       const BindingContext& context,
       const storage::FileSystemURL& url,
       const storage::FileSystemURL& swap_url,
-      scoped_refptr<FileSystemAccessWriteLockManager::WriteLock> lock,
+      scoped_refptr<FileSystemAccessLockManager::LockHandle> lock,
+      scoped_refptr<FileSystemAccessLockManager::LockHandle> swap_lock,
       const SharedHandleState& handle_state,
       mojo::PendingReceiver<blink::mojom::FileSystemAccessFileWriter> receiver,
       bool has_transient_user_activation,
@@ -58,7 +59,7 @@ class CONTENT_EXPORT FileSystemAccessFileWriterImpl
   ~FileSystemAccessFileWriterImpl() override;
 
   const storage::FileSystemURL& swap_url() const { return swap_url_; }
-  const base::WeakPtr<FileSystemAccessFileWriterImpl> weak_ptr() const {
+  base::WeakPtr<FileSystemAccessFileWriterImpl> weak_ptr() {
     DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
     return weak_factory_.GetWeakPtr();
   }
@@ -100,7 +101,8 @@ class CONTENT_EXPORT FileSystemAccessFileWriterImpl
   void CloseImpl(CloseCallback callback);
   void AbortImpl(AbortCallback callback);
   void DidReplaceSwapFile(
-      std::unique_ptr<content::SafeMoveHelper> safe_move_helper,
+      std::unique_ptr<content::FileSystemAccessSafeMoveHelper>
+          file_system_access_safe_move_helper,
       blink::mojom::FileSystemAccessErrorPtr result);
 
   bool is_close_pending() const {
@@ -113,8 +115,11 @@ class CONTENT_EXPORT FileSystemAccessFileWriterImpl
   // most filesystems, this move operation is atomic.
   storage::FileSystemURL swap_url_ GUARDED_BY_CONTEXT(sequence_checker_);
 
-  // Shared write lock on the file. It is released on destruction.
-  scoped_refptr<FileSystemAccessWriteLockManager::WriteLock> lock_
+  // Lock on the target file. It is released on destruction.
+  scoped_refptr<FileSystemAccessLockManager::LockHandle> lock_
+      GUARDED_BY_CONTEXT(sequence_checker_);
+  // Exclusive lock on the swap file. It is released on destruction.
+  scoped_refptr<FileSystemAccessLockManager::LockHandle> swap_lock_
       GUARDED_BY_CONTEXT(sequence_checker_);
 
   CloseCallback close_callback_ GUARDED_BY_CONTEXT(sequence_checker_);

@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -33,9 +33,7 @@ import org.chromium.url.GURL;
 
 import java.util.concurrent.atomic.AtomicBoolean;
 
-/**
- * Tests for {@link BottomSheetToolbarViewBinder}.
- */
+/** Tests for {@link BottomSheetToolbarViewBinder}. */
 @RunWith(ChromeJUnit4ClassRunner.class)
 public class BottomSheetToolbarViewBinderTest extends BlankUiTestActivityTestCase {
     private final AtomicBoolean mIconClicked = new AtomicBoolean();
@@ -50,21 +48,25 @@ public class BottomSheetToolbarViewBinderTest extends BlankUiTestActivityTestCas
 
         ViewGroup view = new FrameLayout(getActivity());
 
-        TestThreadUtils.runOnUiThreadBlocking(() -> {
-            getActivity().setContentView(view);
+        TestThreadUtils.runOnUiThreadBlocking(
+                () -> {
+                    getActivity().setContentView(view);
 
-            mItemView = new BottomSheetToolbarView(getActivity());
-            view.addView(mItemView.getView());
+                    mItemView = new BottomSheetToolbarView(getActivity());
+                    view.addView(mItemView.getView());
 
-            mItemViewModel =
-                    new PropertyModel.Builder(BottomSheetToolbarProperties.ALL_KEYS)
-                            .with(BottomSheetToolbarProperties.FAVICON_ICON_VISIBLE, true)
-                            .with(BottomSheetToolbarProperties.OPEN_IN_NEW_TAB_VISIBLE, false)
-                            .build();
+                    mItemViewModel =
+                            new PropertyModel.Builder(BottomSheetToolbarProperties.ALL_KEYS)
+                                    .with(BottomSheetToolbarProperties.FAVICON_ICON_VISIBLE, true)
+                                    .with(
+                                            BottomSheetToolbarProperties.OPEN_IN_NEW_TAB_VISIBLE,
+                                            false)
+                                    .build();
 
-            mItemMCP = PropertyModelChangeProcessor.create(
-                    mItemViewModel, mItemView, BottomSheetToolbarViewBinder::bind);
-        });
+                    mItemMCP =
+                            PropertyModelChangeProcessor.create(
+                                    mItemViewModel, mItemView, BottomSheetToolbarViewBinder::bind);
+                });
     }
 
     @Test
@@ -109,7 +111,8 @@ public class BottomSheetToolbarViewBinderTest extends BlankUiTestActivityTestCas
     public void testSetSecurityIconClickCallback() {
         ImageView securityIcon = mItemView.getView().findViewById(R.id.security_icon);
         mIconClicked.set(false);
-        mItemViewModel.set(BottomSheetToolbarProperties.SECURITY_ICON_ON_CLICK_CALLBACK,
+        mItemViewModel.set(
+                BottomSheetToolbarProperties.SECURITY_ICON_ON_CLICK_CALLBACK,
                 () -> mIconClicked.set(true));
         securityIcon.performClick();
         assertEquals(true, mIconClicked.get());
@@ -121,7 +124,8 @@ public class BottomSheetToolbarViewBinderTest extends BlankUiTestActivityTestCas
     public void testCloseButtonClickCallback() {
         ImageView closeButton = mItemView.getView().findViewById(R.id.close);
         mIconClicked.set(false);
-        mItemViewModel.set(BottomSheetToolbarProperties.CLOSE_BUTTON_ON_CLICK_CALLBACK,
+        mItemViewModel.set(
+                BottomSheetToolbarProperties.CLOSE_BUTTON_ON_CLICK_CALLBACK,
                 () -> mIconClicked.set(true));
         closeButton.performClick();
         assertEquals(true, mIconClicked.get());

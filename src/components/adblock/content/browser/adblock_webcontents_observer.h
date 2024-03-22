@@ -18,10 +18,11 @@
 #ifndef COMPONENTS_ADBLOCK_CONTENT_BROWSER_ADBLOCK_WEBCONTENTS_OBSERVER_H_
 #define COMPONENTS_ADBLOCK_CONTENT_BROWSER_ADBLOCK_WEBCONTENTS_OBSERVER_H_
 
+#include "base/memory/raw_ptr.h"
 #include "components/adblock/content/browser/element_hider.h"
 #include "components/adblock/content/browser/frame_hierarchy_builder.h"
-#include "components/adblock/core/adblock_controller.h"
 #include "components/adblock/core/sitekey_storage.h"
+#include "components/adblock/core/subscription/subscription_service.h"
 #include "content/public/browser/web_contents.h"
 #include "content/public/browser/web_contents_observer.h"
 #include "content/public/browser/web_contents_user_data.h"
@@ -44,7 +45,7 @@ class AdblockWebContentObserver
  public:
   AdblockWebContentObserver(
       content::WebContents* web_contents,
-      adblock::AdblockController* controller,
+      adblock::SubscriptionService* subscription_service,
       adblock::ElementHider* element_hider,
       adblock::SitekeyStorage* sitekey_storage,
       std::unique_ptr<adblock::FrameHierarchyBuilder> frame_hierarchy_builder);
@@ -57,16 +58,26 @@ class AdblockWebContentObserver
   void DidFinishNavigation(
       content::NavigationHandle* navigation_handle) override;
 
+  void DidOpenRequestedURL(content::WebContents* new_contents,
+                           content::RenderFrameHost* source_render_frame_host,
+                           const GURL& url,
+                           const content::Referrer& referrer,
+                           WindowOpenDisposition disposition,
+                           ui::PageTransition transition,
+                           bool started_from_context_menu,
+                           bool renderer_initiated) override;
+
  private:
   explicit AdblockWebContentObserver(content::WebContents* web_contents);
   void HandleOnLoad(content::RenderFrameHost* render_frame_host);
+  bool IsAdblockEnabled() const;
 
   friend class content::WebContentsUserData<AdblockWebContentObserver>;
   WEB_CONTENTS_USER_DATA_KEY_DECL();
 
-  adblock::AdblockController* controller_;
-  adblock::ElementHider* element_hider_;
-  adblock::SitekeyStorage* sitekey_storage_;
+  raw_ptr<adblock::SubscriptionService> subscription_service_;
+  raw_ptr<adblock::ElementHider> element_hider_;
+  raw_ptr<adblock::SitekeyStorage> sitekey_storage_;
 
   std::unique_ptr<adblock::FrameHierarchyBuilder> frame_hierarchy_builder_;
 };

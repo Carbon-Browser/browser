@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,11 +6,13 @@
 
 #include <algorithm>
 
-#include "base/cxx17_backports.h"
 #include "base/memory/raw_ptr.h"
+#include "base/ranges/algorithm.h"
 #include "testing/gtest/include/gtest/gtest.h"
+#include "ui/gfx/geometry/rect.h"
 #include "ui/views/test/test_layout_manager.h"
 #include "ui/views/test/test_views.h"
+#include "ui/views/test/views_test_utils.h"
 #include "ui/views/view.h"
 
 namespace views {
@@ -31,10 +33,9 @@ class TestLayoutManagerBase : public LayoutManagerBase {
  public:
   std::vector<const View*> GetIncludedChildViews() const {
     std::vector<const View*> included;
-    std::copy_if(host_view()->children().begin(), host_view()->children().end(),
-                 std::back_inserter(included), [=](const View* child) {
-                   return IsChildIncludedInLayout(child);
-                 });
+    base::ranges::copy_if(
+        host_view()->children(), std::back_inserter(included),
+        [=](const View* child) { return IsChildIncludedInLayout(child); });
     return included;
   }
 
@@ -50,13 +51,13 @@ class TestLayoutManagerBase : public LayoutManagerBase {
       return *forced_layout_;
 
     ProposedLayout layout;
-    layout.host_size.set_width(base::clamp<SizeBound>(size_bounds.width(),
-                                                      kMinimumSize.width(),
-                                                      kPreferredSize.width())
+    layout.host_size.set_width(std::clamp<SizeBound>(size_bounds.width(),
+                                                     kMinimumSize.width(),
+                                                     kPreferredSize.width())
                                    .value());
-    layout.host_size.set_height(base::clamp<SizeBound>(size_bounds.height(),
-                                                       kMinimumSize.height(),
-                                                       kPreferredSize.height())
+    layout.host_size.set_height(std::clamp<SizeBound>(size_bounds.height(),
+                                                      kMinimumSize.height(),
+                                                      kPreferredSize.height())
                                     .value());
     return layout;
   }
@@ -341,6 +342,10 @@ class LayoutManagerBaseManagerTest : public testing::Test {
     return host_view_->AddChildView(std::move(child));
   }
 
+  // Directly calls the layout manager's `Layout()` method, as if from within
+  // `View::Layout()` or an overridden version of the function.
+  void DoLayoutManagerLayout() { layout_manager_->Layout(host_view_.get()); }
+
   View* host_view() { return host_view_.get(); }
   MockLayoutManagerBase* layout_manager() { return layout_manager_; }
   View* child(int index) { return host_view_->children().at(index); }
@@ -532,7 +537,7 @@ TEST_F(LayoutManagerBaseManagerTest, ViewVisibilitySet) {
   // Turn the second child view back on and verify it's present in the layout
   // again.
   child(1)->SetVisible(true);
-  host_view()->Layout();
+  test::RunScheduledLayout(host_view());
 
   EXPECT_TRUE(child(0)->GetVisible());
   EXPECT_EQ(child(0)->GetPreferredSize(), child(0)->size());
@@ -556,7 +561,7 @@ TEST_F(LayoutManagerBaseManagerTest, ViewAdded) {
 
   // Add a new view and verify it is being laid out.
   View* new_view = AddChildView(kSquarishSize);
-  host_view()->Layout();
+  test::RunScheduledLayout(host_view());
 
   EXPECT_TRUE(new_view->GetVisible());
   EXPECT_EQ(new_view->GetPreferredSize(), new_view->size());
@@ -579,7 +584,7 @@ TEST_F(LayoutManagerBaseManagerTest, ViewAdded_NotVisible) {
   View* new_view = new StaticSizedView(kSquarishSize);
   new_view->SetVisible(false);
   host_view()->AddChildView(new_view);
-  host_view()->Layout();
+  test::RunScheduledLayout(host_view());
 
   EXPECT_FALSE(new_view->GetVisible());
 }
@@ -599,20 +604,18 @@ TEST_F(LayoutManagerBaseManagerTest, ViewRemoved) {
   EXPECT_TRUE(child(2)->GetVisible());
   EXPECT_EQ(child(2)->GetPreferredSize(), child(2)->size());
 
-  host_view()->RemoveChildView(child_view);
-  child_view->SetSize(kLargeSize);
-  host_view()->Layout();
+  std::unique_ptr<View> owned_child_view =
+      host_view()->RemoveChildViewT(child_view);
+  owned_child_view->SetSize(kLargeSize);
+  test::RunScheduledLayout(host_view());
 
   EXPECT_TRUE(child(0)->GetVisible());
   EXPECT_EQ(child(0)->GetPreferredSize(), child(0)->size());
   EXPECT_TRUE(child(1)->GetVisible());
   EXPECT_EQ(child(1)->GetPreferredSize(), child(1)->size());
 
-  EXPECT_TRUE(child_view->GetVisible());
-  EXPECT_EQ(kLargeSize, child_view->size());
-
-  // Required since we removed it from the parent view.
-  delete child_view;
+  EXPECT_TRUE(owned_child_view->GetVisible());
+  EXPECT_EQ(kLargeSize, owned_child_view->size());
 }
 
 TEST(LayoutManagerBase_ProposedLayoutTest, Equality) {
@@ -793,7 +796,7 @@ TEST_F(LayoutManagerBaseAvailableSizeTest,
   grandchild_layout->OverrideProposedLayout(
       {{}, {{great_grandchild, false, {}, {0, 0}}}});
 
-  view()->Layout();
+  test::RunScheduledLayout(view());
 
   const size_t num_grandchild_layouts = grandchild_layout->layout_count();
   const size_t num_great_grandchild_layouts =
@@ -802,7 +805,7 @@ TEST_F(LayoutManagerBaseAvailableSizeTest,
   // Set the same rootlayout again as a control. This should not have an effect
   // on the layout of the grand- and great-grandchild views.
   layout()->OverrideProposedLayout(root_layout);
-  view()->Layout();
+  test::RunScheduledLayout(view());
 
   EXPECT_EQ(num_grandchild_layouts, grandchild_layout->layout_count());
   EXPECT_EQ(num_great_grandchild_layouts,
@@ -815,11 +818,65 @@ TEST_F(LayoutManagerBaseAvailableSizeTest,
   root_layout.child_layouts[0].bounds = gfx::Rect(0, 0, 5, 5);
   root_layout.child_layouts[0].available_size = SizeBounds(10, 10);
   layout()->OverrideProposedLayout(root_layout);
-  view()->Layout();
+  test::RunScheduledLayout(view());
 
   EXPECT_EQ(num_grandchild_layouts + 1, grandchild_layout->layout_count());
   EXPECT_EQ(num_great_grandchild_layouts + 1,
             great_grandchild_layout->layout_count());
+}
+
+using ManualLayoutUtilTest = LayoutManagerBaseManagerTest;
+
+TEST_F(ManualLayoutUtilTest, SetCanBeVisibleForManualLayout) {
+  ManualLayoutUtil manual_layout_util(layout_manager());
+
+  AddChildView(kPreferredSize);
+  AddChildView(kPreferredSize);
+  AddChildView(kPreferredSize);
+  host_view()->SizeToPreferredSize();
+  test::RunScheduledLayout(host_view());
+
+  const int old_invalidations = layout_manager()->num_invalidations();
+  const int old_layouts = layout_manager()->num_layouts_generated();
+
+  EXPECT_TRUE(child(0)->GetVisible());
+  const gfx::Rect old_child1_bounds = child(0)->bounds();
+  const gfx::Rect old_child2_bounds = child(1)->bounds();
+
+  // Hide the view and remove from the layout.
+  manual_layout_util.SetViewHidden(child(0), true);
+  EXPECT_FALSE(child(0)->GetVisible());
+  DoLayoutManagerLayout();
+  EXPECT_FALSE(child(0)->GetVisible());
+  // The second child should now have moved over into the space of the first.
+  EXPECT_EQ(old_child1_bounds, child(1)->bounds());
+
+  // These lines should have no effect as it is already set to hidden.
+  manual_layout_util.SetViewHidden(child(0), true);
+  DoLayoutManagerLayout();
+  EXPECT_FALSE(child(0)->GetVisible());
+  EXPECT_EQ(old_child1_bounds, child(1)->bounds());
+
+  // Enable the view in the layout again. This won't immediately cause the view
+  // to reappear; it may be made visible during the next layout pass.
+  manual_layout_util.SetViewHidden(child(0), false);
+  EXPECT_FALSE(child(0)->GetVisible());
+  DoLayoutManagerLayout();
+  EXPECT_TRUE(child(0)->GetVisible());
+  // The first child should be in its original bounds.
+  EXPECT_EQ(old_child1_bounds, child(0)->bounds());
+  // The second child should move back to its original bounds.
+  EXPECT_EQ(old_child2_bounds, child(1)->bounds());
+
+  // Again, this should have no effect as the view is already enabled.
+  manual_layout_util.SetViewHidden(child(0), false);
+  DoLayoutManagerLayout();
+  EXPECT_TRUE(child(0)->GetVisible());
+  EXPECT_EQ(old_child1_bounds, child(0)->bounds());
+  EXPECT_EQ(old_child2_bounds, child(1)->bounds());
+
+  EXPECT_EQ(old_layouts + 2, layout_manager()->num_layouts_generated());
+  EXPECT_EQ(old_invalidations + 2, layout_manager()->num_invalidations());
 }
 
 }  // namespace views

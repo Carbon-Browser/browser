@@ -1,10 +1,10 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include "base/bind.h"
 #include "base/command_line.h"
 #include "base/files/file_path.h"
+#include "base/functional/bind.h"
 #include "build/build_config.h"
 #include "content/public/browser/render_frame_host.h"
 #include "content/public/browser/web_contents.h"
@@ -97,8 +97,16 @@ class SavableResourcesTest : public ContentBrowserTest {
   }
 };
 
+// Flaky on Linux MSan. See crbug.com/1423060.
+#if BUILDFLAG(IS_LINUX) && defined(MEMORY_SANITIZER)
+#define MAYBE_GetSavableResourceLinksWithPageHasValidStyleLink \
+  DISABLED_GetSavableResourceLinksWithPageHasValidStyleLink
+#else
+#define MAYBE_GetSavableResourceLinksWithPageHasValidStyleLink \
+  GetSavableResourceLinksWithPageHasValidStyleLink
+#endif
 IN_PROC_BROWSER_TEST_F(SavableResourcesTest,
-                       GetSavableResourceLinksWithPageHasValidStyleLink) {
+                       MAYBE_GetSavableResourceLinksWithPageHasValidStyleLink) {
   base::FilePath page_file_path =
       GetTestFilePath("dom_serializer", "simple_linked_stylesheet.html");
 
@@ -113,8 +121,16 @@ IN_PROC_BROWSER_TEST_F(SavableResourcesTest,
 
 // Test function GetAllSavableResourceLinksForCurrentPage with a web page
 // which has valid savable resource links.
+// Flaky on Linux MSan. See crbug.com/1423060.
+#if BUILDFLAG(IS_LINUX) && defined(MEMORY_SANITIZER)
+#define MAYBE_GetSavableResourceLinksWithPageHasValidLinks \
+  DISABLED_GetSavableResourceLinksWithPageHasValidLinks
+#else
+#define MAYBE_GetSavableResourceLinksWithPageHasValidLinks \
+  GetSavableResourceLinksWithPageHasValidLinks
+#endif
 IN_PROC_BROWSER_TEST_F(SavableResourcesTest,
-                       GetSavableResourceLinksWithPageHasValidLinks) {
+                       MAYBE_GetSavableResourceLinksWithPageHasValidLinks) {
   base::FilePath page_file_path =
       GetTestFilePath("dom_serializer", "youtube_1.htm");
 
@@ -133,8 +149,16 @@ IN_PROC_BROWSER_TEST_F(SavableResourcesTest,
 
 // Test function GetAllSavableResourceLinksForCurrentPage with a web page
 // which does not have valid savable resource links.
+// Flaky on Linux MSan. See crbug.com/1423060.
+#if BUILDFLAG(IS_LINUX) && defined(MEMORY_SANITIZER)
+#define MAYBE_GetSavableResourceLinksWithPageHasInvalidLinks \
+  DISABLED_GetSavableResourceLinksWithPageHasInvalidLinks
+#else
+#define MAYBE_GetSavableResourceLinksWithPageHasInvalidLinks \
+  GetSavableResourceLinksWithPageHasInvalidLinks
+#endif
 IN_PROC_BROWSER_TEST_F(SavableResourcesTest,
-                       GetSavableResourceLinksWithPageHasInvalidLinks) {
+                       MAYBE_GetSavableResourceLinksWithPageHasInvalidLinks) {
   base::FilePath page_file_path =
       GetTestFilePath("dom_serializer", "youtube_2.htm");
 

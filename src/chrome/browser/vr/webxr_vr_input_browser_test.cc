@@ -1,21 +1,32 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "base/memory/raw_ptr.h"
+#include "base/no_destructor.h"
 #include "base/run_loop.h"
 #include "base/strings/string_number_conversions.h"
 #include "chrome/browser/vr/test/mock_xr_device_hook_base.h"
 #include "chrome/browser/vr/test/multi_class_browser_test.h"
 #include "chrome/browser/vr/test/webxr_vr_browser_test.h"
-#include "device/vr/openxr/openxr_interaction_profile_type.h"
 #include "device/vr/public/mojom/browser_test_interfaces.mojom.h"
+#include "device/vr/public/mojom/openxr_interaction_profile_type.mojom.h"
 
 // Browser test equivalent of
 // chrome/android/javatests/src/.../browser/vr/WebXrVrInputTest.java.
 // End-to-end tests for user input interaction with WebXR.
 
 namespace vr {
+
+namespace {
+const std::vector<std::string>& GetDefaultOpenXrProfiles() {
+  static base::NoDestructor<std::vector<std::string>> kDefaultOpenXrProfiles{
+      {"microsoft-mixed-reality", "windows-mixed-reality",
+       "generic-trigger-squeeze-touchpad-thumbstick"}};
+
+  return *kDefaultOpenXrProfiles;
+}
+}  // namespace
 
 // Helper function for verifying the XRInputSource.profiles array contents.
 void VerifyInputSourceProfilesArray(
@@ -148,8 +159,7 @@ class WebXrControllerInputMock : public MockXRDeviceHookBase {
                          bool is_valid) {
     auto controller_data = GetCurrentControllerData(index);
     controller_data.pose_data.is_valid = is_valid;
-    device_to_origin.matrix().getColMajor(
-        controller_data.pose_data.device_to_origin);
+    device_to_origin.GetColMajorF(controller_data.pose_data.device_to_origin);
     UpdateControllerAndWait(index, controller_data);
   }
 
@@ -210,7 +220,7 @@ class WebXrControllerInputMock : public MockXRDeviceHookBase {
   }
 
   void UpdateInteractionProfile(
-      device_test::mojom::InteractionProfileType new_profile) {
+      device::mojom::OpenXrInteractionProfileType new_profile) {
     device_test::mojom::EventData data = {};
     data.type = device_test::mojom::EventType::kInteractionProfileChanged;
     data.interaction_profile = new_profile;
@@ -238,7 +248,7 @@ class WebXrControllerInputMock : public MockXRDeviceHookBase {
     return iter->second;
   }
 
-  raw_ptr<base::RunLoop> wait_loop_ = nullptr;
+  raw_ptr<base::RunLoop, DanglingUntriaged> wait_loop_ = nullptr;
   unsigned int num_submitted_frames_ = 0;
   unsigned int target_submitted_frames_ = 0;
 };
@@ -398,12 +408,7 @@ WEBXR_VR_ALL_RUNTIMES_BROWSER_TEST_F(TestGamepadMinimumData) {
                                  WebXrVrBrowserTestBase::kPollTimeoutShort);
 
   if (t->GetRuntimeType() == XrBrowserTestBase::RuntimeType::RUNTIME_OPENXR) {
-    // OpenXR will still report having squeeze, menu, touchpad, and thumbstick
-    // because it only supports that type of controller and fills in default
-    // values if those inputs don't exist.
-    VerifyInputSourceProfilesArray(
-        t, {"windows-mixed-reality",
-            "generic-trigger-squeeze-touchpad-thumbstick"});
+    VerifyInputSourceProfilesArray(t, GetDefaultOpenXrProfiles());
   }
 
   t->RunJavaScriptOrFail("done()");
@@ -467,12 +472,7 @@ WEBXR_VR_ALL_RUNTIMES_BROWSER_TEST_F(TestMultipleGamepads) {
   t->PollJavaScriptBooleanOrFail("isButtonPressedEqualTo(0, false, 0)");
 
   if (t->GetRuntimeType() == XrBrowserTestBase::RuntimeType::RUNTIME_OPENXR) {
-    // OpenXR will still report having squeeze, menu, touchpad, and thumbstick
-    // because it only supports that type of controller and fills in default
-    // values if those inputs don't exist.
-    VerifyInputSourceProfilesArray(
-        t, {"windows-mixed-reality",
-            "generic-trigger-squeeze-touchpad-thumbstick"});
+    VerifyInputSourceProfilesArray(t, GetDefaultOpenXrProfiles());
   }
 
   t->RunJavaScriptOrFail("done()");
@@ -563,12 +563,7 @@ WEBXR_VR_ALL_RUNTIMES_BROWSER_TEST_F(TestGamepadCompleteData) {
                                  WebXrVrBrowserTestBase::kPollTimeoutShort);
 
   if (t->GetRuntimeType() == XrBrowserTestBase::RuntimeType::RUNTIME_OPENXR) {
-    // OpenXR will still report having squeeze, menu, touchpad, and thumbstick
-    // because it only supports that type of controller and fills in default
-    // values if those inputs don't exist.
-    VerifyInputSourceProfilesArray(
-        t, {"windows-mixed-reality",
-            "generic-trigger-squeeze-touchpad-thumbstick"});
+    VerifyInputSourceProfilesArray(t, GetDefaultOpenXrProfiles());
   }
 
   t->RunJavaScriptOrFail("done()");
@@ -611,7 +606,7 @@ WEBXR_VR_ALL_RUNTIMES_BROWSER_TEST_F(TestInteractionProfileChanged) {
   // Simulate the runtime sending an interaction profile change event to change
   // from Windows motion controller to Khronos simple Controller.
   my_mock.UpdateInteractionProfile(
-      device_test::mojom::InteractionProfileType::kKHRSimple);
+      device::mojom::OpenXrInteractionProfileType::kKHRSimple);
   // Make sure change events happens again since interaction profile changed
   t->PollJavaScriptBooleanOrFail("inputChangeEvents === 2",
                                  WebXrVrBrowserTestBase::kPollTimeoutShort);
@@ -622,36 +617,17 @@ WEBXR_VR_ALL_RUNTIMES_BROWSER_TEST_F(TestInteractionProfileChanged) {
   t->EndTest();
 }
 
-// We explicitly translate between the two types because this ensures that we
-// add a corresponding mojom InteractionProfileType whenever we add a new OpenXr
-// Interaction Profile. Since the mojom type is only needed for tests, we can't
-// just use only the mojom type, and because the mojom type may be used for
-// other runtimes, we can't just typemap it.
-device_test::mojom::InteractionProfileType GetMojomInteractionProfile(
-    device::OpenXrInteractionProfileType profile) {
-  switch (profile) {
-    case device::OpenXrInteractionProfileType::kMicrosoftMotion:
-      return device_test::mojom::InteractionProfileType::kWMRMotion;
-    case device::OpenXrInteractionProfileType::kKHRSimple:
-      return device_test::mojom::InteractionProfileType::kKHRSimple;
-    case device::OpenXrInteractionProfileType::kOculusTouch:
-      return device_test::mojom::InteractionProfileType::kOculusTouch;
-    case device::OpenXrInteractionProfileType::kValveIndex:
-      return device_test::mojom::InteractionProfileType::kValveIndex;
-    case device::OpenXrInteractionProfileType::kHTCVive:
-      return device_test::mojom::InteractionProfileType::kHTCVive;
-    case device::OpenXrInteractionProfileType::kSamsungOdyssey:
-      return device_test::mojom::InteractionProfileType::kSamsungOdyssey;
-    case device::OpenXrInteractionProfileType::kHPReverbG2:
-      return device_test::mojom::InteractionProfileType::kHPReverbG2;
-    case device::OpenXrInteractionProfileType::kHandSelectGrasp:
-      return device_test::mojom::InteractionProfileType::kHandSelectGrasp;
-    case device::OpenXrInteractionProfileType::kViveCosmos:
-      return device_test::mojom::InteractionProfileType::kViveCosmos;
-    case device::OpenXrInteractionProfileType::kCount:
-      return device_test::mojom::InteractionProfileType::kInvalid;
-  }
-}
+// Set up an initial constant and some compile time validations for it.
+constexpr device::mojom::OpenXrInteractionProfileType
+    kInitialInteractionProfile =
+        device::mojom::OpenXrInteractionProfileType::kMinValue;
+
+// If intentionally changing `Invalid` to be the 0th profile, please update the
+// assignment above.
+static_assert(kInitialInteractionProfile !=
+                  device::mojom::OpenXrInteractionProfileType::kInvalid,
+              "TestAllKnownInteractionProfileTypes expects the 0th profile in "
+              "OpenXrInteractionProfileType to be valid.");
 
 // Ensure that OpenXR can change between all known Interaction Profile types.
 // If you're adding a new interaction profile, you may need to validate that
@@ -660,11 +636,7 @@ device_test::mojom::InteractionProfileType GetMojomInteractionProfile(
 // adding with the new interaction profile.
 WEBXR_VR_ALL_RUNTIMES_BROWSER_TEST_F(TestAllKnownInteractionProfileTypes) {
   WebXrControllerInputMock my_mock;
-
-  // Explicitly set us to the first interaction profile before we start the
-  // session.
-  my_mock.UpdateInteractionProfile(GetMojomInteractionProfile(
-      static_cast<device::OpenXrInteractionProfileType>(0)));
+  my_mock.UpdateInteractionProfile(kInitialInteractionProfile);
   auto controller_data = my_mock.CreateValidController(
       device::ControllerRole::kControllerRoleRight);
   my_mock.ConnectController(controller_data);
@@ -680,11 +652,17 @@ WEBXR_VR_ALL_RUNTIMES_BROWSER_TEST_F(TestAllKnownInteractionProfileTypes) {
 
   // Note that since we explicitly set ourselves to the 0th value above, we want
   // to start changing to the first item in the enum.
-  static uint32_t kFinalValue =
-      static_cast<uint32_t>(device::OpenXrInteractionProfileType::kCount);
-  for (uint32_t i = 1; i < kFinalValue; i++) {
-    my_mock.UpdateInteractionProfile(GetMojomInteractionProfile(
-        static_cast<device::OpenXrInteractionProfileType>(i)));
+  static uint32_t kFinalValue = static_cast<uint32_t>(
+      device::mojom::OpenXrInteractionProfileType::kMaxValue);
+  static uint32_t kFirstChangedProfileIndex =
+      static_cast<uint32_t>(kInitialInteractionProfile) + 1;
+  for (uint32_t i = kFirstChangedProfileIndex; i <= kFinalValue; i++) {
+    auto profile = static_cast<device::mojom::OpenXrInteractionProfileType>(i);
+    // Skip the "Invalid" entry.
+    if (profile == device::mojom::OpenXrInteractionProfileType::kInvalid) {
+      continue;
+    }
+    my_mock.UpdateInteractionProfile(profile);
     expected_change_events++;
     // Make sure change events happens again since interaction profile changed
     t->PollJavaScriptBooleanOrFail(
@@ -755,7 +733,7 @@ WEBXR_VR_ALL_RUNTIMES_BROWSER_TEST_F(TestControllerInputRegistered) {
 
 std::string TransformToColMajorString(const gfx::Transform& t) {
   float array[16];
-  t.matrix().getColMajor(array);
+  t.GetColMajorF(array);
   std::string array_string = "[";
   for (int i = 0; i < 16; i++) {
     array_string += base::NumberToString(array[i]) + ",";

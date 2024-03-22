@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -16,6 +16,7 @@
 #include <string>
 
 #include "build/build_config.h"
+#include "sandbox/mac/sandbox_crash_message.h"
 
 #if defined(ARCH_CPU_X86_64)
 #define ABORT()                                                                \
@@ -70,6 +71,10 @@ void SendOsLog(Level level, const char* message) {
   }(level);
 
   os_log_with_type(log.get(), os_log_type, "%{public}s", message);
+
+  if (level == Level::ERR) {
+    sandbox::crash_message::SetCrashMessage(message);
+  }
 
   if (level == Level::FATAL) {
     abort_report_np(message);

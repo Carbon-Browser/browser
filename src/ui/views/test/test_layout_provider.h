@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,8 +11,7 @@
 #include "ui/views/layout/layout_provider.h"
 #include "ui/views/style/typography_provider.h"
 
-namespace views {
-namespace test {
+namespace views::test {
 
 // Helper to test LayoutProvider overrides.
 class TestLayoutProvider : public LayoutProvider, public TypographyProvider {
@@ -42,8 +41,8 @@ class TestLayoutProvider : public LayoutProvider, public TypographyProvider {
   int GetSnappedDialogWidth(int min_width) const override;
 
   // TypographyProvider:
-  ui::ResourceBundle::FontDetails GetFontDetails(int context,
-                                                 int style) const override;
+  ui::ResourceBundle::FontDetails GetFontDetailsImpl(int context,
+                                                     int style) const override;
 
  private:
   std::map<int, int> distance_metrics_;
@@ -51,7 +50,6 @@ class TestLayoutProvider : public LayoutProvider, public TypographyProvider {
   int snapped_dialog_width_ = 0;
 };
 
-}  // namespace test
-}  // namespace views
+}  // namespace views::test
 
 #endif  // UI_VIEWS_TEST_TEST_LAYOUT_PROVIDER_H_

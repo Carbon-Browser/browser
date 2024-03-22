@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -31,19 +31,20 @@ class InheritedFontWeightChecker
 
 InterpolationValue CSSFontWeightInterpolationType::CreateFontWeightValue(
     FontSelectionValue font_weight) const {
-  return InterpolationValue(std::make_unique<InterpolableNumber>(font_weight));
+  return InterpolationValue(
+      MakeGarbageCollected<InterpolableNumber>(font_weight));
 }
 
 InterpolationValue CSSFontWeightInterpolationType::MaybeConvertNeutral(
     const InterpolationValue&,
     ConversionCheckers&) const {
-  return InterpolationValue(std::make_unique<InterpolableNumber>(0));
+  return InterpolationValue(MakeGarbageCollected<InterpolableNumber>(0));
 }
 
 InterpolationValue CSSFontWeightInterpolationType::MaybeConvertInitial(
     const StyleResolverState&,
     ConversionCheckers& conversion_checkers) const {
-  return CreateFontWeightValue(NormalWeightValue());
+  return CreateFontWeightValue(kNormalWeightValue);
 }
 
 InterpolationValue CSSFontWeightInterpolationType::MaybeConvertInherit(
@@ -88,7 +89,7 @@ void CSSFontWeightInterpolationType::ApplyStandardPropertyValue(
     StyleResolverState& state) const {
   state.GetFontBuilder().SetWeight(FontSelectionValue(
       ClampTo(To<InterpolableNumber>(interpolable_value).Value(),
-              MinWeightValue(), MaxWeightValue())));
+              kMinWeightValue, kMaxWeightValue)));
 }
 
 }  // namespace blink

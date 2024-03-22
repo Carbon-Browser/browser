@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,10 +11,12 @@
 #include <memory>
 #include <string>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/files/file_util.h"
 #include "base/files/scoped_temp_dir.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
+#include "base/task/single_thread_task_runner.h"
+#include "base/test/gmock_expected_support.h"
 #include "base/time/time.h"
 #include "components/services/storage/public/cpp/buckets/bucket_info.h"
 #include "components/services/storage/public/cpp/buckets/constants.h"
@@ -51,17 +53,19 @@ class SandboxFileStreamWriterTest : public FileStreamWriterTest {
     ASSERT_TRUE(dir_.CreateUniqueTempDir());
 
     quota_manager_ = base::MakeRefCounted<storage::MockQuotaManager>(
-        is_incognito(), dir_.GetPath(), base::ThreadTaskRunnerHandle::Get(),
+        is_incognito(), dir_.GetPath(),
+        base::SingleThreadTaskRunner::GetCurrentDefault(),
         special_storage_policy_);
     quota_manager_proxy_ = base::MakeRefCounted<storage::MockQuotaManagerProxy>(
-        quota_manager_.get(), base::ThreadTaskRunnerHandle::Get());
+        quota_manager_.get(),
+        base::SingleThreadTaskRunner::GetCurrentDefault());
 
     file_system_context_ =
         CreateFileSystemContext(quota_manager_proxy_.get(), dir_);
 
     file_system_context_->OpenFileSystem(
         blink::StorageKey::CreateFromStringForTesting(kURLOrigin),
-        /*bucket=*/absl::nullopt, kFileSystemTypeTemporary,
+        /*bucket=*/std::nullopt, kFileSystemTypeTemporary,
         OPEN_FILE_SYSTEM_CREATE_IF_NONEXISTENT,
         base::BindOnce([](const FileSystemURL& root_url,
                           const std::string& name, base::File::Error result) {
@@ -73,6 +77,7 @@ class SandboxFileStreamWriterTest : public FileStreamWriterTest {
   }
 
   void TearDown() override {
+    file_system_context_ = nullptr;
     quota_manager_proxy_ = nullptr;
     quota_manager_ = nullptr;
     base::RunLoop().RunUntilIdle();
@@ -81,9 +86,9 @@ class SandboxFileStreamWriterTest : public FileStreamWriterTest {
  protected:
   scoped_refptr<MockSpecialStoragePolicy> special_storage_policy_;
 
-  scoped_refptr<FileSystemContext> file_system_context_;
   scoped_refptr<MockQuotaManager> quota_manager_;
   scoped_refptr<MockQuotaManagerProxy> quota_manager_proxy_;
+  scoped_refptr<FileSystemContext> file_system_context_;
 
   struct quota_usage_and_info {
     blink::mojom::QuotaStatusCode status;
@@ -193,14 +198,15 @@ class SandboxFileStreamWriterTest : public FileStreamWriterTest {
     QuotaManagerProxySync quota_manager_proxy_sync(quota_manager_proxy_.get());
 
     // Check default bucket exist.
-    QuotaErrorOr<BucketInfo> result = quota_manager_proxy_sync.GetBucket(
-        blink::StorageKey::CreateFromStringForTesting(kURLOrigin),
-        kDefaultBucketName, blink::mojom::StorageType::kTemporary);
-    EXPECT_TRUE(result.ok());
-    EXPECT_EQ(result->name, kDefaultBucketName);
-    EXPECT_EQ(result->storage_key,
+    ASSERT_OK_AND_ASSIGN(
+        BucketInfo result,
+        quota_manager_proxy_sync.GetBucket(
+            blink::StorageKey::CreateFromStringForTesting(kURLOrigin),
+            kDefaultBucketName, blink::mojom::StorageType::kTemporary));
+    EXPECT_EQ(result.name, kDefaultBucketName);
+    EXPECT_EQ(result.storage_key,
               blink::StorageKey::CreateFromStringForTesting(kURLOrigin));
-    EXPECT_GT(result->id.value(), 0);
+    EXPECT_GT(result.id.value(), 0);
   }
 
   void Test_Quota_OK() {
@@ -357,8 +363,8 @@ class SandboxFileStreamWriterIncognitoTest
       QuotaManagerProxy* quota_manager_proxy,
       const base::ScopedTempDir& dir) override {
     return CreateIncognitoFileSystemContextForTesting(
-        base::ThreadTaskRunnerHandle::Get(),
-        base::ThreadTaskRunnerHandle::Get(), quota_manager_proxy,
+        base::SingleThreadTaskRunner::GetCurrentDefault(),
+        base::SingleThreadTaskRunner::GetCurrentDefault(), quota_manager_proxy,
         dir.GetPath());
   }
 

@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -75,7 +75,7 @@ class TestZwpLinuxBufferParamsV1 : public ServerObject {
 
   // A buffer resource, which is created on Create or CreateImmed call. Can be
   // null if not created/failed to be created.
-  raw_ptr<wl_resource> buffer_resource_ = nullptr;
+  raw_ptr<wl_resource, DanglingUntriaged> buffer_resource_ = nullptr;
 };
 
 }  // namespace wl

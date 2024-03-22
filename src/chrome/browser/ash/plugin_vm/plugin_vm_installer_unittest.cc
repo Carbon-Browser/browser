@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,25 +13,26 @@
 
 #include "base/files/file_util.h"
 #include "base/files/scoped_temp_dir.h"
+#include "base/memory/raw_ptr.h"
 #include "base/test/bind.h"
 #include "base/test/gmock_callback_support.h"
 #include "base/test/metrics/histogram_tester.h"
-#include "chrome/browser/ash/login/users/mock_user_manager.h"
 #include "chrome/browser/ash/plugin_vm/plugin_vm_drive_image_download_service.h"
 #include "chrome/browser/ash/plugin_vm/plugin_vm_image_download_client.h"
 #include "chrome/browser/ash/plugin_vm/plugin_vm_installer_factory.h"
 #include "chrome/browser/ash/plugin_vm/plugin_vm_metrics_util.h"
 #include "chrome/browser/ash/plugin_vm/plugin_vm_pref_names.h"
 #include "chrome/browser/ash/plugin_vm/plugin_vm_test_helper.h"
+#include "chrome/browser/ash/plugin_vm/plugin_vm_util.h"
 #include "chrome/browser/ash/settings/scoped_cros_settings_test_helper.h"
 #include "chrome/browser/prefs/browser_prefs.h"
 #include "chrome/test/base/testing_profile.h"
 #include "chromeos/ash/components/dbus/concierge/concierge_client.h"
 #include "chromeos/ash/components/dbus/concierge/fake_concierge_client.h"
+#include "chromeos/ash/components/dbus/debug_daemon/debug_daemon_client.h"
+#include "chromeos/ash/components/dbus/dlcservice/fake_dlcservice_client.h"
+#include "chromeos/ash/components/dbus/spaced/fake_spaced_client.h"
 #include "chromeos/ash/components/dbus/vm_plugin_dispatcher/vm_plugin_dispatcher_client.h"
-#include "chromeos/dbus/dbus_thread_manager.h"
-#include "chromeos/dbus/debug_daemon/debug_daemon_client.h"
-#include "chromeos/dbus/dlcservice/fake_dlcservice_client.h"
 #include "components/account_id/account_id.h"
 #include "components/download/public/background_service/test/test_download_service.h"
 #include "components/drive/service/dummy_drive_service.h"
@@ -76,7 +77,6 @@ const char kHashUppercase[] =
 const char kHash2[] =
     "02f06421ae27144aacdc598aebcd345a5e2e634405e8578300173628fe1574bd";
 // File size set in test_download_service.
-const int kDownloadedPluginVmImageSizeInMb = 123456789u / (1024 * 1024);
 const int64_t kDefaultRequiredFreeDiskSpaceGB = 20LL;
 const int kRequiredFreeDiskSpaceGB = 40;
 const int64_t kBytesPerGigabyte = 1024 * 1024 * 1024;
@@ -166,9 +166,8 @@ class PluginVmInstallerTestBase : public testing::Test {
 
  protected:
   void SetUp() override {
-    chromeos::DBusThreadManager::Initialize();
     ash::ConciergeClient::InitializeFake(/*fake_cicerone_client=*/nullptr);
-    chromeos::DebugDaemonClient::InitializeFake();
+    ash::DebugDaemonClient::InitializeFake();
     ash::VmPluginDispatcherClient::InitializeFake();
 
     ASSERT_TRUE(profiles_dir_.CreateUniqueTempDir());
@@ -190,9 +189,7 @@ class PluginVmInstallerTestBase : public testing::Test {
 
     fake_concierge_client_ = ash::FakeConciergeClient::Get();
 
-    chromeos::DlcserviceClient::InitializeFake();
-    fake_dlcservice_client_ = static_cast<chromeos::FakeDlcserviceClient*>(
-        chromeos::DlcserviceClient::Get());
+    ash::FakeSpacedClient::InitializeFake();
   }
 
   void TearDown() override {
@@ -202,17 +199,16 @@ class PluginVmInstallerTestBase : public testing::Test {
     observer_.reset();
 
     ash::VmPluginDispatcherClient::Shutdown();
-    chromeos::DebugDaemonClient::Shutdown();
+    ash::DebugDaemonClient::Shutdown();
     ash::ConciergeClient::Shutdown();
-    chromeos::DBusThreadManager::Shutdown();
-    chromeos::DlcserviceClient::Shutdown();
+    ash::FakeSpacedClient::Shutdown();
   }
 
   void SetPluginVmImagePref(std::string url, std::string hash) {
-    DictionaryPrefUpdate update(profile_->GetPrefs(), prefs::kPluginVmImage);
-    base::Value* plugin_vm_image = update.Get();
-    plugin_vm_image->SetStringKey("url", url);
-    plugin_vm_image->SetStringKey("hash", hash);
+    ScopedDictPrefUpdate update(profile_->GetPrefs(), prefs::kPluginVmImage);
+    base::Value::Dict& plugin_vm_image = update.Get();
+    plugin_vm_image.Set("url", url);
+    plugin_vm_image.Set("hash", hash);
   }
 
   void SetRequiredFreeDiskSpaceGBPref(int required_free_disk_space) {
@@ -246,8 +242,9 @@ class PluginVmInstallerTestBase : public testing::Test {
 
     for (InstallingState state : states) {
       EXPECT_CALL(*observer_, OnStateUpdated(state));
-      if (state == end_state)
+      if (state == end_state) {
         return;
+      }
     }
 
     NOTREACHED();
@@ -275,14 +272,14 @@ class PluginVmInstallerTestBase : public testing::Test {
   content::BrowserTaskEnvironment task_environment_;
   std::unique_ptr<TestingProfile> profile_;
   std::unique_ptr<PluginVmTestHelper> plugin_vm_test_helper_;
-  PluginVmInstaller* installer_;
+  raw_ptr<PluginVmInstaller, DanglingUntriaged | ExperimentalAsh> installer_;
   std::unique_ptr<MockObserver> observer_;
 
   // A pointer to a singleton object which is valid until
   // ConciergeClient::Shutdown() is called.
-  ash::FakeConciergeClient* fake_concierge_client_;
-  // Owned by chromeos::DBusThreadManager
-  chromeos::FakeDlcserviceClient* fake_dlcservice_client_;
+  raw_ptr<ash::FakeConciergeClient, DanglingUntriaged | ExperimentalAsh>
+      fake_concierge_client_;
+  ash::FakeDlcserviceClient fake_dlcservice_client_;
 
  private:
   void CreateProfile() {
@@ -410,8 +407,11 @@ class PluginVmInstallerDriveTest : public PluginVmInstallerTestBase {
     return fake_drive_service_ptr;
   }
 
-  PluginVmDriveImageDownloadService* drive_download_service_;
-  drive::FakeDriveService* fake_drive_service_;
+  raw_ptr<PluginVmDriveImageDownloadService,
+          DanglingUntriaged | ExperimentalAsh>
+      drive_download_service_;
+  raw_ptr<drive::FakeDriveService, DanglingUntriaged | ExperimentalAsh>
+      fake_drive_service_;
   std::unique_ptr<base::HistogramTester> histogram_tester_;
 };
 
@@ -460,7 +460,9 @@ TEST_F(PluginVmInstallerDownloadServiceTest, VmExists) {
 
   vm_tools::concierge::ListVmDisksResponse list_vm_disks_response;
   list_vm_disks_response.set_success(true);
-  list_vm_disks_response.add_images();
+  auto* image = list_vm_disks_response.add_images();
+  image->set_name(kPluginVmName);
+  image->set_storage_location(vm_tools::concierge::STORAGE_CRYPTOHOME_PLUGINVM);
   fake_concierge_client_->set_list_vm_disks_response(list_vm_disks_response);
 
   ExpectObserverEventsUntil(InstallingState::kCheckingForExistingVm);
@@ -469,6 +471,26 @@ TEST_F(PluginVmInstallerDownloadServiceTest, VmExists) {
 
   histogram_tester_->ExpectUniqueSample(
       kPluginVmSetupResultHistogram, PluginVmSetupResult::kVmAlreadyExists, 1);
+}
+
+TEST_F(PluginVmInstallerDownloadServiceTest, InvalidVmExists) {
+  // This flow works even if the image url is not set.
+  SetPluginVmImagePref("", kHash);
+
+  vm_tools::concierge::ListVmDisksResponse list_vm_disks_response;
+  list_vm_disks_response.set_success(true);
+  auto* image = list_vm_disks_response.add_images();
+  // Pretend we have a VM with the right name in a wrong location.
+  image->set_name(kPluginVmName);
+  image->set_storage_location(vm_tools::concierge::STORAGE_CRYPTOHOME_ROOT);
+  fake_concierge_client_->set_list_vm_disks_response(list_vm_disks_response);
+
+  ExpectObserverEventsUntil(InstallingState::kCheckingForExistingVm);
+  EXPECT_CALL(*observer_, OnError(FailureReason::EXISTING_IMAGE_INVALID));
+  StartAndRunToCompletion();
+
+  histogram_tester_->ExpectUniqueSample(
+      kFailureReasonHistogram, FailureReason::EXISTING_IMAGE_INVALID, 1);
 }
 
 TEST_F(PluginVmInstallerDownloadServiceTest, CancelOnVmExistsCheck) {
@@ -526,8 +548,8 @@ TEST_F(PluginVmInstallerDownloadServiceTest, OnlyOneImageIsProcessedTest) {
 
   EXPECT_FALSE(installer_->IsProcessing());
 
-  histogram_tester_->ExpectUniqueSample(kPluginVmImageDownloadedSizeHistogram,
-                                        kDownloadedPluginVmImageSizeInMb, 1);
+  histogram_tester_->ExpectUniqueSample(kPluginVmSetupResultHistogram,
+                                        PluginVmSetupResult::kSuccess, 1);
 }
 
 TEST_F(PluginVmInstallerDownloadServiceTest,
@@ -547,8 +569,6 @@ TEST_F(PluginVmInstallerDownloadServiceTest,
   installer_->SetDownloadedImageForTesting(CreateZipFile());
   StartAndRunToCompletion();
 
-  histogram_tester_->ExpectUniqueSample(kPluginVmImageDownloadedSizeHistogram,
-                                        kDownloadedPluginVmImageSizeInMb, 2);
   histogram_tester_->ExpectUniqueSample(kPluginVmSetupResultHistogram,
                                         PluginVmSetupResult::kSuccess, 2);
 }
@@ -573,8 +593,6 @@ TEST_F(PluginVmInstallerDownloadServiceTest,
 
   StartAndRunToCompletion();
 
-  histogram_tester_->ExpectUniqueSample(kPluginVmImageDownloadedSizeHistogram,
-                                        kDownloadedPluginVmImageSizeInMb, 1);
   histogram_tester_->ExpectBucketCount(kPluginVmSetupResultHistogram,
                                        PluginVmSetupResult::kError, 1);
   histogram_tester_->ExpectBucketCount(kPluginVmSetupResultHistogram,
@@ -589,7 +607,6 @@ TEST_F(PluginVmInstallerDownloadServiceTest, CancelledDownloadTest) {
   installer_->Cancel();
   task_environment_.RunUntilIdle();
 
-  histogram_tester_->ExpectTotalCount(kPluginVmImageDownloadedSizeHistogram, 0);
   histogram_tester_->ExpectTotalCount(kFailureReasonHistogram, 0);
   histogram_tester_->ExpectUniqueSample(
       kPluginVmSetupResultHistogram,
@@ -604,9 +621,6 @@ TEST_F(PluginVmInstallerDownloadServiceTest, ImportNonExistingImageTest) {
 
   installer_->SetDownloadedImageForTesting(base::FilePath());
   StartAndRunToCompletion();
-
-  histogram_tester_->ExpectUniqueSample(kPluginVmImageDownloadedSizeHistogram,
-                                        kDownloadedPluginVmImageSizeInMb, 1);
 }
 
 TEST_F(PluginVmInstallerDownloadServiceTest, ImportFailedOutOfSpaceTest) {
@@ -645,7 +659,6 @@ TEST_F(PluginVmInstallerDownloadServiceTest, EmptyPluginVmImageUrlTest) {
   EXPECT_CALL(*observer_, OnError(FailureReason::INVALID_IMAGE_URL));
   StartAndRunToCompletion();
 
-  histogram_tester_->ExpectTotalCount(kPluginVmImageDownloadedSizeHistogram, 0);
   histogram_tester_->ExpectUniqueSample(kFailureReasonHistogram,
                                         FailureReason::INVALID_IMAGE_URL, 1);
 }
@@ -732,7 +745,7 @@ TEST_F(PluginVmInstallerDriveTest, CancelledDriveDownloadTest) {
 
 TEST_F(PluginVmInstallerDriveTest, SuccessfulDriveDownloadTest) {
   SetPluginVmImagePref(kDriveUrl, kHash);
-  fake_dlcservice_client_->set_install_error(dlcservice::kErrorNone);
+  fake_dlcservice_client_.set_install_error(dlcservice::kErrorNone);
 
   ExpectObserverEventsUntil(InstallingState::kImporting);
   EXPECT_CALL(*observer_, OnDownloadProgressUpdated(_, std::strlen(kContent)))
@@ -744,34 +757,9 @@ TEST_F(PluginVmInstallerDriveTest, SuccessfulDriveDownloadTest) {
                                         PluginVmDlcUseResult::kDlcSuccess, 1);
 }
 
-TEST_F(PluginVmInstallerDriveTest, InstallingPluingVmDlcInternal) {
-  SetPluginVmImagePref(kDriveUrl, kHash);
-  fake_dlcservice_client_->set_install_error(dlcservice::kErrorInternal);
-
-  ExpectObserverEventsUntil(InstallingState::kDownloadingDlc);
-  EXPECT_CALL(*observer_, OnError(FailureReason::DLC_INTERNAL));
-
-  StartAndRunToCompletion();
-  histogram_tester_->ExpectUniqueSample(kPluginVmDlcUseResultHistogram,
-                                        PluginVmDlcUseResult::kInternalDlcError,
-                                        1);
-}
-
-TEST_F(PluginVmInstallerDriveTest, InstallingPluingVmDlcBusy) {
-  SetPluginVmImagePref(kDriveUrl, kHash);
-  fake_dlcservice_client_->set_install_error(dlcservice::kErrorBusy);
-
-  ExpectObserverEventsUntil(InstallingState::kDownloadingDlc);
-  EXPECT_CALL(*observer_, OnError(FailureReason::DLC_BUSY));
-
-  StartAndRunToCompletion();
-  histogram_tester_->ExpectUniqueSample(kPluginVmDlcUseResultHistogram,
-                                        PluginVmDlcUseResult::kBusyDlcError, 1);
-}
-
 TEST_F(PluginVmInstallerDriveTest, InstallingPluginVmDlcNeedReboot) {
   SetPluginVmImagePref(kDriveUrl, kHash);
-  fake_dlcservice_client_->set_install_error(dlcservice::kErrorNeedReboot);
+  fake_dlcservice_client_.set_install_error(dlcservice::kErrorNeedReboot);
 
   ExpectObserverEventsUntil(InstallingState::kDownloadingDlc);
   EXPECT_CALL(*observer_, OnError(FailureReason::DLC_NEED_REBOOT));
@@ -784,7 +772,7 @@ TEST_F(PluginVmInstallerDriveTest, InstallingPluginVmDlcNeedReboot) {
 
 TEST_F(PluginVmInstallerDriveTest, InstallingPluginVmDlcNeedSpace) {
   SetPluginVmImagePref(kDriveUrl, kHash);
-  fake_dlcservice_client_->set_install_error(dlcservice::kErrorAllocation);
+  fake_dlcservice_client_.set_install_error(dlcservice::kErrorAllocation);
 
   ExpectObserverEventsUntil(InstallingState::kDownloadingDlc);
   EXPECT_CALL(*observer_, OnError(FailureReason::DLC_NEED_SPACE));
@@ -797,7 +785,7 @@ TEST_F(PluginVmInstallerDriveTest, InstallingPluginVmDlcNeedSpace) {
 
 TEST_F(PluginVmInstallerDriveTest, InstallingPluginVmDlcWhenUnsupported) {
   SetPluginVmImagePref(kDriveUrl, kHash);
-  fake_dlcservice_client_->set_install_error(dlcservice::kErrorInvalidDlc);
+  fake_dlcservice_client_.set_install_error(dlcservice::kErrorInvalidDlc);
 
   ExpectObserverEventsUntil(InstallingState::kDownloadingDlc);
   EXPECT_CALL(*observer_, OnError(FailureReason::DLC_UNSUPPORTED));
@@ -810,7 +798,7 @@ TEST_F(PluginVmInstallerDriveTest, InstallingPluginVmDlcWhenUnsupported) {
 
 TEST_F(PluginVmInstallerDriveTest, InstallingPluginVmDlcWhenNoImageFound) {
   SetPluginVmImagePref(kDriveUrl, kHash);
-  fake_dlcservice_client_->set_install_error(dlcservice::kErrorNoImageFound);
+  fake_dlcservice_client_.set_install_error(dlcservice::kErrorNoImageFound);
 
   ExpectObserverEventsUntil(InstallingState::kDownloadingDlc);
   EXPECT_CALL(*observer_, OnError(FailureReason::DLC_INTERNAL));

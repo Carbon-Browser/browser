@@ -1,77 +1,136 @@
-# Copyright 2021 The Chromium Authors. All rights reserved.
+# Copyright 2021 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 """Definitions of builders in the tryserver.chromium builder group."""
 
 load("//lib/branches.star", "branches")
-load("//lib/builders.star", "goma", "os")
+load("//lib/builders.star", "cpu", "os", "reclient")
 load("//lib/try.star", "try_")
 load("//lib/consoles.star", "consoles")
+load("//lib/gn_args.star", "gn_args")
 
 try_.defaults.set(
+    executable = try_.DEFAULT_EXECUTABLE,
     builder_group = "tryserver.chromium",
+    pool = try_.DEFAULT_POOL,
     builderless = True,
     cores = 32,
-    executable = try_.DEFAULT_EXECUTABLE,
-    execution_timeout = try_.DEFAULT_EXECUTION_TIMEOUT,
-    goma_backend = goma.backend.RBE_PROD,
     os = os.LINUX_DEFAULT,
-    pool = try_.DEFAULT_POOL,
+    execution_timeout = try_.DEFAULT_EXECUTION_TIMEOUT,
+    reclient_instance = reclient.instance.DEFAULT_UNTRUSTED,
+    reclient_jobs = reclient.jobs.HIGH_JOBS_FOR_CQ,
     service_account = try_.DEFAULT_SERVICE_ACCOUNT,
 )
 
 consoles.list_view(
     name = "tryserver.chromium",
     branch_selector = [
-        branches.DESKTOP_EXTENDED_STABLE_MILESTONE,
-        branches.FUCHSIA_LTS_MILESTONE,
+        branches.selector.ANDROID_BRANCHES,
+        branches.selector.DESKTOP_BRANCHES,
+        branches.selector.FUCHSIA_BRANCHES,
     ],
 )
 
 try_.builder(
     name = "android-official",
-    branch_selector = branches.STANDARD_MILESTONE,
+    branch_selector = branches.selector.ANDROID_BRANCHES,
+    mirrors = [
+        "ci/android-official",
+    ],
+    ssd = True,
+    contact_team_email = "clank-engprod@google.com",
+    gn_args = gn_args.config(
+        configs = [
+            "ci/android-official",
+            "dcheck_always_on",
+            "use_dummy_lastchange",
+        ],
+    ),
 )
 
 try_.builder(
     name = "fuchsia-official",
-    branch_selector = branches.FUCHSIA_LTS_MILESTONE,
+    branch_selector = branches.selector.FUCHSIA_BRANCHES,
+    mirrors = [
+        "ci/fuchsia-official",
+    ],
+    ssd = True,
+    gn_args = gn_args.config(
+        configs = [
+            "ci/fuchsia-official",
+            "minimal_symbols",
+            "dcheck_always_on",
+            "use_dummy_lastchange",
+        ],
+    ),
 )
 
 try_.builder(
     name = "linux-official",
-    branch_selector = branches.STANDARD_MILESTONE,
+    branch_selector = branches.selector.LINUX_BRANCHES,
+    mirrors = [
+        "ci/linux-official",
+    ],
+    ssd = True,
+    gn_args = gn_args.config(
+        configs = ["ci/linux-official", "try_builder"],
+    ),
 )
 
 try_.builder(
     name = "mac-official",
-    branch_selector = branches.DESKTOP_EXTENDED_STABLE_MILESTONE,
+    branch_selector = branches.selector.MAC_BRANCHES,
     mirrors = [
         "ci/mac-official",
     ],
+    builderless = False,
     cores = None,
+    os = os.MAC_ANY,
+    cpu = cpu.ARM64,
     # TODO(crbug.com/1279290) builds with PGO change take long time.
     # Keep in sync with mac-official in ci/chromium.star.
-    execution_timeout = 7 * time.hour,
-    os = os.MAC_ANY,
+    execution_timeout = 15 * time.hour,
+    gn_args = gn_args.config(
+        configs = [
+            "ci/mac-official",
+            "minimal_symbols",
+            "dcheck_always_on",
+            "use_dummy_lastchange",
+        ],
+    ),
 )
 
 try_.builder(
     name = "win-official",
-    branch_selector = branches.DESKTOP_EXTENDED_STABLE_MILESTONE,
+    branch_selector = branches.selector.WINDOWS_BRANCHES,
     mirrors = [
         "ci/win-official",
     ],
     os = os.WINDOWS_DEFAULT,
     execution_timeout = 6 * time.hour,
+    gn_args = gn_args.config(
+        configs = [
+            "ci/win-official",
+            "dcheck_always_on",
+            "use_dummy_lastchange",
+        ],
+    ),
 )
 
 try_.builder(
     name = "win32-official",
-    branch_selector = branches.DESKTOP_EXTENDED_STABLE_MILESTONE,
-    os = os.WINDOWS_DEFAULT,
-    execution_timeout = 6 * time.hour,
+    branch_selector = branches.selector.WINDOWS_BRANCHES,
     mirrors = [
         "ci/win32-official",
     ],
+    os = os.WINDOWS_DEFAULT,
+    execution_timeout = 6 * time.hour,
+    gn_args = gn_args.config(
+        configs = [
+            "ci/win32-official",
+            "minimal_symbols",
+            "dcheck_always_on",
+            "use_dummy_lastchange",
+        ],
+    ),
 )

@@ -20,10 +20,11 @@
 
 #include <string>
 
-#include "components/adblock/content/common/mojom/adblock.mojom.h"
+#include "components/adblock/content/browser/adblock_filter_match.h"
 #include "components/keyed_service/core/keyed_service.h"
 #include "content/public/browser/global_routing_id.h"
 #include "net/http/http_response_headers.h"
+#include "services/network/public/mojom/parsed_headers.mojom-forward.h"
 #include "url/gurl.h"
 
 namespace adblock {

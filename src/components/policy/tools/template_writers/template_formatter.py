@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Copyright 2017 The Chromium Authors. All rights reserved.
+# Copyright 2017 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 '''Takes translated policy_template.json files as input, applies template
@@ -13,13 +13,6 @@ import json
 import os
 import re
 import sys
-
-sys.path.insert(
-    0,
-    os.path.join(os.path.dirname(__file__), os.pardir, os.pardir, os.pardir,
-                 os.pardir, 'third_party', 'six', 'src'))
-
-import six
 
 import writer_configuration
 import policy_template_generator
@@ -130,9 +123,7 @@ def _ParseVersionFile(version_path):
 
 
 def _JsonToUtf8Encoding(data, ignore_dicts=False):
-  if six.PY2 and isinstance(data, unicode):
-    return data.encode('utf-8')
-  elif isinstance(data, list):
+  if isinstance(data, list):
     return [_JsonToUtf8Encoding(item, False) for item in data]
   elif isinstance(data, dict):
     return {

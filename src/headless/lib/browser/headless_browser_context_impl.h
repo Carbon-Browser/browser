@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -19,13 +19,13 @@
 #include "content/public/browser/resource_context.h"
 #include "headless/lib/browser/headless_browser_context_options.h"
 #include "headless/lib/browser/headless_request_context_manager.h"
-#include "headless/public/headless_browser.h"
 #include "headless/public/headless_browser_context.h"
 #include "headless/public/headless_export.h"
 #include "mojo/public/cpp/bindings/remote.h"
 
 namespace headless {
 class HeadlessBrowserImpl;
+class HeadlessClientHintsControllerDelegate;
 class HeadlessWebContentsImpl;
 
 class HEADLESS_EXPORT HeadlessBrowserContextImpl final
@@ -54,15 +54,6 @@ class HEADLESS_EXPORT HeadlessBrowserContextImpl final
   void Close() override;
   const std::string& Id() override;
 
-  void SetDevToolsFrameToken(int render_process_id,
-                             int render_frame_routing_id,
-                             const base::UnguessableToken& devtools_frame_token,
-                             int frame_tree_node_id);
-
-  void RemoveDevToolsFrameToken(int render_process_id,
-                                int render_frame_routing_id,
-                                int frame_tree_node_id);
-
   // BrowserContext implementation:
   std::unique_ptr<content::ZoomLevelDelegate> CreateZoomLevelDelegate(
       const base::FilePath& partition_path) override;
@@ -85,6 +76,10 @@ class HEADLESS_EXPORT HeadlessBrowserContextImpl final
   content::BackgroundSyncController* GetBackgroundSyncController() override;
   content::BrowsingDataRemoverDelegate* GetBrowsingDataRemoverDelegate()
       override;
+  content::ReduceAcceptLanguageControllerDelegate*
+  GetReduceAcceptLanguageControllerDelegate() override;
+  content::OriginTrialsControllerDelegate* GetOriginTrialsControllerDelegate()
+      override;
 
   HeadlessWebContents* CreateWebContents(HeadlessWebContents::Builder* builder);
   // Register web contents which were created not through Headless API
@@ -95,17 +90,6 @@ class HEADLESS_EXPORT HeadlessBrowserContextImpl final
 
   HeadlessBrowserImpl* browser() const;
   const HeadlessBrowserContextOptions* options() const;
-
-  // Returns the DevTools frame token for the corresponding RenderFrameHost or
-  // null if can't be found. Can be called on any thread.
-  const base::UnguessableToken* GetDevToolsFrameToken(
-      int render_process_id,
-      int render_frame_id) const;
-
-  // Returns the DevTools frame token for the corresponding frame tree node id
-  // or null if can't be found. Can be called on any thread.
-  const base::UnguessableToken* GetDevToolsFrameTokenForFrameTreeNodeId(
-      int frame_tree_node_id) const;
 
   void ConfigureNetworkContextParams(
       bool in_memory,
@@ -130,21 +114,16 @@ class HEADLESS_EXPORT HeadlessBrowserContextImpl final
   std::unordered_map<std::string, std::unique_ptr<HeadlessWebContents>>
       web_contents_map_;
 
-  // Guards |devtools_frame_token_map_| from being concurrently written on the
-  // UI thread and read on the IO thread.
-  // TODO(alexclarke): Remove if we can add DevTools frame token ID to
-  // ResourceRequestInfo. See https://crbug.com/715541
-  mutable base::Lock devtools_frame_token_map_lock_;
-  base::flat_map<content::GlobalRenderFrameHostId, base::UnguessableToken>
-      devtools_frame_token_map_;
-  base::flat_map<int, base::UnguessableToken>
-      frame_tree_node_id_to_devtools_frame_token_map_;
-
   std::unique_ptr<content::PermissionControllerDelegate>
       permission_controller_delegate_;
 
   std::unique_ptr<HeadlessRequestContextManager> request_context_manager_;
   std::unique_ptr<SimpleFactoryKey> simple_factory_key_;
+
+  std::unique_ptr<content::OriginTrialsControllerDelegate>
+      origin_trials_controller_delegate_;
+
+  std::unique_ptr<HeadlessClientHintsControllerDelegate> hints_delegate_;
 };
 
 }  // namespace headless

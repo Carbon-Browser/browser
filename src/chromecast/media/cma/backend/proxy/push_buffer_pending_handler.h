@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,7 +8,7 @@
 #include <memory>
 #include <queue>
 
-#include "base/memory/ref_counted.h"
+#include "base/memory/weak_ptr.h"
 #include "base/sequence_checker.h"
 #include "chromecast/media/api/cma_backend.h"
 #include "chromecast/media/api/decoder_buffer_base.h"
@@ -58,7 +58,7 @@ class PushBufferPendingHandler : public AudioChannelPushBufferHandler {
   CmaBackend::BufferStatus PushBuffer(
       const PushBufferRequest& request) override;
   bool HasBufferedData() const override;
-  absl::optional<PushBufferRequest> GetBufferedData() override;
+  std::optional<PushBufferRequest> GetBufferedData() override;
 
  private:
   friend class PushBufferPendingHandlerTest;

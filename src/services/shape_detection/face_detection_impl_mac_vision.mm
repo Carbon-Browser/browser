@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,7 +6,7 @@
 
 #include <vector>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
 #include "base/memory/ptr_util.h"
 #include "third_party/skia/include/core/SkBitmap.h"
@@ -67,7 +67,7 @@ void FaceDetectionImplMacVision::OnFacesDetected(VNRequest* request,
   if (receiver_)  // Can be unbound in unit testing.
     receiver_->ResumeIncomingMethodCallProcessing();
 
-  if (![request.results count] || error) {
+  if (!request.results.count || error) {
     std::move(detected_callback_).Run({});
     return;
   }

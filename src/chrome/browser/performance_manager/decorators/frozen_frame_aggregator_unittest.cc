@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -86,11 +86,11 @@ class FrozenFrameAggregatorTest : public GraphTestHarness {
   }
 
   void ExpectRunning() {
-    EXPECT_EQ(LifecycleState::kRunning, page_node_.get()->lifecycle_state());
+    EXPECT_EQ(LifecycleState::kRunning, page_node_.get()->GetLifecycleState());
   }
 
   void ExpectFrozen() {
-    EXPECT_EQ(LifecycleState::kFrozen, page_node_.get()->lifecycle_state());
+    EXPECT_EQ(LifecycleState::kFrozen, page_node_.get()->GetLifecycleState());
   }
 
   TestNodeWrapper<FrameNodeImpl> CreateFrame(FrameNodeImpl* parent_frame_node) {

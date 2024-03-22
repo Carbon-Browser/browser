@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,8 +7,10 @@
 #include "base/containers/contains.h"
 #include "ui/base/x/x11_util.h"
 #include "ui/base/x/x11_xrandr_interval_only_vsync_provider.h"
+#include "ui/gfx/frame_data.h"
+#include "ui/gfx/x/connection.h"
+#include "ui/gfx/x/visual_manager.h"
 #include "ui/gfx/x/xproto.h"
-#include "ui/gfx/x/xproto_util.h"
 #include "ui/gl/egl_util.h"
 
 namespace gl {
@@ -47,8 +49,9 @@ void NativeViewGLSurfaceEGLX11::Destroy() {
 }
 
 gfx::SwapResult NativeViewGLSurfaceEGLX11::SwapBuffers(
-    PresentationCallback callback) {
-  auto result = NativeViewGLSurfaceEGL::SwapBuffers(std::move(callback));
+    PresentationCallback callback,
+    gfx::FrameData data) {
+  auto result = NativeViewGLSurfaceEGL::SwapBuffers(std::move(callback), data);
   if (result == gfx::SwapResult::SWAP_FAILED)
     return result;
 
@@ -69,7 +72,7 @@ gfx::SwapResult NativeViewGLSurfaceEGLX11::SwapBuffers(
 
 EGLint NativeViewGLSurfaceEGLX11::GetNativeVisualID() const {
   x11::VisualId visual_id;
-  ui::XVisualManager::GetInstance()->ChooseVisualForWindow(
+  GetXNativeConnection()->GetOrCreateVisualManager().ChooseVisualForWindow(
       true, &visual_id, nullptr, nullptr, nullptr);
   return static_cast<EGLint>(visual_id);
 }
@@ -97,7 +100,8 @@ void NativeViewGLSurfaceEGLX11::OnEvent(const x11::Event& x11_event) {
   auto expose_copy = *expose;
   auto window = static_cast<x11::Window>(window_);
   expose_copy.window = window;
-  x11::SendEvent(expose_copy, window, x11::EventMask::Exposure);
+  x11::Connection::Get()->SendEvent(expose_copy, window,
+                                    x11::EventMask::Exposure);
   x11::Connection::Get()->Flush();
 }
 

@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 package org.chromium.net.impl;
@@ -52,15 +52,25 @@ public abstract class UrlRequestBase extends ExperimentalUrlRequest {
     protected abstract void setUploadDataProvider(
             UploadDataProvider uploadDataProvider, Executor executor);
 
-    /**
-     * Possible URL Request statuses.
-     */
-    @IntDef({Status.INVALID, Status.IDLE, Status.WAITING_FOR_STALLED_SOCKET_POOL,
-            Status.WAITING_FOR_AVAILABLE_SOCKET, Status.WAITING_FOR_DELEGATE,
-            Status.WAITING_FOR_CACHE, Status.DOWNLOADING_PAC_FILE, Status.RESOLVING_PROXY_FOR_URL,
-            Status.RESOLVING_HOST_IN_PAC_FILE, Status.ESTABLISHING_PROXY_TUNNEL,
-            Status.RESOLVING_HOST, Status.CONNECTING, Status.SSL_HANDSHAKE, Status.SENDING_REQUEST,
-            Status.WAITING_FOR_RESPONSE, Status.READING_RESPONSE})
+    /** Possible URL Request statuses. */
+    @IntDef({
+        Status.INVALID,
+        Status.IDLE,
+        Status.WAITING_FOR_STALLED_SOCKET_POOL,
+        Status.WAITING_FOR_AVAILABLE_SOCKET,
+        Status.WAITING_FOR_DELEGATE,
+        Status.WAITING_FOR_CACHE,
+        Status.DOWNLOADING_PAC_FILE,
+        Status.RESOLVING_PROXY_FOR_URL,
+        Status.RESOLVING_HOST_IN_PAC_FILE,
+        Status.ESTABLISHING_PROXY_TUNNEL,
+        Status.RESOLVING_HOST,
+        Status.CONNECTING,
+        Status.SSL_HANDSHAKE,
+        Status.SENDING_REQUEST,
+        Status.WAITING_FOR_RESPONSE,
+        Status.READING_RESPONSE
+    })
     @Retention(RetentionPolicy.SOURCE)
     public @interface StatusValues {}
 

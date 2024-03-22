@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,9 +10,9 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
 #include "base/files/file_util.h"
 #include "base/files/scoped_temp_dir.h"
+#include "base/functional/bind.h"
 #include "base/memory/ptr_util.h"
 #include "base/run_loop.h"
 #include "base/strings/string_number_conversions.h"
@@ -148,9 +148,7 @@ class DownloadFeedbackServiceTest : public testing::Test {
     base::FilePath upload_file_path(temp_dir_.GetPath().AppendASCII(
         "test file " + base::NumberToString(n)));
     const std::string upload_file_data = "data";
-    int wrote = base::WriteFile(upload_file_path, upload_file_data.data(),
-                                upload_file_data.size());
-    EXPECT_EQ(static_cast<int>(upload_file_data.size()), wrote);
+    EXPECT_TRUE(base::WriteFile(upload_file_path, upload_file_data));
     return upload_file_path;
   }
 
@@ -278,9 +276,6 @@ TEST_F(DownloadFeedbackServiceTest, SingleFeedbackCompleteAndKeepDownload) {
                     bool _, download::DownloadItem::AcquireFileCallback arg) {
         download_discarded_callback = std::move(arg);
       });
-  EXPECT_CALL(item, ValidateDangerousDownload()).Times(1);
-  GURL empty_url;
-  EXPECT_CALL(item, GetURL()).WillOnce(ReturnRef(empty_url));
 
   DownloadFeedbackService service(&fake_download_service_,
                                   file_task_runner_.get());

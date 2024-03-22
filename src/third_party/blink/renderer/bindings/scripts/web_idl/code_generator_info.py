@@ -1,4 +1,4 @@
-# Copyright 2019 The Chromium Authors. All rights reserved.
+# Copyright 2019 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -6,8 +6,7 @@
 # attributes are auto-generated from this list because they're boilerplated.
 _CODE_GENERATOR_INFO_ATTRIBUTES = (
     'blink_headers',
-    'defined_in_mixin',  # [LegacyTreatAsPartialInterface] makes this False
-    'defined_in_partial',  # [LegacyTreatAsPartialInterface] makes this True
+    'defined_in_partial',
     'for_testing',
     'is_active_script_wrappable',
     'is_legacy_unenumerable_named_properties',

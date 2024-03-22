@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,6 +7,7 @@
 
 #include <vector>
 
+#include "base/memory/raw_ptr.h"
 #include "chrome/browser/ash/smb_client/smb_share_info.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 
@@ -49,7 +50,7 @@ class SmbPersistedShareRegistry {
   std::vector<SmbShareInfo> GetAll() const;
 
  private:
-  Profile* const profile_;
+  const raw_ptr<Profile, ExperimentalAsh> profile_;
 };
 
 }  // namespace smb_client

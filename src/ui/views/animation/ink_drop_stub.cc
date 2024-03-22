@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,6 +11,8 @@ InkDropStub::InkDropStub() = default;
 InkDropStub::~InkDropStub() = default;
 
 void InkDropStub::HostSizeChanged(const gfx::Size& new_size) {}
+
+void InkDropStub::HostViewThemeChanged() {}
 
 void InkDropStub::HostTransformChanged(const gfx::Transform& new_transform) {}
 

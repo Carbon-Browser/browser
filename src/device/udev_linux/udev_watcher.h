@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,12 +7,13 @@
 
 #include <memory>
 #include <string>
+#include <string_view>
 #include <vector>
 
+#include "base/component_export.h"
 #include "base/files/file_descriptor_watcher_posix.h"
 #include "base/memory/raw_ptr.h"
 #include "base/sequence_checker.h"
-#include "base/strings/string_piece.h"
 #include "device/udev_linux/scoped_udev.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 
@@ -20,7 +21,7 @@ namespace device {
 
 // This class wraps an instance of udev_monitor, watching for devices that are
 // added and removed from the system. This class has sequence affinity.
-class UdevWatcher {
+class COMPONENT_EXPORT(DEVICE_UDEV_LINUX) UdevWatcher {
  public:
   class Observer {
    public:
@@ -36,7 +37,7 @@ class UdevWatcher {
   // udev_monitor_filter_add_match_subsystem_devtype().
   class Filter {
    public:
-    Filter(base::StringPiece subsystem_in, base::StringPiece devtype_in);
+    Filter(std::string_view subsystem_in, std::string_view devtype_in);
     Filter(const Filter&);
     ~Filter();
 
@@ -75,7 +76,7 @@ class UdevWatcher {
   raw_ptr<Observer> observer_;
   const std::vector<Filter> udev_filters_;
   std::unique_ptr<base::FileDescriptorWatcher::Controller> file_watcher_;
-  base::SequenceChecker sequence_checker_;
+  SEQUENCE_CHECKER(sequence_checker_);
 };
 
 }  // namespace device

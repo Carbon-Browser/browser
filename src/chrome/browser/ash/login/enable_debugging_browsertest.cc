@@ -1,18 +1,17 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include <string>
 
 #include "ash/constants/ash_switches.h"
-#include "base/bind.h"
 #include "base/command_line.h"
+#include "base/functional/bind.h"
 #include "base/json/json_file_value_serializer.h"
 #include "base/location.h"
 #include "base/path_service.h"
 #include "base/run_loop.h"
 #include "base/task/single_thread_task_runner.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "chrome/browser/ash/login/startup_utils.h"
 #include "chrome/browser/ash/login/test/js_checker.h"
 #include "chrome/browser/ash/login/test/oobe_base_test.h"
@@ -20,17 +19,17 @@
 #include "chrome/browser/ash/login/ui/login_display_host.h"
 #include "chrome/browser/ash/login/ui/webui_login_view.h"
 #include "chrome/browser/browser_process.h"
-#include "chrome/browser/ui/webui/chromeos/login/enable_debugging_screen_handler.h"
-#include "chrome/browser/ui/webui/chromeos/login/oobe_ui.h"
+#include "chrome/browser/ui/webui/ash/login/enable_debugging_screen_handler.h"
+#include "chrome/browser/ui/webui/ash/login/oobe_ui.h"
 #include "chrome/common/chrome_constants.h"
 #include "chrome/common/chrome_paths.h"
 #include "chrome/common/chrome_switches.h"
 #include "chrome/common/pref_names.h"
+#include "chromeos/ash/components/dbus/dbus_thread_manager.h"
+#include "chromeos/ash/components/dbus/debug_daemon/debug_daemon_client.h"
+#include "chromeos/ash/components/dbus/debug_daemon/fake_debug_daemon_client.h"
 #include "chromeos/ash/components/dbus/update_engine/fake_update_engine_client.h"
 #include "chromeos/dbus/constants/dbus_switches.h"
-#include "chromeos/dbus/dbus_thread_manager.h"
-#include "chromeos/dbus/debug_daemon/debug_daemon_client.h"
-#include "chromeos/dbus/debug_daemon/fake_debug_daemon_client.h"
 #include "chromeos/dbus/power/fake_power_manager_client.h"
 #include "components/prefs/pref_service.h"
 #include "content/public/test/browser_test.h"
@@ -97,7 +96,7 @@ class TestDebugDaemonClient : public FakeDebugDaemonClient {
   void OnRemoveRootfsVerification(EnableDebuggingCallback original_callback,
                                   bool succeeded) {
     LOG(WARNING) << "OnRemoveRootfsVerification: succeeded = " << succeeded;
-    base::ThreadTaskRunnerHandle::Get()->PostTask(
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE, base::BindOnce(std::move(original_callback), succeeded));
     if (runner_.get())
       runner_->Quit();
@@ -112,7 +111,7 @@ class TestDebugDaemonClient : public FakeDebugDaemonClient {
                                 int feature_mask) {
     LOG(WARNING) << "OnQueryDebuggingFeatures: succeeded = " << succeeded
                  << ", feature_mask = " << feature_mask;
-    base::ThreadTaskRunnerHandle::Get()->PostTask(
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE,
         base::BindOnce(std::move(original_callback), succeeded, feature_mask));
     if (runner_.get())
@@ -127,7 +126,7 @@ class TestDebugDaemonClient : public FakeDebugDaemonClient {
                                  bool succeeded) {
     LOG(WARNING) << "OnEnableDebuggingFeatures: succeeded = " << succeeded
                  << ", feature_mask = ";
-    base::ThreadTaskRunnerHandle::Get()->PostTask(
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE, base::BindOnce(std::move(original_callback), succeeded));
     if (runner_.get())
       runner_->Quit();
@@ -215,7 +214,7 @@ class EnableDebuggingTestBase : public OobeBaseTest {
   void ShowRemoveProtectionScreen() {
     debug_daemon_client_->SetDebuggingFeaturesStatus(
         DebugDaemonClient::DEV_FEATURE_NONE);
-    OobeBaseTest::MaybeWaitForLoginScreenLoad();
+    WaitForOobeUI();
     test::OobeJS().ExpectHidden(kDebuggingScreenId);
     InvokeEnableDebuggingScreen();
     test::OobeJS().ExpectVisiblePath(kRemoveProtectionDialog);
@@ -228,7 +227,7 @@ class EnableDebuggingTestBase : public OobeBaseTest {
   void ShowSetupScreen() {
     debug_daemon_client_->SetDebuggingFeaturesStatus(
         debugd::DevFeatureFlag::DEV_FEATURE_ROOTFS_VERIFICATION_REMOVED);
-    OobeBaseTest::MaybeWaitForLoginScreenLoad();
+    WaitForOobeUI();
     test::OobeJS().ExpectHidden(kDebuggingScreenId);
     InvokeEnableDebuggingScreen();
     test::OobeJS().ExpectVisiblePath(kSetupDialog);
@@ -303,7 +302,14 @@ IN_PROC_BROWSER_TEST_F(EnableDebuggingDevTest, ShowSetup) {
 
 // Show setup screen. Type in matching passwords.
 // Click on [Enable] button. Wait until done screen is shown.
-IN_PROC_BROWSER_TEST_F(EnableDebuggingDevTest, SetupMatchingPasswords) {
+// TODO(b/311477912): enable the flaky test.
+#if BUILDFLAG(IS_CHROMEOS) && defined(ADDRESS_SANITIZER) && \
+    defined(LEAK_SANITIZER)
+#define MAYBE_SetupMatchingPasswords DISABLED_SetupMatchingPasswords
+#else
+#define MAYBE_SetupMatchingPasswords SetupMatchingPasswords
+#endif
+IN_PROC_BROWSER_TEST_F(EnableDebuggingDevTest, MAYBE_SetupMatchingPasswords) {
   ShowSetupScreen();
   debug_daemon_client_->ResetWait();
   test::OobeJS().TypeIntoPath("test0000", kPasswordInput);
@@ -344,7 +350,7 @@ IN_PROC_BROWSER_TEST_F(EnableDebuggingDevTest, ShowOnTestImages) {
   debug_daemon_client_->SetDebuggingFeaturesStatus(
       debugd::DevFeatureFlag::DEV_FEATURE_SSH_SERVER_CONFIGURED |
       debugd::DevFeatureFlag::DEV_FEATURE_SYSTEM_ROOT_PASSWORD_SET);
-  OobeBaseTest::MaybeWaitForLoginScreenLoad();
+  WaitForOobeUI();
   test::OobeJS().ExpectHidden(kDebuggingScreenId);
   InvokeEnableDebuggingScreen();
   test::OobeJS().ExpectVisiblePath(kRemoveProtectionDialog);
@@ -361,7 +367,7 @@ IN_PROC_BROWSER_TEST_F(EnableDebuggingDevTest, WaitForDebugDaemon) {
   debug_daemon_client_->SetServiceIsAvailable(false);
   debug_daemon_client_->SetDebuggingFeaturesStatus(
       DebugDaemonClient::DEV_FEATURE_NONE);
-  OobeBaseTest::MaybeWaitForLoginScreenLoad();
+  WaitForOobeUI();
 
   // Invoking UI and it should land on wait-view.
   test::OobeJS().ExpectHidden(kDebuggingScreenId);
@@ -380,6 +386,7 @@ using EnableDebuggingTest = EnableDebuggingTestBase;
 
 // Try to show enable debugging dialog, we should see error screen here.
 IN_PROC_BROWSER_TEST_F(EnableDebuggingTest, NoShowInNonDevMode) {
+  WaitForOobeUI();
   test::OobeJS().ExpectHidden(kDebuggingScreenId);
   InvokeEnableDebuggingScreen();
   test::OobeJS().CreateVisibilityWaiter(true, kErrorDialog)->Wait();
@@ -391,8 +398,8 @@ class EnableDebuggingRequestedTest : public EnableDebuggingDevTest {
 
   // EnableDebuggingDevTest overrides:
   bool SetUpUserDataDirectory() override {
-    base::DictionaryValue local_state_dict;
-    local_state_dict.SetBoolKey(prefs::kDebuggingFeaturesRequested, true);
+    base::Value::Dict local_state_dict;
+    local_state_dict.Set(prefs::kDebuggingFeaturesRequested, true);
 
     base::FilePath user_data_dir;
     CHECK(base::PathService::Get(chrome::DIR_USER_DATA, &user_data_dir));

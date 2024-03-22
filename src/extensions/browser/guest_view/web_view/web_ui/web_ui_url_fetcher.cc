@@ -1,10 +1,10 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "extensions/browser/guest_view/web_view/web_ui/web_ui_url_fetcher.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "content/public/browser/render_frame_host.h"
 #include "content/public/browser/web_ui_url_loader_factory.h"
 #include "net/base/load_flags.h"
@@ -27,15 +27,16 @@ WebUIURLFetcher::~WebUIURLFetcher() {
 }
 
 void WebUIURLFetcher::Start() {
-  content::RenderFrameHost* rfh =
+  content::RenderFrameHost* render_frame_host =
       content::RenderFrameHost::FromID(render_process_id_, render_frame_id_);
-  if (!rfh) {
+  if (!render_frame_host) {
     std::move(callback_).Run(false, nullptr);
     return;
   }
 
   mojo::Remote<network::mojom::URLLoaderFactory> factory(
-      content::CreateWebUIURLLoaderFactory(rfh, url_.scheme(), {}));
+      content::CreateWebUIURLLoaderFactory(render_frame_host, url_.scheme(),
+                                           {}));
 
   net::NetworkTrafficAnnotationTag traffic_annotation =
       net::DefineNetworkTrafficAnnotation("webui_content_scripts_download", R"(

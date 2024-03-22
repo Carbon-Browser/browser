@@ -1,4 +1,4 @@
-// Copyright 2010 The Chromium Authors. All rights reserved.
+// Copyright 2010 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,10 +9,12 @@
 #include <string>
 #include <vector>
 
-#include "base/callback.h"
+#include <optional>
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/synchronization/lock.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/threading/thread_checker.h"
 #include "cc/cc_export.h"
 #include "cc/layers/layer.h"
@@ -20,6 +22,7 @@
 #include "cc/resources/shared_bitmap_id_registrar.h"
 #include "components/viz/common/resources/release_callback.h"
 #include "components/viz/common/resources/transferable_resource.h"
+#include "ui/gfx/hdr_metadata.h"
 
 namespace gpu {
 struct SyncToken;
@@ -123,7 +126,11 @@ class CC_EXPORT TextureLayer : public Layer, SharedBitmapIdRegistrar {
   void SetTransferableResource(const viz::TransferableResource& resource,
                                viz::ReleaseCallback release_callback);
 
+  // Set or unset HDR metadata.
+  void SetHdrMetadata(const gfx::HDRMetadata& hdr_metadata);
+
   void SetLayerTreeHost(LayerTreeHost* layer_tree_host) override;
+  bool RequiresSetNeedsDisplayOnHdrHeadroomChange() const override;
   bool Update() override;
   bool IsSnappedToPixelGridInTarget() const override;
   void PushPropertiesTo(LayerImpl* layer,
@@ -164,7 +171,10 @@ class CC_EXPORT TextureLayer : public Layer, SharedBitmapIdRegistrar {
   // compositor.
   void UnregisterSharedBitmapId(viz::SharedBitmapId id);
 
-  ProtectedSequenceForbidden<raw_ptr<TextureLayerClient>> client_;
+  // Dangling on `mac-rel` in `blink_web_tests`:
+  // `fast/events/touch/touch-handler-iframe-plugin-assert.html`
+  ProtectedSequenceForbidden<raw_ptr<TextureLayerClient, DanglingUntriaged>>
+      client_;
 
   ProtectedSequenceReadable<bool> flipped_;
   ProtectedSequenceReadable<bool> nearest_neighbor_;
@@ -174,6 +184,7 @@ class CC_EXPORT TextureLayer : public Layer, SharedBitmapIdRegistrar {
   ProtectedSequenceReadable<bool> premultiplied_alpha_;
   ProtectedSequenceReadable<bool> blend_background_color_;
   ProtectedSequenceReadable<bool> force_texture_to_opaque_;
+  ProtectedSequenceWritable<gfx::HDRMetadata> hdr_metadata_;
 
   ProtectedSequenceWritable<scoped_refptr<TransferableResourceHolder>>
       resource_holder_;

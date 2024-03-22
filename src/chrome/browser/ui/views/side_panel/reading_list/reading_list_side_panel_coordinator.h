@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -20,10 +20,6 @@ class ReadingListSidePanelCoordinator
     : public BrowserUserData<ReadingListSidePanelCoordinator> {
  public:
   explicit ReadingListSidePanelCoordinator(Browser* browser);
-  ReadingListSidePanelCoordinator(const ReadingListSidePanelCoordinator&) =
-      delete;
-  ReadingListSidePanelCoordinator& operator=(
-      const ReadingListSidePanelCoordinator&) = delete;
   ~ReadingListSidePanelCoordinator() override;
 
   void CreateAndRegisterEntry(SidePanelRegistry* global_registry);

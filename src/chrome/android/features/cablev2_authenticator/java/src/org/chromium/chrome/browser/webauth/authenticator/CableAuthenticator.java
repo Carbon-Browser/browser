@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -19,19 +19,26 @@ import android.util.Pair;
 
 import com.google.android.gms.tasks.Task;
 
+import org.jni_zero.CalledByNative;
+import org.jni_zero.NativeMethods;
+
 import org.chromium.base.Log;
-import org.chromium.base.annotations.CalledByNative;
-import org.chromium.base.annotations.NativeMethods;
 import org.chromium.base.task.PostTask;
 import org.chromium.base.task.SingleThreadTaskRunner;
+import org.chromium.base.task.TaskTraits;
+import org.chromium.blink.mojom.AuthenticatorStatus;
 import org.chromium.blink.mojom.GetAssertionAuthenticatorResponse;
 import org.chromium.blink.mojom.MakeCredentialAuthenticatorResponse;
 import org.chromium.blink.mojom.PublicKeyCredentialCreationOptions;
 import org.chromium.blink.mojom.PublicKeyCredentialRequestOptions;
+import org.chromium.blink.mojom.ResidentKeyRequirement;
 import org.chromium.components.webauthn.Fido2Api;
 import org.chromium.components.webauthn.Fido2ApiCall;
-import org.chromium.content_public.browser.UiThreadTaskTraits;
-import org.chromium.content_public.browser.WebAuthenticationDelegate;
+import org.chromium.components.webauthn.Fido2CredentialRequest;
+import org.chromium.device.DeviceFeatureList;
+import org.chromium.device.DeviceFeatureMap;
+import org.chromium.url.GURL;
+import org.chromium.url.Origin;
 
 import java.nio.ByteBuffer;
 import java.security.NoSuchAlgorithmException;
@@ -42,8 +49,6 @@ import java.security.NoSuchAlgorithmException;
  */
 class CableAuthenticator {
     private static final String TAG = "CableAuthenticator";
-    private static final String FIDO2_KEY_CREDENTIAL_EXTRA = "FIDO2_CREDENTIAL_EXTRA";
-    private static final long TIMEOUT_SECONDS = 20;
 
     private static final int REGISTER_REQUEST_CODE = 1;
     private static final int SIGN_REQUEST_CODE = 2;
@@ -52,7 +57,7 @@ class CableAuthenticator {
     private static final int CTAP2_ERR_CREDENTIAL_EXCLUDED = 0x19;
     private static final int CTAP2_ERR_UNSUPPORTED_ALGORITHM = 0x26;
     private static final int CTAP2_ERR_OPERATION_DENIED = 0x27;
-    private static final int CTAP2_ERR_UNSUPPORTED_OPTION = 0x2D;
+    private static final int CTAP2_ERR_UNSUPPORTED_OPTION = 0x2B;
     private static final int CTAP2_ERR_NO_CREDENTIALS = 0x2E;
     private static final int CTAP2_ERR_OTHER = 0x7F;
 
@@ -72,6 +77,8 @@ class CableAuthenticator {
     private boolean mLinkQR;
     // mAccessory contains the USB device, if operating in USB mode.
     private UsbAccessory mAccessory;
+    // mAttestationAcceptable is true if a makeCredential request may return attestation.
+    private boolean mAttestationAcceptable;
 
     // mHandle is the opaque ID returned by the native code to ensure that
     // |stop| doesn't apply to a transaction that this instance didn't create.
@@ -90,9 +97,17 @@ class CableAuthenticator {
         MAKE_CREDENTIAL,
     }
 
-    public CableAuthenticator(Context context, CableAuthenticatorUI ui, long networkContext,
-            long registration, byte[] secret, boolean isFcmNotification, UsbAccessory accessory,
-            byte[] serverLink, byte[] fcmEvent, String qrURI, boolean metricsEnabled) {
+    public CableAuthenticator(
+            Context context,
+            CableAuthenticatorUI ui,
+            long networkContext,
+            long registration,
+            byte[] secret,
+            boolean isFcmNotification,
+            UsbAccessory accessory,
+            byte[] serverLink,
+            byte[] fcmEvent,
+            String qrURI) {
         mContext = context;
         mUi = ui;
         mFCMEvent = fcmEvent;
@@ -102,10 +117,10 @@ class CableAuthenticator {
 
         // networkContext can only be used from the UI thread, therefore all
         // short-lived work is done on that thread.
-        mTaskRunner = PostTask.createSingleThreadTaskRunner(UiThreadTaskTraits.USER_VISIBLE);
+        mTaskRunner = PostTask.createSingleThreadTaskRunner(TaskTraits.UI_USER_VISIBLE);
         assert mTaskRunner.belongsToCurrentThread();
 
-        CableAuthenticatorJni.get().setup(registration, networkContext, secret, metricsEnabled);
+        CableAuthenticatorJni.get().setup(registration, networkContext, secret);
 
         // Wait for |onTransportReady|.
     }
@@ -119,12 +134,6 @@ class CableAuthenticator {
         mUi.onStatus(code);
     }
 
-    // Called when the native code wishes to log a protobuf event.
-    @CalledByNative
-    public static void logEvent(byte[] event) {
-        CableEventLogger.log(event);
-    }
-
     @CalledByNative
     public static BLEAdvert newBLEAdvert(byte[] payload) {
         return new BLEAdvert(payload);
@@ -134,10 +143,58 @@ class CableAuthenticator {
     public void makeCredential(byte[] serializedParams) {
         PublicKeyCredentialCreationOptions params =
                 PublicKeyCredentialCreationOptions.deserialize(ByteBuffer.wrap(serializedParams));
+        // The Chrome hybrid authenticator never supported creation-time
+        // evaluation of PRFs and, by the time we added support in general, we
+        // were already in the process of rolling out the hybrid authenticator
+        // in Play Services and so it continued not to be supported.
+        params.prfInput = null;
 
-        Fido2ApiCall call = new Fido2ApiCall(mContext, WebAuthenticationDelegate.Support.BROWSER);
+        if (DeviceFeatureMap.isEnabled(DeviceFeatureList.WEBAUTHN_CABLE_VIA_CREDMAN)) {
+            final Fido2CredentialRequest request = new Fido2CredentialRequest(mUi);
+            request.setIsHybridRequest(true);
+            final Origin origin = Origin.create(new GURL("https://" + params.relyingParty.id));
+            request.handleMakeCredentialRequest(
+                    mContext,
+                    params,
+                    null,
+                    params.challenge,
+                    origin,
+                    (status, response) -> {
+                        mTaskRunner.postTask(
+                                () ->
+                                        CableAuthenticatorJni.get()
+                                                .onAuthenticatorAttestationResponse(
+                                                        CTAP2_OK,
+                                                        response.attestationObject,
+                                                        response.prf));
+                        mUi.onAuthenticatorResult(Result.REGISTER_OK);
+                    },
+                    (status) -> {
+                        final boolean isInvalidStateError =
+                                status == AuthenticatorStatus.CREDENTIAL_EXCLUDED;
+
+                        mTaskRunner.postTask(
+                                () ->
+                                        CableAuthenticatorJni.get()
+                                                .onAuthenticatorAttestationResponse(
+                                                        isInvalidStateError
+                                                                ? CTAP2_ERR_CREDENTIAL_EXCLUDED
+                                                                : CTAP2_ERR_OPERATION_DENIED,
+                                                        null,
+                                                        false));
+
+                        mUi.onAuthenticatorResult(
+                                isInvalidStateError ? Result.REGISTER_OK : Result.REGISTER_ERROR);
+                    });
+            return;
+        }
+
+        mAttestationAcceptable =
+                params.authenticatorSelection.residentKey == ResidentKeyRequirement.DISCOURAGED;
+
+        Fido2ApiCall call = new Fido2ApiCall(mContext);
         Parcel args = call.start();
-        Fido2ApiCall.PendingIntentResult result = new Fido2ApiCall.PendingIntentResult(call);
+        Fido2ApiCall.PendingIntentResult result = new Fido2ApiCall.PendingIntentResult();
         args.writeStrongBinder(result);
         args.writeInt(1); // This indicates that the following options are present.
 
@@ -145,12 +202,16 @@ class CableAuthenticator {
             Fido2Api.appendBrowserMakeCredentialOptionsToParcel(
                     params, Uri.parse("https://" + params.relyingParty.id), params.challenge, args);
         } catch (NoSuchAlgorithmException e) {
-            onAuthenticatorAttestationResponse(CTAP2_ERR_UNSUPPORTED_ALGORITHM, null);
+            onAuthenticatorAttestationResponse(CTAP2_ERR_UNSUPPORTED_ALGORITHM, null, false);
             return;
         }
 
-        Task<PendingIntent> task = call.run(Fido2ApiCall.METHOD_BROWSER_REGISTER,
-                Fido2ApiCall.TRANSACTION_REGISTER, args, result);
+        Task<PendingIntent> task =
+                call.run(
+                        Fido2ApiCall.METHOD_BROWSER_REGISTER,
+                        Fido2ApiCall.TRANSACTION_REGISTER,
+                        args,
+                        result);
         awaitPendingIntent(task, REGISTER_REQUEST_CODE);
     }
 
@@ -159,32 +220,82 @@ class CableAuthenticator {
         PublicKeyCredentialRequestOptions params =
                 PublicKeyCredentialRequestOptions.deserialize(ByteBuffer.wrap(serializedParams));
 
-        Fido2ApiCall call = new Fido2ApiCall(mContext, WebAuthenticationDelegate.Support.BROWSER);
+        if (DeviceFeatureMap.isEnabled(DeviceFeatureList.WEBAUTHN_CABLE_VIA_CREDMAN)) {
+            final Fido2CredentialRequest request = new Fido2CredentialRequest(mUi);
+            request.setIsHybridRequest(true);
+            final Origin origin = Origin.create(new GURL("https://" + params.relyingPartyId));
+            request.handleGetAssertionRequest(
+                    mContext,
+                    params,
+                    /* frameHost= */ null,
+                    /* maybeClientDataHash= */ params.challenge,
+                    origin,
+                    origin,
+                    /* payment= */ null,
+                    (status, response) -> {
+                        response.info.clientDataJson = new byte[0];
+                        ByteBuffer buffer = response.serialize();
+                        byte[] serialized = new byte[buffer.remaining()];
+                        buffer.get(serialized);
+                        mTaskRunner.postTask(
+                                () ->
+                                        CableAuthenticatorJni.get()
+                                                .onAuthenticatorAssertionResponse(
+                                                        CTAP2_OK, serialized));
+                        mUi.onAuthenticatorResult(Result.SIGN_OK);
+                    },
+                    (status) -> {
+                        mTaskRunner.postTask(
+                                () ->
+                                        CableAuthenticatorJni.get()
+                                                .onAuthenticatorAssertionResponse(
+                                                        CTAP2_ERR_OPERATION_DENIED, null));
+                        mUi.onAuthenticatorResult(Result.SIGN_ERROR);
+                    });
+            return;
+        }
+
+        Fido2ApiCall call = new Fido2ApiCall(mContext);
         Parcel args = call.start();
-        Fido2ApiCall.PendingIntentResult result = new Fido2ApiCall.PendingIntentResult(call);
+        Fido2ApiCall.PendingIntentResult result = new Fido2ApiCall.PendingIntentResult();
         args.writeStrongBinder(result);
         args.writeInt(1); // This indicates that the following options are present.
-        Fido2Api.appendBrowserGetAssertionOptionsToParcel(params,
-                Uri.parse("https://" + params.relyingPartyId), params.challenge, tunnelId, args);
+        Fido2Api.appendBrowserGetAssertionOptionsToParcel(
+                params,
+                Uri.parse("https://" + params.relyingPartyId),
+                params.challenge,
+                tunnelId,
+                args);
 
-        Task<PendingIntent> task = call.run(
-                Fido2ApiCall.METHOD_BROWSER_SIGN, Fido2ApiCall.TRANSACTION_SIGN, args, result);
+        Task<PendingIntent> task =
+                call.run(
+                        Fido2ApiCall.METHOD_BROWSER_SIGN,
+                        Fido2ApiCall.TRANSACTION_SIGN,
+                        args,
+                        result);
         awaitPendingIntent(task, SIGN_REQUEST_CODE);
     }
 
     private void awaitPendingIntent(Task<PendingIntent> task, int requestCode) {
-        task.addOnSuccessListener(pendingIntent -> {
-                try {
-                    mUi.startIntentSenderForResult(pendingIntent.getIntentSender(), requestCode,
-                            null, // fillInIntent,
-                            0, // flagsMask,
-                            0, // flagsValue,
-                            0, // extraFlags,
-                            Bundle.EMPTY);
-                } catch (IntentSender.SendIntentException e) {
-                    Log.e(TAG, "SendIntentException", e);
-                }
-            }).addOnFailureListener(exception -> { Log.e(TAG, "FIDO2 call failed", exception); });
+        task.addOnSuccessListener(
+                        pendingIntent -> {
+                            try {
+                                mUi.startIntentSenderForResult(
+                                        pendingIntent.getIntentSender(),
+                                        requestCode,
+                                        null, // fillInIntent,
+                                        0, // flagsMask,
+                                        0, // flagsValue,
+                                        0, // extraFlags,
+                                        Bundle.EMPTY);
+                            } catch (IntentSender.SendIntentException e) {
+                                Log.e(TAG, "SendIntentException", e);
+                            }
+                        })
+                .addOnFailureListener(
+                        exception -> {
+                            Log.e(TAG, "FIDO2 call failed", exception);
+                        });
     }
 
     /**
@@ -233,7 +344,7 @@ class CableAuthenticator {
                     ctapStatus = CTAP2_ERR_OPERATION_DENIED;
                 } else {
                     try {
-                        response = Fido2Api.parseIntentResponse(data);
+                        response = Fido2Api.parseIntentResponse(data, mAttestationAcceptable);
                     } catch (IllegalArgumentException e) {
                         response = null;
                     }
@@ -253,8 +364,11 @@ class CableAuthenticator {
             // Use already set error code.
         } else if (response instanceof Pair) {
             Pair<Integer, String> error = (Pair<Integer, String>) response;
-            Log.e(TAG,
-                    "FIDO2 API call resulted in error: " + error.first + " "
+            Log.e(
+                    TAG,
+                    "FIDO2 API call resulted in error: "
+                            + error.first
+                            + " "
                             + (error.second != null ? error.second : ""));
 
             switch (error.first) {
@@ -266,7 +380,16 @@ class CableAuthenticator {
                     }
                     break;
                 case Fido2Api.NOT_ALLOWED_ERR:
-                    ctapStatus = CTAP2_ERR_OPERATION_DENIED;
+                    if (error.second != null
+                            && error.second.equals(
+                                    "Request doesn't have a valid list of allowed credentials.")) {
+                        ctapStatus = CTAP2_ERR_NO_CREDENTIALS;
+                    } else {
+                        ctapStatus = CTAP2_ERR_OPERATION_DENIED;
+                    }
+                    break;
+                case Fido2Api.NOT_SUPPORTED_ERR:
+                    ctapStatus = CTAP2_ERR_UNSUPPORTED_OPTION;
                     break;
                 default:
                     ctapStatus = CTAP2_ERR_OTHER;
@@ -274,8 +397,10 @@ class CableAuthenticator {
             }
         } else if (isMakeCredential) {
             if (response instanceof MakeCredentialAuthenticatorResponse) {
-                onAuthenticatorAttestationResponse(CTAP2_OK,
-                        ((MakeCredentialAuthenticatorResponse) response).attestationObject);
+                MakeCredentialAuthenticatorResponse r =
+                        (MakeCredentialAuthenticatorResponse) response;
+
+                onAuthenticatorAttestationResponse(CTAP2_OK, r.attestationObject, r.prf);
                 result = Result.REGISTER_OK;
             }
         } else {
@@ -292,7 +417,7 @@ class CableAuthenticator {
 
         if (result != Result.REGISTER_OK && result != Result.SIGN_OK) {
             if (isMakeCredential) {
-                onAuthenticatorAttestationResponse(ctapStatus, null);
+                onAuthenticatorAttestationResponse(ctapStatus, null, false);
             } else {
                 onAuthenticatorAssertionResponse(ctapStatus, null);
             }
@@ -301,18 +426,20 @@ class CableAuthenticator {
         mUi.onAuthenticatorResult(result);
     }
 
-    private void onAuthenticatorAttestationResponse(int ctapStatus, byte[] attestationObject) {
+    private void onAuthenticatorAttestationResponse(
+            int ctapStatus, byte[] attestationObject, boolean prfEnabled) {
         mTaskRunner.postTask(
-                ()
-                        -> CableAuthenticatorJni.get().onAuthenticatorAttestationResponse(
-                                ctapStatus, attestationObject));
+                () ->
+                        CableAuthenticatorJni.get()
+                                .onAuthenticatorAttestationResponse(
+                                        ctapStatus, attestationObject, prfEnabled));
     }
 
     private void onAuthenticatorAssertionResponse(int ctapStatus, byte[] responseBytes) {
         mTaskRunner.postTask(
-                ()
-                        -> CableAuthenticatorJni.get().onAuthenticatorAssertionResponse(
-                                ctapStatus, responseBytes));
+                () ->
+                        CableAuthenticatorJni.get()
+                                .onAuthenticatorAssertionResponse(ctapStatus, responseBytes));
     }
 
     // Calls from UI.
@@ -321,20 +448,7 @@ class CableAuthenticator {
         mLinkQR = link;
     }
 
-    /**
-     * Records an event if this is a server-link transaction and if UMA has been opted into.
-     *
-     * @param event a value from `CableV2MobileEvent`
-     */
-    void maybeRecordEvent(int event) {
-        if (mServerLinkData != null) {
-            CableAuthenticatorJni.get().recordEvent(event, mServerLinkData);
-        }
-    }
-
-    /**
-     * Called to indicate that either USB or Bluetooth transports are ready for processing.
-     */
+    /** Called to indicate that either USB or Bluetooth transports are ready for processing. */
     void onTransportReady() {
         assert mTaskRunner.belongsToCurrentThread();
 
@@ -345,8 +459,9 @@ class CableAuthenticator {
         } else if (mFCMEvent != null) {
             mHandle = CableAuthenticatorJni.get().startCloudMessage(this, mFCMEvent);
         } else {
-            mHandle = CableAuthenticatorJni.get().startUSB(
-                    this, new USBHandler(mContext, mTaskRunner, mAccessory));
+            mHandle =
+                    CableAuthenticatorJni.get()
+                            .startUSB(this, new USBHandler(mContext, mTaskRunner, mAccessory));
         }
     }
 
@@ -356,8 +471,9 @@ class CableAuthenticator {
     }
 
     String getName() {
-        final String name = Settings.Global.getString(
-                mContext.getContentResolver(), Settings.Global.DEVICE_NAME);
+        final String name =
+                Settings.Global.getString(
+                        mContext.getContentResolver(), Settings.Global.DEVICE_NAME);
         if (name != null && name.length() > 0) {
             return name;
         }
@@ -380,14 +496,14 @@ class CableAuthenticator {
         return CableAuthenticatorJni.get().validateQRURI(uri);
     }
 
-    @NativeMethods
+    @NativeMethods("cablev2_authenticator")
     interface Natives {
         /**
          * setup is called before any other functions in order for the native code to perform
          * one-time setup operations. It may be called several times, but subsequent calls are
          * ignored.
          */
-        void setup(long registration, long networkContext, byte[] secret, boolean metricsEnabled);
+        void setup(long registration, long networkContext, byte[] secret);
 
         /**
          * Called to instruct the C++ code to start a new transaction using |usbDevice|. Returns an
@@ -401,7 +517,10 @@ class CableAuthenticator {
          * should be human-meaningful. The qrURI must be a fido: URI. Returns an opaque value that
          * can be passed to |stop| to cancel this transaction.
          */
-        long startQR(CableAuthenticator cableAuthenticator, String authenticatorName, String qrURI,
+        long startQR(
+                CableAuthenticator cableAuthenticator,
+                String authenticatorName,
+                String qrURI,
                 boolean link);
 
         /**
@@ -443,20 +562,11 @@ class CableAuthenticator {
          */
         void onActivityStop(long handle);
 
-        /**
-         * Called to alert native code of a response to a makeCredential request.
-         */
-        void onAuthenticatorAttestationResponse(int ctapStatus, byte[] attestationObject);
+        /** Called to alert native code of a response to a makeCredential request. */
+        void onAuthenticatorAttestationResponse(
+                int ctapStatus, byte[] attestationObject, boolean prfEnabled);
 
-        /**
-         * Called to alert native code of a response to a getAssertion request.
-         */
+        /** Called to alert native code of a response to a getAssertion request. */
         void onAuthenticatorAssertionResponse(int ctapStatus, byte[] responseBytes);
-
-        /**
-         * Called to perhaps record an event. The event must be a value from `CableV2MobileEvent`.
-         * It is recorded only if UMA has been opted into.
-         */
-        void recordEvent(int event, byte[] serverLinkData);
     }
 }

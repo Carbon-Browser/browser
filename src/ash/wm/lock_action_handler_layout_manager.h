@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,11 +13,10 @@
 #include "ash/tray_action/tray_action.h"
 #include "ash/tray_action/tray_action_observer.h"
 #include "ash/wm/lock_layout_manager.h"
+#include "base/memory/raw_ptr.h"
 #include "base/scoped_observation.h"
 
 namespace ash {
-
-class Shelf;
 
 // Window layout manager for windows intended to handle lock tray actions.
 // Since "new note" is currently the only supported action, the layout
@@ -41,7 +40,6 @@ class ASH_EXPORT LockActionHandlerLayoutManager
  public:
   LockActionHandlerLayoutManager(
       aura::Window* window,
-      Shelf* shelf,
       LockScreenActionBackgroundController* action_background_controller);
 
   LockActionHandlerLayoutManager(const LockActionHandlerLayoutManager&) =
@@ -69,7 +67,8 @@ class ASH_EXPORT LockActionHandlerLayoutManager
   void UpdateChildren(mojom::TrayActionState action_state,
                       LockScreenActionBackgroundState background_state);
 
-  LockScreenActionBackgroundController* action_background_controller_;
+  raw_ptr<LockScreenActionBackgroundController, ExperimentalAsh>
+      action_background_controller_;
 
   base::ScopedObservation<TrayAction, TrayActionObserver>
       tray_action_observation_{this};

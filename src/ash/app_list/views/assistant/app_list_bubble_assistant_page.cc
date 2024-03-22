@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -45,6 +45,10 @@ void AppListBubbleAssistantPage::OnBoundsChanged(
   // AssistantUiController::Get() can be nullptr in test.
   if (AssistantUiController::Get())
     AssistantUiController::Get()->SetAppListBubbleWidth(size().width());
+}
+
+void AppListBubbleAssistantPage::InitializeUIForBubbleView() {
+  main_stage_->InitializeUIForBubbleView();
 }
 
 BEGIN_METADATA(AppListBubbleAssistantPage, views::View)

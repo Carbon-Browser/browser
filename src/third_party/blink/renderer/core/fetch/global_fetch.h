@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,11 +12,14 @@
 
 namespace blink {
 
-class LocalDOMWindow;
 class ExceptionState;
+class LocalDOMWindow;
+class NavigatorBase;
 class RequestInit;
+class DeferredRequestInit;
 class ScriptState;
 class WorkerGlobalScope;
+class FetchLaterResult;
 
 class CORE_EXPORT GlobalFetch {
   STATIC_ONLY(GlobalFetch);
@@ -31,12 +34,18 @@ class CORE_EXPORT GlobalFetch {
                                 const RequestInit*,
                                 ExceptionState&) = 0;
 
+    virtual FetchLaterResult* FetchLater(ScriptState*,
+                                         const V8RequestInfo*,
+                                         const DeferredRequestInit*,
+                                         ExceptionState&);
+
     // Returns the number of fetch() method calls in the associated execution
     // context.  This is used for metrics.
     virtual uint32_t FetchCount() const = 0;
 
     static ScopedFetcher* From(LocalDOMWindow&);
     static ScopedFetcher* From(WorkerGlobalScope&);
+    static ScopedFetcher* From(NavigatorBase& navigator);
 
     void Trace(Visitor*) const override;
   };
@@ -51,6 +60,12 @@ class CORE_EXPORT GlobalFetch {
                              const V8RequestInfo* input,
                              const RequestInit* init,
                              ExceptionState& exception_state);
+
+  static FetchLaterResult* fetchLater(ScriptState* script_state,
+                                      LocalDOMWindow& window,
+                                      const V8RequestInfo* input,
+                                      const DeferredRequestInit* init,
+                                      ExceptionState& exception_state);
 };
 
 }  // namespace blink

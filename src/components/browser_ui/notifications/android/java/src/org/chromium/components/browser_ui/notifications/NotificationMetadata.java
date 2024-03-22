@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,9 +6,7 @@ package org.chromium.components.browser_ui.notifications;
 
 import androidx.annotation.Nullable;
 
-/**
- * Struct to contain information to identify the notification.
- */
+/** Struct to contain information to identify the notification. */
 public class NotificationMetadata {
     /**
      * The notification type used in metrics tracking.
@@ -20,8 +18,7 @@ public class NotificationMetadata {
      * The notification tag used in {@link android.app.NotificationManager#notify(String, int,
      * android.app.Notification)}.
      */
-    @Nullable
-    public final String tag;
+    @Nullable public final String tag;
 
     /**
      * The notification id used in {@link android.app.NotificationManager#notify(String, int,

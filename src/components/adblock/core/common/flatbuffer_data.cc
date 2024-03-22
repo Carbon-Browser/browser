@@ -18,9 +18,9 @@
 #include "components/adblock/core/common/flatbuffer_data.h"
 
 #include "absl/types/optional.h"
-#include "base/bind.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
 #include "base/task/task_traits.h"
 #include "base/task/thread_pool.h"
@@ -34,8 +34,9 @@ void DestroyMemoryMappedFile(std::unique_ptr<base::MemoryMappedFile> memory,
                              absl::optional<base::FilePath> path_to_remove) {
   memory.reset();
   // Deleting the file should happen *after* removing the memory mapping.
-  if (path_to_remove)
+  if (path_to_remove) {
     base::DeleteFile(*path_to_remove);
+  }
 }
 
 }  // namespace
@@ -56,8 +57,9 @@ size_t InMemoryFlatbufferData::size() const {
 MemoryMappedFlatbufferData::MemoryMappedFlatbufferData(base::FilePath path)
     : permanently_remove_path_(false), path_(std::move(path)) {
   file_ = std::make_unique<base::MemoryMappedFile>();
-  if (!file_->Initialize(path_))
+  if (!file_->Initialize(path_)) {
     file_.reset();
+  }
 }
 
 MemoryMappedFlatbufferData::~MemoryMappedFlatbufferData() {
@@ -72,14 +74,16 @@ MemoryMappedFlatbufferData::~MemoryMappedFlatbufferData() {
 }
 
 const uint8_t* MemoryMappedFlatbufferData::data() const {
-  if (!file_)
+  if (!file_) {
     return nullptr;
+  }
   return file_->data();
 }
 
 size_t MemoryMappedFlatbufferData::size() const {
-  if (!file_)
+  if (!file_) {
     return 0u;
+  }
   return file_->length();
 }
 

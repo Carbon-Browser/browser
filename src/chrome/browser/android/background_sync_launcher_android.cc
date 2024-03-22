@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,8 +8,8 @@
 
 #include "base/android/callback_android.h"
 #include "base/barrier_closure.h"
-#include "base/bind.h"
 #include "base/feature_list.h"
+#include "base/functional/bind.h"
 #include "chrome/android/chrome_jni_headers/BackgroundSyncBackgroundTaskScheduler_jni.h"
 #include "chrome/android/chrome_jni_headers/BackgroundSyncBackgroundTask_jni.h"
 #include "chrome/android/chrome_jni_headers/GooglePlayServicesChecker_jni.h"

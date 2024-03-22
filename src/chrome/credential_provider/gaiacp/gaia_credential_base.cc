@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,18 +9,19 @@
 
 #include <ntstatus.h>
 
-#include <algorithm>
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/command_line.h"
+#include "base/containers/contains.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/json/json_reader.h"
 #include "base/json/json_writer.h"
 #include "base/path_service.h"
+#include "base/ranges/algorithm.h"
 #include "base/strings/escape.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/string_split.h"
@@ -458,7 +459,7 @@ HRESULT FindExistingUserSidIfAvailable(const std::string& refresh_token,
 // since only local users can be created. |sid| will be empty until the user is
 // created later on. |is_consumer_account| will be set to true if the email used
 // to sign in is gmail or googlemail.
-HRESULT MakeUsernameForAccount(const base::Value& result,
+HRESULT MakeUsernameForAccount(const base::Value::Dict& result,
                                std::wstring* gaia_id,
                                wchar_t* username,
                                DWORD username_length,
@@ -477,7 +478,7 @@ HRESULT MakeUsernameForAccount(const base::Value& result,
 
   // Determine if the email is a consumer domain (gmail.com or googlemail.com).
   std::wstring email = GetDictString(result, kKeyEmail);
-  std::transform(email.begin(), email.end(), email.begin(), ::tolower);
+  base::ranges::transform(email, email.begin(), ::tolower);
   std::wstring::size_type consumer_domain_pos = email.find(L"@gmail.com");
   if (consumer_domain_pos == std::wstring::npos)
     consumer_domain_pos = email.find(L"@googlemail.com");
@@ -658,11 +659,11 @@ HRESULT WaitForLoginUIAndGetResult(
 // This function validates the response from GLS and makes sure it contained
 // all the fields required to proceed with logon.  This does not necessarily
 // guarantee that the logon will succeed, only that GLS response seems correct.
-HRESULT ValidateResult(const base::Value& result, BSTR* status_text) {
+HRESULT ValidateResult(const base::Value::Dict& result, BSTR* status_text) {
   DCHECK(status_text);
 
   // Check the exit_code to see if any errors were detected by the GLS.
-  absl::optional<int> exit_code = result.FindIntKey(kKeyExitCode);
+  absl::optional<int> exit_code = result.FindInt(kKeyExitCode);
   if (exit_code.value() != kUiecSuccess) {
     switch (exit_code.value()) {
       case kUiecAbort:
@@ -1129,7 +1130,7 @@ void CGaiaCredentialBase::ResetInternalState() {
 
   current_windows_password_.Empty();
 
-  SecurelyClearDictionaryValue(&authentication_results_);
+  SecurelyClearDictionaryValue(authentication_results_);
   needs_windows_password_ = false;
   request_force_password_change_ = false;
   result_status_ = STATUS_SUCCESS;
@@ -1932,7 +1933,7 @@ HRESULT CGaiaCredentialBase::ForkGaiaLogonStub(
 }
 
 HRESULT CGaiaCredentialBase::ForkPerformPostSigninActionsStub(
-    const base::Value& dict,
+    const base::Value::Dict& dict,
     BSTR* status_text) {
   LOGFN(VERBOSE);
   DCHECK(status_text);
@@ -2070,7 +2071,8 @@ unsigned __stdcall CGaiaCredentialBase::WaitForLoginUI(void* param) {
 }
 
 // static
-HRESULT CGaiaCredentialBase::PerformActions(const base::Value& properties) {
+HRESULT CGaiaCredentialBase::PerformActions(
+    const base::Value::Dict& properties) {
   LOGFN(VERBOSE);
 
   std::wstring sid = GetDictString(properties, kKeySID);
@@ -2148,7 +2150,7 @@ HRESULT CGaiaCredentialBase::PerformActions(const base::Value& properties) {
 
 // static
 HRESULT CGaiaCredentialBase::PerformPostSigninActions(
-    const base::Value& properties,
+    const base::Value::Dict& properties,
     bool com_initialized) {
   LOGFN(VERBOSE);
   HRESULT hr = S_OK;
@@ -2253,13 +2255,13 @@ HRESULT CGaiaCredentialBase::ReportResult(
     // |authentication_results_| with the real Windows information for the user
     // so that the PerformPostSigninActions process can correctly sign in to the
     // user account.
-    authentication_results_->SetKey(
+    authentication_results_->Set(
         kKeySID, base::Value(base::WideToUTF8((BSTR)user_sid_)));
-    authentication_results_->SetKey(
-        kKeyDomain, base::Value(base::WideToUTF8((BSTR)domain_)));
-    authentication_results_->SetKey(
+    authentication_results_->Set(kKeyDomain,
+                                 base::Value(base::WideToUTF8((BSTR)domain_)));
+    authentication_results_->Set(
         kKeyUsername, base::Value(base::WideToUTF8((BSTR)username_)));
-    authentication_results_->SetKey(
+    authentication_results_->Set(
         kKeyPassword, base::Value(base::WideToUTF8((BSTR)password_)));
 
     std::wstring gaia_id = GetDictString(*authentication_results_, kKeyId);
@@ -2332,11 +2334,12 @@ void CGaiaCredentialBase::TerminateLogonProcess() {
   }
 }
 
-HRESULT CGaiaCredentialBase::ValidateOrCreateUser(const base::Value& result,
-                                                  BSTR* domain,
-                                                  BSTR* username,
-                                                  BSTR* sid,
-                                                  BSTR* error_text) {
+HRESULT CGaiaCredentialBase::ValidateOrCreateUser(
+    const base::Value::Dict& result,
+    BSTR* domain,
+    BSTR* username,
+    BSTR* sid,
+    BSTR* error_text) {
   LOGFN(VERBOSE);
   DCHECK(domain);
   DCHECK(username);
@@ -2504,25 +2507,23 @@ HRESULT CGaiaCredentialBase::OnUserAuthenticated(BSTR authentication_info,
   base::WideToUTF8(OLE2CW(authentication_info),
                    ::SysStringLen(authentication_info), &json_string);
 
-  absl::optional<base::Value> properties =
-      base::JSONReader::Read(json_string, base::JSON_ALLOW_TRAILING_COMMAS);
+  absl::optional<base::Value::Dict> properties =
+      base::JSONReader::ReadDict(json_string, base::JSON_ALLOW_TRAILING_COMMAS);
 
   SecurelyClearString(json_string);
   json_string.clear();
 
-  if (!properties || !properties->is_dict()) {
+  if (!properties) {
     LOGFN(ERROR) << "base::JSONReader::Read failed to translate to JSON";
     *status_text = AllocErrorString(IDS_INVALID_UI_RESPONSE_BASE);
     return E_FAIL;
   }
 
   {
-    base::ScopedClosureRunner zero_dict_on_exit(base::BindOnce(
-        &SecurelyClearDictionaryValue, base::Unretained(&properties)));
-
     HRESULT hr = ValidateResult(*properties, status_text);
     if (FAILED(hr)) {
       LOGFN(ERROR) << "ValidateResult hr=" << putHR(hr);
+      SecurelyClearDictionaryValue(properties);
       return hr;
     }
 
@@ -2530,20 +2531,20 @@ HRESULT CGaiaCredentialBase::OnUserAuthenticated(BSTR authentication_info,
     const std::wstring email_domain = email.substr(email.find(L"@") + 1);
     const std::vector<std::wstring> allowed_domains = GetEmailDomainsList();
 
-    if (std::find(allowed_domains.begin(), allowed_domains.end(),
-                  email_domain) == allowed_domains.end()) {
+    if (!base::Contains(allowed_domains, email_domain)) {
       LOGFN(VERBOSE) << "Account " << email
                      << " isn't in a domain from allowed domains.";
       *status_text =
           CGaiaCredentialBase::AllocErrorString(IDS_INVALID_EMAIL_DOMAIN_BASE);
+      SecurelyClearDictionaryValue(properties);
       return E_FAIL;
     }
 
     std::vector<std::wstring> permitted_accounts = GetPermittedAccounts();
     if (!permitted_accounts.empty() &&
-        std::find(permitted_accounts.begin(), permitted_accounts.end(),
-                  email) == permitted_accounts.end()) {
+        !base::Contains(permitted_accounts, email)) {
       *status_text = AllocErrorString(IDS_EMAIL_MISMATCH_BASE);
+      SecurelyClearDictionaryValue(properties);
       return E_FAIL;
     }
 
@@ -2558,14 +2559,14 @@ HRESULT CGaiaCredentialBase::OnUserAuthenticated(BSTR authentication_info,
       if (*status_text == nullptr)
         *status_text = AllocErrorString(IDS_INVALID_UI_RESPONSE_BASE);
       LOGFN(ERROR) << "ValidateOrCreateUser hr=" << putHR(hr);
+      SecurelyClearDictionaryValue(properties);
       return hr;
     }
 
-    base::IgnoreResult(zero_dict_on_exit.Release());
     authentication_results_ = std::move(properties);
     // Update the info whether the user is an AD joined user or local user.
     std::wstring sid = OLE2CW(user_sid_);
-    authentication_results_->SetKey(
+    authentication_results_->Set(
         kKeyIsAdJoinedUser,
         base::Value(OSUserManager::Get()->IsUserDomainJoined(sid) ? "true"
                                                                   : "false"));
@@ -2719,7 +2720,7 @@ HRESULT CGaiaCredentialBase::RecoverWindowsPasswordIfPossible(
   }
 
   const std::string* access_token =
-      authentication_results_->FindStringKey(kKeyAccessToken);
+      authentication_results_->FindString(kKeyAccessToken);
   if (!access_token) {
     LOGFN(ERROR) << "No access token found in authentication results";
     return E_FAIL;

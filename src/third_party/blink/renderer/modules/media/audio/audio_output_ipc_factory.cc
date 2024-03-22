@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,8 +6,8 @@
 
 #include <utility>
 
-#include "base/bind.h"
 #include "base/check_op.h"
+#include "base/functional/bind.h"
 #include "base/task/single_thread_task_runner.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
 #include "mojo/public/cpp/bindings/remote.h"
@@ -32,7 +32,7 @@ class AudioOutputIPCFactory::Impl {
   Impl(const Impl&) = delete;
   Impl& operator=(const Impl&) = delete;
 
-  ~Impl() { DCHECK(factory_remotes_.IsEmpty()); }
+  ~Impl() { DCHECK(factory_remotes_.empty()); }
 
   mojom::blink::RendererAudioOutputStreamFactory* GetRemoteFactory(
       const blink::LocalFrameToken& frame_token) const;

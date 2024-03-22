@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -21,7 +21,6 @@ CredentialLeakDialogControllerImpl::CredentialLeakDialogControllerImpl(
     const std::u16string& username,
     std::unique_ptr<LeakDialogMetricsRecorder> metrics_recorder)
     : delegate_(delegate),
-      leak_type_(leak_type),
       leak_dialog_traits_(CreateDialogTraits(leak_type)),
       url_(url),
       username_(username),
@@ -49,11 +48,7 @@ void CredentialLeakDialogControllerImpl::OnCancelDialog() {
 }
 
 void CredentialLeakDialogControllerImpl::OnAcceptDialog() {
-  if (ShouldOfferAutomatedPasswordChange()) {
-    metrics_recorder_->LogLeakDialogTypeAndDismissalReason(
-        LeakDialogDismissalReason::kClickedChangePasswordAutomatically);
-    delegate_->StartAutomatedPasswordChange(url_, username_);
-  } else if (ShouldCheckPasswords()) {
+  if (ShouldCheckPasswords()) {
     metrics_recorder_->LogLeakDialogTypeAndDismissalReason(
         LeakDialogDismissalReason::kClickedCheckPasswords);
     delegate_->NavigateToPasswordCheckup(
@@ -98,11 +93,6 @@ std::u16string CredentialLeakDialogControllerImpl::GetTitle() const {
 
 bool CredentialLeakDialogControllerImpl::ShouldCheckPasswords() const {
   return leak_dialog_traits_->ShouldCheckPasswords();
-}
-
-bool CredentialLeakDialogControllerImpl::ShouldOfferAutomatedPasswordChange()
-    const {
-  return password_manager::ShouldShowAutomaticChangePasswordButton(leak_type_);
 }
 
 bool CredentialLeakDialogControllerImpl::ShouldShowCancelButton() const {

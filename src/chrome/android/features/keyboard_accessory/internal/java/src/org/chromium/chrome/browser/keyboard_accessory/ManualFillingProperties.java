@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -22,9 +22,7 @@ import org.chromium.ui.modelutil.PropertyModel;
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 
-/**
- * Properties defined here reflect the visible state of the ManualFilling-components.
- */
+/** Properties defined here reflect the visible state of the ManualFilling-components. */
 class ManualFillingProperties {
     static final PropertyModel.WritableBooleanPropertyKey SHOW_WHEN_VISIBLE =
             new PropertyModel.WritableBooleanPropertyKey("show_when_visible");
@@ -34,12 +32,16 @@ class ManualFillingProperties {
             new PropertyModel.WritableIntPropertyKey("keyboard_extension_state");
     static final PropertyModel.WritableBooleanPropertyKey SUPPRESSED_BY_BOTTOM_SHEET =
             new PropertyModel.WritableBooleanPropertyKey("suppressed_by_bottom_sheet");
+    // TODO(crbug.com/1395804): SHOULD_EXTEND_KEYBOARD doubles the number of states of
+    // KEYBOARD_EXTENSION_STATE.
+    static final PropertyModel.WritableBooleanPropertyKey SHOULD_EXTEND_KEYBOARD =
+            new PropertyModel.WritableBooleanPropertyKey("should_extend_keyboard");
 
     /**
      * Properties that a given state enforces. Must be between 0x0 and 0x100.
      * @see KeyboardExtensionState
      */
-    @IntDef({BAR, VISIBLE_SHEET, HIDDEN_SHEET})
+    @IntDef({BAR, VISIBLE_SHEET, HIDDEN_SHEET, FLOATING})
     @Retention(RetentionPolicy.SOURCE)
     public @interface StateProperty {
         int BAR = 0x1; // Any state either shows it or hides it - there is no neutral stance.
@@ -57,26 +59,36 @@ class ManualFillingProperties {
      * The state FLOATING_BAR must close the sheet but show the bar. To satisfy the FLOATING
      * property, the state will ensure that the keyboard can not affect it.
      */
-    @IntDef({HIDDEN, EXTENDING_KEYBOARD, WAITING_TO_REPLACE, REPLACING_KEYBOARD, FLOATING_BAR,
-            FLOATING_SHEET})
+    @IntDef({
+        HIDDEN,
+        EXTENDING_KEYBOARD,
+        WAITING_TO_REPLACE,
+        REPLACING_KEYBOARD,
+        FLOATING_BAR,
+        FLOATING_SHEET
+    })
     @Retention(RetentionPolicy.SOURCE)
     public @interface KeyboardExtensionState {
         int HIDDEN = HIDDEN_SHEET; // == 4
         int EXTENDING_KEYBOARD = BAR | HIDDEN_SHEET; // == 5
-        int REPLACING_KEYBOARD = BAR | VISIBLE_SHEET; // == 3
-        int WAITING_TO_REPLACE = BAR; // == 1
         int FLOATING_BAR = BAR | HIDDEN_SHEET | FLOATING; // == 13
-        int FLOATING_SHEET = BAR | VISIBLE_SHEET | FLOATING; // == 11
+        int REPLACING_KEYBOARD = VISIBLE_SHEET; // == 2
+        int WAITING_TO_REPLACE = 0;
+        int FLOATING_SHEET = VISIBLE_SHEET | FLOATING; // == 10
     }
 
     static PropertyModel createFillingModel() {
-        return new PropertyModel
-                .Builder(SHOW_WHEN_VISIBLE, KEYBOARD_EXTENSION_STATE, PORTRAIT_ORIENTATION,
-                        SUPPRESSED_BY_BOTTOM_SHEET)
+        return new PropertyModel.Builder(
+                        SHOW_WHEN_VISIBLE,
+                        KEYBOARD_EXTENSION_STATE,
+                        PORTRAIT_ORIENTATION,
+                        SUPPRESSED_BY_BOTTOM_SHEET,
+                        SHOULD_EXTEND_KEYBOARD)
                 .with(SHOW_WHEN_VISIBLE, false)
                 .with(KEYBOARD_EXTENSION_STATE, HIDDEN)
                 .with(PORTRAIT_ORIENTATION, true)
                 .with(SUPPRESSED_BY_BOTTOM_SHEET, false)
+                .with(SHOULD_EXTEND_KEYBOARD, true)
                 .build();
     }
 

@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -69,12 +69,6 @@ class PasswordCheckBridge : public PasswordCheckManager::Observer {
 
   // Called by Java when the bridge is no longer needed. Destructs itself.
   void Destroy(JNIEnv* env);
-
-  // Checks if script refreshment is finished.
-  bool AreScriptsRefreshed(JNIEnv* env) const;
-
-  // Invokes scripts refreshment.
-  void RefreshScripts(JNIEnv* env);
 
   // Called by the check manager when the saved passwords have been first loaded
   // in memory. `count` is the number of saved passwords.

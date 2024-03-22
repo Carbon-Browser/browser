@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,7 +11,7 @@ import com.google.android.gms.gcm.TaskParams;
 /**
  * A class with this name was part of the cacheinvalidation library, which isn't used anymore and
  * has been deleted. However, this service is exported in the AndroidManifest.xml and thus is part
- * of Chrome's public API, so we need to keep this dummy class around.
+ * of Chrome's public API, so we need to keep this placeholder class around.
  */
 public class GcmRegistrationTaskService extends GcmTaskService {
     @Override

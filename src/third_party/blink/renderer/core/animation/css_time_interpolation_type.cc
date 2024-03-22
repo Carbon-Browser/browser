@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,7 +10,6 @@
 #include "third_party/blink/renderer/core/css/properties/css_property.h"
 #include "third_party/blink/renderer/core/css/resolver/style_builder.h"
 #include "third_party/blink/renderer/core/css/resolver/style_resolver.h"
-#include "third_party/blink/renderer/core/css/scoped_css_value.h"
 
 namespace blink {
 
@@ -40,7 +39,7 @@ const CSSValue* CSSTimeInterpolationType::CreateCSSValue(
 
 InterpolationValue CSSTimeInterpolationType::CreateTimeValue(
     double seconds) const {
-  return InterpolationValue(std::make_unique<InterpolableNumber>(seconds));
+  return InterpolationValue(MakeGarbageCollected<InterpolableNumber>(seconds));
 }
 
 // static
@@ -48,10 +47,10 @@ absl::optional<double> CSSTimeInterpolationType::GetSeconds(
     const CSSPropertyID& property,
     const ComputedStyle& style) {
   switch (property) {
-    case CSSPropertyID::kHoverPopUpDelay:
-      return style.HoverPopUpDelay();
-    case CSSPropertyID::kHoverPopUpHideDelay:
-      return style.HoverPopUpHideDelay();
+    case CSSPropertyID::kPopoverShowDelay:
+      return style.PopoverShowDelay();
+    case CSSPropertyID::kPopoverHideDelay:
+      return style.PopoverHideDelay();
     default:
       NOTREACHED();
       return absl::optional<double>();
@@ -70,8 +69,8 @@ absl::optional<double> CSSTimeInterpolationType::GetSeconds(
 double CSSTimeInterpolationType::ClampTime(const CSSPropertyID& property,
                                            double value) const {
   switch (property) {
-    case CSSPropertyID::kHoverPopUpDelay:
-    case CSSPropertyID::kHoverPopUpHideDelay:
+    case CSSPropertyID::kPopoverShowDelay:
+    case CSSPropertyID::kPopoverHideDelay:
       return ClampTo<float>(value, 0);
     default:
       NOTREACHED();
@@ -91,16 +90,16 @@ void CSSTimeInterpolationType::ApplyStandardPropertyValue(
     const InterpolableValue& interpolable_value,
     const NonInterpolableValue*,
     StyleResolverState& state) const {
+  ComputedStyleBuilder& builder = state.StyleBuilder();
   auto property = CssProperty().PropertyID();
   double clamped_seconds =
       ClampTime(property, To<InterpolableNumber>(interpolable_value).Value());
-  ComputedStyle& style = *state.Style();
   switch (property) {
-    case CSSPropertyID::kHoverPopUpDelay:
-      style.SetHoverPopUpDelay(clamped_seconds);
+    case CSSPropertyID::kPopoverShowDelay:
+      builder.SetPopoverShowDelay(clamped_seconds);
       break;
-    case CSSPropertyID::kHoverPopUpHideDelay:
-      style.SetHoverPopUpHideDelay(clamped_seconds);
+    case CSSPropertyID::kPopoverHideDelay:
+      builder.SetPopoverHideDelay(clamped_seconds);
       break;
     default:
       NOTREACHED();

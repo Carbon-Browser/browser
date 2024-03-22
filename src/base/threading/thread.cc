@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,9 +8,9 @@
 #include <type_traits>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
-#include "base/lazy_instance.h"
+#include "base/dcheck_is_on.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/location.h"
 #include "base/logging.h"
 #include "base/memory/ptr_util.h"
@@ -21,15 +21,15 @@
 #include "base/task/current_thread.h"
 #include "base/task/sequence_manager/sequence_manager_impl.h"
 #include "base/task/sequence_manager/task_queue.h"
-#include "base/task/simple_task_executor.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/third_party/dynamic_annotations/dynamic_annotations.h"
 #include "base/threading/thread_id_name_manager.h"
-#include "base/threading/thread_local.h"
 #include "base/threading/thread_restrictions.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/types/pass_key.h"
 #include "build/build_config.h"
+#include "third_party/abseil-cpp/absl/base/attributes.h"
 
-#if BUILDFLAG(IS_POSIX) && !BUILDFLAG(IS_NACL)
+#if (BUILDFLAG(IS_POSIX) && !BUILDFLAG(IS_NACL)) || BUILDFLAG(IS_FUCHSIA)
 #include "base/files/file_descriptor_watcher_posix.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 #endif
@@ -40,14 +40,19 @@
 
 namespace base {
 
+#if DCHECK_IS_ON()
 namespace {
 
 // We use this thread-local variable to record whether or not a thread exited
 // because its Stop method was called.  This allows us to catch cases where
 // MessageLoop::QuitWhenIdle() is called directly, which is unexpected when
 // using a Thread to setup and run a MessageLoop.
-base::LazyInstance<base::ThreadLocalBoolean>::Leaky lazy_tls_bool =
-    LAZY_INSTANCE_INITIALIZER;
+ABSL_CONST_INIT thread_local bool was_quit_properly = false;
+
+}  // namespace
+#endif
+
+namespace internal {
 
 class SequenceManagerThreadDelegate : public Thread::Delegate {
  public:
@@ -55,12 +60,14 @@ class SequenceManagerThreadDelegate : public Thread::Delegate {
       MessagePumpType message_pump_type,
       OnceCallback<std::unique_ptr<MessagePump>()> message_pump_factory)
       : sequence_manager_(
-            sequence_manager::internal::SequenceManagerImpl::CreateUnbound(
+            sequence_manager::internal::CreateUnboundSequenceManagerImpl(
+                PassKey<base::internal::SequenceManagerThreadDelegate>(),
                 sequence_manager::SequenceManager::Settings::Builder()
                     .SetMessagePumpType(message_pump_type)
                     .Build())),
         default_task_queue_(sequence_manager_->CreateTaskQueue(
-            sequence_manager::TaskQueue::Spec("default_tq"))),
+            sequence_manager::TaskQueue::Spec(
+                sequence_manager::QueueName::DEFAULT_TQ))),
         message_pump_factory_(std::move(message_pump_factory)) {
     sequence_manager_->SetDefaultTaskRunner(default_task_queue_->task_runner());
   }
@@ -86,22 +93,19 @@ class SequenceManagerThreadDelegate : public Thread::Delegate {
     return sequence_manager_->GetTaskRunner();
   }
 
-  void BindToCurrentThread(TimerSlack timer_slack) override {
+  void BindToCurrentThread() override {
     sequence_manager_->BindToMessagePump(
         std::move(message_pump_factory_).Run());
-    sequence_manager_->SetTimerSlack(timer_slack);
-    simple_task_executor_.emplace(GetDefaultTaskRunner());
   }
 
  private:
   std::unique_ptr<sequence_manager::internal::SequenceManagerImpl>
       sequence_manager_;
-  scoped_refptr<sequence_manager::TaskQueue> default_task_queue_;
+  sequence_manager::TaskQueue::Handle default_task_queue_;
   OnceCallback<std::unique_ptr<MessagePump>()> message_pump_factory_;
-  absl::optional<SimpleTaskExecutor> simple_task_executor_;
 };
 
-}  // namespace
+}  // namespace internal
 
 Thread::Options::Options() = default;
 
@@ -113,7 +117,6 @@ Thread::Options::Options(ThreadType thread_type) : thread_type(thread_type) {}
 Thread::Options::Options(Options&& other)
     : message_pump_type(std::move(other.message_pump_type)),
       delegate(std::move(other.delegate)),
-      timer_slack(std::move(other.timer_slack)),
       message_pump_factory(std::move(other.message_pump_factory)),
       stack_size(std::move(other.stack_size)),
       thread_type(std::move(other.thread_type)),
@@ -126,7 +129,6 @@ Thread::Options& Thread::Options::operator=(Thread::Options&& other) {
 
   message_pump_type = std::move(other.message_pump_type);
   delegate = std::move(other.delegate);
-  timer_slack = std::move(other.timer_slack);
   message_pump_factory = std::move(other.message_pump_factory);
   stack_size = std::move(other.stack_size);
   thread_type = std::move(other.thread_type);
@@ -184,16 +186,14 @@ bool Thread::StartWithOptions(Options options) {
 
   SetThreadWasQuitProperly(false);
 
-  timer_slack_ = options.timer_slack;
-
   if (options.delegate) {
     DCHECK(!options.message_pump_factory);
     delegate_ = std::move(options.delegate);
   } else if (options.message_pump_factory) {
-    delegate_ = std::make_unique<SequenceManagerThreadDelegate>(
+    delegate_ = std::make_unique<internal::SequenceManagerThreadDelegate>(
         MessagePumpType::CUSTOM, options.message_pump_factory);
   } else {
-    delegate_ = std::make_unique<SequenceManagerThreadDelegate>(
+    delegate_ = std::make_unique<internal::SequenceManagerThreadDelegate>(
         options.message_pump_type,
         BindOnce([](MessagePumpType type) { return MessagePump::Create(type); },
                  options.message_pump_type));
@@ -339,16 +339,18 @@ void Thread::Run(RunLoop* run_loop) {
 
 // static
 void Thread::SetThreadWasQuitProperly(bool flag) {
-  lazy_tls_bool.Pointer()->Set(flag);
+#if DCHECK_IS_ON()
+  was_quit_properly = flag;
+#endif
 }
 
 // static
 bool Thread::GetThreadWasQuitProperly() {
-  bool quit_properly = true;
 #if DCHECK_IS_ON()
-  quit_properly = lazy_tls_bool.Pointer()->Get();
+  return was_quit_properly;
+#else
+  return true;
 #endif
-  return quit_properly;
 }
 
 void Thread::ThreadMain() {
@@ -369,19 +371,18 @@ void Thread::ThreadMain() {
 
   // Lazily initialize the |message_loop| so that it can run on this thread.
   DCHECK(delegate_);
-  // This binds CurrentThread and ThreadTaskRunnerHandle.
-  delegate_->BindToCurrentThread(timer_slack_);
+  // This binds CurrentThread and SingleThreadTaskRunner::CurrentDefaultHandle.
+  delegate_->BindToCurrentThread();
   DCHECK(CurrentThread::Get());
-  DCHECK(ThreadTaskRunnerHandle::IsSet());
-
-#if BUILDFLAG(IS_POSIX) && !BUILDFLAG(IS_NACL)
+  DCHECK(SingleThreadTaskRunner::HasCurrentDefault());
+#if (BUILDFLAG(IS_POSIX) && !BUILDFLAG(IS_NACL)) || BUILDFLAG(IS_FUCHSIA)
   // Allow threads running a MessageLoopForIO to use FileDescriptorWatcher API.
   std::unique_ptr<FileDescriptorWatcher> file_descriptor_watcher;
   if (CurrentIOThread::IsSet()) {
     file_descriptor_watcher = std::make_unique<FileDescriptorWatcher>(
         delegate_->GetDefaultTaskRunner());
   }
-#endif
+#endif  // (BUILDFLAG(IS_POSIX) && !BUILDFLAG(IS_NACL)) || BUILDFLAG(IS_FUCHSIA)
 
 #if BUILDFLAG(IS_WIN)
   std::unique_ptr<win::ScopedCOMInitializer> com_initializer;

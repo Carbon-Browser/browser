@@ -1,4 +1,4 @@
-// Copyright (c) 2011 The Chromium Authors. All rights reserved.
+// Copyright 2011 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -332,10 +332,11 @@ chrome.test.getConfig(function(config) {
     // Tests that the port is still available even if the page is salvaged
     // from back/forward cache.
     function keepConnectionOnNavigationWithBfcache() {
-      // Skip test if bfcache is disabled because this test expects
+      // Skip test if bfcache is disabled or the extension port will be
+      // disconnected after the page enters bfcache, because this test expects
       // the port will remain open when the page is salvaged from the
       // back/forward cache.
-      if (config.customArg !== 'bfcache') {
+      if (config.customArg !== 'bfcache/without_disconnection') {
         chrome.test.succeed();
         return;
       }
@@ -358,7 +359,7 @@ chrome.test.getConfig(function(config) {
     function disconnectOnClose() {
       // Skip test if bfcache is enabled because the port will not be
       // closed immediately if the page is cached.
-      if (config.customArg === 'bfcache') {
+      if (config.customArg === 'bfcache/without_disconnection') {
         chrome.test.succeed();
         return;
       }
@@ -384,7 +385,7 @@ chrome.test.getConfig(function(config) {
       } catch(e) {
         error = e;
       }
-      chrome.test.assertTrue(error != undefined);
+      chrome.test.assertNe(undefined, error);
 
       error = undefined;
       try {
@@ -392,7 +393,7 @@ chrome.test.getConfig(function(config) {
       } catch(e) {
         error = e;
       }
-      chrome.test.assertTrue(error != undefined);
+      chrome.test.assertNe(undefined, error);
 
       chrome.test.succeed();
     },

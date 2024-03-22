@@ -1,10 +1,10 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "ui/ozone/platform/drm/host/drm_window_host.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/memory/scoped_refptr.h"
 #include "ui/base/cursor/platform_cursor.h"
 #include "ui/display/display.h"
@@ -79,8 +79,9 @@ bool DrmWindowHost::IsVisible() const {
 void DrmWindowHost::PrepareForShutdown() {}
 
 void DrmWindowHost::SetBoundsInPixels(const gfx::Rect& bounds) {
+  bool origin_changed = bounds_.origin() != bounds.origin();
   bounds_ = bounds;
-  delegate_->OnBoundsChanged(bounds);
+  delegate_->OnBoundsChanged({origin_changed});
   SendBoundsChange();
 }
 
@@ -113,7 +114,7 @@ bool DrmWindowHost::HasCapture() const {
   return widget_ == window_manager_->event_grabber();
 }
 
-void DrmWindowHost::ToggleFullscreen() {}
+void DrmWindowHost::SetFullscreen(bool fullscreen, int64_t target_display_id) {}
 
 void DrmWindowHost::Maximize() {}
 

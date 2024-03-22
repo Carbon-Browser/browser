@@ -1,10 +1,11 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef UI_VIEWS_EXAMPLES_COMBOBOX_EXAMPLE_H_
 #define UI_VIEWS_EXAMPLES_COMBOBOX_EXAMPLE_H_
 
+#include "base/memory/raw_ptr.h"
 #include "ui/base/models/combobox_model.h"
 #include "ui/views/examples/example_base.h"
 
@@ -27,7 +28,7 @@ class VIEWS_EXAMPLES_EXPORT ComboboxExample : public ExampleBase {
  private:
   void ValueChanged();
 
-  Combobox* combobox_ = nullptr;
+  raw_ptr<Combobox> combobox_ = nullptr;
 };
 
 }  // namespace examples

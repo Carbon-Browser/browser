@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,10 +9,9 @@
 #include <memory>
 #include <vector>
 
-#include "base/callback.h"
 #include "base/feature_list.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
-#include "base/memory/ref_counted.h"
 #include "base/memory/weak_ptr.h"
 #include "base/time/time.h"
 #include "base/timer/timer.h"
@@ -64,7 +63,7 @@ class WrappingIterator {
   bool valid_ = false;
   size_t iterations_done_ = 0;
   typename T::const_iterator inner_;
-  const T* container_ = nullptr;
+  raw_ptr<const T, DanglingUntriaged> container_ = nullptr;
 };
 
 // Sweeps the IndexedDB leveldb database looking for index tombstones. These

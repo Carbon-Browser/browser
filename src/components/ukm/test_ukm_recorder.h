@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,6 +6,7 @@
 #define COMPONENTS_UKM_TEST_UKM_RECORDER_H_
 
 #include <stddef.h>
+#include <iosfwd>
 
 #include <map>
 #include <memory>
@@ -46,8 +47,6 @@ class TestUkmRecorder : public UkmRecorderImpl {
   TestUkmRecorder& operator=(const TestUkmRecorder&) = delete;
 
   ~TestUkmRecorder() override;
-
-  bool ShouldRestrictToWhitelistedSourceIds() const override;
 
   void AddEntry(mojom::UkmEntryPtr entry) override;
 
@@ -136,6 +135,10 @@ class TestAutoSetUkmRecorder : public TestUkmRecorder {
  private:
   base::WeakPtrFactory<TestAutoSetUkmRecorder> self_ptr_factory_{this};
 };
+
+// Formatter method for Google Test.
+void PrintTo(const TestUkmRecorder::HumanReadableUkmEntry& entry,
+             std::ostream* os);
 
 }  // namespace ukm
 

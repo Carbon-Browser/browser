@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,6 +6,7 @@
 #define COMPONENTS_POLICY_CORE_BROWSER_URL_SCHEME_LIST_POLICY_HANDLER_H_
 
 #include "base/compiler_specific.h"
+#include "base/gtest_prod_util.h"
 #include "components/policy/core/browser/configuration_policy_handler.h"
 #include "components/policy/policy_export.h"
 
@@ -29,8 +30,11 @@ class POLICY_EXPORT URLSchemeListPolicyHandler
   void ApplyPolicySettings(const PolicyMap& policies,
                            PrefValueMap* prefs) override;
 
+ protected:
+  virtual size_t max_items();
+  virtual bool ValidatePolicyEntry(const std::string* policy);
+
  private:
-  bool ValidatePolicyEntry(const std::string* policy);
   const char* pref_path_;
 
   FRIEND_TEST_ALL_PREFIXES(URLSchemeListPolicyHandlerTest, ValidatePolicyEntry);

@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -15,7 +15,7 @@ namespace signin {
 struct AccountsInCookieJarInfo {
   // True if the accounts info from cookie is fresh and does not need to be
   // updated.
-  bool accounts_are_fresh;
+  bool accounts_are_fresh = true;
 
   // The current list of signed in accounts from the cookie jar.
   std::vector<gaia::ListedAccount> signed_in_accounts;

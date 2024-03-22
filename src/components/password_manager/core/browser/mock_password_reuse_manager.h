@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -20,16 +20,13 @@ class MockPasswordReuseManager : public PasswordReuseManager {
               Init,
               (PrefService * prefs,
                PasswordStoreInterface* profile_store,
-               PasswordStoreInterface* account_store),
+               PasswordStoreInterface* account_store,
+               signin::IdentityManager* identity_manager,
+               std::unique_ptr<SharedPreferencesDelegate> shared_pref_delegate),
               (override));
-  MOCK_METHOD(void, AccountStoreStateChanged, (), (override));
   MOCK_METHOD(void,
               ReportMetrics,
               (const std::string& username, bool is_under_advanced_protection),
-              (override));
-  MOCK_METHOD(void,
-              PreparePasswordHashData,
-              (const std::string& sync_username, bool is_signed_in),
               (override));
   MOCK_METHOD(void,
               CheckReuse,
@@ -42,7 +39,7 @@ class MockPasswordReuseManager : public PasswordReuseManager {
               (const std::string& username,
                const std::u16string& password,
                bool is_primary_account,
-               GaiaPasswordHashChange event),
+               metrics_util::GaiaPasswordHashChange event),
               (override));
   MOCK_METHOD(void,
               SaveEnterprisePasswordHash,
@@ -51,7 +48,7 @@ class MockPasswordReuseManager : public PasswordReuseManager {
   MOCK_METHOD(void,
               SaveSyncPasswordHash,
               (const PasswordHashData& sync_password_data,
-               GaiaPasswordHashChange event),
+               metrics_util::GaiaPasswordHashChange event),
               (override));
   MOCK_METHOD(void,
               ClearGaiaPasswordHash,
@@ -69,12 +66,6 @@ class MockPasswordReuseManager : public PasswordReuseManager {
   MOCK_METHOD(void,
               SetPasswordStoreSigninNotifier,
               (std::unique_ptr<PasswordStoreSigninNotifier> notifier),
-              (override));
-  MOCK_METHOD(void,
-              SchedulePasswordHashUpdate,
-              (bool should_log_metrics,
-               bool does_primary_account_exists,
-               bool is_signed_in),
               (override));
   MOCK_METHOD(void, ScheduleEnterprisePasswordURLUpdate, (), (override));
 };

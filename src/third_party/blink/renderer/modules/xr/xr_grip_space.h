@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -16,7 +16,7 @@ class XRGripSpace : public XRSpace {
  public:
   XRGripSpace(XRSession* session, XRInputSource* input_source);
 
-  absl::optional<TransformationMatrix> MojoFromNative() const override;
+  absl::optional<gfx::Transform> MojoFromNative() const override;
   bool EmulatedPosition() const override;
 
   device::mojom::blink::XRNativeOriginInformationPtr NativeOrigin()

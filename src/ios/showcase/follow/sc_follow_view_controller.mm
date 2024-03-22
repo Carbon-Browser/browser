@@ -1,28 +1,24 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #import "ios/showcase/follow/sc_follow_view_controller.h"
 
+#import "ios/chrome/browser/follow/model/followed_web_site_state.h"
 #import "ios/chrome/browser/net/crurl.h"
-#import "ios/chrome/browser/ui/follow/first_follow_favicon_data_source.h"
+#import "ios/chrome/browser/shared/ui/symbols/symbols.h"
+#import "ios/chrome/browser/shared/ui/table_view/table_view_favicon_data_source.h"
+#import "ios/chrome/browser/shared/ui/table_view/table_view_navigation_controller.h"
 #import "ios/chrome/browser/ui/follow/first_follow_view_controller.h"
 #import "ios/chrome/browser/ui/follow/followed_web_channel.h"
-#import "ios/chrome/browser/ui/icons/chrome_symbol.h"
 #import "ios/chrome/browser/ui/ntp/feed_management/feed_management_follow_delegate.h"
 #import "ios/chrome/browser/ui/ntp/feed_management/feed_management_navigation_delegate.h"
 #import "ios/chrome/browser/ui/ntp/feed_management/feed_management_view_controller.h"
 #import "ios/chrome/browser/ui/ntp/feed_management/follow_management_ui_updater.h"
 #import "ios/chrome/browser/ui/ntp/feed_management/follow_management_view_controller.h"
 #import "ios/chrome/browser/ui/ntp/feed_management/followed_web_channels_data_source.h"
-#import "ios/chrome/browser/ui/table_view/table_view_favicon_data_source.h"
-#import "ios/chrome/browser/ui/table_view/table_view_navigation_controller.h"
 #import "ios/chrome/common/ui/favicon/favicon_attributes.h"
-#import "ios/showcase/common/protocol_alerter.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
+#import "ios/testing/protocol_fake.h"
 
 namespace {
 
@@ -32,20 +28,15 @@ constexpr CGFloat kHalfSheetCornerRadius = 20;
 // An example favicon URL given from the Discover backend.
 static NSString* const kExampleFaviconURL = @"https://www.the-sun.com/";
 
-// Specific symbols used to create favicons.
-NSString* kGlobeSymbol = @"globe";
-NSString* kGlobeAmericaSymbol = @"globe.americas.fill";
-
 // The size of favicon symbol images.
 NSInteger kFaviconSymbolPointSize = 17;
 
 }  // namespace
 
-@interface SCFollowViewController () <FirstFollowFaviconDataSource,
-                                      FollowedWebChannelsDataSource,
+@interface SCFollowViewController () <FollowedWebChannelsDataSource,
                                       TableViewFaviconDataSource>
 // Shows alerts of protocol method calls.
-@property(nonatomic, strong) ProtocolAlerter* alerter;
+@property(nonatomic, strong) ProtocolFake* alerter;
 // Called to unfollow/refollow channels in the follow mgmt UI.
 @property(nonatomic, weak) id<FollowManagementUIUpdater>
     followManagementUIUpdater;
@@ -59,7 +50,7 @@ NSInteger kFaviconSymbolPointSize = 17;
 - (void)viewDidLoad {
   [super viewDidLoad];
 
-  self.alerter = [[ProtocolAlerter alloc] initWithProtocols:@[
+  self.alerter = [[ProtocolFake alloc] initWithProtocols:@[
     @protocol(FeedManagementFollowDelegate),
     @protocol(FeedManagementNavigationDelegate)
   ]];
@@ -129,18 +120,19 @@ NSInteger kFaviconSymbolPointSize = 17;
 }
 
 - (void)handleFirstFollowButtonTapped {
+  __weak __typeof(self) weakSelf = self;
   FirstFollowViewController* firstFollowViewController =
-      [[FirstFollowViewController alloc] init];
+      [[FirstFollowViewController alloc]
+          initWithTitle:@"First Web Channel"
+                 active:YES
+          faviconSource:^(void (^completion)(UIImage* favicon)) {
+            [weakSelf faviconForPageURL:nil
+                             completion:^(FaviconAttributes* attributes) {
+                               completion(attributes.faviconImage);
+                             }];
+          }];
 
-  FollowedWebChannel* ch1 = [[FollowedWebChannel alloc] init];
-  ch1.title = @"First Web Channel";
-  ch1.available = YES;
-  ch1.webPageURL =
-      [[CrURL alloc] initWithNSURL:[NSURL URLWithString:kExampleFaviconURL]];
-
-  firstFollowViewController.followedWebChannel = ch1;
   self.alerter.baseViewController = firstFollowViewController;
-  firstFollowViewController.faviconDataSource = self;
   firstFollowViewController.imageEnclosedWithShadowAndBadge = YES;
 
   if (@available(iOS 15, *)) {
@@ -182,21 +174,25 @@ NSInteger kFaviconSymbolPointSize = 17;
 - (FollowedWebChannel*)createWebChannelWithTitle:(NSString*)title {
   FollowedWebChannel* channel = [[FollowedWebChannel alloc] init];
   channel.title = title;
-  channel.available = YES;
+  channel.state = FollowedWebSiteStateStateActive;
   channel.faviconURL =
       [[CrURL alloc] initWithNSURL:[NSURL URLWithString:kExampleFaviconURL]];
   return channel;
 }
 
-#pragma mark - TableViewFaviconDataSource & FirstFollowFaviconDataSource
+- (void)loadFollowedWebSites {
+  return;
+}
 
-- (void)faviconForURL:(CrURL*)URL
-           completion:(void (^)(FaviconAttributes*))completion {
+#pragma mark - TableViewFaviconDataSource
+
+- (void)faviconForPageURL:(CrURL*)URL
+               completion:(void (^)(FaviconAttributes*))completion {
   // This mimics the behavior of favicon loader by immediately returning a
   // default image, then fetching and returning another image.
   UIImage* image1 =
       DefaultSymbolTemplateWithPointSize(kGlobeSymbol, kFaviconSymbolPointSize);
-  UIImage* image2 = DefaultSymbolTemplateWithPointSize(kGlobeAmericaSymbol,
+  UIImage* image2 = DefaultSymbolTemplateWithPointSize(kGlobeAmericasSymbol,
                                                        kFaviconSymbolPointSize);
   completion([FaviconAttributes attributesWithImage:image1]);
   dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 3 * NSEC_PER_SEC),

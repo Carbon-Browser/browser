@@ -1,4 +1,4 @@
-// Copyright (c) 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,6 +8,7 @@
 #include "base/files/file.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
+#include "base/memory/raw_ptr.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/string_piece.h"
 #include "base/strings/string_util.h"
@@ -45,7 +46,7 @@ class SimpleFileTrackerTest : public DiskCacheTest {
     }
 
    private:
-    SimpleFileTrackerTest* fixture_;
+    raw_ptr<SimpleFileTrackerTest> fixture_;
   };
 
   using SyncEntryPointer =
@@ -347,8 +348,7 @@ TEST_F(SimpleFileTrackerTest, OverLimit) {
   UpdateEntryFileKey(entries[1].get(), key);
   base::FilePath new_path =
       entries[1]->GetFilenameForSubfile(SimpleFileTracker::SubFile::FILE_0);
-  EXPECT_TRUE(base::StartsWith(new_path.BaseName().MaybeAsASCII(), "todelete_",
-                               base::CompareCase::SENSITIVE));
+  EXPECT_TRUE(new_path.BaseName().MaybeAsASCII().starts_with("todelete_"));
   EXPECT_TRUE(base::Move(old_path, new_path));
 
   // Now re-acquire everything again; this time reading.

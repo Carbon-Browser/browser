@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,6 +10,7 @@
 
 #include "base/memory/weak_ptr.h"
 #include "base/values.h"
+#include "build/build_config.h"
 #include "chrome/browser/ui/webui/settings/settings_page_ui_handler.h"
 #include "device/fido/bio/enrollment.h"
 #include "device/fido/bio/enrollment_handler.h"
@@ -24,6 +25,8 @@ enum class CredentialManagementStatus;
 class SetPINRequestHandler;
 class ResetRequestHandler;
 }  // namespace device
+
+class LocalCredentialManagement;
 
 namespace settings {
 
@@ -266,6 +269,45 @@ class SecurityKeysPhonesHandler : public SettingsPageUIHandler {
 
   void DoEnumerate(const base::Value& callback_id);
 };
+
+#if BUILDFLAG(IS_WIN) || BUILDFLAG(IS_MAC)
+class PasskeysHandler : public SettingsPageUIHandler {
+ public:
+  PasskeysHandler();
+  explicit PasskeysHandler(
+      std::unique_ptr<LocalCredentialManagement> local_cred_man);
+  ~PasskeysHandler() override;
+
+ protected:
+  void RegisterMessages() override;
+  void OnJavascriptAllowed() override;
+  void OnJavascriptDisallowed() override;
+
+  void HandleEdit(const base::Value::List& args);
+  void OnEditComplete(std::string callback_id, bool edit_ok);
+
+  void HandleDelete(const base::Value::List& args);
+  void OnDeleteComplete(std::string callback_id, bool delete_ok);
+
+ private:
+  void HandleHasPasskeys(const base::Value::List& args);
+  void OnHasPasskeysComplete(std::string callback_id, bool has_passkeys);
+
+  void HandleManagePasskeys(const base::Value::List& args);
+
+  void HandleEnumerate(const base::Value::List& args);
+  void DoEnumerate(std::string callback_id);
+  void OnEnumerateComplete(
+      std::string callback_id,
+      absl::optional<std::vector<device::DiscoverableCredentialMetadata>>
+          credentials);
+
+  std::unique_ptr<LocalCredentialManagement> local_cred_man_{nullptr};
+
+  base::WeakPtrFactory<PasskeysHandler> weak_factory_{this};
+};
+
+#endif
 
 }  // namespace settings
 

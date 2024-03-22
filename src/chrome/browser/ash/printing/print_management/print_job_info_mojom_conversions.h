@@ -1,11 +1,11 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CHROME_BROWSER_ASH_PRINTING_PRINT_MANAGEMENT_PRINT_JOB_INFO_MOJOM_CONVERSIONS_H_
 #define CHROME_BROWSER_ASH_PRINTING_PRINT_MANAGEMENT_PRINT_JOB_INFO_MOJOM_CONVERSIONS_H_
 
-#include "ash/webui/print_management/mojom/printing_manager.mojom.h"
+#include "chromeos/components/print_management/mojom/printing_manager.mojom.h"
 
 namespace ash {
 
@@ -19,12 +19,12 @@ class PrintJobInfo;
 namespace print_management {
 
 // Converts proto::PrintJobInfo into mojom::PrintJobInfoPtr.
-printing_manager::mojom::PrintJobInfoPtr PrintJobProtoToMojom(
-    const proto::PrintJobInfo& print_job_info_proto);
+chromeos::printing::printing_manager::mojom::PrintJobInfoPtr
+PrintJobProtoToMojom(const proto::PrintJobInfo& print_job_info_proto);
 
 // Convert CupsPrintJob into mojom::PrintJobInfoPtr.
-printing_manager::mojom::PrintJobInfoPtr CupsPrintJobToMojom(
-    const CupsPrintJob& job);
+chromeos::printing::printing_manager::mojom::PrintJobInfoPtr
+CupsPrintJobToMojom(const CupsPrintJob& job);
 
 }  // namespace print_management
 }  // namespace printing

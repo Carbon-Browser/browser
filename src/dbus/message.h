@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -139,7 +139,7 @@ class CHROME_DBUS_EXPORT Message {
   std::string ToStringInternal(const std::string& indent,
                                MessageReader* reader);
 
-  raw_ptr<DBusMessage, DanglingUntriaged> raw_message_;
+  raw_ptr<DBusMessage, AcrossTasksDanglingUntriaged> raw_message_;
 };
 
 // MessageCall is a type of message used for calling a method via D-Bus.
@@ -287,7 +287,7 @@ class CHROME_DBUS_EXPORT MessageWriter {
   void AppendInt64(int64_t value);
   void AppendUint64(uint64_t value);
   void AppendDouble(double value);
-  void AppendString(const std::string& value);
+  void AppendString(std::string_view value);
   void AppendObjectPath(const ObjectPath& value);
 
   // Appends a file descriptor to the message.
@@ -371,7 +371,7 @@ class CHROME_DBUS_EXPORT MessageWriter {
   // Helper function used to implement AppendVariantOfByte() etc.
   void AppendVariantOfBasic(int dbus_type, const void* value);
 
-  raw_ptr<Message, DanglingUntriaged> message_;
+  raw_ptr<Message, AcrossTasksDanglingUntriaged> message_;
   DBusMessageIter raw_message_iter_;
   bool container_is_open_;
 };
@@ -513,7 +513,7 @@ class CHROME_DBUS_EXPORT MessageReader {
   // Helper function used to implement PopVariantOfByte() etc.
   bool PopVariantOfBasic(int dbus_type, void* value);
 
-  raw_ptr<Message, DanglingUntriaged> message_;
+  raw_ptr<Message, AcrossTasksDanglingUntriaged> message_;
   DBusMessageIter raw_message_iter_;
 };
 

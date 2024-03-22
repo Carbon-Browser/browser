@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,7 +11,6 @@
 #include <utility>
 
 #include "ipcz/ipcz.h"
-#include "reference_drivers/blob.h"
 #include "reference_drivers/file_descriptor.h"
 #include "reference_drivers/memfd_memory.h"
 #include "reference_drivers/object.h"
@@ -30,7 +29,7 @@ namespace {
 class MultiprocessTransport
     : public ObjectImpl<MultiprocessTransport, Object::kTransport> {
  public:
-  explicit MultiprocessTransport(std::unique_ptr<SocketTransport> transport)
+  explicit MultiprocessTransport(Ref<SocketTransport> transport)
       : transport_(std::move(transport)) {}
   MultiprocessTransport(const MultiprocessTransport&) = delete;
   MultiprocessTransport& operator=(const MultiprocessTransport&) = delete;
@@ -50,16 +49,19 @@ class MultiprocessTransport
   }
 
   void Deactivate() {
+    Ref<SocketTransport> transport;
     {
       absl::MutexLock lock(&transport_mutex_);
-      transport_->Deactivate();
-      transport_.reset();
+      transport = std::move(transport_);
     }
 
-    if (activity_handler_) {
-      activity_handler_(ipcz_transport_, nullptr, 0, nullptr, 0,
-                        IPCZ_TRANSPORT_ACTIVITY_DEACTIVATED, nullptr);
-    }
+    transport->Deactivate([ipcz_transport = ipcz_transport_,
+                           activity_handler = activity_handler_] {
+      if (activity_handler) {
+        activity_handler(ipcz_transport, nullptr, 0, nullptr, 0,
+                         IPCZ_TRANSPORT_ACTIVITY_DEACTIVATED, nullptr);
+      }
+    });
   }
 
   IpczResult Transmit(absl::Span<const uint8_t> data,
@@ -117,7 +119,7 @@ class MultiprocessTransport
   bool was_activated_ = false;
 
   absl::Mutex transport_mutex_;
-  std::unique_ptr<SocketTransport> transport_ ABSL_GUARDED_BY(transport_mutex_);
+  Ref<SocketTransport> transport_ ABSL_GUARDED_BY(transport_mutex_);
 };
 
 class MultiprocessMemoryMapping
@@ -185,7 +187,7 @@ IpczResult IPCZ_API Serialize(IpczDriverHandle handle,
                               IpczDriverHandle transport,
                               uint32_t flags,
                               const void* options,
-                              void* data,
+                              volatile void* data,
                               size_t* num_bytes,
                               IpczDriverHandle* handles,
                               size_t* num_handles) {
@@ -201,11 +203,6 @@ IpczResult IPCZ_API Serialize(IpczDriverHandle handle,
     case Object::kTransport:
     case Object::kMemory:
       required_num_handles = 1;
-      break;
-
-    case Object::kBlob:
-      required_num_bytes += Blob::FromObject(object)->message().size();
-      required_num_handles = 0;
       break;
 
     default:
@@ -226,7 +223,7 @@ IpczResult IPCZ_API Serialize(IpczDriverHandle handle,
     return IPCZ_RESULT_RESOURCE_EXHAUSTED;
   }
 
-  auto& header = *reinterpret_cast<SerializedObjectHeader*>(data);
+  auto& header = *reinterpret_cast<volatile SerializedObjectHeader*>(data);
   header.type = object->type();
   header.memory_size = 0;
 
@@ -243,12 +240,6 @@ IpczResult IPCZ_API Serialize(IpczDriverHandle handle,
       break;
     }
 
-    case Object::kBlob: {
-      auto blob = Blob::TakeFromObject(object);
-      memcpy(&header + 1, blob->message().data(), blob->message().size());
-      break;
-    }
-
     default:
       return IPCZ_RESULT_INVALID_ARGUMENT;
   }
@@ -256,7 +247,7 @@ IpczResult IPCZ_API Serialize(IpczDriverHandle handle,
   return IPCZ_RESULT_OK;
 }
 
-IpczResult IPCZ_API Deserialize(const void* data,
+IpczResult IPCZ_API Deserialize(const volatile void* data,
                                 size_t num_bytes,
                                 const IpczDriverHandle* handles,
                                 size_t num_handles,
@@ -264,7 +255,8 @@ IpczResult IPCZ_API Deserialize(const void* data,
                                 uint32_t flags,
                                 const void* options,
                                 IpczDriverHandle* driver_handle) {
-  const auto& header = *static_cast<const SerializedObjectHeader*>(data);
+  const auto& header =
+      *static_cast<const volatile SerializedObjectHeader*>(data);
   if (num_bytes < sizeof(header)) {
     return IPCZ_RESULT_INVALID_ARGUMENT;
   }
@@ -274,7 +266,7 @@ IpczResult IPCZ_API Deserialize(const void* data,
     case Object::kTransport:
       if (num_handles == 1) {
         object = MakeRefCounted<MultiprocessTransport>(
-            std::make_unique<SocketTransport>(
+            MakeRefCounted<SocketTransport>(
                 WrappedFileDescriptor::UnwrapHandle(handles[0])));
       }
       break;
@@ -285,12 +277,6 @@ IpczResult IPCZ_API Deserialize(const void* data,
             WrappedFileDescriptor::UnwrapHandle(handles[0]),
             header.memory_size);
       }
-      break;
-
-    case Object::kBlob:
-      object = MakeRefCounted<Blob>(
-          std::string_view(reinterpret_cast<const char*>(&header + 1),
-                           num_bytes - sizeof(header)));
       break;
 
     default:
@@ -320,33 +306,40 @@ IpczResult IPCZ_API CreateTransports(IpczDriverHandle transport0,
 }
 
 IpczResult IPCZ_API
-ActivateTransport(IpczDriverHandle driver_transport,
-                  IpczHandle transport,
+ActivateTransport(IpczDriverHandle transport,
+                  IpczHandle listener,
                   IpczTransportActivityHandler activity_handler,
                   uint32_t flags,
                   const void* options) {
-  MultiprocessTransport::FromHandle(driver_transport)
-      ->Activate(transport, activity_handler);
+  MultiprocessTransport::FromHandle(transport)->Activate(listener,
+                                                         activity_handler);
   return IPCZ_RESULT_OK;
 }
 
-IpczResult IPCZ_API DeactivateTransport(IpczDriverHandle driver_transport,
+IpczResult IPCZ_API DeactivateTransport(IpczDriverHandle transport,
                                         uint32_t flags,
                                         const void* options) {
-  MultiprocessTransport::FromHandle(driver_transport)->Deactivate();
+  MultiprocessTransport::FromHandle(transport)->Deactivate();
   return IPCZ_RESULT_OK;
 }
 
-IpczResult IPCZ_API Transmit(IpczDriverHandle driver_transport,
+IpczResult IPCZ_API Transmit(IpczDriverHandle transport,
                              const void* data,
                              size_t num_bytes,
                              const IpczDriverHandle* handles,
                              size_t num_handles,
                              uint32_t flags,
                              const void* options) {
-  return MultiprocessTransport::FromHandle(driver_transport)
-      ->Transmit(absl::MakeSpan(static_cast<const uint8_t*>(data), num_bytes),
-                 absl::MakeSpan(handles, num_handles));
+  return MultiprocessTransport::FromHandle(transport)->Transmit(
+      absl::MakeSpan(static_cast<const uint8_t*>(data), num_bytes),
+      absl::MakeSpan(handles, num_handles));
+}
+
+IpczResult IPCZ_API ReportBadTransportActivity(IpczDriverHandle transport,
+                                               uintptr_t context,
+                                               uint32_t flags,
+                                               const void* options) {
+  return IPCZ_RESULT_OK;
 }
 
 IpczResult IPCZ_API AllocateSharedMemory(size_t num_bytes,
@@ -385,7 +378,7 @@ IpczResult GetSharedMemoryInfo(IpczDriverHandle driver_memory,
 IpczResult IPCZ_API MapSharedMemory(IpczDriverHandle driver_memory,
                                     uint32_t flags,
                                     const void* options,
-                                    void** address,
+                                    volatile void** address,
                                     IpczDriverHandle* driver_mapping) {
   auto mapping = MultiprocessMemory::FromHandle(driver_memory)->Map();
   *address = mapping->address();
@@ -412,6 +405,7 @@ const IpczDriver kMultiprocessReferenceDriver = {
     ActivateTransport,
     DeactivateTransport,
     Transmit,
+    ReportBadTransportActivity,
     AllocateSharedMemory,
     GetSharedMemoryInfo,
     DuplicateSharedMemory,
@@ -419,8 +413,7 @@ const IpczDriver kMultiprocessReferenceDriver = {
     GenerateRandomBytes,
 };
 
-IpczDriverHandle CreateMultiprocessTransport(
-    std::unique_ptr<SocketTransport> transport) {
+IpczDriverHandle CreateMultiprocessTransport(Ref<SocketTransport> transport) {
   return Object::ReleaseAsHandle(
       MakeRefCounted<MultiprocessTransport>(std::move(transport)));
 }

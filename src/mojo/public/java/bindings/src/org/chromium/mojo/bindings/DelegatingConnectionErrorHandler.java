@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -33,16 +33,12 @@ public class DelegatingConnectionErrorHandler implements ConnectionErrorHandler 
         }
     }
 
-    /**
-     * Add a handler that will be notified of any error this object receives.
-     */
+    /** Add a handler that will be notified of any error this object receives. */
     public void addConnectionErrorHandler(ConnectionErrorHandler handler) {
         mHandlers.add(handler);
     }
 
-    /**
-     * Remove a previously registered handler.
-     */
+    /** Remove a previously registered handler. */
     public void removeConnectionErrorHandler(ConnectionErrorHandler handler) {
         mHandlers.remove(handler);
     }

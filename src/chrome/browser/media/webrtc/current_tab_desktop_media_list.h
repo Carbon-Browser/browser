@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,6 +7,7 @@
 
 #include "chrome/browser/media/webrtc/desktop_media_list_base.h"
 
+#include "base/task/sequenced_task_runner.h"
 #include "content/public/browser/web_contents.h"
 
 // Implementation of DesktopMediaList that only follows a single tab.

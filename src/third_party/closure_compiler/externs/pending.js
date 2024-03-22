@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -50,8 +50,27 @@ class StylePropertyMap {
 /** @type {!StylePropertyMap} */
 HTMLElement.prototype.attributeStyleMap;
 
+/**
+ * @see https://drafts.css-houdini.org/css-typed-om/#stylepropertymapreadonly
+ */
+class StylePropertyMapReadOnly {
+  /** @param {string} property */
+  get(property) {}
+}
+
+/** @return {!StylePropertyMapReadOnly} */
+HTMLElement.prototype.computedStyleMap = function() {};
+
 /** @return {!AnimationEffectTimingProperties} */
 AnimationEffect.prototype.getTiming = function() {};
 
 /** @return {!Array<!Object>} */
 AnimationEffect.prototype.getKeyframes = function() {};
+
+/**
+ * https://developer.mozilla.org/en-US/docs/Web/API/structuredClone
+ * @param {T} obj
+ * @return {T}
+ * @template T
+ */
+function structuredClone(obj) {}

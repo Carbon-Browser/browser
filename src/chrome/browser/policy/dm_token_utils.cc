@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -20,7 +20,6 @@
 #include "components/policy/core/common/cloud/user_cloud_policy_manager.h"
 #include "components/policy/core/common/policy_loader_lacros.h"
 #else
-#include "chrome/browser/browser_process.h"
 #include "chrome/browser/policy/chrome_browser_policy_connector.h"
 #include "components/enterprise/browser/controller/browser_dm_token_storage.h"
 #include "components/enterprise/browser/controller/chrome_browser_cloud_management_controller.h"
@@ -31,8 +30,7 @@ namespace policy {
 namespace {
 
 DMToken* GetTestingDMTokenStorage() {
-  static base::NoDestructor<DMToken> dm_token(
-      DMToken::CreateEmptyTokenForTesting());
+  static base::NoDestructor<DMToken> dm_token(DMToken::CreateEmptyToken());
   return dm_token.get();
 }
 
@@ -64,8 +62,8 @@ DMToken GetDMToken(Profile* const profile) {
 
   if (dm_token.is_empty() && policy_manager &&
       policy_manager->IsClientRegistered()) {
-    dm_token = DMToken(DMToken::Status::kValid,
-                       policy_manager->core()->client()->dm_token());
+    dm_token =
+        DMToken::CreateValidToken(policy_manager->core()->client()->dm_token());
   }
 #elif BUILDFLAG(IS_CHROMEOS_LACROS)
   if (!profile)
@@ -76,15 +74,15 @@ DMToken GetDMToken(Profile* const profile) {
         policy::PolicyLoaderLacros::main_user_policy_data();
     if (dm_token.is_empty() && policy && policy->has_request_token() &&
         !policy->request_token().empty()) {
-      dm_token = DMToken(DMToken::Status::kValid, policy->request_token());
+      dm_token = DMToken::CreateValidToken(policy->request_token());
     }
   } else {
     UserCloudPolicyManager* policy_manager =
         profile->GetUserCloudPolicyManager();
     if (dm_token.is_empty() && policy_manager &&
         policy_manager->IsClientRegistered()) {
-      dm_token = DMToken(DMToken::Status::kValid,
-                         policy_manager->core()->client()->dm_token());
+      dm_token = DMToken::CreateValidToken(
+          policy_manager->core()->client()->dm_token());
     }
   }
 #elif !BUILDFLAG(IS_ANDROID)

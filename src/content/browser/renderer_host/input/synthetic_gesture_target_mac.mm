@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -42,11 +42,10 @@
 @synthesize deltaY = _deltaY;
 @synthesize modifierFlags = _modifierFlags;
 
-- (id)initWithMagnification:(float)magnification
-           locationInWindow:(NSPoint)location
-                  timestamp:(NSTimeInterval)timestamp {
-  self = [super init];
-  if (self) {
+- (instancetype)initWithMagnification:(float)magnification
+                     locationInWindow:(NSPoint)location
+                            timestamp:(NSTimeInterval)timestamp {
+  if (self = [super init]) {
     _type = NSEventTypeMagnify;
     _phase = NSEventPhaseChanged;
     _magnification = magnification;
@@ -61,16 +60,16 @@
   return self;
 }
 
-+ (id)eventWithMagnification:(float)magnification
-            locationInWindow:(NSPoint)location
-                   timestamp:(NSTimeInterval)timestamp
-                       phase:(NSEventPhase)phase {
++ (instancetype)eventWithMagnification:(float)magnification
+                      locationInWindow:(NSPoint)location
+                             timestamp:(NSTimeInterval)timestamp
+                                 phase:(NSEventPhase)phase {
   SyntheticPinchEvent* event =
       [[SyntheticPinchEvent alloc] initWithMagnification:magnification
                                         locationInWindow:location
                                                timestamp:timestamp];
   event.phase = phase;
-  return [event autorelease];
+  return event;
 }
 
 @end
@@ -93,7 +92,7 @@ void SyntheticGestureTargetMac::DispatchWebGestureEventToPlatform(
   @autoreleasepool {
     NSPoint content_local = NSMakePoint(
         web_gesture.PositionInWidget().x(),
-        [cocoa_view_ frame].size.height - web_gesture.PositionInWidget().y());
+        cocoa_view_.frame.size.height - web_gesture.PositionInWidget().y());
     NSPoint location_in_window = [cocoa_view_ convertPoint:content_local
                                                     toView:nil];
     NSTimeInterval timestamp =

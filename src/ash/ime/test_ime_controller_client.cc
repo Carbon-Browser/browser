@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -40,14 +40,6 @@ void TestImeControllerClient::OverrideKeyboardKeyset(
     OverrideKeyboardKeysetCallback callback) {
   last_keyset_ = keyset;
   std::move(callback).Run();
-}
-
-void TestImeControllerClient::UpdateMirroringState(bool enabled) {
-  is_mirroring_ = enabled;
-}
-
-void TestImeControllerClient::UpdateCastingState(bool enabled) {
-  is_casting_ = enabled;
 }
 
 void TestImeControllerClient::ShowModeIndicator() {

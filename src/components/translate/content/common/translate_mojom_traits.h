@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -17,16 +17,21 @@ namespace mojo {
 
 template <>
 struct EnumTraits<translate::mojom::TranslateError,
-                  translate::TranslateErrors::Type> {
+                  translate::TranslateErrors> {
   static translate::mojom::TranslateError ToMojom(
-      translate::TranslateErrors::Type input);
+      translate::TranslateErrors input);
   static bool FromMojom(translate::mojom::TranslateError input,
-                        translate::TranslateErrors::Type* output);
+                        translate::TranslateErrors* output);
 };
 
 template <>
 struct StructTraits<translate::mojom::LanguageDetectionDetailsDataView,
                     translate::LanguageDetectionDetails> {
+  static bool has_run_lang_detection(
+      const translate::LanguageDetectionDetails& r) {
+    return r.has_run_lang_detection;
+  }
+
   static const base::Time& time(const translate::LanguageDetectionDetails& r) {
     return r.time;
   }

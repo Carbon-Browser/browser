@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,20 +6,18 @@
 
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/check.h"
 #include "base/feature_list.h"
-#include "base/lazy_instance.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/task/task_features.h"
 #include "base/task/thread_pool/task_tracker.h"
-#include "base/threading/thread_local.h"
 #include "build/build_config.h"
+#include "third_party/abseil-cpp/absl/base/attributes.h"
 
 #if BUILDFLAG(IS_WIN)
 #include "base/win/com_init_check_hook.h"
-#include "base/win/scoped_com_initializer.h"
 #include "base/win/scoped_winrt_initializer.h"
-#include "base/win/windows_version.h"
 #endif
 
 namespace base {
@@ -28,12 +26,7 @@ namespace internal {
 namespace {
 
 // ThreadGroup that owns the current thread, if any.
-LazyInstance<ThreadLocalPointer<const ThreadGroup>>::Leaky
-    tls_current_thread_group = LAZY_INSTANCE_INITIALIZER;
-
-const ThreadGroup* GetCurrentThreadGroup() {
-  return tls_current_thread_group.Get().Get();
-}
+ABSL_CONST_INIT thread_local const ThreadGroup* current_thread_group = nullptr;
 
 }  // namespace
 
@@ -61,7 +54,7 @@ ThreadGroup::ScopedReenqueueExecutor::~ScopedReenqueueExecutor() {
 
 void ThreadGroup::ScopedReenqueueExecutor::
     SchedulePushTaskSourceAndWakeUpWorkers(
-        TransactionWithRegisteredTaskSource transaction_with_task_source,
+        RegisteredTaskSourceAndTransaction transaction_with_task_source,
         ThreadGroup* destination_thread_group) {
   DCHECK(destination_thread_group);
   DCHECK(!destination_thread_group_);
@@ -72,34 +65,29 @@ void ThreadGroup::ScopedReenqueueExecutor::
 }
 
 ThreadGroup::ThreadGroup(TrackedRef<TaskTracker> task_tracker,
-                         TrackedRef<Delegate> delegate,
-                         ThreadGroup* predecessor_thread_group)
-    : task_tracker_(std::move(task_tracker)),
-      delegate_(std::move(delegate)),
-      lock_(predecessor_thread_group ? &predecessor_thread_group->lock_
-                                     : nullptr) {
+                         TrackedRef<Delegate> delegate)
+    : task_tracker_(std::move(task_tracker)), delegate_(std::move(delegate)) {
   DCHECK(task_tracker_);
 }
 
 ThreadGroup::~ThreadGroup() = default;
 
 void ThreadGroup::BindToCurrentThread() {
-  DCHECK(!GetCurrentThreadGroup());
-  tls_current_thread_group.Get().Set(this);
+  DCHECK(!CurrentThreadHasGroup());
+  current_thread_group = this;
 }
 
 void ThreadGroup::UnbindFromCurrentThread() {
-  DCHECK(GetCurrentThreadGroup());
-  tls_current_thread_group.Get().Set(nullptr);
+  DCHECK(IsBoundToCurrentThread());
+  current_thread_group = nullptr;
 }
 
 bool ThreadGroup::IsBoundToCurrentThread() const {
-  return GetCurrentThreadGroup() == this;
+  return current_thread_group == this;
 }
 
 void ThreadGroup::Start() {
   CheckedAutoLock auto_lock(lock_);
-  disable_fair_scheduling_ = FeatureList::IsEnabled(kDisableFairJobScheduling);
 }
 
 size_t
@@ -157,25 +145,36 @@ RegisteredTaskSource ThreadGroup::RemoveTaskSource(
 void ThreadGroup::ReEnqueueTaskSourceLockRequired(
     BaseScopedCommandsExecutor* workers_executor,
     ScopedReenqueueExecutor* reenqueue_executor,
-    TransactionWithRegisteredTaskSource transaction_with_task_source) {
+    RegisteredTaskSourceAndTransaction transaction_with_task_source) {
   // Decide in which thread group the TaskSource should be reenqueued.
   ThreadGroup* destination_thread_group = delegate_->GetThreadGroupForTraits(
       transaction_with_task_source.transaction.traits());
+
+  bool push_to_immediate_queue =
+      transaction_with_task_source.task_source.WillReEnqueue(
+          TimeTicks::Now(), &transaction_with_task_source.transaction);
 
   if (destination_thread_group == this) {
     // Another worker that was running a task from this task source may have
     // reenqueued it already, in which case its heap_handle will be valid. It
     // shouldn't be queued twice so the task source registration is released.
-    if (transaction_with_task_source.task_source->heap_handle().IsValid()) {
+    if (transaction_with_task_source.task_source->immediate_heap_handle()
+            .IsValid()) {
       workers_executor->ScheduleReleaseTaskSource(
           std::move(transaction_with_task_source.task_source));
     } else {
       // If the TaskSource should be reenqueued in the current thread group,
       // reenqueue it inside the scope of the lock.
-      auto sort_key = transaction_with_task_source.task_source->GetSortKey(
-          disable_fair_scheduling_);
-      priority_queue_.Push(std::move(transaction_with_task_source.task_source),
-                           sort_key);
+      if (push_to_immediate_queue) {
+        auto sort_key = transaction_with_task_source.task_source->GetSortKey();
+        // When moving |task_source| into |priority_queue_|, it may be destroyed
+        // on another thread as soon as |lock_| is released, since we're no
+        // longer holding a reference to it. To prevent UAF, release
+        // |transaction| before moving |task_source|. Ref. crbug.com/1412008
+        transaction_with_task_source.transaction.Release();
+        priority_queue_.Push(
+            std::move(transaction_with_task_source.task_source), sort_key);
+      }
     }
     // This is called unconditionally to ensure there are always workers to run
     // task sources in the queue. Some ThreadGroup implementations only invoke
@@ -218,51 +217,68 @@ RegisteredTaskSource ThreadGroup::TakeRegisteredTaskSource(
     return priority_queue_.PopTaskSource();
   // Replace the top task_source and then update the queue.
   std::swap(priority_queue_.PeekTaskSource(), task_source);
-  if (!disable_fair_scheduling_) {
-    priority_queue_.UpdateSortKey(*task_source.get(),
-                                  task_source->GetSortKey(false));
-  }
+  priority_queue_.UpdateSortKey(*task_source.get(), task_source->GetSortKey());
   return task_source;
 }
 
 void ThreadGroup::UpdateSortKeyImpl(BaseScopedCommandsExecutor* executor,
                                     TaskSource::Transaction transaction) {
   CheckedAutoLock auto_lock(lock_);
-  priority_queue_.UpdateSortKey(
-      *transaction.task_source(),
-      transaction.task_source()->GetSortKey(disable_fair_scheduling_));
+  priority_queue_.UpdateSortKey(*transaction.task_source(),
+                                transaction.task_source()->GetSortKey());
   EnsureEnoughWorkersLockRequired(executor);
 }
 
 void ThreadGroup::PushTaskSourceAndWakeUpWorkersImpl(
     BaseScopedCommandsExecutor* executor,
-    TransactionWithRegisteredTaskSource transaction_with_task_source) {
+    RegisteredTaskSourceAndTransaction transaction_with_task_source) {
   CheckedAutoLock auto_lock(lock_);
   DCHECK(!replacement_thread_group_);
   DCHECK_EQ(delegate_->GetThreadGroupForTraits(
                 transaction_with_task_source.transaction.traits()),
             this);
-  if (transaction_with_task_source.task_source->heap_handle().IsValid()) {
+  if (transaction_with_task_source.task_source->immediate_heap_handle()
+          .IsValid()) {
     // If the task source changed group, it is possible that multiple concurrent
     // workers try to enqueue it. Only the first enqueue should succeed.
     executor->ScheduleReleaseTaskSource(
         std::move(transaction_with_task_source.task_source));
     return;
   }
-  auto sort_key = transaction_with_task_source.task_source->GetSortKey(
-      disable_fair_scheduling_);
+  auto sort_key = transaction_with_task_source.task_source->GetSortKey();
+  // When moving |task_source| into |priority_queue_|, it may be destroyed
+  // on another thread as soon as |lock_| is released, since we're no longer
+  // holding a reference to it. To prevent UAF, release |transaction| before
+  // moving |task_source|. Ref. crbug.com/1412008
+  transaction_with_task_source.transaction.Release();
   priority_queue_.Push(std::move(transaction_with_task_source.task_source),
                        sort_key);
   EnsureEnoughWorkersLockRequired(executor);
 }
 
-void ThreadGroup::InvalidateAndHandoffAllTaskSourcesToOtherThreadGroup(
+void ThreadGroup::HandoffNonUserBlockingTaskSourcesToOtherThreadGroup(
     ThreadGroup* destination_thread_group) {
-  CheckedAutoLock current_thread_group_lock(lock_);
-  CheckedAutoLock destination_thread_group_lock(
-      destination_thread_group->lock_);
-  destination_thread_group->priority_queue_ = std::move(priority_queue_);
-  replacement_thread_group_ = destination_thread_group;
+  PriorityQueue new_priority_queue;
+  TaskSourceSortKey top_sort_key;
+  {
+    // This works because all USER_BLOCKING tasks are at the front of the queue.
+    CheckedAutoLock current_thread_group_lock(lock_);
+    while (!priority_queue_.IsEmpty() &&
+           (top_sort_key = priority_queue_.PeekSortKey()).priority() ==
+               TaskPriority::USER_BLOCKING) {
+      new_priority_queue.Push(priority_queue_.PopTaskSource(), top_sort_key);
+    }
+    new_priority_queue.swap(priority_queue_);
+  }
+  {
+    CheckedAutoLock destination_thread_group_lock(
+        destination_thread_group->lock_);
+    while (!new_priority_queue.IsEmpty()) {
+      top_sort_key = new_priority_queue.PeekSortKey();
+      destination_thread_group->priority_queue_.Push(
+          new_priority_queue.PopTaskSource(), top_sort_key);
+    }
+  }
 }
 
 bool ThreadGroup::ShouldYield(TaskSourceSortKey sort_key) {
@@ -305,24 +321,23 @@ bool ThreadGroup::ShouldYield(TaskSourceSortKey sort_key) {
 std::unique_ptr<win::ScopedWindowsThreadEnvironment>
 ThreadGroup::GetScopedWindowsThreadEnvironment(WorkerEnvironment environment) {
   std::unique_ptr<win::ScopedWindowsThreadEnvironment> scoped_environment;
-  switch (environment) {
-    case WorkerEnvironment::COM_MTA: {
-      if (win::GetVersion() >= win::Version::WIN8) {
-        scoped_environment = std::make_unique<win::ScopedWinrtInitializer>();
-      } else {
-        scoped_environment = std::make_unique<win::ScopedCOMInitializer>(
-            win::ScopedCOMInitializer::kMTA);
-      }
-      break;
-    }
-    default:
-      break;
+  if (environment == WorkerEnvironment::COM_MTA) {
+    scoped_environment = std::make_unique<win::ScopedWinrtInitializer>();
+
+    // TODO(crbug.com/1498668): rollback the change or replace it with a CHECK
+    // before closing the bug.
+    DUMP_WILL_BE_CHECK(scoped_environment->Succeeded());
   }
 
   DCHECK(!scoped_environment || scoped_environment->Succeeded());
   return scoped_environment;
 }
 #endif
+
+// static
+bool ThreadGroup::CurrentThreadHasGroup() {
+  return current_thread_group != nullptr;
+}
 
 }  // namespace internal
 }  // namespace base

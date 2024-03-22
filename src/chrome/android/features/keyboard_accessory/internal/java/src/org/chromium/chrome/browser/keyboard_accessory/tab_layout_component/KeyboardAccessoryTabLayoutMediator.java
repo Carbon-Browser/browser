@@ -1,10 +1,11 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 package org.chromium.chrome.browser.keyboard_accessory.tab_layout_component;
 
 import static org.chromium.chrome.browser.keyboard_accessory.tab_layout_component.KeyboardAccessoryTabLayoutProperties.ACTIVE_TAB;
+import static org.chromium.chrome.browser.keyboard_accessory.tab_layout_component.KeyboardAccessoryTabLayoutProperties.BUTTON_SELECTION_CALLBACKS;
 import static org.chromium.chrome.browser.keyboard_accessory.tab_layout_component.KeyboardAccessoryTabLayoutProperties.TABS;
 import static org.chromium.chrome.browser.keyboard_accessory.tab_layout_component.KeyboardAccessoryTabLayoutProperties.TAB_SELECTION_CALLBACKS;
 
@@ -32,37 +33,38 @@ import java.util.Set;
  */
 class KeyboardAccessoryTabLayoutMediator
         implements TabLayout.OnTabSelectedListener,
-                   PropertyObservable.PropertyObserver<PropertyKey>,
-                   KeyboardAccessoryCoordinator.TabSwitchingDelegate {
+                KeyboardAccessoryButtonGroupView.KeyboardAccessoryButtonGroupListener,
+                PropertyObservable.PropertyObserver<PropertyKey>,
+                KeyboardAccessoryCoordinator.TabSwitchingDelegate {
     private final PropertyModel mModel;
     private @Nullable AccessoryTabObserver mAccessoryTabObserver;
-    private Set<TabLayout.TabLayoutOnPageChangeListener> mPageChangeListeners = new HashSet<>();
+    private Set<ViewPager.OnPageChangeListener> mPageChangeListeners = new HashSet<>();
 
     KeyboardAccessoryTabLayoutMediator(PropertyModel model) {
         mModel = model;
         mModel.addObserver(this);
-        mModel.set(TAB_SELECTION_CALLBACKS, this);
+        mModel.set(BUTTON_SELECTION_CALLBACKS, this);
     }
 
     ViewPager.OnPageChangeListener getStableOnPageChangeListener() {
         return new ViewPager.OnPageChangeListener() {
             @Override
             public void onPageScrolled(int i, float v, int j) {
-                for (TabLayout.TabLayoutOnPageChangeListener listener : mPageChangeListeners) {
+                for (ViewPager.OnPageChangeListener listener : mPageChangeListeners) {
                     listener.onPageScrolled(i, v, j);
                 }
             }
 
             @Override
             public void onPageSelected(int i) {
-                for (TabLayout.TabLayoutOnPageChangeListener listener : mPageChangeListeners) {
+                for (ViewPager.OnPageChangeListener listener : mPageChangeListeners) {
                     listener.onPageSelected(i);
                 }
             }
 
             @Override
             public void onPageScrollStateChanged(int i) {
-                for (TabLayout.TabLayoutOnPageChangeListener listener : mPageChangeListeners) {
+                for (ViewPager.OnPageChangeListener listener : mPageChangeListeners) {
                     listener.onPageScrollStateChanged(i);
                 }
             }
@@ -82,7 +84,7 @@ class KeyboardAccessoryTabLayoutMediator
             closeActiveTab(); // Make sure the active tab is reset for a modified tab list.
             return;
         }
-        if (propertyKey == TAB_SELECTION_CALLBACKS) {
+        if (propertyKey == TAB_SELECTION_CALLBACKS || propertyKey == BUTTON_SELECTION_CALLBACKS) {
             return;
         }
         assert false : "Every property update needs to be handled explicitly!";
@@ -150,15 +152,20 @@ class KeyboardAccessoryTabLayoutMediator
         }
     }
 
+    @Override
+    public void onButtonClicked(int position) {
+        mModel.set(ACTIVE_TAB, validateActiveTab(position));
+    }
+
     void setTabObserver(AccessoryTabObserver accessoryTabObserver) {
         mAccessoryTabObserver = accessoryTabObserver;
     }
 
-    void addPageChangeListener(TabLayout.TabLayoutOnPageChangeListener pageChangeListener) {
+    void addPageChangeListener(ViewPager.OnPageChangeListener pageChangeListener) {
         mPageChangeListeners.add(pageChangeListener);
     }
 
-    void removePageChangeListener(TabLayout.TabLayoutOnPageChangeListener pageChangeListener) {
+    void removePageChangeListener(ViewPager.OnPageChangeListener pageChangeListener) {
         mPageChangeListeners.remove(pageChangeListener);
     }
 

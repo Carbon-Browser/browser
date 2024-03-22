@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -21,9 +21,7 @@ import java.util.WeakHashMap;
  * held weakly so to not lead to leaks.
  */
 public class DisplayAndroid {
-    /**
-     * DisplayAndroidObserver interface for changes to this Display.
-     */
+    /** DisplayAndroidObserver interface for changes to this Display. */
     public interface DisplayAndroidObserver {
         /**
          * Called whenever the screen orientation changes.
@@ -70,12 +68,16 @@ public class DisplayAndroid {
     private final int mDisplayId;
     private Point mSize;
     private float mDipScale;
+    private float mXdpi;
+    private float mYdpi;
     private int mBitsPerPixel;
     private int mBitsPerComponent;
     private int mRotation;
     private float mRefreshRate;
     private Display.Mode mCurrentDisplayMode;
     private List<Display.Mode> mDisplayModes;
+    private boolean mIsHdr;
+    private float mHdrMaxLuminanceRatio = 1.0f;
     protected boolean mIsDisplayWideColorGamut;
     protected boolean mIsDisplayServerWideColorGamut;
 
@@ -162,23 +164,17 @@ public class DisplayAndroid {
     }
 
     /**
-     * You probably do not want to use this function.
-     *
-     * In VR, there's a mismatch between the dip scale reported by getDipScale and the dip scale
-     * Android UI is rendered with (in order for VR to control the size of the WebContents).
-     * This means that Android UI may need to be scaled when it's drawn to a texture in VR, which
-     * means that values in units of pixels (like input event locations) also need to be scaled
-     * when being passed to WebContents (and vice versa).
-     *
-     * This function should only be used on the boundaries between Android UI and the rest of Chrome
-     * when doing things like scaling sizes/positions.
-     *
-     * Note: This function is not available through the native display::Display.
-     *
-     * @return The scaling factor of Android UI in this display.
+     * @return The exact physical pixels per inch of the screen in the X dimension.
      */
-    public float getAndroidUIScaling() {
-        return 1.0f;
+    public float getXdpi() {
+        return mXdpi;
+    }
+
+    /**
+     * @return The exact physical pixels per inch of the screen in the Y dimension.
+     */
+    public float getYdpi() {
+        return mYdpi;
     }
 
     /**
@@ -225,6 +221,32 @@ public class DisplayAndroid {
     }
 
     /**
+     * Whether or not the display is HDR capable. If false then getHdrMaxLuminanceRatio will
+     * always return 1.0.
+     */
+    // Package private only because no client needs to access this from java.
+    boolean getIsHdr() {
+        return mIsHdr;
+    }
+
+    /**
+     * Max luminance HDR content can display, represented as a multiple of the SDR white luminance
+     * (so a display that is incapable of HDR would have a value of 1.0).
+     */
+    // Package private only because no client needs to access this from java.
+    float getHdrMaxLuminanceRatio() {
+        return mHdrMaxLuminanceRatio;
+    }
+
+    /**
+     * Return window context for display android. Implemented by @{@link PhysicalDisplayAndroid}
+     * @return window context.
+     */
+    public Context getWindowContext() {
+        return null;
+    }
+
+    /**
      * Add observer. Note repeat observers will be called only one.
      * Observers are held only weakly by Display.
      */
@@ -232,9 +254,7 @@ public class DisplayAndroid {
         mObservers.put(observer, null);
     }
 
-    /**
-     * Remove observer.
-     */
+    /** Remove observer. */
     public void removeObserver(DisplayAndroidObserver observer) {
         mObservers.remove(observer);
     }
@@ -251,49 +271,124 @@ public class DisplayAndroid {
     }
 
     public void updateIsDisplayServerWideColorGamut(Boolean isDisplayServerWideColorGamut) {
-        update(null, null, null, null, null, null, isDisplayServerWideColorGamut, null, null, null);
+        update(
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                isDisplayServerWideColorGamut,
+                null,
+                null,
+                null,
+                /* isHdr= */ null,
+                /* hdrMaxLuminanceRatio= */ null);
     }
 
-    /**
-     * Update the display to the provided parameters. Null values leave the parameter unchanged.
-     */
+    /** Update the display to the provided parameters. Null values leave the parameter unchanged. */
     @SuppressLint("NewApi")
-    protected void update(Point size, Float dipScale, Integer bitsPerPixel,
-            Integer bitsPerComponent, Integer rotation, Boolean isDisplayWideColorGamut,
-            Boolean isDisplayServerWideColorGamut, Float refreshRate, Display.Mode currentMode,
+    protected void update(
+            Point size,
+            Float dipScale,
+            Integer bitsPerPixel,
+            Integer bitsPerComponent,
+            Integer rotation,
+            Boolean isDisplayWideColorGamut,
+            Boolean isDisplayServerWideColorGamut,
+            Float refreshRate,
+            Display.Mode currentMode,
             List<Display.Mode> supportedModes) {
+        update(
+                size,
+                dipScale,
+                null,
+                null,
+                bitsPerPixel,
+                bitsPerComponent,
+                rotation,
+                isDisplayWideColorGamut,
+                isDisplayServerWideColorGamut,
+                refreshRate,
+                currentMode,
+                supportedModes,
+                /* isHdr= */ null,
+                /* hdrMaxLuminanceRatio= */ null);
+    }
+
+    /** Update the display to the provided parameters. Null values leave the parameter unchanged. */
+    @SuppressLint("NewApi")
+    protected void update(
+            Point size,
+            Float dipScale,
+            Float xdpi,
+            Float ydpi,
+            Integer bitsPerPixel,
+            Integer bitsPerComponent,
+            Integer rotation,
+            Boolean isDisplayWideColorGamut,
+            Boolean isDisplayServerWideColorGamut,
+            Float refreshRate,
+            Display.Mode currentMode,
+            List<Display.Mode> supportedModes,
+            Boolean isHdr,
+            Float hdrMaxLuminanceRatio) {
         boolean sizeChanged = size != null && !mSize.equals(size);
         // Intentional comparison of floats: we assume that if scales differ, they differ
         // significantly.
         boolean dipScaleChanged = dipScale != null && mDipScale != dipScale;
+        boolean xdpiChanged = xdpi != null && mXdpi != xdpi;
+        boolean ydpiChanged = ydpi != null && mYdpi != ydpi;
         boolean bitsPerPixelChanged = bitsPerPixel != null && mBitsPerPixel != bitsPerPixel;
         boolean bitsPerComponentChanged =
                 bitsPerComponent != null && mBitsPerComponent != bitsPerComponent;
         boolean rotationChanged = rotation != null && mRotation != rotation;
-        boolean isDisplayWideColorGamutChanged = isDisplayWideColorGamut != null
-                && mIsDisplayWideColorGamut != isDisplayWideColorGamut;
-        boolean isDisplayServerWideColorGamutChanged = isDisplayServerWideColorGamut != null
-                && mIsDisplayServerWideColorGamut != isDisplayServerWideColorGamut;
+        boolean isDisplayWideColorGamutChanged =
+                isDisplayWideColorGamut != null
+                        && mIsDisplayWideColorGamut != isDisplayWideColorGamut;
+        boolean isDisplayServerWideColorGamutChanged =
+                isDisplayServerWideColorGamut != null
+                        && mIsDisplayServerWideColorGamut != isDisplayServerWideColorGamut;
         boolean isRefreshRateChanged = refreshRate != null && mRefreshRate != refreshRate;
-        boolean displayModesChanged = supportedModes != null
-                && (mDisplayModes == null ? true : mDisplayModes.equals(supportedModes));
+        boolean displayModesChanged =
+                supportedModes != null
+                        && (mDisplayModes == null ? true : mDisplayModes.equals(supportedModes));
         boolean currentModeChanged =
                 currentMode != null && !currentMode.equals(mCurrentDisplayMode);
-
-        boolean changed = sizeChanged || dipScaleChanged || bitsPerPixelChanged
-                || bitsPerComponentChanged || rotationChanged || isDisplayWideColorGamutChanged
-                || isDisplayServerWideColorGamutChanged || isRefreshRateChanged
-                || displayModesChanged || currentModeChanged;
+        boolean isHdrChanged = isHdr != null && isHdr != mIsHdr;
+        boolean hdrMaxLuninanceRatioChanged =
+                hdrMaxLuminanceRatio != null && hdrMaxLuminanceRatio != mHdrMaxLuminanceRatio;
+        boolean changed =
+                sizeChanged
+                        || dipScaleChanged
+                        || bitsPerPixelChanged
+                        || bitsPerComponentChanged
+                        || rotationChanged
+                        || isDisplayWideColorGamutChanged
+                        || isDisplayServerWideColorGamutChanged
+                        || isRefreshRateChanged
+                        || displayModesChanged
+                        || currentModeChanged
+                        || isHdrChanged
+                        || hdrMaxLuninanceRatioChanged;
         if (!changed) return;
 
         if (sizeChanged) mSize = size;
         if (dipScaleChanged) mDipScale = dipScale;
+        if (xdpiChanged) mXdpi = xdpi;
+        if (ydpiChanged) mYdpi = ydpi;
         if (bitsPerPixelChanged) mBitsPerPixel = bitsPerPixel;
         if (bitsPerComponentChanged) mBitsPerComponent = bitsPerComponent;
         if (rotationChanged) mRotation = rotation;
         if (isDisplayWideColorGamutChanged) mIsDisplayWideColorGamut = isDisplayWideColorGamut;
         if (isDisplayServerWideColorGamutChanged) {
             mIsDisplayServerWideColorGamut = isDisplayServerWideColorGamut;
+        }
+        if (isHdrChanged) mIsHdr = isHdr;
+        if (hdrMaxLuninanceRatioChanged) {
+            mHdrMaxLuminanceRatio = hdrMaxLuminanceRatio;
         }
         if (isRefreshRateChanged) mRefreshRate = refreshRate;
         if (displayModesChanged) mDisplayModes = supportedModes;

@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,6 @@
 #include <string>
 
 #include "base/observer_list.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "base/time/time.h"
 #include "build/build_config.h"
 #include "chrome/browser/download/download_commands.h"
@@ -102,6 +101,18 @@ void OfflineItemModel::SetWasUINotified(bool was_ui_notified) {
   OfflineItemModelData* data =
       manager_->GetOrCreateOfflineItemModelData(offline_item_->id);
   data->was_ui_notified_ = was_ui_notified;
+}
+
+bool OfflineItemModel::WasActionedOn() const {
+  const OfflineItemModelData* data =
+      manager_->GetOrCreateOfflineItemModelData(offline_item_->id);
+  return data->actioned_on_;
+}
+
+void OfflineItemModel::SetActionedOn(bool actioned_on) {
+  OfflineItemModelData* data =
+      manager_->GetOrCreateOfflineItemModelData(offline_item_->id);
+  data->actioned_on_ = actioned_on;
 }
 
 base::FilePath OfflineItemModel::GetFileNameToReportUser() const {
@@ -284,9 +295,6 @@ bool OfflineItemModel::IsCommandEnabled(
     const DownloadCommands* download_commands,
     DownloadCommands::Command command) const {
   switch (command) {
-    case DownloadCommands::MAX:
-      NOTREACHED();
-      return false;
     case DownloadCommands::SHOW_IN_FOLDER:
     case DownloadCommands::OPEN_WHEN_COMPLETE:
     case DownloadCommands::PLATFORM_OPEN:
@@ -301,11 +309,15 @@ bool OfflineItemModel::IsCommandEnabled(
     case DownloadCommands::KEEP:
     case DownloadCommands::LEARN_MORE_SCANNING:
     case DownloadCommands::LEARN_MORE_INTERRUPTED:
-    case DownloadCommands::LEARN_MORE_MIXED_CONTENT:
+    case DownloadCommands::LEARN_MORE_INSECURE_DOWNLOAD:
+    case DownloadCommands::LEARN_MORE_DOWNLOAD_BLOCKED:
+    case DownloadCommands::OPEN_SAFE_BROWSING_SETTING:
     case DownloadCommands::DEEP_SCAN:
     case DownloadCommands::BYPASS_DEEP_SCANNING:
+    case DownloadCommands::BYPASS_DEEP_SCANNING_AND_OPEN:
     case DownloadCommands::REVIEW:
     case DownloadCommands::RETRY:
+    case DownloadCommands::CANCEL_DEEP_SCAN:
       return DownloadUIModel::IsCommandEnabled(download_commands, command);
   }
   NOTREACHED();
@@ -316,9 +328,6 @@ bool OfflineItemModel::IsCommandChecked(
     const DownloadCommands* download_commands,
     DownloadCommands::Command command) const {
   switch (command) {
-    case DownloadCommands::MAX:
-      NOTREACHED();
-      return false;
     case DownloadCommands::OPEN_WHEN_COMPLETE:
     case DownloadCommands::ALWAYS_OPEN_TYPE:
       NOTIMPLEMENTED();
@@ -333,12 +342,16 @@ bool OfflineItemModel::IsCommandChecked(
     case DownloadCommands::KEEP:
     case DownloadCommands::LEARN_MORE_SCANNING:
     case DownloadCommands::LEARN_MORE_INTERRUPTED:
-    case DownloadCommands::LEARN_MORE_MIXED_CONTENT:
+    case DownloadCommands::LEARN_MORE_INSECURE_DOWNLOAD:
+    case DownloadCommands::LEARN_MORE_DOWNLOAD_BLOCKED:
+    case DownloadCommands::OPEN_SAFE_BROWSING_SETTING:
     case DownloadCommands::COPY_TO_CLIPBOARD:
     case DownloadCommands::DEEP_SCAN:
     case DownloadCommands::BYPASS_DEEP_SCANNING:
+    case DownloadCommands::BYPASS_DEEP_SCANNING_AND_OPEN:
     case DownloadCommands::REVIEW:
     case DownloadCommands::RETRY:
+    case DownloadCommands::CANCEL_DEEP_SCAN:
       return false;
   }
   return false;
@@ -347,15 +360,14 @@ bool OfflineItemModel::IsCommandChecked(
 void OfflineItemModel::ExecuteCommand(DownloadCommands* download_commands,
                                       DownloadCommands::Command command) {
   switch (command) {
-    case DownloadCommands::MAX:
-      NOTREACHED();
-      break;
     case DownloadCommands::SHOW_IN_FOLDER:
     case DownloadCommands::OPEN_WHEN_COMPLETE:
     case DownloadCommands::ALWAYS_OPEN_TYPE:
     case DownloadCommands::KEEP:
     case DownloadCommands::LEARN_MORE_SCANNING:
-    case DownloadCommands::LEARN_MORE_MIXED_CONTENT:
+    case DownloadCommands::LEARN_MORE_INSECURE_DOWNLOAD:
+    case DownloadCommands::LEARN_MORE_DOWNLOAD_BLOCKED:
+    case DownloadCommands::OPEN_SAFE_BROWSING_SETTING:
       NOTIMPLEMENTED();
       return;
     case DownloadCommands::PLATFORM_OPEN:
@@ -367,8 +379,10 @@ void OfflineItemModel::ExecuteCommand(DownloadCommands* download_commands,
     case DownloadCommands::COPY_TO_CLIPBOARD:
     case DownloadCommands::DEEP_SCAN:
     case DownloadCommands::BYPASS_DEEP_SCANNING:
+    case DownloadCommands::BYPASS_DEEP_SCANNING_AND_OPEN:
     case DownloadCommands::REVIEW:
     case DownloadCommands::RETRY:
+    case DownloadCommands::CANCEL_DEEP_SCAN:
       DownloadUIModel::ExecuteCommand(download_commands, command);
       break;
   }

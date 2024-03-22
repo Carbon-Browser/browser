@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -18,10 +18,12 @@
 namespace media {
 
 struct FakeV4L2DeviceConfig {
-  FakeV4L2DeviceConfig(const VideoCaptureDeviceDescriptor& descriptor)
-      : descriptor(descriptor) {}
+  explicit FakeV4L2DeviceConfig(const VideoCaptureDeviceDescriptor& descriptor,
+                                uint32_t fmt = V4L2_PIX_FMT_YUV420)
+      : descriptor(descriptor), v4l2_pixel_format(fmt) {}
 
   const VideoCaptureDeviceDescriptor descriptor;
+  uint32_t v4l2_pixel_format;
 };
 
 // Implementation of V4L2CaptureDevice interface that allows configuring fake

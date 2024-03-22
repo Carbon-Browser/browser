@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -155,6 +155,7 @@ class EditorViewController : public PaymentRequestSheetController,
   bool GetPrimaryButtonEnabled() override;
   bool ShouldShowSecondaryButton() override;
   void FillContentView(views::View* content_view) override;
+  bool ShouldAccelerateEnterKey() override;
 
   // Combobox callback.
   virtual void OnPerformAction(ValidatingCombobox* combobox);
@@ -204,7 +205,7 @@ class EditorViewController : public PaymentRequestSheetController,
   void AddOrUpdateErrorMessageForField(autofill::ServerFieldType type,
                                        const std::u16string& error_message);
 
-  void SaveButtonPressed();
+  void SaveButtonPressed(const ui::Event& event);
 
   // Used to remember the association between the input field UI element and the
   // original field definition. The ValidatingTextfield* and ValidatingCombobox*
@@ -216,7 +217,7 @@ class EditorViewController : public PaymentRequestSheetController,
   ErrorLabelMap error_labels_;
 
   // The input field view in the editor used to set the initial focus.
-  raw_ptr<views::View> initial_focus_field_view_;
+  raw_ptr<views::View, DanglingUntriaged> initial_focus_field_view_;
 
   // Identifies where to go back when the editing completes successfully.
   BackNavigationType back_navigation_type_;

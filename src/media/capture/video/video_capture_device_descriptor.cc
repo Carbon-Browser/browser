@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -41,10 +41,12 @@ VideoCaptureDeviceDescriptor::VideoCaptureDeviceDescriptor(
     VideoCaptureApi capture_api,
     const VideoCaptureControlSupport& control_support,
     VideoCaptureTransportType transport_type,
-    VideoFacingMode facing)
+    VideoFacingMode facing,
+    absl::optional<CameraAvailability> availability)
     : device_id(device_id),
       model_id(model_id),
       facing(facing),
+      availability(std::move(availability)),
       capture_api(capture_api),
       transport_type(transport_type),
       display_name_(TrimDisplayName(display_name)),

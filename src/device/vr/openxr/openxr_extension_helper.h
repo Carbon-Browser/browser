@@ -1,26 +1,27 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef DEVICE_VR_OPENXR_OPENXR_EXTENSION_HELPER_H_
 #define DEVICE_VR_OPENXR_OPENXR_EXTENSION_HELPER_H_
 
-#include <d3d11.h>
+#include <memory>
 #include <vector>
 
 #include "base/logging.h"
 #include "base/memory/raw_ptr.h"
+#include "device/vr/openxr/openxr_anchor_manager.h"
+#include "device/vr/openxr/openxr_hand_tracker.h"
+#include "device/vr/openxr/openxr_platform.h"
+#include "device/vr/openxr/openxr_scene_understanding_manager.h"
+#include "device/vr/openxr/openxr_stage_bounds_provider.h"
+#include "device/vr/public/mojom/xr_session.mojom-forward.h"
 #include "third_party/openxr/src/include/openxr/openxr.h"
-#include "third_party/openxr/src/include/openxr/openxr_platform.h"
 
 namespace device {
 struct OpenXrExtensionMethods {
   OpenXrExtensionMethods();
   ~OpenXrExtensionMethods();
-  // D3D
-  PFN_xrGetD3D11GraphicsRequirementsKHR xrGetD3D11GraphicsRequirementsKHR{
-      nullptr};
-
   // Hand Tracking
   PFN_xrCreateHandTrackerEXT xrCreateHandTrackerEXT{nullptr};
   PFN_xrDestroyHandTrackerEXT xrDestroyHandTrackerEXT{nullptr};
@@ -43,6 +44,12 @@ struct OpenXrExtensionMethods {
   PFN_xrGetSceneComponentsMSFT xrGetSceneComponentsMSFT{nullptr};
   PFN_xrLocateSceneComponentsMSFT xrLocateSceneComponentsMSFT{nullptr};
   PFN_xrGetSceneMeshBuffersMSFT xrGetSceneMeshBuffersMSFT{nullptr};
+
+#if BUILDFLAG(IS_WIN)
+  // Time
+  PFN_xrConvertWin32PerformanceCounterToTimeKHR
+      xrConvertWin32PerformanceCounterToTimeKHR{nullptr};
+#endif
 };
 
 class OpenXrExtensionEnumeration {
@@ -71,7 +78,38 @@ class OpenXrExtensionHelper {
     return extension_methods_;
   }
 
+  // Returns whether or not we can support a given feature. If a given feature
+  // is determined to be supported solely by the core spec, we will simply
+  // return true for that feature as we assume the entire core spec is
+  // supported.
+  bool IsFeatureSupported(device::mojom::XRSessionFeature feature) const;
+
+  // Feature Implementation Helpers ---------------------------------------
+  //
+  // There may be multiple extensions that can support a given WebXR feature,
+  // though each device will likely only implement one of them. The following
+  // methods help provide managers for the various WebXR features that can
+  // abstract the *actual* extension that we need to use, since different
+  // extensions will be looking for different methods.
+
+  std::unique_ptr<OpenXrAnchorManager> CreateAnchorManager(
+      XrSession session,
+      XrSpace base_space) const;
+
+  std::unique_ptr<OpenXrHandTracker> CreateHandTracker(
+      XrSession session,
+      OpenXrHandednessType handedness) const;
+
+  std::unique_ptr<OpenXRSceneUnderstandingManager>
+  CreateSceneUnderstandingManager(XrSession session, XrSpace base_space) const;
+
+  std::unique_ptr<OpenXrStageBoundsProvider> CreateStageBoundsProvider(
+      XrSession session) const;
+
  private:
+  // Small helper method to check if a given extension is enabled.
+  bool IsExtensionSupported(const char* extension_name) const;
+
   const OpenXrExtensionMethods extension_methods_;
   const raw_ptr<const OpenXrExtensionEnumeration> extension_enumeration_;
 };

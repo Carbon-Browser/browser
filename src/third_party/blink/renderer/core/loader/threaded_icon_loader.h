@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -21,6 +21,8 @@ class ResourceRequestHead;
 
 // Utility class for loading, decoding, and potentially rescaling an icon on a
 // background thread. Note that icons are only downscaled and never upscaled.
+// Warning! If the response image type is "image/svg+xml", the process will
+// happen on the main thread.
 class CORE_EXPORT ThreadedIconLoader final
     : public GarbageCollected<ThreadedIconLoader>,
       public ThreadableLoaderClient {
@@ -43,6 +45,7 @@ class CORE_EXPORT ThreadedIconLoader final
   void Stop();
 
   // ThreadableLoaderClient interface.
+  void DidReceiveResponse(uint64_t, const ResourceResponse& response) override;
   void DidReceiveData(const char* data, unsigned length) override;
   void DidFinishLoading(uint64_t resource_identifier) override;
   void DidFail(uint64_t, const ResourceError& error) override;
@@ -59,11 +62,11 @@ class CORE_EXPORT ThreadedIconLoader final
   // of the image data starts.
   scoped_refptr<SharedBuffer> data_;
 
+  String response_mime_type_;
+
   absl::optional<gfx::Size> resize_dimensions_;
 
   IconCallback icon_callback_;
-
-  base::TimeTicks start_time_;
 
   bool stopped_ = false;
 };

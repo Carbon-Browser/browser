@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,7 +11,7 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "build/build_config.h"
 #include "ipc/ipc_message.h"
 #include "ipc/ipc_message_macros.h"
@@ -199,6 +199,14 @@ void ScanTuple(std::tuple<A, B, C, D>&& t1, ScanningResults* results) {
   ScanParam(std::move(std::get<1>(t1)), results);
   ScanParam(std::move(std::get<2>(t1)), results);
   ScanParam(std::move(std::get<3>(t1)), results);
+}
+template <class A, class B, class C, class D, class E>
+void ScanTuple(std::tuple<A, B, C, D, E>&& t1, ScanningResults* results) {
+  ScanParam(std::move(std::get<0>(t1)), results);
+  ScanParam(std::move(std::get<1>(t1)), results);
+  ScanParam(std::move(std::get<2>(t1)), results);
+  ScanParam(std::move(std::get<3>(t1)), results);
+  ScanParam(std::move(std::get<4>(t1)), results);
 }
 
 template <class MessageType>

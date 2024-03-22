@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -59,6 +59,10 @@ class DeviceInfoFetcher {
 
   // Fetches the device information for the current platform.
   virtual DeviceInfo Fetch() = 0;
+
+ protected:
+  // Implements a platform specific instance of DeviceInfoFetcher.
+  static std::unique_ptr<DeviceInfoFetcher> CreateInstanceInternal();
 };
 
 }  // namespace enterprise_signals

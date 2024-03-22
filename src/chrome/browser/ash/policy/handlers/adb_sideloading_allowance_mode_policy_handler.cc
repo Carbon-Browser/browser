@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,11 +6,9 @@
 
 #include <utility>
 
-#include "ash/components/settings/cros_settings_names.h"
-#include "ash/components/settings/cros_settings_provider.h"
 #include "ash/constants/ash_features.h"
-#include "base/bind.h"
 #include "base/feature_list.h"
+#include "base/functional/bind.h"
 #include "base/time/time.h"
 #include "base/timer/timer.h"
 #include "base/values.h"
@@ -19,6 +17,8 @@
 #include "chrome/browser/browser_process_platform_part.h"
 #include "chrome/common/pref_names.h"
 #include "chromeos/ash/components/dbus/session_manager/session_manager_client.h"
+#include "chromeos/ash/components/settings/cros_settings_names.h"
+#include "chromeos/ash/components/settings/cros_settings_provider.h"
 #include "components/policy/proto/chrome_device_policy.pb.h"
 #include "components/prefs/pref_registry_simple.h"
 #include "components/prefs/pref_service.h"
@@ -171,7 +171,7 @@ void AdbSideloadingAllowanceModePolicyHandler::CheckSideloadingStatus(
     base::OnceCallback<void(bool)> callback) {
   // If the feature is not enabled, never show a notification
   if (!base::FeatureList::IsEnabled(
-          chromeos::features::kArcManagedAdbSideloadingSupport)) {
+          ash::features::kArcManagedAdbSideloadingSupport)) {
     std::move(callback).Run(false);
     return;
   }

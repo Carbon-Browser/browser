@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,6 +12,7 @@
 #include "build/buildflag.h"
 #include "build/chromeos_buildflags.h"
 #include "chrome/browser/profiles/profile.h"
+#include "chrome/browser/search_engines/template_url_service_factory.h"
 #include "chrome/browser/sessions/session_service.h"
 #include "chrome/browser/sessions/session_service_factory.h"
 #include "chrome/browser/ui/browser.h"
@@ -39,16 +40,6 @@ std::string SerializeSideSearchTabDataAsString(
   return side_search_tab_data.SerializeAsString();
 }
 
-void MaybeAddSideSearchTabRestoreData(
-    content::WebContents* web_contents,
-    std::map<std::string, std::string>& extra_data) {
-  SideSearchTabContentsHelper* helper =
-      SideSearchTabContentsHelper::FromWebContents(web_contents);
-  if (helper && helper->last_search_url().has_value())
-    extra_data[kSideSearchExtraDataKey] =
-        SerializeSideSearchTabDataAsString(helper);
-}
-
 absl::optional<std::pair<std::string, std::string>>
 MaybeGetSideSearchTabRestoreData(content::WebContents* web_contents) {
   SideSearchTabContentsHelper* helper =
@@ -62,7 +53,7 @@ MaybeGetSideSearchTabRestoreData(content::WebContents* web_contents) {
 }
 
 void MaybeSaveSideSearchTabSessionData(content::WebContents* web_contents) {
-  Browser* browser = chrome::FindBrowserWithWebContents(web_contents);
+  Browser* browser = chrome::FindBrowserWithTab(web_contents);
   if (!browser)
     return;
 
@@ -110,15 +101,22 @@ bool IsSidePanelWebContents(content::WebContents* web_contents) {
   return !!SideSearchSideContentsHelper::FromWebContents(web_contents);
 }
 
-bool IsDSESupportEnabled(const Profile* profile) {
-  return base::FeatureList::IsEnabled(features::kSideSearchDSESupport) &&
-         IsSideSearchEnabled(profile);
-}
-
 bool IsEnabledForBrowser(const Browser* browser) {
   return IsSideSearchEnabled(browser->profile()) && browser->is_type_normal();
 }
 
+bool IsSearchWebInSidePanelSupported(const Browser* browser) {
+  if (!browser)
+    return false;
+
+  const TemplateURL* const default_provider =
+      TemplateURLServiceFactory::GetForProfile(browser->profile())
+          ->GetDefaultSearchProvider();
+  DCHECK(default_provider);
+  return IsEnabledForBrowser(browser) &&
+         default_provider->IsSideSearchSupported() &&
+         base::FeatureList::IsEnabled(features::kSearchWebInSidePanel);
+}
 }  // namespace side_search
 
 bool IsSideSearchEnabled(const Profile* profile) {

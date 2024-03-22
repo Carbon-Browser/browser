@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,8 +14,8 @@
 #include "third_party/blink/public/common/features.h"
 #include "third_party/blink/renderer/core/loader/empty_clients.h"
 #include "third_party/blink/renderer/core/testing/page_test_base.h"
-#include "third_party/blink/renderer/platform/scheduler/public/thread.h"
-#include "third_party/blink/renderer/platform/scheduler/public/thread_scheduler.h"
+#include "third_party/blink/renderer/platform/scheduler/public/main_thread.h"
+#include "third_party/blink/renderer/platform/scheduler/public/main_thread_scheduler.h"
 #include "third_party/blink/renderer/platform/testing/unit_test_helpers.h"
 
 namespace blink {
@@ -76,8 +76,10 @@ class MockMemoryUsageMonitor : public MemoryUsageMonitor {
       scoped_refptr<base::TestMockTimeTaskRunner> task_runner_for_testing,
       const base::TickClock* clock)
       : MemoryUsageMonitor(task_runner_for_testing, clock),
-        agent_group_scheduler_(
-            Thread::MainThread()->Scheduler()->CreateAgentGroupScheduler()) {
+        agent_group_scheduler_(Thread::MainThread()
+                                   ->Scheduler()
+                                   ->ToMainThreadScheduler()
+                                   ->CreateAgentGroupScheduler()) {
     memset(&mock_memory_usage_, 0, sizeof(mock_memory_usage_));
   }
   ~MockMemoryUsageMonitor() override = default;
@@ -126,7 +128,7 @@ class MockMemoryUsageMonitor : public MemoryUsageMonitor {
 
   MemoryUsage mock_memory_usage_;
   std::vector<Persistent<Page>> dummy_pages_;
-  std::unique_ptr<scheduler::WebAgentGroupScheduler> agent_group_scheduler_;
+  Persistent<AgentGroupScheduler> agent_group_scheduler_;
 };
 
 class HighestPmfReporterTest : public PageTestBase {
@@ -182,7 +184,13 @@ TEST_F(HighestPmfReporterTest, ReportNoMetricBeforeNavigationStart) {
   EXPECT_EQ(0U, reporter_->GetReportedPeakRss().size());
 }
 
-TEST_F(HighestPmfReporterTest, ReportMetric) {
+// TODO(https://crbug.com/1408949): This test fails on ASAN bots.
+#if defined(ADDRESS_SANITIZER)
+#define MAYBE_ReportMetric DISABLED_ReportMetric
+#else
+#define MAYBE_ReportMetric ReportMetric
+#endif
+TEST_F(HighestPmfReporterTest, MAYBE_ReportMetric) {
   EXPECT_TRUE(memory_usage_monitor_->TimerIsActive());
   Page::OrdinaryPages().insert(&GetPage());
   AdvanceClock(base::Seconds(1));

@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -23,9 +23,6 @@ class DeviceInfoSyncClient {
   virtual ~DeviceInfoSyncClient();
 
   virtual std::string GetSigninScopedDeviceId() const = 0;
-  // TODO(crbug.com/1324936): This only returns false for one embedder, it can
-  // be replaced with a check for whether send-tab-to-self is "enabled"
-  // (preconditions met?).
   virtual bool GetSendTabToSelfReceivingEnabled() const = 0;
   virtual absl::optional<DeviceInfo::SharingInfo> GetLocalSharingInfo()
       const = 0;
@@ -39,8 +36,10 @@ class DeviceInfoSyncClient {
   // not initialized yet.
   virtual absl::optional<ModelTypeSet> GetInterestedDataTypes() const = 0;
 
-  // Returns registration information for using a phone-as-a-security-key.
-  virtual absl::optional<DeviceInfo::PhoneAsASecurityKeyInfo>
+  // Returns registration information for using a phone-as-a-security-key, or
+  // else one of the special `Status` values to indicate that the information
+  // isn't ready yet.
+  virtual DeviceInfo::PhoneAsASecurityKeyInfo::StatusOrInfo
   GetPhoneAsASecurityKeyInfo() const = 0;
 
   // Returns whether a CrOS device has User Metric Analysis (UMA) enabled.

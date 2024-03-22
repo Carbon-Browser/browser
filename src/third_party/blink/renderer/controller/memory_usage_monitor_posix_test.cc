@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -32,14 +32,12 @@ TEST(MemoryUsageMonitorPosixTest, CalculateProcessFootprint) {
 
   base::FilePath statm_path;
   EXPECT_TRUE(base::CreateTemporaryFile(&statm_path));
-  EXPECT_EQ(static_cast<int>(sizeof(kStatmFile)),
-            base::WriteFile(statm_path, kStatmFile, sizeof(kStatmFile)));
+  EXPECT_TRUE(base::WriteFile(statm_path, kStatmFile));
   base::File statm_file(statm_path,
                         base::File::FLAG_OPEN | base::File::FLAG_READ);
   base::FilePath status_path;
   EXPECT_TRUE(base::CreateTemporaryFile(&status_path));
-  EXPECT_EQ(static_cast<int>(sizeof(kStatusFile)),
-            base::WriteFile(status_path, kStatusFile, sizeof(kStatusFile)));
+  EXPECT_TRUE(base::WriteFile(status_path, kStatusFile));
   base::File status_file(status_path,
                          base::File::FLAG_OPEN | base::File::FLAG_READ);
 

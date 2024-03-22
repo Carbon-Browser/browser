@@ -1,13 +1,12 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef ASH_COMPONENTS_ARC_SESSION_ARC_INSTANCE_MODE_H_
 #define ASH_COMPONENTS_ARC_SESSION_ARC_INSTANCE_MODE_H_
 
+#include <optional>
 #include <ostream>
-
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace arc {
 
@@ -22,8 +21,7 @@ enum class ArcInstanceMode {
 
 // Stringified output for logging purpose.
 std::ostream& operator<<(std::ostream& os, ArcInstanceMode mode);
-std::ostream& operator<<(std::ostream& os,
-                         absl::optional<ArcInstanceMode> mode);
+std::ostream& operator<<(std::ostream& os, std::optional<ArcInstanceMode> mode);
 
 }  // namespace arc
 

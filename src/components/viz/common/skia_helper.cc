@@ -1,8 +1,9 @@
-// Copyright (c) 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 #include "components/viz/common/skia_helper.h"
 
+#include "third_party/skia/include/core/SkColorFilter.h"
 #include "third_party/skia/include/effects/SkColorMatrix.h"
 #include "third_party/skia/include/effects/SkImageFilters.h"
 #include "third_party/skia/include/effects/SkOverdrawColorFilter.h"

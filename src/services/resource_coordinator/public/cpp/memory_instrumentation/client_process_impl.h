@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -18,8 +18,6 @@
 #include "services/resource_coordinator/public/mojom/memory_instrumentation/memory_instrumentation.mojom.h"
 
 namespace memory_instrumentation {
-
-class TracingObserver;
 
 // This is the bridge between MemoryDumpManager and the Coordinator service.
 // This indirection is needed to avoid a dependency from //base, where
@@ -101,11 +99,6 @@ class COMPONENT_EXPORT(RESOURCE_COORDINATOR_PUBLIC_MEMORY_INSTRUMENTATION)
 
   // Only browser process is allowed to request memory dumps.
   const bool is_browser_process_;
-
-  // TODO(crbug.com/728199): The observer is only used to setup and tear down
-  // MemoryDumpManager in each process. Setting up MemoryDumpManager should
-  // be moved away from TracingObserver.
-  std::unique_ptr<TracingObserver> tracing_observer_;
 };
 
 }  // namespace memory_instrumentation

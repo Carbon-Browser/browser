@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,6 +9,7 @@
 #include "ash/test/ash_test_base.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
+#include "base/files/scoped_file.h"
 #include "base/files/scoped_temp_dir.h"
 #include "base/test/bind.h"
 #include "base/threading/thread_restrictions.h"
@@ -16,16 +17,14 @@
 #include "components/exo/input_method_surface_manager.h"
 #include "components/exo/notification_surface_manager.h"
 #include "components/exo/security_delegate.h"
+#include "components/exo/server/wayland_server_handle.h"
+#include "components/exo/test/test_security_delegate.h"
 #include "components/exo/toast_surface_manager.h"
+#include "components/exo/wayland/test/wayland_server_test_base.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
 namespace exo {
 namespace {
-
-class TestSecurityDelegate : public SecurityDelegate {
- public:
-  std::string GetSecurityContext() const override { return "test"; }
-};
 
 class WaylandServerControllerTest : public ash::AshTestBase {
  public:
@@ -46,33 +45,52 @@ class WaylandServerControllerTest : public ash::AshTestBase {
 
 }  // namespace
 
-TEST_F(WaylandServerControllerTest, RequestServer) {
+TEST_F(WaylandServerControllerTest, RequestServerByFd) {
   WaylandServerController wsc(nullptr, nullptr, nullptr, nullptr);
-
   ASSERT_EQ(WaylandServerController::Get(), &wsc);
 
+  wayland::test::WaylandServerTestBase::ScopedTempSocket sock;
+
   base::RunLoop loop;
-  base::FilePath socket_path;
+  std::unique_ptr<WaylandServerHandle> handle;
   {
     base::ScopedDisallowBlocking no_blocking;
-    WaylandServerController::Get()->CreateServer(
-        std::make_unique<TestSecurityDelegate>(),
+    WaylandServerController::Get()->ListenOnSocket(
+        std::make_unique<test::TestSecurityDelegate>(), sock.TakeFd(),
         base::BindLambdaForTesting(
-            [&loop, &socket_path](bool success,
-                                  const base::FilePath& new_path) {
-              socket_path = std::move(new_path);
+            [&loop,
+             &handle](std::unique_ptr<WaylandServerHandle> result_handle) {
+              EXPECT_TRUE(result_handle);
+              handle = std::move(result_handle);
               loop.Quit();
             }));
   }
   loop.Run();
-  EXPECT_FALSE(socket_path.empty());
-  EXPECT_TRUE(base::PathExists(socket_path));
 
   {
     base::ScopedDisallowBlocking no_blocking;
-    WaylandServerController::Get()->DeleteServer(socket_path);
+    // Just ensure that closing a socket is nonblocking.
+    handle.reset();
   }
-  EXPECT_FALSE(base::PathExists(socket_path));
+  task_environment()->RunUntilIdle();
+}
+
+TEST_F(WaylandServerControllerTest, RequestServerBadSocket) {
+  WaylandServerController wsc(nullptr, nullptr, nullptr, nullptr);
+  ASSERT_EQ(WaylandServerController::Get(), &wsc);
+
+  base::RunLoop loop;
+  {
+    base::ScopedDisallowBlocking no_blocking;
+    WaylandServerController::Get()->ListenOnSocket(
+        std::make_unique<test::TestSecurityDelegate>(), base::ScopedFD{},
+        base::BindLambdaForTesting(
+            [&loop](std::unique_ptr<WaylandServerHandle> result_handle) {
+              EXPECT_FALSE(result_handle);
+              loop.Quit();
+            }));
+  }
+  loop.Run();
 }
 
 }  // namespace exo

@@ -1,17 +1,17 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chromeos/ash/components/network/network_activation_handler_impl.h"
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
+#include "chromeos/ash/components/dbus/shill/shill_service_client.h"
 #include "chromeos/ash/components/network/network_event_log.h"
 #include "chromeos/ash/components/network/network_handler.h"
-#include "chromeos/dbus/shill/shill_service_client.h"
 #include "dbus/object_proxy.h"
 
-namespace chromeos {
+namespace ash {
 
 namespace {
 
@@ -43,4 +43,4 @@ void NetworkActivationHandlerImpl::HandleShillSuccess(
     std::move(success_callback).Run();
 }
 
-}  // namespace chromeos
+}  // namespace ash

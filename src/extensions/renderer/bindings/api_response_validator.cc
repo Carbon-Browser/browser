@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -55,7 +55,7 @@ APIResponseValidator::~APIResponseValidator() = default;
 void APIResponseValidator::ValidateResponse(
     v8::Local<v8::Context> context,
     const std::string& method_name,
-    const std::vector<v8::Local<v8::Value>> response_arguments,
+    const v8::LocalVector<v8::Value>& response_arguments,
     const std::string& api_error,
     CallbackType callback_type) {
   DCHECK(binding::IsResponseValidationEnabled());
@@ -99,7 +99,7 @@ void APIResponseValidator::ValidateResponse(
 void APIResponseValidator::ValidateEvent(
     v8::Local<v8::Context> context,
     const std::string& event_name,
-    const std::vector<v8::Local<v8::Value>>& event_args) {
+    const v8::LocalVector<v8::Value>& event_args) {
   DCHECK(binding::IsResponseValidationEnabled());
 
   const APISignature* signature = type_refs_->GetEventSignature(event_name);
@@ -119,11 +119,17 @@ void APIResponseValidator::ValidateEvent(
   static constexpr char const* kBrokenSignaturesToIgnore[] = {
       "automationInternal.onAccessibilityEvent",
       "chromeWebViewInternal.onClicked",
+      "input.ime.onFocus",
       "inputMethodPrivate.onFocus",
       "test.onMessage",
+
       // https://crbug.com/1343611.
       "runtime.onMessage",
+      "runtime.onConnect",
       "contextMenus.onClicked",
+
+      // https://crbug.com/1375903.
+      "downloads.onCreated",
   };
 
   if (base::ranges::find(kBrokenSignaturesToIgnore, event_name) !=

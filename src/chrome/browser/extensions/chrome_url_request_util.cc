@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,8 +7,8 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
 #include "base/files/file_path.h"
+#include "base/functional/bind.h"
 #include "base/memory/ref_counted_memory.h"
 #include "base/memory/weak_ptr.h"
 #include "base/path_service.h"
@@ -71,7 +71,7 @@ scoped_refptr<base::RefCountedMemory> GetResource(
                             bytes->size());
     std::string temp_str = ui::ReplaceTemplateExpressions(input, *replacements);
     DCHECK(!temp_str.empty());
-    return base::RefCountedString::TakeString(&temp_str);
+    return base::MakeRefCounted<base::RefCountedString>(std::move(temp_str));
   } else {
     return bytes;
   }
@@ -177,7 +177,8 @@ class ResourceBundleFileLoader : public network::mojom::URLLoader {
       head->headers->AddHeader(net::HttpRequestHeaders::kContentType,
                                head->mime_type.c_str());
     }
-    client_->OnReceiveResponse(std::move(head), std::move(consumer_handle));
+    client_->OnReceiveResponse(std::move(head), std::move(consumer_handle),
+                               absl::nullopt);
 
     uint32_t write_size = data->size();
     MojoResult result = producer_handle->WriteData(data->front(), &write_size,

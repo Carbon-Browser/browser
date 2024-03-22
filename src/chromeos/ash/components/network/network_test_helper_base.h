@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,17 +8,18 @@
 #include <memory>
 #include <string>
 
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "chromeos/ash/components/dbus/hermes/hermes_euicc_client.h"
 #include "chromeos/ash/components/dbus/hermes/hermes_manager_client.h"
 #include "chromeos/ash/components/dbus/hermes/hermes_profile_client.h"
-#include "chromeos/dbus/shill/shill_device_client.h"
-#include "chromeos/dbus/shill/shill_ipconfig_client.h"
-#include "chromeos/dbus/shill/shill_manager_client.h"
-#include "chromeos/dbus/shill/shill_profile_client.h"
-#include "chromeos/dbus/shill/shill_service_client.h"
+#include "chromeos/ash/components/dbus/shill/shill_device_client.h"
+#include "chromeos/ash/components/dbus/shill/shill_ipconfig_client.h"
+#include "chromeos/ash/components/dbus/shill/shill_manager_client.h"
+#include "chromeos/ash/components/dbus/shill/shill_profile_client.h"
+#include "chromeos/ash/components/dbus/shill/shill_service_client.h"
 
-namespace chromeos {
+namespace ash {
 
 // Base Network test helper class. This base class handles initialization and
 // shutdown of Shill and Hermes DBus clients and provides utility methods to
@@ -53,6 +54,10 @@ class NetworkTestHelperBase {
   // service could not be configured. Note: the 'GUID' key is also used as the
   // name of the service if no 'Name' key is provided.
   std::string ConfigureService(const std::string& shill_json_string);
+
+  // Configures a new WiFi service with state |state|. Returns the service
+  // path of the new service.
+  std::string ConfigureWiFi(const std::string& state);
 
   // Returns a double value for property |key| associated with |service_path|.
   absl::optional<double> GetServiceDoubleProperty(
@@ -109,20 +114,35 @@ class NetworkTestHelperBase {
   bool hermes_clients_initialized_ = false;
 
   std::string last_created_service_path_;
+  int wifi_index_ = 0;
 
-  ShillManagerClient::TestInterface* manager_test_;
-  ShillProfileClient::TestInterface* profile_test_;
-  ShillDeviceClient::TestInterface* device_test_;
-  ShillServiceClient::TestInterface* service_test_;
-  ShillIPConfigClient::TestInterface* ip_config_test_;
+  raw_ptr<ShillManagerClient::TestInterface,
+          DanglingUntriaged | ExperimentalAsh>
+      manager_test_;
+  raw_ptr<ShillProfileClient::TestInterface,
+          DanglingUntriaged | ExperimentalAsh>
+      profile_test_;
+  raw_ptr<ShillDeviceClient::TestInterface, DanglingUntriaged | ExperimentalAsh>
+      device_test_;
+  raw_ptr<ShillServiceClient::TestInterface,
+          DanglingUntriaged | ExperimentalAsh>
+      service_test_;
+  raw_ptr<ShillIPConfigClient::TestInterface,
+          DanglingUntriaged | ExperimentalAsh>
+      ip_config_test_;
 
-  HermesEuiccClient::TestInterface* hermes_euicc_test_;
-  HermesManagerClient::TestInterface* hermes_manager_test_;
-  HermesProfileClient::TestInterface* hermes_profile_test_;
+  raw_ptr<HermesEuiccClient::TestInterface, DanglingUntriaged | ExperimentalAsh>
+      hermes_euicc_test_;
+  raw_ptr<HermesManagerClient::TestInterface,
+          DanglingUntriaged | ExperimentalAsh>
+      hermes_manager_test_;
+  raw_ptr<HermesProfileClient::TestInterface,
+          DanglingUntriaged | ExperimentalAsh>
+      hermes_profile_test_;
 
   base::WeakPtrFactory<NetworkTestHelperBase> weak_ptr_factory_{this};
 };
 
-}  // namespace chromeos
+}  // namespace ash
 
 #endif  // CHROMEOS_ASH_COMPONENTS_NETWORK_NETWORK_TEST_HELPER_BASE_H_

@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -28,35 +28,36 @@ public class LogTest {
 
         List<ShadowLog.LogItem> logs = ShadowLog.getLogs();
 
-        assertTrue("The origin of the log message (" + logs.get(logs.size() - 1).msg
+        assertTrue(
+                "The origin of the log message ("
+                        + logs.get(logs.size() - 1).msg
                         + ") looks wrong.",
                 logs.get(logs.size() - 1).msg.matches("\\[LogTest.java:\\d+\\].*"));
     }
 
     @Test
     public void normalizeTagTest() {
-        assertEquals("cr_foo", Log.normalizeTag("cr.foo"));
-        assertEquals("cr_foo", Log.normalizeTag("cr_foo"));
         assertEquals("cr_foo", Log.normalizeTag("foo"));
-        assertEquals("cr_ab_foo", Log.normalizeTag("ab_foo"));
     }
 
     /** Tests that exceptions provided to the log functions are properly recognized and printed. */
     @Test
     public void exceptionLoggingTest() {
-        Throwable t = new Throwable() {
-            @Override
-            public String toString() {
-                return "MyThrowable";
-            }
-        };
+        Throwable t =
+                new Throwable() {
+                    @Override
+                    public String toString() {
+                        return "MyThrowable";
+                    }
+                };
 
-        Throwable t2 = new Throwable() {
-            @Override
-            public String toString() {
-                return "MyOtherThrowable";
-            }
-        };
+        Throwable t2 =
+                new Throwable() {
+                    @Override
+                    public String toString() {
+                        return "MyOtherThrowable";
+                    }
+                };
 
         List<ShadowLog.LogItem> logs;
 

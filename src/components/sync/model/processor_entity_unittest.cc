@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -16,6 +16,7 @@
 #include "components/sync/engine/commit_and_get_updates_types.h"
 #include "components/sync/protocol/entity_metadata.pb.h"
 #include "components/sync/protocol/entity_specifics.pb.h"
+#include "components/version_info/version_info.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
@@ -156,7 +157,7 @@ TEST_F(ProcessorEntityTest, DefaultEntity) {
   EXPECT_FALSE(entity->RequiresCommitRequest());
   EXPECT_FALSE(entity->RequiresCommitData());
   EXPECT_FALSE(entity->CanClearMetadata());
-  EXPECT_FALSE(entity->UpdateIsReflection(1));
+  EXPECT_FALSE(entity->IsVersionAlreadyKnown(1));
   EXPECT_FALSE(entity->HasCommitData());
 }
 
@@ -179,7 +180,7 @@ TEST_F(ProcessorEntityTest, NewLocalItem) {
   EXPECT_TRUE(entity->RequiresCommitRequest());
   EXPECT_FALSE(entity->RequiresCommitData());
   EXPECT_FALSE(entity->CanClearMetadata());
-  EXPECT_FALSE(entity->UpdateIsReflection(1));
+  EXPECT_FALSE(entity->IsVersionAlreadyKnown(1));
   EXPECT_TRUE(entity->HasCommitData());
 
   EXPECT_EQ(kValue1, entity->commit_data().specifics.preference().value());
@@ -195,7 +196,7 @@ TEST_F(ProcessorEntityTest, NewLocalItem) {
   EXPECT_FALSE(entity->RequiresCommitRequest());
   EXPECT_FALSE(entity->RequiresCommitData());
   EXPECT_FALSE(entity->CanClearMetadata());
-  EXPECT_FALSE(entity->UpdateIsReflection(1));
+  EXPECT_FALSE(entity->IsVersionAlreadyKnown(1));
 
   const EntityData& data = *request.entity;
   EXPECT_EQ("", data.id);
@@ -228,8 +229,34 @@ TEST_F(ProcessorEntityTest, NewLocalItem) {
   EXPECT_FALSE(entity->RequiresCommitRequest());
   EXPECT_FALSE(entity->RequiresCommitData());
   EXPECT_FALSE(entity->CanClearMetadata());
-  EXPECT_TRUE(entity->UpdateIsReflection(1));
+  EXPECT_TRUE(entity->IsVersionAlreadyKnown(1));
   EXPECT_FALSE(entity->HasCommitData());
+}
+
+// Test handling of invalid server version.
+TEST_F(ProcessorEntityTest,
+       ShouldIgnoreCommitResponseWithInvalidServerVersion) {
+  std::unique_ptr<ProcessorEntity> entity = CreateNew();
+  entity->RecordLocalUpdate(GenerateEntityData(kHash, kName, kValue1),
+                            /*trimmed_specifics=*/{});
+
+  CommitRequestData request;
+
+  // Ack the commit - set current version to 2.
+  entity->InitializeCommitRequestData(&request);
+  entity->ReceiveCommitResponse(GenerateAckData(request, kId, 2), false);
+
+  entity->RecordLocalUpdate(GenerateEntityData(kHash, kName, kValue2),
+                            /*trimmed_specifics=*/{});
+  ASSERT_EQ(2, entity->metadata().server_version());
+  ASSERT_EQ(2, entity->metadata().sequence_number());
+  ASSERT_EQ(1, entity->metadata().acked_sequence_number());
+
+  // Ack the commit - try server version 1.
+  entity->InitializeCommitRequestData(&request);
+  entity->ReceiveCommitResponse(GenerateAckData(request, kId, 1), false);
+  // no update as the server responds with an older version.
+  EXPECT_EQ(2, entity->metadata().server_version());
 }
 
 // Test state for a newly synced server item.
@@ -254,9 +281,9 @@ TEST_F(ProcessorEntityTest, NewServerItem) {
   EXPECT_FALSE(entity->RequiresCommitRequest());
   EXPECT_FALSE(entity->RequiresCommitData());
   EXPECT_FALSE(entity->CanClearMetadata());
-  EXPECT_TRUE(entity->UpdateIsReflection(9));
-  EXPECT_TRUE(entity->UpdateIsReflection(10));
-  EXPECT_FALSE(entity->UpdateIsReflection(11));
+  EXPECT_TRUE(entity->IsVersionAlreadyKnown(9));
+  EXPECT_TRUE(entity->IsVersionAlreadyKnown(10));
+  EXPECT_FALSE(entity->IsVersionAlreadyKnown(11));
   EXPECT_FALSE(entity->HasCommitData());
 }
 
@@ -297,8 +324,8 @@ TEST_F(ProcessorEntityTest, NewServerTombstone) {
   EXPECT_FALSE(entity->RequiresCommitRequest());
   EXPECT_FALSE(entity->RequiresCommitData());
   EXPECT_TRUE(entity->CanClearMetadata());
-  EXPECT_TRUE(entity->UpdateIsReflection(1));
-  EXPECT_FALSE(entity->UpdateIsReflection(2));
+  EXPECT_TRUE(entity->IsVersionAlreadyKnown(1));
+  EXPECT_FALSE(entity->IsVersionAlreadyKnown(2));
   EXPECT_FALSE(entity->HasCommitData());
 }
 
@@ -324,8 +351,8 @@ TEST_F(ProcessorEntityTest, ServerTombstone) {
   EXPECT_FALSE(entity->RequiresCommitRequest());
   EXPECT_FALSE(entity->RequiresCommitData());
   EXPECT_TRUE(entity->CanClearMetadata());
-  EXPECT_TRUE(entity->UpdateIsReflection(2));
-  EXPECT_FALSE(entity->UpdateIsReflection(3));
+  EXPECT_TRUE(entity->IsVersionAlreadyKnown(2));
+  EXPECT_FALSE(entity->IsVersionAlreadyKnown(3));
   EXPECT_FALSE(entity->HasCommitData());
 }
 
@@ -650,8 +677,6 @@ TEST_F(ProcessorEntityTest, LocalCreationConflictsWithServerTombstone) {
 }
 
 TEST_F(ProcessorEntityTest, UpdatesSpecificsCacheOnRemoteUpdates) {
-  base::test::ScopedFeatureList feature_list;
-  feature_list.InitAndEnableFeature(kCacheBaseEntitySpecificsInMetadata);
   std::unique_ptr<ProcessorEntity> entity = CreateNew();
   const base::Time mtime = base::Time::Now();
   UpdateResponseData update =
@@ -665,9 +690,6 @@ TEST_F(ProcessorEntityTest, UpdatesSpecificsCacheOnRemoteUpdates) {
 }
 
 TEST_F(ProcessorEntityTest, UpdatesSpecificsCacheOnLocalUpdates) {
-  base::test::ScopedFeatureList feature_list;
-  feature_list.InitAndEnableFeature(kCacheBaseEntitySpecificsInMetadata);
-
   std::unique_ptr<ProcessorEntity> entity = CreateNew();
   sync_pb::EntitySpecifics specifics_for_caching =
       GenerateSpecifics(kName, kValue2);
@@ -676,6 +698,29 @@ TEST_F(ProcessorEntityTest, UpdatesSpecificsCacheOnLocalUpdates) {
   EXPECT_EQ(
       specifics_for_caching.SerializeAsString(),
       entity->metadata().possibly_trimmed_base_specifics().SerializeAsString());
+}
+
+TEST_F(ProcessorEntityTest,
+       LocalDeletionDoesNotRecordVersionInfoIfFeatureIsDisabled) {
+  base::test::ScopedFeatureList scoped_feature_list;
+  scoped_feature_list.InitWithFeatures(
+      {/* enabled_features */},
+      {syncer::kSyncEntityMetadataRecordDeletedByVersionOnLocalDeletion});
+
+  std::unique_ptr<ProcessorEntity> entity = CreateNew();
+  entity->RecordLocalDeletion();
+  EXPECT_FALSE(entity->metadata().has_deleted_by_version());
+}
+
+TEST_F(ProcessorEntityTest, LocalDeletionRecordsVersionInfoIfFeatureIsEnabled) {
+  base::test::ScopedFeatureList scoped_feature_list;
+  scoped_feature_list.InitWithFeatures(
+      {syncer::kSyncEntityMetadataRecordDeletedByVersionOnLocalDeletion},
+      {/* disabled_features */});
+  std::unique_ptr<ProcessorEntity> entity = CreateNew();
+  entity->RecordLocalDeletion();
+  std::string expected_version = std::string(version_info::GetVersionNumber());
+  EXPECT_EQ(expected_version, entity->metadata().deleted_by_version());
 }
 
 }  // namespace syncer

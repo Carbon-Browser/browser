@@ -1,17 +1,18 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/chromeos/policy/dlp/dlp_notification_helper.h"
 
 #include "build/chromeos_buildflags.h"
-#include "chrome/browser/chromeos/policy/dlp/dlp_clipboard_bubble_constants.h"
+#include "chrome/browser/chromeos/policy/dlp/dlp_policy_constants.h"
 #include "chrome/browser/notifications/notification_display_service.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/profiles/profile_manager.h"
 #include "components/strings/grit/components_strings.h"
 #include "components/vector_icons/vector_icons.h"
 #include "ui/base/l10n/l10n_util.h"
+#include "ui/color/color_id.h"
 #include "ui/gfx/geometry/insets.h"
 #include "ui/message_center/public/cpp/notification.h"
 #include "ui/message_center/public/cpp/notification_types.h"
@@ -24,7 +25,8 @@
 #endif  // BUILDFLAG(IS_CHROMEOS_ASH)
 
 #if BUILDFLAG(IS_CHROMEOS_LACROS)
-#include "chrome/browser/lacros/browser_service_lacros.h"
+#include "chrome/browser/ui/browser_navigator.h"
+#include "chrome/browser/ui/browser_navigator_params.h"
 #endif  // BUILDFLAG(IS_CHROMEOS_LACROS)
 
 namespace policy {
@@ -46,18 +48,19 @@ constexpr char kDlpPolicyNotifierId[] = "policy.dlp";
 void OnNotificationClicked(const std::string id) {
 #if BUILDFLAG(IS_CHROMEOS_ASH)
   ash::NewWindowDelegate::GetPrimary()->OpenUrl(
-      GURL(kDlpLearnMoreUrl),
-      ash::NewWindowDelegate::OpenUrlFrom::kUserInteraction);
+      GURL(dlp::kDlpLearnMoreUrl),
+      ash::NewWindowDelegate::OpenUrlFrom::kUserInteraction,
+      ash::NewWindowDelegate::Disposition::kNewForegroundTab);
 #elif BUILDFLAG(IS_CHROMEOS_LACROS)
-  // TODO(hidehiko): Instantiating BrowserServiceLacros here is an unexpected
-  // use case. Get rid of this by replacing with Navigate() API invocation
-  // directly.
-  auto browser_service = std::make_unique<BrowserServiceLacros>();
-  using OpenUrlParams = crosapi::mojom::OpenUrlParams;
-  auto params = OpenUrlParams::New();
-  params->disposition = OpenUrlParams::WindowOpenDisposition::kNewForegroundTab;
-  browser_service->OpenUrl(GURL(kDlpLearnMoreUrl), std::move(params),
-                           base::DoNothing());
+  // The dlp policy applies to the main profile, so use the main profile for
+  // opening the page.
+  NavigateParams navigate_params(
+      ProfileManager::GetPrimaryUserProfile(), GURL(dlp::kDlpLearnMoreUrl),
+      ui::PageTransitionFromInt(ui::PAGE_TRANSITION_LINK |
+                                ui::PAGE_TRANSITION_FROM_API));
+  navigate_params.disposition = WindowOpenDisposition::NEW_FOREGROUND_TAB;
+  navigate_params.window_action = NavigateParams::SHOW_WINDOW;
+  Navigate(&navigate_params);
 #endif  // BUILDFLAG(IS_CHROMEOS_ASH)
 
   NotificationDisplayService::GetForProfile(
@@ -84,7 +87,7 @@ void ShowDlpNotification(const std::string& id,
       base::MakeRefCounted<message_center::HandleNotificationClickDelegate>(
           base::BindRepeating(&OnNotificationClicked, id)));
   // Set critical warning color.
-  notification.set_accent_color(gfx::kGoogleRed700);
+  notification.set_accent_color_id(ui::kColorSysError);
 #if BUILDFLAG(IS_CHROMEOS_ASH)
   notification.set_system_notification_warning_level(
       message_center::SystemNotificationWarningLevel::CRITICAL_WARNING);

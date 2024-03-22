@@ -1,12 +1,12 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CHROME_BROWSER_ASH_SECURE_CHANNEL_NEARBY_ENDPOINT_FINDER_H_
 #define CHROME_BROWSER_ASH_SECURE_CHANNEL_NEARBY_ENDPOINT_FINDER_H_
 
-#include "ash/services/nearby/public/mojom/nearby_connections.mojom.h"
 #include "base/unguessable_token.h"
+#include "chromeos/ash/services/nearby/public/mojom/nearby_connections.mojom.h"
 
 namespace ash {
 namespace secure_channel {
@@ -23,7 +23,7 @@ class NearbyEndpointFinder {
   // discovered endpoint.
   using EndpointCallback = base::OnceCallback<void(
       const std::string&,
-      location::nearby::connections::mojom::DiscoveredEndpointInfoPtr)>;
+      ::nearby::connections::mojom::DiscoveredEndpointInfoPtr)>;
 
   // Attempts to find an endpoint for the device with the provided Bluetooth
   // address, which is expected to be a 6-byte MAC address.
@@ -43,7 +43,7 @@ class NearbyEndpointFinder {
 
   void NotifyEndpointFound(
       const std::string& endpoint_id,
-      location::nearby::connections::mojom::DiscoveredEndpointInfoPtr info);
+      ::nearby::connections::mojom::DiscoveredEndpointInfoPtr info);
   void NotifyEndpointDiscoveryFailure();
 
   virtual void PerformFindEndpoint() = 0;

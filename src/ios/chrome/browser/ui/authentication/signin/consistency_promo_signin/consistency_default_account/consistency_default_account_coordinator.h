@@ -1,15 +1,15 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef IOS_CHROME_BROWSER_UI_AUTHENTICATION_SIGNIN_CONSISTENCY_PROMO_SIGNIN_CONSISTENCY_DEFAULT_ACCOUNT_CONSISTENCY_DEFAULT_ACCOUNT_COORDINATOR_H_
 #define IOS_CHROME_BROWSER_UI_AUTHENTICATION_SIGNIN_CONSISTENCY_PROMO_SIGNIN_CONSISTENCY_DEFAULT_ACCOUNT_CONSISTENCY_DEFAULT_ACCOUNT_COORDINATOR_H_
 
-#import "ios/chrome/browser/ui/coordinators/chrome_coordinator.h"
+#import "ios/chrome/browser/shared/coordinator/chrome_coordinator/chrome_coordinator.h"
 
-@class ChromeIdentity;
 @class ConsistencyDefaultAccountCoordinator;
 @protocol ConsistencyLayoutDelegate;
+@protocol SystemIdentity;
 
 namespace signin_metrics {
 enum class AccessPoint : int;
@@ -33,6 +33,10 @@ enum class AccessPoint : int;
 - (void)consistencyDefaultAccountCoordinatorSignin:
     (ConsistencyDefaultAccountCoordinator*)coordinator;
 
+// Called when the user wants to sign in without an existing account.
+- (void)consistencyDefaultAccountCoordinatorOpenAddAccount:
+    (ConsistencyDefaultAccountCoordinator*)coordinator;
+
 @end
 
 // This coordinator presents an entry point to the Chrome sign-in flow with the
@@ -53,7 +57,7 @@ enum class AccessPoint : int;
     delegate;
 @property(nonatomic, weak) id<ConsistencyLayoutDelegate> layoutDelegate;
 // This property can be used only after the coordinator is started.
-@property(nonatomic, strong) ChromeIdentity* selectedIdentity;
+@property(nonatomic, strong) id<SystemIdentity> selectedIdentity;
 
 // Starts the spinner and disables buttons.
 - (void)startSigninSpinner;

@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,7 +14,6 @@
 #include "base/notreached.h"
 #include "base/strings/string_util_win.h"
 #include "ui/base/cursor/platform_cursor.h"
-#include "ui/base/win/shell.h"
 #include "ui/base/win/win_cursor.h"
 #include "ui/events/event.h"
 #include "ui/events/event_utils.h"
@@ -132,7 +131,7 @@ bool WinWindow::HasCapture() const {
   return ::GetCapture() == hwnd();
 }
 
-void WinWindow::ToggleFullscreen() {}
+void WinWindow::SetFullscreen(bool fullscreen, int64_t target_display_id) {}
 
 void WinWindow::Maximize() {}
 
@@ -187,9 +186,9 @@ bool WinWindow::ShouldWindowContentsBeTransparent() const {
   // by the DWM rather than Chrome, so that area can show through.  This
   // function does not describe the transparency of the whole window appearance,
   // but merely of the content Chrome draws, so even when the system titlebars
-  // appear opaque (Win 8+), the content above them needs to be transparent, or
-  // they'll be covered by a black (undrawn) region.
-  return ui::win::IsAeroGlassEnabled() && !IsFullscreen();
+  // appear opaque, the content above them needs to be transparent, or they'll
+  // be covered by a black (undrawn) region.
+  return !IsFullscreen();
 }
 
 void WinWindow::SetZOrderLevel(ZOrderLevel order) {
@@ -311,8 +310,7 @@ void WinWindow::OnWindowPosChanged(WINDOWPOS* window_pos) {
   if (!(window_pos->flags & SWP_NOSIZE) || !(window_pos->flags & SWP_NOMOVE)) {
     RECT cr;
     GetClientRect(hwnd(), &cr);
-    delegate_->OnBoundsChanged(gfx::Rect(
-        window_pos->x, window_pos->y, cr.right - cr.left, cr.bottom - cr.top));
+    delegate_->OnBoundsChanged({true});
   }
 }
 

@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,7 +12,7 @@
 #include "ash/public/cpp/image_downloader.h"
 #include "base/component_export.h"
 #include "base/observer_list_types.h"
-#include "chromeos/services/libassistant/public/cpp/assistant_suggestion.h"
+#include "chromeos/ash/services/libassistant/public/cpp/assistant_suggestion.h"
 #include "ui/wm/core/cursor_manager.h"
 
 namespace ash {
@@ -29,7 +29,7 @@ enum class DeepLinkType;
 class COMPONENT_EXPORT(ASSISTANT_UI) AssistantViewDelegateObserver
     : public base::CheckedObserver {
  public:
-  using AssistantSuggestion = chromeos::assistant::AssistantSuggestion;
+  using AssistantSuggestion = assistant::AssistantSuggestion;
 
   // Invoked when the dialog plate button identified by |id| is pressed.
   virtual void OnDialogPlateButtonPressed(AssistantButtonId id) {}
@@ -46,6 +46,9 @@ class COMPONENT_EXPORT(ASSISTANT_UI) AssistantViewDelegateObserver
   // Invoked when a suggestion UI element is pressed.
   virtual void OnSuggestionPressed(
       const base::UnguessableToken& suggestion_id) {}
+
+  // Invoked when a launcher search chip is pressed.
+  virtual void OnLauncherSearchChipPressed(const std::u16string& query) {}
 };
 
 // A delegate of views in assistant/ui that handles views related actions e.g.
@@ -53,7 +56,7 @@ class COMPONENT_EXPORT(ASSISTANT_UI) AssistantViewDelegateObserver
 // etc.
 class COMPONENT_EXPORT(ASSISTANT_UI) AssistantViewDelegate {
  public:
-  using AssistantSuggestion = chromeos::assistant::AssistantSuggestion;
+  using AssistantSuggestion = assistant::AssistantSuggestion;
 
   virtual ~AssistantViewDelegate() = default;
 
@@ -107,6 +110,9 @@ class COMPONENT_EXPORT(ASSISTANT_UI) AssistantViewDelegate {
 
   // Returns true if Assistant onboarding should be shown.
   virtual bool ShouldShowOnboarding() const = 0;
+
+  // Invoked when a launcher search chip is pressed.
+  virtual void OnLauncherSearchChipPressed(const std::u16string& query) = 0;
 };
 
 }  // namespace ash

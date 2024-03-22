@@ -1,10 +1,11 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/ash/login/test/session_manager_state_waiter.h"
 
 #include "base/run_loop.h"
+#include "base/trace_event/trace_event.h"
 #include "chrome/browser/ash/login/existing_user_controller.h"
 #include "chrome/browser/ash/login/test/profile_prepared_waiter.h"
 #include "components/user_manager/user_manager.h"
@@ -54,6 +55,7 @@ void SessionStateWaiter::Wait() {
 }
 
 void SessionStateWaiter::OnSessionStateChanged() {
+  TRACE_EVENT0("login", "SessionStateWaiter::OnSessionStateChanged");
   if (session_manager::SessionManager::Get()->session_state() ==
       target_state_) {
     session_observation_.Reset();

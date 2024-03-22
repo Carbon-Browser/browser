@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,13 +6,13 @@
 
 #import <Cocoa/Cocoa.h>
 
-#include "base/mac/scoped_nsobject.h"
 #include "base/strings/sys_string_conversions.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/test/task_environment.h"
 #include "chrome/browser/favicon/favicon_utils.h"
 #include "chrome/browser/ui/cocoa/tab_menu_bridge.h"
 #include "chrome/browser/ui/tab_ui_helper.h"
+#include "chrome/browser/ui/tabs/tab_enums.h"
 #include "chrome/browser/ui/tabs/tab_strip_model.h"
 #include "chrome/browser/ui/tabs/test_tab_strip_model_delegate.h"
 #include "chrome/test/base/testing_profile.h"
@@ -39,17 +39,17 @@ class TabMenuBridgeTest : public ::testing::Test {
     rvh_test_enabler_ = std::make_unique<content::RenderViewHostTestEnabler>();
     delegate_ = std::make_unique<TabStripModelUiHelperDelegate>();
     model_ = std::make_unique<TabStripModel>(delegate_.get(), nullptr);
-    menu_root_.reset(ItemWithTitle(@"Tab"));
-    menu_.reset([[NSMenu alloc] initWithTitle:@"Tab"]);
-    menu_root_.get().submenu = menu_.get();
+    menu_root_ = ItemWithTitle(@"Tab");
+    menu_ = [[NSMenu alloc] initWithTitle:@"Tab"];
+    menu_root_.submenu = menu_;
 
-    AddStaticItems(menu_.get());
+    AddStaticItems(menu_);
   }
 
   void TearDown() override { model_->CloseAllTabs(); }
 
-  NSMenuItem* menu_root() { return menu_root_.get(); }
-  NSMenu* menu() { return menu_.get(); }
+  NSMenuItem* menu_root() { return menu_root_; }
+  NSMenu* menu() { return menu_; }
   TabStripModel* model() { return model_.get(); }
   TabStripModelDelegate* delegate() { return delegate_.get(); }
 
@@ -90,7 +90,7 @@ class TabMenuBridgeTest : public ::testing::Test {
   void RemoveModelTabNamed(const std::string& name) {
     int index = ModelIndexForTabNamed(name);
     DCHECK(index >= 0);
-    model()->CloseWebContentsAt(index, TabStripModel::CLOSE_NONE);
+    model()->CloseWebContentsAt(index, TabCloseTypes::CLOSE_NONE);
   }
 
   void RenameModelTabNamed(const std::string& old_name,
@@ -148,7 +148,7 @@ class TabMenuBridgeTest : public ::testing::Test {
     // Check the static items too, to make sure none of them are checked.
     for (int i = 0; i < menu().numberOfItems; ++i) {
       NSMenuItem* item = [menu() itemAtIndex:i];
-      if (item.state == NSOnState)
+      if (item.state == NSControlStateValueOn)
         active_items.push_back(base::SysNSStringToUTF8(item.title));
     }
 
@@ -171,8 +171,8 @@ class TabMenuBridgeTest : public ::testing::Test {
   std::unique_ptr<content::RenderViewHostTestEnabler> rvh_test_enabler_;
   std::unique_ptr<TabStripModelUiHelperDelegate> delegate_;
   std::unique_ptr<TabStripModel> model_;
-  base::scoped_nsobject<NSMenuItem> menu_root_;
-  base::scoped_nsobject<NSMenu> menu_;
+  NSMenuItem* __strong menu_root_;
+  NSMenu* __strong menu_;
 };
 
 TEST_F(TabMenuBridgeTest, CreatesBlankMenu) {

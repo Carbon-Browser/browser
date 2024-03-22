@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,23 +8,18 @@
 #include <memory>
 #include <string>
 
-#include "base/callback.h"
 #include "base/containers/fixed_flat_set.h"
+#include "base/functional/callback.h"
 #include "base/gtest_prod_util.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/scoped_observation.h"
 #include "base/time/time.h"
 #include "base/timer/timer.h"
 #include "chrome/browser/ash/accessibility/accessibility_manager.h"
-// TODO(https://crbug.com/1164001): move to forward declaration.
-#include "chrome/browser/ash/login/error_screens_histogram_helper.h"
 #include "chrome/browser/ash/login/screens/base_screen.h"
 #include "chrome/browser/ash/login/screens/error_screen.h"
 #include "chrome/browser/ash/login/version_updater/version_updater.h"
-// TODO(https://crbug.com/1164001): move to forward declaration.
-#include "chrome/browser/ash/login/wizard_context.h"
-// TODO(https://crbug.com/1164001): move to forward declaration.
-#include "chrome/browser/ui/webui/chromeos/login/update_screen_handler.h"
 #include "chromeos/dbus/power/power_manager_client.h"
 
 namespace base {
@@ -32,6 +27,9 @@ class TickClock;
 }
 
 namespace ash {
+
+class ErrorScreensHistogramHelper;
+class UpdateView;
 
 // Controller for the update screen.
 //
@@ -61,7 +59,7 @@ namespace ash {
 // delayed until the Internet connectivity is established.
 class UpdateScreen : public BaseScreen,
                      public VersionUpdater::Delegate,
-                     public PowerManagerClient::Observer {
+                     public chromeos::PowerManagerClient::Observer {
  public:
   using TView = UpdateView;
   using Result = VersionUpdater::Result;
@@ -83,15 +81,17 @@ class UpdateScreen : public BaseScreen,
   base::OneShotTimer* GetErrorMessageTimerForTesting();
   VersionUpdater* GetVersionUpdaterForTesting();
 
+  void set_delay_for_delayed_timer_for_testing(base::TimeDelta delay) {
+    delay_error_message_ = delay;
+  }
 
   // VersionUpdater::Delegate:
   void OnWaitForRebootTimeElapsed() override;
   void PrepareForUpdateCheck() override;
   void ShowErrorMessage() override;
-  void UpdateErrorMessage(
-      const NetworkPortalDetector::CaptivePortalStatus status,
-      const NetworkError::ErrorState& error_state,
-      const std::string& network_name) override;
+  void UpdateErrorMessage(NetworkState::PortalState state,
+                          NetworkError::ErrorState error_state,
+                          const std::string& network_name) override;
   void DelayErrorMessage() override;
   void UpdateInfoChanged(
       const VersionUpdater::UpdateInfo& update_info) override;
@@ -113,13 +113,17 @@ class UpdateScreen : public BaseScreen,
     wait_before_reboot_time_ = wait_before_reboot_time;
   }
 
+  void set_show_delay_for_testing(base::TimeDelta show_delay) {
+    show_delay_ = show_delay;
+  }
+
   base::OneShotTimer* GetWaitRebootTimerForTesting() {
     return &wait_reboot_timer_;
   }
 
  protected:
   // BaseScreen:
-  bool MaybeSkip(WizardContext* context) override;
+  bool MaybeSkip(WizardContext& context) override;
   void ShowImpl() override;
   void HideImpl() override;
   void OnUserAction(const base::Value::List& args) override;
@@ -166,7 +170,7 @@ class UpdateScreen : public BaseScreen,
   static bool CheckIfOptOutIsEnabled();
 
   base::WeakPtr<UpdateView> view_;
-  ErrorScreen* error_screen_;
+  raw_ptr<ErrorScreen, ExperimentalAsh> error_screen_;
   ScreenExitCallback exit_callback_;
 
   // Whether the update screen is shown.
@@ -223,7 +227,10 @@ class UpdateScreen : public BaseScreen,
   // Time in seconds after which we initiate reboot.
   base::TimeDelta wait_before_reboot_time_;
 
-  const base::TickClock* tick_clock_;
+  // Time to delay showing the screen.
+  base::TimeDelta show_delay_;
+
+  raw_ptr<const base::TickClock, ExperimentalAsh> tick_clock_;
 
   base::TimeTicks start_update_downloading_;
   // Support variables for update stages time recording.
@@ -237,25 +244,19 @@ class UpdateScreen : public BaseScreen,
 
   base::CallbackListSubscription accessibility_subscription_;
 
+  // Delay before showing error message if captive portal is detected.
+  // We wait for this delay to let captive portal to perform redirect and show
+  // its login page before error message appears.
+  base::TimeDelta delay_error_message_ = base::Seconds(10);
+
   // PowerManagerClient::Observer is used only when screen is shown.
-  base::ScopedObservation<PowerManagerClient, PowerManagerClient::Observer>
+  base::ScopedObservation<chromeos::PowerManagerClient,
+                          chromeos::PowerManagerClient::Observer>
       power_manager_subscription_{this};
 
   base::WeakPtrFactory<UpdateScreen> weak_factory_{this};
 };
 
 }  // namespace ash
-
-// TODO(https://crbug.com/1164001): remove after the //chrome/browser/chromeos
-// source migration is finished.
-namespace chromeos {
-using ::ash::UpdateScreen;
-}
-
-// TODO(https://crbug.com/1164001): remove after the //chrome/browser/chromeos
-// source migration is finished.
-namespace ash {
-using ::chromeos::UpdateScreen;
-}
 
 #endif  // CHROME_BROWSER_ASH_LOGIN_SCREENS_UPDATE_SCREEN_H_

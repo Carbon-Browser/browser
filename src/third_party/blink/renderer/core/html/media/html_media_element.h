@@ -46,6 +46,7 @@
 #include "third_party/blink/renderer/core/html/html_element.h"
 #include "third_party/blink/renderer/core/html/media/media_controls.h"
 #include "third_party/blink/renderer/core/intersection_observer/intersection_observer.h"
+#include "third_party/blink/renderer/core/speech/speech_synthesis_base.h"
 #include "third_party/blink/renderer/platform/audio/audio_source_provider.h"
 #include "third_party/blink/renderer/platform/bindings/exception_state.h"
 #include "third_party/blink/renderer/platform/heap/disallow_new_wrapper.h"
@@ -58,7 +59,6 @@
 #include "third_party/blink/renderer/platform/scheduler/public/post_cancellable_task.h"
 #include "third_party/blink/renderer/platform/supplementable.h"
 #include "third_party/blink/renderer/platform/timer.h"
-
 #include "third_party/blink/renderer/platform/weborigin/kurl.h"
 #include "third_party/blink/renderer/platform/wtf/vector.h"
 #include "third_party/webrtc_overrides/low_precision_timer.h"
@@ -98,7 +98,6 @@ class TextTrackList;
 class TimeRanges;
 class VideoTrack;
 class VideoTrackList;
-class WebInbandTextTrack;
 class WebRemotePlaybackClient;
 
 class CORE_EXPORT HTMLMediaElement
@@ -134,8 +133,6 @@ class CORE_EXPORT HTMLMediaElement
 
   static MIMETypeRegistry::SupportsType GetSupportsType(const ContentType&);
 
-  enum class RecordMetricsBehavior { kDoNotRecord, kDoRecord };
-
   static bool IsHLSURL(const KURL&);
 
   // Notify the HTMLMediaElement that the media controls settings have changed
@@ -156,11 +153,14 @@ class CORE_EXPORT HTMLMediaElement
   // Note that even an audio element can have video track in cases such as
   // <audio src="video.webm">, in which case this function will return true.
   bool HasVideo() const;
+
   // Returns true if loaded media has an audio track.
   bool HasAudio() const;
 
-  bool SupportsSave() const;
+  // Whether the media element has encrypted audio or video streams.
+  bool IsEncrypted() const;
 
+  bool SupportsSave() const;
   bool SupportsLoop() const;
 
   cc::Layer* CcLayer() const;
@@ -210,7 +210,7 @@ class CORE_EXPORT HTMLMediaElement
   WebTimeRanges BufferedInternal() const;
   TimeRanges* buffered() const;
   void load();
-  String canPlayType(ExecutionContext* context, const String& mime_type) const;
+  String canPlayType(const String& mime_type) const;
 
   // ready state
   enum ReadyState {
@@ -241,6 +241,10 @@ class CORE_EXPORT HTMLMediaElement
   void SetLoop(bool);
   ScriptPromise playForBindings(ScriptState*);
   absl::optional<DOMExceptionCode> Play();
+
+  // Called when the video should pause to let audio descriptions finish.
+  void PauseToLetDescriptionFinish();
+
   void pause();
   double latencyHint() const;
   void setLatencyHint(double);
@@ -258,8 +262,7 @@ class CORE_EXPORT HTMLMediaElement
   void DurationChanged(double duration, bool request_seek);
 
   // controls
-  bool ShouldShowControls(
-      const RecordMetricsBehavior = RecordMetricsBehavior::kDoNotRecord) const;
+  bool ShouldShowControls() const;
   bool ShouldShowAllControls() const;
   DOMTokenList* controlsList() const;
   HTMLMediaElementControlsList* ControlsListInternal() const;
@@ -299,6 +302,10 @@ class CORE_EXPORT HTMLMediaElement
   bool TextTracksAreReady() const;
   void ConfigureTextTrackDisplay();
   void UpdateTextTrackDisplay();
+
+  // Get a SpeechSynthesis interface to use for generating speech for audio
+  // descriptions.
+  SpeechSynthesisBase* SpeechSynthesis();
   double LastSeekTime() const { return last_seek_time_; }
   void TextTrackReadyStateChanged(TextTrack*);
 
@@ -335,7 +342,9 @@ class CORE_EXPORT HTMLMediaElement
   // ScriptWrappable functions.
   bool HasPendingActivity() const override;
 
-  AudioSourceProviderClient* AudioSourceNode() { return audio_source_node_; }
+  AudioSourceProviderClient* AudioSourceNode() {
+    return audio_source_node_.Get();
+  }
   void SetAudioSourceNode(AudioSourceProviderClient*);
 
   AudioSourceProvider& GetAudioSourceProvider() {
@@ -404,6 +413,9 @@ class CORE_EXPORT HTMLMediaElement
   // reason while in picture in picture mode.
   LocalFrame* LocalFrameForPlayer();
 
+  bool HandleInvokeInternal(HTMLElement& invoker,
+                            AtomicString& action) override;
+
  protected:
   // Assert the correct order of the children in shadow dom when DCHECK is on.
   static void AssertShadowRootChildren(ShadowRoot&);
@@ -427,7 +439,7 @@ class CORE_EXPORT HTMLMediaElement
   void AttachLayoutTree(AttachContext&) override;
   void ParserDidSetAttributes() override;
   void CloneNonAttributePropertiesFrom(const Element&,
-                                       CloneChildrenFlag) override;
+                                       NodeCloningData&) override;
 
   InsertionNotificationRequest InsertedInto(ContainerNode&) override;
   void RemovedFrom(ContainerNode&) override;
@@ -450,7 +462,7 @@ class CORE_EXPORT HTMLMediaElement
   // Friend class for testing.
   friend class ContextMenuControllerTest;
   friend class HTMLMediaElementTest;
-  friend class PictureInPictureControllerTest;
+  friend class PictureInPictureControllerTestWithWidget;
   friend class VideoWakeLockTest;
 
   class SourceMetadata {
@@ -484,10 +496,15 @@ class CORE_EXPORT HTMLMediaElement
   bool AlwaysCreateUserAgentShadowRoot() const final { return true; }
   bool AreAuthorShadowsAllowed() const final { return false; }
 
-  bool SupportsFocus() const final;
-  bool IsMouseFocusable() const final;
-  bool LayoutObjectIsNeeded(const ComputedStyle&) const override;
-  LayoutObject* CreateLayoutObject(const ComputedStyle&, LegacyLayout) override;
+  bool SupportsFocus(UpdateBehavior update_behavior =
+                         UpdateBehavior::kStyleAndLayout) const final;
+  bool IsFocusable(UpdateBehavior update_behavior =
+                       UpdateBehavior::kStyleAndLayout) const final;
+  bool IsKeyboardFocusable(UpdateBehavior update_behavior =
+                               UpdateBehavior::kStyleAndLayout) const final;
+  int DefaultTabIndex() const final;
+  bool LayoutObjectIsNeeded(const DisplayStyle&) const override;
+  LayoutObject* CreateLayoutObject(const ComputedStyle&) override;
   void DidNotifySubtreeInsertionsToDocument() override;
   void DidRecalcStyle(const StyleRecalcChange) final;
 
@@ -503,6 +520,10 @@ class CORE_EXPORT HTMLMediaElement
   virtual void OnLoadStarted() {}
   virtual void OnLoadFinished() {}
 
+  // Handles playing of media element when audio descriptions are finished
+  // speaking.
+  void OnSpeakingCompleted();
+
   void SetShowPosterFlag(bool value);
 
   void SetReadyState(ReadyState);
@@ -515,6 +536,8 @@ class CORE_EXPORT HTMLMediaElement
   void Repaint() final;
   void DurationChanged() final;
   void SizeChanged() final;
+  void OnFirstFrame(base::TimeTicks frame_time,
+                    size_t bytes_to_first_frame) override {}
 
   void SetCcLayer(cc::Layer*) final;
   WebMediaPlayer::TrackId AddAudioTrack(const WebString&,
@@ -529,8 +552,6 @@ class CORE_EXPORT HTMLMediaElement
                                         const WebString&,
                                         bool) final;
   void RemoveVideoTrack(WebMediaPlayer::TrackId) final;
-  void AddTextTrack(WebInbandTextTrack*) final;
-  void RemoveTextTrack(WebInbandTextTrack*) final;
   void MediaSourceOpened(WebMediaSource*) final;
   void RemotePlaybackCompatibilityChanged(const WebURL&,
                                           bool is_compatible) final;
@@ -543,7 +564,6 @@ class CORE_EXPORT HTMLMediaElement
   WebRemotePlaybackClient* RemotePlaybackClient() final {
     return remote_playback_client_;
   }
-  Vector<TextTrackMetadata> GetTextTrackMetadata() override;
   gfx::ColorSpace TargetColorSpace() override;
   bool WasAutoplayInitiated() override;
   bool IsInAutoPIP() const override { return false; }
@@ -552,10 +572,12 @@ class CORE_EXPORT HTMLMediaElement
   void DidPlayerStartPlaying() override;
   void DidPlayerPaused(bool stream_ended) override;
   void DidPlayerMutedStatusChange(bool muted) override;
-  void DidMediaMetadataChange(
-      bool has_audio,
-      bool has_video,
-      media::MediaContentType media_content_type) override;
+  void DidMediaMetadataChange(bool has_audio,
+                              bool has_video,
+                              media::AudioCodec audio_codec,
+                              media::VideoCodec video_codec,
+                              media::MediaContentType media_content_type,
+                              bool is_encrypted_media) override;
   void DidPlayerMediaPositionStateChange(double playback_rate,
                                          base::TimeDelta duration,
                                          base::TimeDelta position,
@@ -563,6 +585,7 @@ class CORE_EXPORT HTMLMediaElement
   void DidDisableAudioOutputSinkChanges() override;
   void DidUseAudioServiceChange(bool uses_audio_service) override;
   void DidPlayerSizeChange(const gfx::Size& size) override;
+  void OnRemotePlaybackDisabled(bool disabled) override;
 
   // Returns a reference to the mojo remote for the MediaPlayerHost interface,
   // requesting it first from the BrowserInterfaceBroker if needed. It is an
@@ -576,13 +599,13 @@ class CORE_EXPORT HTMLMediaElement
   void RequestSeekBackward(base::TimeDelta seek_time) override;
   void RequestSeekTo(base::TimeDelta seek_time) override;
   void RequestEnterPictureInPicture() override {}
-  void RequestExitPictureInPicture() override {}
   void RequestMute(bool mute) override;
   void SetVolumeMultiplier(double multiplier) override;
   void SetPersistentState(bool persistent) override {}
   void SetPowerExperimentState(bool enabled) override;
   void SetAudioSinkId(const String&) override;
   void SuspendForFrameClosed() override;
+  void RequestMediaRemoting() override {}
 
   void LoadTimerFired(TimerBase*);
   void ProgressEventTimerFired();
@@ -638,9 +661,12 @@ class CORE_EXPORT HTMLMediaElement
   void PlayInternal();
 
   // This does not stop autoplay visibility observation.
-  void PauseInternal(PlayPromiseError code);
+  // By default, will pause the video and speech.
+  void PauseInternal(PlayPromiseError code, bool pause_speech = true);
 
-  void UpdatePlayState();
+  // By default, will pause the video and speech.
+  void UpdatePlayState(bool pause_speech = true);
+
   bool PotentiallyPlaying() const;
   bool StoppedDueToErrors() const;
   bool CouldPlayIfEnoughData() const override;
@@ -698,6 +724,11 @@ class CORE_EXPORT HTMLMediaElement
   void ReportCurrentTimeToMediaSource();
 
   void ResetMojoState();
+  void OnRemotePlaybackMetadataChange();
+
+  // Determine if we should reuse the player when moving the element from
+  // |old_document| to |new_document|
+  bool ShouldReusePlayer(Document& old_document, Document& new_document) const;
 
   // Adds a new MediaPlayerObserver remote that will be notified about media
   // player events and returns a receiver that an observer implementation can
@@ -830,6 +861,16 @@ class CORE_EXPORT HTMLMediaElement
   // playback raters other than 1.0.
   bool preserves_pitch_ = true;
 
+  // Whether the player disables the Remote Playback feature.
+  bool is_remote_playback_disabled_ = false;
+  // Whether the player is rendering remotely.
+  bool is_remote_rendering_ = false;
+  // Whether the media content is encrypted.
+  bool is_encrypted_media_ = false;
+  WebString remote_device_friendly_name_;
+  absl::optional<media::AudioCodec> audio_codec_ = absl::nullopt;
+  absl::optional<media::VideoCodec> video_codec_ = absl::nullopt;
+
   Member<AudioTrackList> audio_tracks_;
   Member<VideoTrackList> video_tracks_;
   Member<TextTrackList> text_tracks_;
@@ -847,6 +888,10 @@ class CORE_EXPORT HTMLMediaElement
   // HTMLMediaElement and its MediaElementAudioSourceNode in case it is provided
   // die together.
   Member<AudioSourceProviderClient> audio_source_node_;
+
+  // Controls browser vocalization within the media element (e.g. to speak cues,
+  // to pause utterance).
+  Member<SpeechSynthesisBase> speech_synthesis_;
 
   // AudioClientImpl wraps an AudioSourceProviderClient.
   // When the audio format is known, Chromium calls setFormat().
@@ -948,8 +993,7 @@ class CORE_EXPORT HTMLMediaElement
       HeapMojoAssociatedRemote<media::mojom::blink::MediaPlayerHost>>>
       media_player_host_remote_;
 
-  // Multiple objects outside of the renderer process can register as observers,
-  // so we need to store the remotes in a set here.
+  // Note: There's only ever one entry in this set.
   Member<DisallowNewWrapper<
       HeapMojoAssociatedRemoteSet<media::mojom::blink::MediaPlayerObserver>>>
       media_player_observer_remote_set_;

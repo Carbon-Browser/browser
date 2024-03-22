@@ -1,13 +1,13 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/ui/views/web_apps/frame_toolbar/web_app_toolbar_button_container.h"
 
-#include "base/metrics/histogram_macros.h"
 #include "base/time/time.h"
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
+#include "chrome/browser/download/bubble/download_bubble_prefs.h"
 #include "chrome/browser/ui/browser_command_controller.h"
 #include "chrome/browser/ui/browser_content_setting_bubble_model_delegate.h"
 #include "chrome/browser/ui/ui_features.h"
@@ -55,7 +55,6 @@ base::TimeDelta WebAppToolbarButtonContainer::OriginTotalDuration() {
 }
 
 WebAppToolbarButtonContainer::WebAppToolbarButtonContainer(
-    views::Widget* widget,
     BrowserView* browser_view,
     ToolbarButtonProvider* toolbar_button_provider)
     : browser_view_(browser_view),
@@ -82,15 +81,19 @@ WebAppToolbarButtonContainer::WebAppToolbarButtonContainer(
 
   const auto* app_controller = browser_view_->browser()->app_controller();
 
-  if (app_controller->HasTitlebarAppOriginText()) {
+  // App's origin will not be shown in the borderless mode, it will only be
+  // visible in App Settings UI.
+  if (app_controller->HasTitlebarAppOriginText() &&
+      !browser_view_->IsBorderlessModeEnabled()) {
     web_app_origin_text_ = AddChildView(
         std::make_unique<WebAppOriginText>(browser_view_->browser()));
   }
 
 #if BUILDFLAG(IS_CHROMEOS_ASH)
   if (app_controller->system_app()) {
-    AddChildView(std::make_unique<SystemAppAccessibleName>(
-        app_controller->GetAppShortName()));
+    system_app_accessible_name_ =
+        AddChildView(std::make_unique<SystemAppAccessibleName>(
+            app_controller->GetAppShortName()));
   }
 #endif  // BUILDFLAG(IS_CHROMEOS_ASH)
 
@@ -101,6 +104,8 @@ WebAppToolbarButtonContainer::WebAppToolbarButtonContainer(
                                static_cast<int>(HTCLIENT));
     ConfigureWebAppToolbarButton(window_controls_overlay_toggle_button_,
                                  toolbar_button_provider_);
+    window_controls_overlay_toggle_button_->SetVisible(
+        browser_view_->should_show_window_controls_overlay_toggle());
   }
 
   if (app_controller->HasTitlebarContentSettings()) {
@@ -145,6 +150,8 @@ WebAppToolbarButtonContainer::WebAppToolbarButtonContainer(
     extensions_container_ =
         AddChildView(std::make_unique<ExtensionsToolbarContainer>(
             browser_view_->browser(), display_mode));
+    extensions_container_->GetExtensionsButton()
+        ->SetAppearDisabledInInactiveWidget(true);
     extensions_container_->SetProperty(
         views::kFlexBehaviorKey,
         views::FlexSpecification(
@@ -154,6 +161,23 @@ WebAppToolbarButtonContainer::WebAppToolbarButtonContainer(
     views::SetHitTestComponent(extensions_container_,
                                static_cast<int>(HTCLIENT));
   }
+
+  if (download::IsDownloadBubbleEnabled()) {
+    download_button_ = AddChildView(
+        std::make_unique<DownloadToolbarButtonView>(browser_view_));
+    views::SetHitTestComponent(download_button_, static_cast<int>(HTCLIENT));
+    ConfigureWebAppToolbarButton(download_button_, toolbar_button_provider_);
+  }
+
+#if !BUILDFLAG(IS_CHROMEOS)
+  if (app_controller->HasProfileMenuButton()) {
+    avatar_button_ =
+        AddChildView(std::make_unique<AvatarToolbarButton>(browser_view_));
+    avatar_button_->SetID(VIEW_ID_AVATAR_BUTTON);
+    ConfigureWebAppToolbarButton(avatar_button_, toolbar_button_provider_);
+    views::SetHitTestComponent(avatar_button_, static_cast<int>(HTCLIENT));
+  }
+#endif
 
   if (app_controller->HasTitlebarMenuButton()) {
     web_app_menu_button_ =
@@ -166,7 +190,6 @@ WebAppToolbarButtonContainer::WebAppToolbarButtonContainer(
   }
 
   browser_view_->immersive_mode_controller()->AddObserver(this);
-  scoped_widget_observation_.Observe(widget);
 }
 
 WebAppToolbarButtonContainer::~WebAppToolbarButtonContainer() {
@@ -191,16 +214,10 @@ void WebAppToolbarButtonContainer::SetColors(SkColor foreground_color,
     web_app_origin_text_->SetTextColor(foreground_color_,
                                        /*show_text=*/color_changed);
   }
-  if (window_controls_overlay_toggle_button_)
-    window_controls_overlay_toggle_button_->SetColor(foreground_color_);
 
   if (content_settings_container_)
     content_settings_container_->SetIconColor(foreground_color_);
-  if (extensions_container_)
-    extensions_container_->SetIconColor(foreground_color_);
   page_action_icon_controller_->SetIconColor(foreground_color_);
-  if (web_app_menu_button_)
-    web_app_menu_button_->SetColor(foreground_color_);
 }
 
 views::FlexRule WebAppToolbarButtonContainer::GetFlexRule() const {
@@ -223,8 +240,8 @@ views::FlexRule WebAppToolbarButtonContainer::GetFlexRule() const {
       base::Unretained(toolbar_button_provider_), layout->GetDefaultFlexRule());
 }
 
-void WebAppToolbarButtonContainer::DisableAnimationForTesting() {
-  g_animation_disabled_for_testing = true;
+void WebAppToolbarButtonContainer::DisableAnimationForTesting(bool disable) {
+  g_animation_disabled_for_testing = disable;
 }
 
 void WebAppToolbarButtonContainer::AddPageActionIcon(
@@ -260,10 +277,13 @@ void WebAppToolbarButtonContainer::StartTitlebarAnimation() {
   if (!GetAnimate())
     return;
 
-  if (web_app_origin_text_)
+  if (web_app_origin_text_) {
+    web_app_origin_text_->SetAllowedToAnimate(true);
     web_app_origin_text_->StartFadeAnimation();
-  if (web_app_menu_button_)
+  }
+  if (web_app_menu_button_) {
     web_app_menu_button_->StartHighlightAnimation();
+  }
   icon_fade_in_delay_.Start(
       FROM_HERE, OriginTotalDuration(), this,
       &WebAppToolbarButtonContainer::FadeInContentSettingIcons);
@@ -305,13 +325,6 @@ WebAppToolbarButtonContainer::GetContentSettingWebContents() {
 ContentSettingBubbleModelDelegate*
 WebAppToolbarButtonContainer::GetContentSettingBubbleModelDelegate() {
   return browser_view_->browser()->content_setting_bubble_model_delegate();
-}
-
-void WebAppToolbarButtonContainer::OnContentSettingImageBubbleShown(
-    ContentSettingImageModel::ImageType type) const {
-  UMA_HISTOGRAM_ENUMERATION(
-      "HostedAppFrame.ContentSettings.ImagePressed", type,
-      ContentSettingImageModel::ImageType::NUM_IMAGE_TYPES);
 }
 
 // ImmersiveModeController::Observer:

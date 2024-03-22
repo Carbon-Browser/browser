@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,9 +7,9 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/cancelable_callback.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/memory/ptr_util.h"
 #include "base/memory/ref_counted.h"
 #include "base/synchronization/waitable_event.h"
@@ -29,7 +29,7 @@ namespace {
 
 constexpr TimeDelta kLongerDelay = Hours(3);
 constexpr TimeDelta kLongDelay = Hours(1);
-constexpr TimeDelta kLeeway = PendingTask::kDefaultLeeway;
+constexpr TimeDelta kLeeway = base::kDefaultLeeway;
 
 class MockCallback {
  public:
@@ -65,7 +65,12 @@ class ThreadPoolDelayedTaskManagerTest : public testing::Test {
       const ThreadPoolDelayedTaskManagerTest&) = delete;
 
  protected:
-  ThreadPoolDelayedTaskManagerTest() = default;
+  ThreadPoolDelayedTaskManagerTest() {
+    // A null clock triggers some assertions.
+    service_thread_task_runner_->AdvanceMockTickClock(Milliseconds(1));
+    task_ = ConstructMockedTask(
+        mock_callback_, service_thread_task_runner_->NowTicks(), kLongDelay);
+  }
   ~ThreadPoolDelayedTaskManagerTest() override = default;
 
   const scoped_refptr<TestMockTimeTaskRunner> service_thread_task_runner_ =
@@ -73,9 +78,7 @@ class ThreadPoolDelayedTaskManagerTest : public testing::Test {
   DelayedTaskManager delayed_task_manager_{
       service_thread_task_runner_->GetMockTickClock()};
   testing::StrictMock<MockCallback> mock_callback_;
-  Task task_{ConstructMockedTask(mock_callback_,
-                                 service_thread_task_runner_->NowTicks(),
-                                 kLongDelay)};
+  Task task_;
 };
 
 }  // namespace
@@ -288,10 +291,12 @@ TEST_F(ThreadPoolDelayedTaskManagerTest,
   // Send tasks to the DelayedTaskManager.
   delayed_task_manager_.AddDelayedTask(std::move(task_a),
                                        BindOnce(&PostTaskNow), nullptr);
-  EXPECT_FALSE(delayed_task_manager_.HasPendingHighResolutionTasksForTesting());
+  EXPECT_EQ(base::subtle::DelayPolicy::kFlexibleNoSooner,
+            delayed_task_manager_.TopTaskDelayPolicyForTesting());
   delayed_task_manager_.AddDelayedTask(std::move(task_b),
                                        BindOnce(&PostTaskNow), nullptr);
-  EXPECT_TRUE(delayed_task_manager_.HasPendingHighResolutionTasksForTesting());
+  EXPECT_EQ(base::subtle::DelayPolicy::kPrecise,
+            delayed_task_manager_.TopTaskDelayPolicyForTesting());
 
   // The task doesn't run before the delay has completed.
   service_thread_task_runner_->FastForwardBy(Milliseconds(10) -

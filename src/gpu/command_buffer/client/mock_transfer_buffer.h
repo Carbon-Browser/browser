@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -18,7 +18,9 @@ class MockTransferBuffer : public TransferBufferInterface {
   struct ExpectedMemoryInfo {
     uint32_t offset;
     int32_t id;
-    uint8_t* ptr;
+    // `ptr` is not a raw_ptr<...> because it requires a rewrite in a generated
+    // file (gles2_implementation_unittest_autogen.h)
+    RAW_PTR_EXCLUSION uint8_t* ptr;
   };
 
   MockTransferBuffer(CommandBuffer* command_buffer,

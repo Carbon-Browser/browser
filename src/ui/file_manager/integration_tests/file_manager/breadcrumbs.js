@@ -1,20 +1,18 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 /**
  * @fileoverview Tests that breadcrumbs work.
  */
 
-import {ENTRIES, EntryType, getCaller, getUserActionCount, pending, repeatUntil, RootPath, sendTestMessage, TestEntryInfo} from '../test_util.js';
+import {createNestedTestFolders, ENTRIES, EntryType, getCaller, getUserActionCount, pending, repeatUntil, RootPath, sendTestMessage, TestEntryInfo} from '../test_util.js';
 import {testcase} from '../testcase.js';
 
-import {expandTreeItem, navigateWithDirectoryTree, remoteCall, setupAndWaitUntilReady} from './background.js';
+import {remoteCall, setupAndWaitUntilReady} from './background.js';
+import {DirectoryTreePageObject} from './page_objects/directory_tree.js';
 
 async function getBreadcrumbTagName() {
-  const isFilesAppExperimental =
-      await sendTestMessage({name: 'isFilesAppExperimental'}) === 'true';
-
-  return isFilesAppExperimental ? 'xf-breadcrumb' : 'bread-crumb';
+  return 'xf-breadcrumb';
 }
 
 testcase.breadcrumbsNavigate = async () => {
@@ -24,8 +22,8 @@ testcase.breadcrumbsNavigate = async () => {
   const breadcrumbsTag = await getBreadcrumbTagName();
 
   // Navigate to Downloads/photos.
-  await remoteCall.navigateWithDirectoryTree(
-      appId, '/Downloads/photos', 'My files');
+  const directoryTree = await DirectoryTreePageObject.create(appId, remoteCall);
+  await directoryTree.navigateToPath('/My files/Downloads/photos');
 
   // Use the breadcrumbs to navigate back to Downloads.
   await remoteCall.waitAndClickElement(
@@ -46,13 +44,6 @@ testcase.breadcrumbsDownloadsTranslation = async () => {
   // Switch UI to Portuguese (Portugal).
   await sendTestMessage({name: 'switchLanguage', language: 'pt-PT'});
 
-  // TODO(b/198106171): Remove call to reload, once Chrome App Files is removed.
-  // Reload Files app extension to pick up the new language.
-  const isFilesAppSwa = await sendTestMessage({name: 'isFilesAppSwa'});
-  if (isFilesAppSwa !== 'true') {
-    await remoteCall.callRemoteTestUtil('reload', null, []);
-  }
-
   // Open Files app.
   const appId =
       await setupAndWaitUntilReady(RootPath.DOWNLOADS, [ENTRIES.photos], []);
@@ -65,57 +56,16 @@ testcase.breadcrumbsDownloadsTranslation = async () => {
   chrome.test.assertEq('/Os meus ficheiros/Transferências', path);
 
   // Expand Downloads folder.
-  await expandTreeItem(
-      appId, '#directory-tree [full-path-for-testing="/Downloads"]');
+  const directoryTree = await DirectoryTreePageObject.create(appId, remoteCall);
+  await directoryTree.expandTreeItemByPath('/Downloads');
 
   // Navigate to Downloads/photos.
-  await remoteCall.waitAndClickElement(
-      appId, '[full-path-for-testing="/Downloads/photos"]');
+  await directoryTree.selectItemByPath('/Downloads/photos');
 
   // Wait and check breadcrumb translation.
   await remoteCall.waitUntilCurrentDirectoryIsChanged(
       appId, '/Os meus ficheiros/Transferências/photos');
 };
-
-/**
- * Creates a folder test entry from a folder |path|.
- * @param {string} path The folder path.
- * @return {!TestEntryInfo}
- */
-function createTestFolder(path) {
-  const name = path.split('/').pop();
-  return new TestEntryInfo({
-    targetPath: path,
-    nameText: name,
-    type: EntryType.DIRECTORY,
-    lastModifiedTime: 'Jan 1, 1980, 11:59 PM',
-    sizeText: '--',
-    typeText: 'Folder',
-  });
-}
-
-/**
- * Returns an array of nested folder test entries, where |depth| controls
- * the nesting. For example, a |depth| of 4 will return:
- *
- *   [0]: nested-folder0
- *   [1]: nested-folder0/nested-folder1
- *   [2]: nested-folder0/nested-folder1/nested-folder2
- *   [3]: nested-folder0/nested-folder1/nested-folder2/nested-folder3
- *
- * @param {number} depth The nesting depth.
- * @return {!Array<!TestEntryInfo>}
- */
-function createNestedTestFolders(depth) {
-  const nestedFolderTestEntries = [];
-
-  for (let path = 'nested-folder0', i = 0; i < depth; ++i) {
-    nestedFolderTestEntries.push(createTestFolder(path));
-    path += `/nested-folder${i + 1}`;
-  }
-
-  return nestedFolderTestEntries;
-}
 
 /**
  * Tests that the breadcrumbs correctly render a short (3 component) path.
@@ -132,7 +82,8 @@ testcase.breadcrumbsRenderShortPath = async () => {
   // Navigate to deepest folder.
   const breadcrumb = '/My files/Downloads/' +
       nestedFolderTestEntries.map(e => e.nameText).join('/');
-  await navigateWithDirectoryTree(appId, breadcrumb);
+  const directoryTree = await DirectoryTreePageObject.create(appId, remoteCall);
+  await directoryTree.navigateToPath(breadcrumb);
 
   // Check: the breadcrumb element should have a |path| attribute.
   const breadcrumbElement =
@@ -141,7 +92,7 @@ testcase.breadcrumbsRenderShortPath = async () => {
   chrome.test.assertEq(path, breadcrumbElement.attributes.path);
 
   // Check: some of the main breadcrumb buttons should be visible.
-  const buttons = [breadcrumbsTag, 'button:not([hidden])'];
+  const buttons = [breadcrumbsTag, 'button'];
   const elements = await remoteCall.callRemoteTestUtil(
       'deepQueryAllElements', appId, [buttons]);
   chrome.test.assertEq(3, elements.length);
@@ -156,16 +107,16 @@ testcase.breadcrumbsRenderShortPath = async () => {
   chrome.test.assertEq(undefined, elements[1].attributes.disabled);
   chrome.test.assertEq('', elements[2].attributes.disabled);
 
-  // Check: the breadcrumb elider button should be hidden.
-  const eliderButtonHidden = [breadcrumbsTag, '[elider][hidden]'];
-  await remoteCall.waitForElement(appId, eliderButtonHidden);
+  // Check: the breadcrumb elider button should not exist.
+  const eliderButton = [breadcrumbsTag, '[elider]'];
+  await remoteCall.waitForElementLost(appId, eliderButton);
 };
 
 /**
  * Tests that short breadcrumbs paths (of 4 or fewer components) should not
- * be rendered elided. The elider button should be hidden.
+ * be rendered elided. The elider button not exist.
  */
-testcase.breadcrumbsEliderButtonHidden = async () => {
+testcase.breadcrumbsEliderButtonNotExist = async () => {
   // Build an array of nested folder test entries.
   const nestedFolderTestEntries = createNestedTestFolders(2);
 
@@ -177,7 +128,8 @@ testcase.breadcrumbsEliderButtonHidden = async () => {
   // Navigate to deepest folder.
   const breadcrumb = '/My files/Downloads/' +
       nestedFolderTestEntries.map(e => e.nameText).join('/');
-  await navigateWithDirectoryTree(appId, breadcrumb);
+  const directoryTree = await DirectoryTreePageObject.create(appId, remoteCall);
+  await directoryTree.navigateToPath(breadcrumb);
 
   // Check: the breadcrumb element should have a |path| attribute.
   const breadcrumbElement =
@@ -186,7 +138,7 @@ testcase.breadcrumbsEliderButtonHidden = async () => {
   chrome.test.assertEq(path, breadcrumbElement.attributes.path);
 
   // Check: all of the main breadcrumb buttons should be visible.
-  const buttons = [breadcrumbsTag, 'button:not([hidden])'];
+  const buttons = [breadcrumbsTag, 'button'];
   const elements = await remoteCall.callRemoteTestUtil(
       'deepQueryAllElements', appId, [buttons]);
   chrome.test.assertEq(4, elements.length);
@@ -203,9 +155,9 @@ testcase.breadcrumbsEliderButtonHidden = async () => {
   chrome.test.assertEq(undefined, elements[2].attributes.disabled);
   chrome.test.assertEq('', elements[3].attributes.disabled);
 
-  // Check: the breadcrumb elider button should be hidden.
-  const eliderButtonHidden = [breadcrumbsTag, '[elider][hidden]'];
-  await remoteCall.waitForElement(appId, eliderButtonHidden);
+  // Check: the breadcrumb elider button should not exist.
+  const eliderButton = [breadcrumbsTag, '[elider]'];
+  await remoteCall.waitForElementLost(appId, eliderButton);
 };
 
 /**
@@ -223,7 +175,8 @@ testcase.breadcrumbsRenderLongPath = async () => {
   // Navigate to deepest folder.
   const breadcrumb = '/My files/Downloads/' +
       nestedFolderTestEntries.map(e => e.nameText).join('/');
-  await navigateWithDirectoryTree(appId, breadcrumb);
+  const directoryTree = await DirectoryTreePageObject.create(appId, remoteCall);
+  await directoryTree.navigateToPath(breadcrumb);
 
   // Check: the breadcrumb element should have a |path| attribute.
   const breadcrumbElement =
@@ -232,7 +185,7 @@ testcase.breadcrumbsRenderLongPath = async () => {
   chrome.test.assertEq(path, breadcrumbElement.attributes.path);
 
   // Check: some of the main breadcrumb buttons should be visible.
-  const buttons = [breadcrumbsTag, 'button[id]:not([hidden])'];
+  const buttons = [breadcrumbsTag, 'button[id]'];
   const elements = await remoteCall.callRemoteTestUtil(
       'deepQueryAllElements', appId, [buttons]);
   chrome.test.assertEq(3, elements.length);
@@ -248,7 +201,7 @@ testcase.breadcrumbsRenderLongPath = async () => {
   chrome.test.assertEq('', elements[2].attributes.disabled);
 
   // Check: the breadcrumb elider button should be shown.
-  const eliderButton = [breadcrumbsTag, '[elider]:not([hidden])'];
+  const eliderButton = [breadcrumbsTag, '[elider]'];
   await remoteCall.waitForElement(appId, eliderButton);
 };
 
@@ -268,7 +221,8 @@ testcase.breadcrumbsMainButtonClick = async () => {
   // Navigate to deepest folder.
   const breadcrumb = '/My files/Downloads/' +
       nestedFolderTestEntries.map(e => e.nameText).join('/');
-  await navigateWithDirectoryTree(appId, breadcrumb);
+  const directoryTree = await DirectoryTreePageObject.create(appId, remoteCall);
+  await directoryTree.navigateToPath(breadcrumb);
 
   // Check: the breadcrumb path attribute should be |breadcrumb|.
   const breadcrumbElement =
@@ -282,7 +236,7 @@ testcase.breadcrumbsMainButtonClick = async () => {
 
   // Check: the breadcrumb path should be updated due to navigation.
   await remoteCall.waitForElement(
-      appId, ['bread-crumb[path="My files/Downloads"']);
+      appId, [`${breadcrumbsTag}[path="My files/Downloads"]`]);
 };
 
 /**
@@ -301,7 +255,8 @@ testcase.breadcrumbsMainButtonEnterKey = async () => {
   // Navigate to deepest folder.
   const breadcrumb = '/My files/Downloads/' +
       nestedFolderTestEntries.map(e => e.nameText).join('/');
-  await navigateWithDirectoryTree(appId, breadcrumb);
+  const directoryTree = await DirectoryTreePageObject.create(appId, remoteCall);
+  await directoryTree.navigateToPath(breadcrumb);
 
   // Check: the breadcrumb path attribute should be |breadcrumb|.
   const breadcrumbElement =
@@ -317,7 +272,7 @@ testcase.breadcrumbsMainButtonEnterKey = async () => {
 
   // Check: the breadcrumb path should be updated due to navigation.
   await remoteCall.waitForElement(
-      appId, ['bread-crumb[path="My files/Downloads"']);
+      appId, [`${breadcrumbsTag}[path="My files/Downloads"]`]);
 };
 
 /**
@@ -336,10 +291,11 @@ testcase.breadcrumbsEliderButtonClick = async () => {
   // Navigate to deepest folder.
   const breadcrumb = '/My files/Downloads/' +
       nestedFolderTestEntries.map(e => e.nameText).join('/');
-  await navigateWithDirectoryTree(appId, breadcrumb);
+  const directoryTree = await DirectoryTreePageObject.create(appId, remoteCall);
+  await directoryTree.navigateToPath(breadcrumb);
 
   // Click the breadcrumb elider button when it appears.
-  const eliderButton = [breadcrumbsTag, '[elider]:not([hidden])'];
+  const eliderButton = [breadcrumbsTag, '[elider]'];
   await remoteCall.waitAndClickElement(appId, eliderButton);
 
   // Check: the elider button drop-down menu should open.
@@ -357,7 +313,7 @@ testcase.breadcrumbsEliderButtonClick = async () => {
   chrome.test.assertEq('nested-folder0', elements[1].text);
 
   // Check: the elider button should not have the focus.
-  const eliderFocus = [breadcrumbsTag, '[elider]:not([hidden]):focus'];
+  const eliderFocus = [breadcrumbsTag, '[elider]:focus'];
   await remoteCall.waitForElementLost(appId, eliderFocus);
 
   // Click the elider button.
@@ -386,10 +342,11 @@ testcase.breadcrumbsEliderButtonKeyboard = async () => {
   // Navigate to deepest folder.
   const breadcrumb = '/My files/Downloads/' +
       nestedFolderTestEntries.map(e => e.nameText).join('/');
-  await navigateWithDirectoryTree(appId, breadcrumb);
+  const directoryTree = await DirectoryTreePageObject.create(appId, remoteCall);
+  await directoryTree.navigateToPath(breadcrumb);
 
   // Wait for the breadcrumb elider button to appear.
-  const eliderButton = [breadcrumbsTag, '[elider]:not([hidden])'];
+  const eliderButton = [breadcrumbsTag, '[elider]'];
   await remoteCall.waitForElement(appId, eliderButton);
 
   // Send an Enter key to the breadcrumb elider button.
@@ -413,7 +370,7 @@ testcase.breadcrumbsEliderButtonKeyboard = async () => {
   chrome.test.assertEq('nested-folder1', elements[2].text);
 
   // Check: the elider button should not have the focus.
-  const eliderFocus = [breadcrumbsTag, '[elider]:not([hidden]):focus'];
+  const eliderFocus = [breadcrumbsTag, '[elider]:focus'];
   await remoteCall.waitForElementLost(appId, eliderFocus);
 
   // Send an Escape key to the drop-down menu.
@@ -444,10 +401,11 @@ testcase.breadcrumbsEliderMenuClickOutside = async () => {
   // Navigate to deepest folder.
   const breadcrumb = '/My files/Downloads/' +
       nestedFolderTestEntries.map(e => e.nameText).join('/');
-  await navigateWithDirectoryTree(appId, breadcrumb);
+  const directoryTree = await DirectoryTreePageObject.create(appId, remoteCall);
+  await directoryTree.navigateToPath(breadcrumb);
 
   // Click the breadcrumb elider button when it appears.
-  const eliderButton = [breadcrumbsTag, '[elider]:not([hidden])'];
+  const eliderButton = [breadcrumbsTag, '[elider]'];
   await remoteCall.waitAndClickElement(appId, eliderButton);
 
   // Check: the elider button drop-down menu should open.
@@ -477,7 +435,8 @@ testcase.breadcrumbsEliderMenuItemClick = async () => {
   // Navigate to deepest folder.
   const breadcrumb = '/My files/Downloads/' +
       nestedFolderTestEntries.map(e => e.nameText).join('/');
-  await navigateWithDirectoryTree(appId, breadcrumb);
+  const directoryTree = await DirectoryTreePageObject.create(appId, remoteCall);
+  await directoryTree.navigateToPath(breadcrumb);
 
   // Check: the breadcrumb path attribute should be |breadcrumb|.
   const breadcrumbElement =
@@ -486,7 +445,7 @@ testcase.breadcrumbsEliderMenuItemClick = async () => {
   chrome.test.assertEq(path, breadcrumbElement.attributes.path);
 
   // Click the breadcrumb elider button when it appears.
-  const eliderButton = [breadcrumbsTag, '[elider]:not([hidden])'];
+  const eliderButton = [breadcrumbsTag, '[elider]'];
   await remoteCall.waitAndClickElement(appId, eliderButton);
 
   // Check: the elider button drop-down menu should open.
@@ -512,7 +471,7 @@ testcase.breadcrumbsEliderMenuItemClick = async () => {
 
   // Check: the breadcrumb path should be updated due to navigation.
   await remoteCall.waitForElement(
-      appId, ['bread-crumb[path="My files/Downloads"']);
+      appId, [`${breadcrumbsTag}[path="My files/Downloads"]`]);
 };
 
 /**
@@ -531,10 +490,11 @@ testcase.breadcrumbsEliderMenuItemTabLeft = async () => {
   // Navigate to deepest folder.
   const breadcrumb = '/My files/Downloads/' +
       nestedFolderTestEntries.map(e => e.nameText).join('/');
-  await navigateWithDirectoryTree(appId, breadcrumb);
+  const directoryTree = await DirectoryTreePageObject.create(appId, remoteCall);
+  await directoryTree.navigateToPath(breadcrumb);
 
   // Click the breadcrumb elider button when it appears.
-  const eliderButton = [breadcrumbsTag, '[elider]:not([hidden])'];
+  const eliderButton = [breadcrumbsTag, '[elider]'];
   await remoteCall.waitAndClickElement(appId, eliderButton);
 
   // Check: the elider button drop-down menu should open.
@@ -557,7 +517,7 @@ testcase.breadcrumbsEliderMenuItemTabLeft = async () => {
 
 /**
  * Tests that a Tab key on the elider button drop down menu closes the menu
- * and focuses button#third to the right of the elider button.
+ * and focuses button#second to the right of the elider button.
  */
 testcase.breadcrumbsEliderMenuItemTabRight = async () => {
   // Build an array of nested folder test entries.
@@ -571,10 +531,11 @@ testcase.breadcrumbsEliderMenuItemTabRight = async () => {
   // Navigate to deepest folder.
   const breadcrumb = '/My files/Downloads/' +
       nestedFolderTestEntries.map(e => e.nameText).join('/');
-  await navigateWithDirectoryTree(appId, breadcrumb);
+  const directoryTree = await DirectoryTreePageObject.create(appId, remoteCall);
+  await directoryTree.navigateToPath(breadcrumb);
 
   // Click the breadcrumb elider button when it appears.
-  const eliderButton = [breadcrumbsTag, '[elider]:not([hidden])'];
+  const eliderButton = [breadcrumbsTag, '[elider]'];
   await remoteCall.waitAndClickElement(appId, eliderButton);
 
   // Check: the elider button drop-down menu should open.
@@ -589,9 +550,9 @@ testcase.breadcrumbsEliderMenuItemTabRight = async () => {
   // Check: the elider button drop-down menu should close.
   await remoteCall.waitForElementLost(appId, menu);
 
-  // Check: the "third" main button should be focused.
+  // Check: the "second" main button should be focused.
   await remoteCall.waitForElement(
-      appId, [breadcrumbsTag, 'button[id="third"]:focus']);
+      appId, [breadcrumbsTag, 'button[id="second"]:focus']);
 };
 
 /**
@@ -633,7 +594,8 @@ testcase.breadcrumbsDontExceedAvailableViewport = async () => {
   // Navigate to deepest folder.
   const breadcrumb = '/My files/Downloads/' +
       nestedFolderTestEntries.map(e => e.nameText).join('/');
-  await navigateWithDirectoryTree(appId, breadcrumb);
+  const directoryTree = await DirectoryTreePageObject.create(appId, remoteCall);
+  await directoryTree.navigateToPath(breadcrumb);
 
   // The relayout occurs asynchronously, so there's a chance after navigating
   // to the directory the below calculation occurs prior to the relayout
@@ -650,4 +612,39 @@ testcase.breadcrumbsDontExceedAvailableViewport = async () => {
           actualDialogHeaderWidth.renderedWidth);
     }
   });
+};
+
+/**
+ * Test that navigating back from a sub-folder in Google Drive> Shared With Me
+ * using the breadcrumbs.
+ * Internally Shared With Me uses some of the Drive Search code, this confused
+ * the DirectoryModel clearing the search state in the Store.
+ */
+testcase.breadcrumbNavigateBackToSharedWithMe = async () => {
+  // Open Files app on Drive containing "Shared with me" file entries.
+  const sharedSubFolderName = ENTRIES.sharedWithMeDirectory.nameText;
+  const appId = await setupAndWaitUntilReady(
+      RootPath.DRIVE, [], [ENTRIES.sharedWithMeDirectory, ENTRIES.hello]);
+
+  // Navigate to Shared with me.
+  const directoryTree = await DirectoryTreePageObject.create(appId, remoteCall);
+  await directoryTree.selectItemByLabel('Shared with me');
+
+  // Wait until the breadcrumb path is updated.
+  await remoteCall.waitUntilCurrentDirectoryIsChanged(appId, '/Shared with me');
+
+  // Navigate to the directory within Shared with me.
+  await remoteCall.waitUntilSelected(appId, sharedSubFolderName);
+  await remoteCall.fakeKeyDown(
+      appId, '#file-list', 'Enter', false, false, false);
+
+  await remoteCall.waitUntilCurrentDirectoryIsChanged(
+      appId, `/Shared with me/${sharedSubFolderName}`);
+
+  // Navigate back using breadcrumb.
+  await remoteCall.waitAndClickElement(
+      appId, ['xf-breadcrumb', 'button[id="first"]']);
+
+  // Wait until the breadcrumb path is updated.
+  await remoteCall.waitUntilCurrentDirectoryIsChanged(appId, '/Shared with me');
 };

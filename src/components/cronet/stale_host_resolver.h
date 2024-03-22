@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,8 +11,9 @@
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/time/default_tick_clock.h"
+#include "base/values.h"
 #include "net/base/completion_once_callback.h"
-#include "net/base/network_isolation_key.h"
+#include "net/base/network_anonymization_key.h"
 #include "net/dns/host_resolver.h"
 #include "net/log/net_log_with_source.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
@@ -88,12 +89,12 @@ class StaleHostResolver : public net::HostResolver {
   // request to continue in order to repopulate the cache.
   std::unique_ptr<ResolveHostRequest> CreateRequest(
       url::SchemeHostPort host,
-      net::NetworkIsolationKey network_isolation_key,
+      net::NetworkAnonymizationKey network_anonymization_key,
       net::NetLogWithSource net_log,
       absl::optional<ResolveHostParameters> optional_parameters) override;
   std::unique_ptr<ResolveHostRequest> CreateRequest(
       const net::HostPortPair& host,
-      const net::NetworkIsolationKey& network_isolation_key,
+      const net::NetworkAnonymizationKey& network_anonymization_key,
       const net::NetLogWithSource& net_log,
       const absl::optional<ResolveHostParameters>& optional_parameters)
       override;
@@ -101,7 +102,7 @@ class StaleHostResolver : public net::HostResolver {
   // The remaining public methods pass through to the inner resolver:
 
   net::HostCache* GetHostCache() override;
-  base::Value GetDnsConfigAsValue() const override;
+  base::Value::Dict GetDnsConfigAsValue() const override;
   void SetRequestContext(net::URLRequestContext* request_context) override;
 
  private:

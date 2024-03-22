@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -39,6 +39,9 @@ class TouchSelectionControllerClientChildFrame
   ~TouchSelectionControllerClientChildFrame() override;
 
   void DidStopFlinging();
+  void OnSwipeToMoveCursorBegin();
+  void OnSwipeToMoveCursorEnd();
+  void OnHitTestRegionUpdated();
   void UpdateSelectionBoundsIfNeeded(
       const viz::Selection<gfx::SelectionBound>& selection,
       float device_scale_factor);

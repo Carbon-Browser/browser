@@ -1,33 +1,33 @@
-// Copyright (c) 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include "ios/chrome/browser/web/chrome_web_client.h"
+#import "ios/chrome/browser/web/chrome_web_client.h"
 
 #import <UIKit/UIKit.h>
 
-#include <memory>
+#import <memory>
 
-#include "base/command_line.h"
-#include "base/run_loop.h"
-#include "base/strings/string_split.h"
-#include "base/strings/sys_string_conversions.h"
+#import "base/command_line.h"
+#import "base/run_loop.h"
+#import "base/strings/string_split.h"
+#import "base/strings/sys_string_conversions.h"
 #import "base/test/ios/wait_util.h"
-#include "base/test/scoped_feature_list.h"
-#include "components/captive_portal/core/captive_portal_detector.h"
-#include "components/content_settings/core/browser/host_content_settings_map.h"
-#include "components/lookalikes/core/lookalike_url_util.h"
+#import "base/test/scoped_feature_list.h"
+#import "components/captive_portal/core/captive_portal_detector.h"
+#import "components/content_settings/core/browser/host_content_settings_map.h"
+#import "components/lookalikes/core/lookalike_url_util.h"
 #import "components/safe_browsing/ios/browser/safe_browsing_url_allow_list.h"
-#include "components/security_interstitials/core/unsafe_resource.h"
-#include "components/strings/grit/components_strings.h"
-#include "ios/chrome/browser/browser_state/test_chrome_browser_state.h"
-#include "ios/chrome/browser/chrome_url_constants.h"
-#include "ios/chrome/browser/content_settings/host_content_settings_map_factory.h"
-#import "ios/chrome/browser/safe_browsing/safe_browsing_blocking_page.h"
-#import "ios/chrome/browser/ssl/captive_portal_tab_helper.h"
-#include "ios/chrome/browser/web/error_page_controller_bridge.h"
+#import "components/security_interstitials/core/unsafe_resource.h"
+#import "components/strings/grit/components_strings.h"
+#import "ios/chrome/browser/content_settings/model/host_content_settings_map_factory.h"
+#import "ios/chrome/browser/reading_list/model/offline_url_utils.h"
+#import "ios/chrome/browser/safe_browsing/model/safe_browsing_blocking_page.h"
+#import "ios/chrome/browser/shared/model/browser_state/test_chrome_browser_state.h"
+#import "ios/chrome/browser/shared/model/url/chrome_url_constants.h"
+#import "ios/chrome/browser/ssl/model/captive_portal_tab_helper.h"
 #import "ios/chrome/browser/web/error_page_util.h"
-#include "ios/chrome/browser/web/features.h"
+#import "ios/chrome/browser/web/features.h"
 #import "ios/components/security_interstitials/https_only_mode/https_only_mode_container.h"
 #import "ios/components/security_interstitials/https_only_mode/https_only_mode_error.h"
 #import "ios/components/security_interstitials/ios_blocking_page_tab_helper.h"
@@ -36,31 +36,27 @@
 #import "ios/components/security_interstitials/safe_browsing/safe_browsing_error.h"
 #import "ios/components/security_interstitials/safe_browsing/safe_browsing_unsafe_resource_container.h"
 #import "ios/net/protocol_handler_util.h"
-#include "ios/web/common/features.h"
+#import "ios/web/common/features.h"
 #import "ios/web/common/web_view_creation_util.h"
 #import "ios/web/public/test/error_test_util.h"
 #import "ios/web/public/test/fakes/fake_navigation_manager.h"
 #import "ios/web/public/test/fakes/fake_web_state.h"
 #import "ios/web/public/test/js_test_util.h"
-#include "ios/web/public/test/scoped_testing_web_client.h"
-#include "ios/web/public/test/web_task_environment.h"
-#include "net/base/net_errors.h"
-#include "net/http/http_status_code.h"
-#include "net/ssl/ssl_info.h"
-#include "net/test/cert_test_util.h"
-#include "net/test/test_data_directory.h"
-#include "services/network/public/cpp/weak_wrapper_shared_url_loader_factory.h"
-#include "services/network/public/mojom/fetch_api.mojom.h"
-#include "services/network/test/test_url_loader_factory.h"
-#include "testing/gtest/include/gtest/gtest.h"
-#include "testing/gtest_mac.h"
-#include "testing/platform_test.h"
+#import "ios/web/public/test/scoped_testing_web_client.h"
+#import "ios/web/public/test/web_task_environment.h"
+#import "net/base/net_errors.h"
+#import "net/http/http_status_code.h"
+#import "net/ssl/ssl_info.h"
+#import "net/test/cert_test_util.h"
+#import "net/test/test_data_directory.h"
+#import "services/network/public/cpp/weak_wrapper_shared_url_loader_factory.h"
+#import "services/network/public/mojom/fetch_api.mojom.h"
+#import "services/network/test/test_url_loader_factory.h"
+#import "testing/gtest/include/gtest/gtest.h"
+#import "testing/gtest_mac.h"
+#import "testing/platform_test.h"
 #import "third_party/ocmock/OCMock/OCMock.h"
-#include "ui/base/l10n/l10n_util.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
+#import "ui/base/l10n/l10n_util.h"
 
 using base::test::ios::kWaitForActionTimeout;
 using base::test::ios::WaitUntilConditionOrTimeout;
@@ -153,11 +149,10 @@ TEST_F(ChromeWebClientTest, PrepareErrorPageNonPostNonOtr) {
         page = error_html;
       });
   web::FakeWebState web_state;
-  ErrorPageControllerBridge::CreateForWebState(&web_state);
   web_client.PrepareErrorPage(&web_state, GURL(kTestUrl), error,
                               /*is_post=*/false,
                               /*is_off_the_record=*/false,
-                              /*info=*/absl::nullopt,
+                              /*info=*/std::nullopt,
                               /*navigation_id=*/0, std::move(callback));
   EXPECT_TRUE(WaitUntilConditionOrTimeout(kWaitForActionTimeout, ^bool {
     base::RunLoop().RunUntilIdle();
@@ -180,11 +175,10 @@ TEST_F(ChromeWebClientTest, PrepareErrorPagePostNonOtr) {
         page = error_html;
       });
   web::FakeWebState web_state;
-  ErrorPageControllerBridge::CreateForWebState(&web_state);
   web_client.PrepareErrorPage(&web_state, GURL(kTestUrl), error,
                               /*is_post=*/true,
                               /*is_off_the_record=*/false,
-                              /*info=*/absl::nullopt,
+                              /*info=*/std::nullopt,
                               /*navigation_id=*/0, std::move(callback));
   EXPECT_TRUE(WaitUntilConditionOrTimeout(kWaitForActionTimeout, ^bool {
     base::RunLoop().RunUntilIdle();
@@ -207,11 +201,10 @@ TEST_F(ChromeWebClientTest, PrepareErrorPageNonPostOtr) {
         page = error_html;
       });
   web::FakeWebState web_state;
-  ErrorPageControllerBridge::CreateForWebState(&web_state);
   web_client.PrepareErrorPage(&web_state, GURL(kTestUrl), error,
                               /*is_post=*/false,
                               /*is_off_the_record=*/true,
-                              /*info=*/absl::nullopt,
+                              /*info=*/std::nullopt,
                               /*navigation_id=*/0, std::move(callback));
   EXPECT_TRUE(WaitUntilConditionOrTimeout(kWaitForActionTimeout, ^bool {
     base::RunLoop().RunUntilIdle();
@@ -234,11 +227,10 @@ TEST_F(ChromeWebClientTest, PrepareErrorPagePostOtr) {
         page = error_html;
       });
   web::FakeWebState web_state;
-  ErrorPageControllerBridge::CreateForWebState(&web_state);
   web_client.PrepareErrorPage(&web_state, GURL(kTestUrl), error,
                               /*is_post=*/true,
                               /*is_off_the_record=*/true,
-                              /*info=*/absl::nullopt,
+                              /*info=*/std::nullopt,
                               /*navigation_id=*/0, std::move(callback));
   EXPECT_TRUE(WaitUntilConditionOrTimeout(kWaitForActionTimeout, ^bool {
     base::RunLoop().RunUntilIdle();
@@ -257,8 +249,7 @@ TEST_F(ChromeWebClientTest, PrepareErrorPageWithSSLInfo) {
       net::ImportCertFromFile(net::GetTestCertsDirectory(), "ok_cert.pem");
   info.is_fatal_cert_error = false;
   info.cert_status = net::CERT_STATUS_COMMON_NAME_INVALID;
-  absl::optional<net::SSLInfo> ssl_info =
-      absl::make_optional<net::SSLInfo>(info);
+  std::optional<net::SSLInfo> ssl_info = info;
   ChromeWebClient web_client;
   NSError* error =
       [NSError errorWithDomain:NSURLErrorDomain
@@ -304,7 +295,7 @@ TEST_F(ChromeWebClientTest, PrepareErrorPageWithSSLInfo) {
 // Tests PrepareErrorPage for a safe browsing error, which results in a
 // committed safe browsing interstitial.
 TEST_F(ChromeWebClientTest, PrepareErrorPageForSafeBrowsingError) {
-  // Store an unsafe resource in |web_state|'s container.
+  // Store an unsafe resource in `web_state`'s container.
   web::FakeWebState web_state;
   web_state.SetBrowserState(browser_state());
   SafeBrowsingUrlAllowList::CreateForWebState(&web_state);
@@ -337,11 +328,11 @@ TEST_F(ChromeWebClientTest, PrepareErrorPageForSafeBrowsingError) {
   web_client.PrepareErrorPage(&web_state, GURL(kTestUrl), error,
                               /*is_post=*/false,
                               /*is_off_the_record=*/false,
-                              /*info=*/absl::optional<net::SSLInfo>(),
+                              /*info=*/std::optional<net::SSLInfo>(),
                               /*navigation_id=*/0, std::move(callback));
 
   EXPECT_TRUE(callback_called);
-  NSString* error_string = l10n_util::GetNSString(IDS_PHISHING_V4_HEADING);
+  NSString* error_string = l10n_util::GetNSString(IDS_HEADING_NEW);
   EXPECT_TRUE([page containsString:error_string]);
 }
 
@@ -357,8 +348,9 @@ TEST_F(ChromeWebClientTest, PrepareErrorPageForLookalikeUrlError) {
   web_state.SetNavigationManager(std::move(navigation_manager));
 
   LookalikeUrlContainer::FromWebState(&web_state)
-      ->SetLookalikeUrlInfo(GURL("https://www.safe.test"), GURL(kTestUrl),
-                            LookalikeUrlMatchType::kSkeletonMatchTop5k);
+      ->SetLookalikeUrlInfo(
+          GURL("https://www.safe.test"), GURL(kTestUrl),
+          lookalikes::LookalikeUrlMatchType::kSkeletonMatchTop5k);
 
   NSError* error = [NSError errorWithDomain:kLookalikeUrlErrorDomain
                                        code:kLookalikeUrlErrorCode
@@ -375,7 +367,7 @@ TEST_F(ChromeWebClientTest, PrepareErrorPageForLookalikeUrlError) {
   web_client.PrepareErrorPage(&web_state, GURL(kTestUrl), error,
                               /*is_post=*/false,
                               /*is_off_the_record=*/false,
-                              /*info=*/absl::optional<net::SSLInfo>(),
+                              /*info=*/std::optional<net::SSLInfo>(),
                               /*navigation_id=*/0, std::move(callback));
 
   EXPECT_TRUE(callback_called);
@@ -398,8 +390,9 @@ TEST_F(ChromeWebClientTest, PrepareErrorPageForLookalikeUrlErrorNoSuggestion) {
   web_state.SetNavigationManager(std::move(navigation_manager));
 
   LookalikeUrlContainer::FromWebState(&web_state)
-      ->SetLookalikeUrlInfo(GURL(""), GURL(kTestUrl),
-                            LookalikeUrlMatchType::kSkeletonMatchTop5k);
+      ->SetLookalikeUrlInfo(
+          GURL(""), GURL(kTestUrl),
+          lookalikes::LookalikeUrlMatchType::kSkeletonMatchTop5k);
 
   NSError* error = [NSError errorWithDomain:kLookalikeUrlErrorDomain
                                        code:kLookalikeUrlErrorCode
@@ -416,7 +409,7 @@ TEST_F(ChromeWebClientTest, PrepareErrorPageForLookalikeUrlErrorNoSuggestion) {
   web_client.PrepareErrorPage(&web_state, GURL(kTestUrl), error,
                               /*is_post=*/false,
                               /*is_off_the_record=*/false,
-                              /*info=*/absl::optional<net::SSLInfo>(),
+                              /*info=*/std::optional<net::SSLInfo>(),
                               /*navigation_id=*/0, std::move(callback));
 
   EXPECT_TRUE(callback_called);
@@ -458,7 +451,7 @@ TEST_F(ChromeWebClientTest, PrepareErrorPageForHttpsOnlyModeError) {
   web_client.PrepareErrorPage(&web_state, GURL(kTestUrl), error,
                               /*is_post=*/false,
                               /*is_off_the_record=*/false,
-                              /*info=*/absl::optional<net::SSLInfo>(),
+                              /*info=*/std::optional<net::SSLInfo>(),
                               /*navigation_id=*/0, std::move(callback));
 
   EXPECT_TRUE(callback_called);
@@ -489,4 +482,98 @@ TEST_F(ChromeWebClientTest, DefaultUserAgent) {
 
   EXPECT_EQ(web::UserAgentType::DESKTOP,
             web_client.GetDefaultUserAgent(&web_state, GURL()));
+}
+
+// Tests if two online URLs are correctly processed.
+TEST_F(ChromeWebClientTest, IsPointingToSameDocumentOnline) {
+  ChromeWebClient web_client;
+  GURL same_url1 = GURL("http://chromium.org/foo");
+  GURL same_url2 = GURL("http://chromium.org/foo");
+
+  EXPECT_TRUE(web_client.IsPointingToSameDocument(same_url1, same_url2));
+
+  GURL different_url1 = GURL("http://chromium.org/foo");
+  GURL different_url2 = GURL("http://chromium.org/bar");
+
+  EXPECT_FALSE(
+      web_client.IsPointingToSameDocument(different_url1, different_url2));
+}
+
+// Tests if one online URL and one offline reload URL are correctly processed.
+TEST_F(ChromeWebClientTest, IsPointingToSameDocumentOnlineOfflineReload) {
+  ChromeWebClient web_client;
+  GURL same_url1 = GURL("http://chromium.org/foo");
+  GURL same_url2 =
+      reading_list::OfflineReloadURLForURL(GURL("http://chromium.org/foo"));
+
+  EXPECT_TRUE(web_client.IsPointingToSameDocument(same_url1, same_url2));
+
+  GURL different_url1 = GURL("http://chromium.org/foo");
+  GURL different_url2 =
+      reading_list::OfflineReloadURLForURL(GURL("http://chromium.org/bar"));
+
+  EXPECT_FALSE(
+      web_client.IsPointingToSameDocument(different_url1, different_url2));
+}
+
+// Tests if one online URL and one offline Entry URL are correctly processed.
+TEST_F(ChromeWebClientTest, IsPointingToSameDocumentOnlineOfflineEntry) {
+  ChromeWebClient web_client;
+  GURL same_url1 = GURL("http://chromium.org/foo");
+  GURL same_url2 =
+      reading_list::OfflineURLForURL(GURL("http://chromium.org/foo"));
+
+  EXPECT_TRUE(web_client.IsPointingToSameDocument(same_url1, same_url2));
+
+  GURL different_url1 = GURL("http://chromium.org/foo");
+  GURL different_url2 =
+      reading_list::OfflineURLForURL(GURL("http://chromium.org/bar"));
+
+  EXPECT_FALSE(
+      web_client.IsPointingToSameDocument(different_url1, different_url2));
+}
+
+// Tests if two offline URLs are correctly processed.
+TEST_F(ChromeWebClientTest, IsPointingToSameDocumentOfflineEntry) {
+  ChromeWebClient web_client;
+  GURL same_url1 =
+      reading_list::OfflineURLForURL(GURL("http://chromium.org/foo"));
+  GURL same_url2 =
+      reading_list::OfflineURLForURL(GURL("http://chromium.org/foo"));
+
+  EXPECT_TRUE(web_client.IsPointingToSameDocument(same_url1, same_url2));
+
+  GURL different_url1 =
+      reading_list::OfflineURLForURL(GURL("http://chromium.org/foo"));
+  GURL different_url2 =
+      reading_list::OfflineURLForURL(GURL("http://chromium.org/bar"));
+
+  EXPECT_FALSE(
+      web_client.IsPointingToSameDocument(different_url1, different_url2));
+
+  GURL same_url3 =
+      reading_list::OfflineURLForURL(GURL("http://chromium.org/foo"));
+  GURL same_url4 =
+      reading_list::OfflineURLForURL(GURL("http://chromium.org/foo"));
+
+  EXPECT_TRUE(web_client.IsPointingToSameDocument(same_url3, same_url4));
+
+  GURL different_url3 =
+      reading_list::OfflineURLForURL(GURL("http://chromium.org/foo"));
+  GURL different_url4 =
+      reading_list::OfflineURLForURL(GURL("http://chromium.org/bar"));
+
+  EXPECT_FALSE(
+      web_client.IsPointingToSameDocument(different_url3, different_url4));
+}
+
+// Tests if URLs with one empty is working as expected.
+TEST_F(ChromeWebClientTest, IsPointingToSameDocumentEmpty) {
+  ChromeWebClient web_client;
+  GURL offline_url =
+      reading_list::OfflineURLForURL(GURL("http://chromium.org/foo"));
+  GURL online_url = GURL("http://chromium.org/foo");
+
+  EXPECT_FALSE(web_client.IsPointingToSameDocument(GURL(), offline_url));
+  EXPECT_FALSE(web_client.IsPointingToSameDocument(GURL(), online_url));
 }

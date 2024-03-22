@@ -1,12 +1,13 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/ui/webui/welcome/welcome_ui.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/string_util.h"
+#include "base/values.h"
 #include "build/branding_buildflags.h"
 #include "build/build_config.h"
 #include "chrome/browser/signin/account_consistency_mode_manager.h"
@@ -18,8 +19,8 @@
 #include "chrome/browser/ui/webui/welcome/set_as_default_handler.h"
 #include "chrome/browser/ui/webui/welcome/welcome_handler.h"
 #include "chrome/common/pref_names.h"
+#include "chrome/grit/branded_strings.h"
 #include "chrome/grit/chrome_unscaled_resources.h"
-#include "chrome/grit/chromium_strings.h"
 #include "chrome/grit/generated_resources.h"
 #include "chrome/grit/welcome_resources.h"
 #include "chrome/grit/welcome_resources_map.h"
@@ -28,10 +29,6 @@
 #include "components/strings/grit/components_strings.h"
 #include "net/base/url_util.h"
 #include "ui/base/webui/web_ui_util.h"
-
-#if BUILDFLAG(IS_WIN)
-#include "base/win/windows_version.h"
-#endif
 
 namespace {
 
@@ -107,6 +104,8 @@ void AddStrings(content::WebUIDataSource* html_source) {
       {"landingDescription", IDS_WELCOME_LANDING_DESCRIPTION},
       {"landingNewUser", IDS_WELCOME_LANDING_NEW_USER},
       {"landingExistingUser", IDS_WELCOME_LANDING_EXISTING_USER},
+      {"landingPauseAnimations", IDS_WELCOME_LANDING_PAUSE_ANIMATIONS},
+      {"landingPlayAnimations", IDS_WELCOME_LANDING_PLAY_ANIMATIONS},
   };
   html_source->AddLocalizedStrings(kLocalizedStrings);
 }
@@ -128,7 +127,7 @@ WelcomeUI::WelcomeUI(content::WebUI* web_ui, const GURL& url)
   web_ui->AddMessageHandler(std::make_unique<WelcomeHandler>(web_ui));
 
   content::WebUIDataSource* html_source =
-      content::WebUIDataSource::Create(url.host());
+      content::WebUIDataSource::CreateAndAdd(profile, url.host());
   webui::SetupWebUIDataSource(
       html_source, base::make_span(kWelcomeResources, kWelcomeResourcesSize),
       IDR_WELCOME_WELCOME_HTML);
@@ -142,8 +141,7 @@ WelcomeUI::WelcomeUI(content::WebUI* web_ui, const GURL& url)
 #endif
 
 #if BUILDFLAG(IS_WIN)
-  html_source->AddBoolean("is_win10",
-                          base::win::GetVersion() >= base::win::Version::WIN10);
+  html_source->AddBoolean("is_win10", true);
 #endif
 
   // Add the shared bookmark handler for welcome modules.
@@ -161,10 +159,10 @@ WelcomeUI::WelcomeUI(content::WebUI* web_ui, const GURL& url)
 
   html_source->AddString(
       "newUserModules",
-      welcome::GetModules(profile).FindKey("new-user")->GetString());
+      welcome::GetModules(profile).Find("new-user")->GetString());
   html_source->AddString(
       "returningUserModules",
-      welcome::GetModules(profile).FindKey("returning-user")->GetString());
+      welcome::GetModules(profile).Find("returning-user")->GetString());
   html_source->AddBoolean(
       "signinAllowed", profile->GetPrefs()->GetBoolean(prefs::kSigninAllowed));
   html_source->SetRequestFilter(
@@ -172,8 +170,6 @@ WelcomeUI::WelcomeUI(content::WebUI* web_ui, const GURL& url)
                           weak_ptr_factory_.GetWeakPtr()),
       base::BindRepeating(&HandleRequestCallback,
                           weak_ptr_factory_.GetWeakPtr()));
-
-  content::WebUIDataSource::Add(profile, html_source);
 }
 
 WelcomeUI::~WelcomeUI() {}

@@ -1,22 +1,26 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "third_party/blink/renderer/core/testing/fake_local_frame_host.h"
 
+#include "services/network/public/cpp/attribution_reporting_runtime_features.h"
 #include "skia/public/mojom/skcolor.mojom-blink.h"
 #include "third_party/blink/public/mojom/choosers/popup_menu.mojom-blink.h"
 #include "third_party/blink/public/mojom/frame/frame_owner_properties.mojom-blink.h"
+#include "third_party/blink/public/mojom/frame/frame_replication_state.mojom-blink.h"
 #include "third_party/blink/public/mojom/frame/fullscreen.mojom-blink.h"
+#include "third_party/blink/public/mojom/frame/remote_frame.mojom-blink.h"
 #include "third_party/blink/public/mojom/timing/resource_timing.mojom-blink.h"
+#include "third_party/blink/renderer/platform/wtf/functional.h"
 
 namespace blink {
 
 void FakeLocalFrameHost::Init(blink::AssociatedInterfaceProvider* provider) {
   provider->OverrideBinderForTesting(
       mojom::blink::LocalFrameHost::Name_,
-      base::BindRepeating(&FakeLocalFrameHost::BindFrameHostReceiver,
-                          base::Unretained(this)));
+      WTF::BindRepeating(&FakeLocalFrameHost::BindFrameHostReceiver,
+                         base::Unretained(this)));
 }
 
 void FakeLocalFrameHost::EnterFullscreen(
@@ -30,6 +34,10 @@ void FakeLocalFrameHost::ExitFullscreen() {}
 void FakeLocalFrameHost::FullscreenStateChanged(
     bool is_fullscreen,
     mojom::blink::FullscreenOptionsPtr options) {}
+
+void FakeLocalFrameHost::Maximize() {}
+void FakeLocalFrameHost::Minimize() {}
+void FakeLocalFrameHost::Restore() {}
 
 void FakeLocalFrameHost::RegisterProtocolHandler(const WTF::String& scheme,
                                                  const ::blink::KURL& url,
@@ -47,8 +55,8 @@ void FakeLocalFrameHost::MainDocumentElementAvailable(
     bool uses_temporary_zoom_level) {}
 
 void FakeLocalFrameHost::SetNeedsOcclusionTracking(bool needs_tracking) {}
-void FakeLocalFrameHost::SetVirtualKeyboardOverlayPolicy(
-    bool vk_overlays_content) {}
+void FakeLocalFrameHost::SetVirtualKeyboardMode(
+    ui::mojom::blink::VirtualKeyboardMode mode) {}
 
 void FakeLocalFrameHost::VisibilityChanged(
     mojom::blink::FrameVisibility visibility) {}
@@ -56,8 +64,9 @@ void FakeLocalFrameHost::VisibilityChanged(
 void FakeLocalFrameHost::DidChangeThemeColor(
     absl::optional<::SkColor> theme_color) {}
 
-void FakeLocalFrameHost::DidChangeBackgroundColor(SkColor background_color,
-                                                  bool color_adjust) {}
+void FakeLocalFrameHost::DidChangeBackgroundColor(
+    const SkColor4f& background_color,
+    bool color_adjust) {}
 
 void FakeLocalFrameHost::DidFailLoadWithError(const ::blink::KURL& url,
                                               int32_t error_code) {}
@@ -98,8 +107,10 @@ void FakeLocalFrameHost::DidFinishLoad(const KURL& validated_url) {}
 
 void FakeLocalFrameHost::DispatchLoad() {}
 
-void FakeLocalFrameHost::GoToEntryAtOffset(int32_t offset,
-                                           bool has_user_gesture) {}
+void FakeLocalFrameHost::GoToEntryAtOffset(
+    int32_t offset,
+    bool has_user_gesture,
+    absl::optional<blink::scheduler::TaskAttributionId>) {}
 
 void FakeLocalFrameHost::UpdateTitle(
     const WTF::String& title,
@@ -157,6 +168,7 @@ void FakeLocalFrameHost::DownloadURL(
 
 void FakeLocalFrameHost::FocusedElementChanged(
     bool is_editable_element,
+    bool is_richly_editable_element,
     const gfx::Rect& bounds_in_frame_widget,
     blink::mojom::FocusType focus_type) {}
 
@@ -200,8 +212,7 @@ void FakeLocalFrameHost::DidChangeOpener(
 
 void FakeLocalFrameHost::DidChangeIframeAttributes(
     const blink::FrameToken& child_frame_token,
-    network::mojom::blink::ContentSecurityPolicyPtr,
-    bool anonymous) {}
+    mojom::blink::IframeAttributesPtr) {}
 
 void FakeLocalFrameHost::DidChangeFramePolicy(
     const blink::FrameToken& child_frame_token,
@@ -228,9 +239,6 @@ void FakeLocalFrameHost::DidAddMessageToConsole(
 
 void FakeLocalFrameHost::FrameSizeChanged(const gfx::Size& frame_size) {}
 
-void FakeLocalFrameHost::DidUpdatePreferredColorScheme(
-    blink::mojom::PreferredColorScheme preferred_color_scheme) {}
-
 void FakeLocalFrameHost::DidInferColorScheme(
     blink::mojom::PreferredColorScheme preferred_color_scheme) {}
 
@@ -246,5 +254,50 @@ void FakeLocalFrameHost::DidChangeSrcDoc(
 
 void FakeLocalFrameHost::ReceivedDelegatedCapability(
     blink::mojom::DelegatedCapability delegated_capability) {}
+
+void FakeLocalFrameHost::SendFencedFrameReportingBeacon(
+    const WTF::String& event_data,
+    const WTF::String& event_type,
+    const WTF::Vector<blink::FencedFrame::ReportingDestination>& destinations,
+    network::AttributionReportingRuntimeFeatures
+        attribution_reporting_runtime_features) {}
+
+void FakeLocalFrameHost::SendFencedFrameReportingBeaconToCustomURL(
+    const blink::KURL& destination_url,
+    network::AttributionReportingRuntimeFeatures
+        attribution_reporting_runtime_features) {}
+
+void FakeLocalFrameHost::SetFencedFrameAutomaticBeaconReportEventData(
+    blink::mojom::AutomaticBeaconType event_type,
+    const WTF::String& event_data,
+    const WTF::Vector<blink::FencedFrame::ReportingDestination>& destinations,
+    network::AttributionReportingRuntimeFeatures
+        attribution_reporting_runtime_features,
+    bool once,
+    bool cross_origin_exposed) {}
+
+void FakeLocalFrameHost::SendLegacyTechEvent(
+    const WTF::String& type,
+    mojom::blink::LegacyTechEventCodeLocationPtr code_location) {}
+
+void FakeLocalFrameHost::SendPrivateAggregationRequestsForFencedFrameEvent(
+    const WTF::String& event_type) {}
+
+void FakeLocalFrameHost::CreateFencedFrame(
+    mojo::PendingAssociatedReceiver<mojom::blink::FencedFrameOwnerHost>,
+    mojom::blink::RemoteFrameInterfacesFromRendererPtr remote_frame_interfaces,
+    const RemoteFrameToken& frame_token,
+    const base::UnguessableToken& devtools_frame_token) {
+  NOTREACHED() << "At the moment, FencedFrame is not used in any "
+                  "unit tests, so this path should not be hit";
+}
+
+void FakeLocalFrameHost::StartDragging(
+    const blink::WebDragData& drag_data,
+    blink::DragOperationsMask operations_allowed,
+    const SkBitmap& bitmap,
+    const gfx::Vector2d& cursor_offset_in_dip,
+    const gfx::Rect& drag_obj_rect_in_dip,
+    mojom::blink::DragEventSourceInfoPtr event_info) {}
 
 }  // namespace blink

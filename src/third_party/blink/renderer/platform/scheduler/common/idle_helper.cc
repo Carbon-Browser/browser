@@ -1,17 +1,23 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "third_party/blink/renderer/platform/scheduler/common/idle_helper.h"
 
-#include "base/bind.h"
+#include "base/feature_list.h"
+#include "base/functional/bind.h"
+#include "base/memory/scoped_refptr.h"
 #include "base/task/sequence_manager/sequence_manager.h"
 #include "base/task/sequence_manager/task_queue.h"
 #include "base/task/sequence_manager/time_domain.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/time/time.h"
 #include "base/trace_event/trace_event.h"
 #include "base/trace_event/traced_value.h"
+#include "third_party/blink/public/common/features.h"
+#include "third_party/blink/renderer/platform/scheduler/common/blink_scheduler_single_thread_task_runner.h"
 #include "third_party/blink/renderer/platform/scheduler/common/scheduler_helper.h"
+#include "third_party/blink/renderer/platform/scheduler/common/task_priority.h"
 
 namespace blink {
 namespace scheduler {
@@ -26,10 +32,10 @@ IdleHelper::IdleHelper(
     Delegate* delegate,
     const char* idle_period_tracing_name,
     base::TimeDelta required_quiescence_duration_before_long_idle_period,
-    scoped_refptr<TaskQueue> idle_queue)
+    TaskQueue* idle_queue)
     : helper_(helper),
       delegate_(delegate),
-      idle_queue_(std::move(idle_queue)),
+      idle_queue_(idle_queue),
       state_(helper, delegate, idle_period_tracing_name),
       required_quiescence_duration_before_long_idle_period_(
           required_quiescence_duration_before_long_idle_period),
@@ -40,14 +46,19 @@ IdleHelper::IdleHelper(
   on_idle_task_posted_closure_.Reset(base::BindRepeating(
       &IdleHelper::OnIdleTaskPostedOnMainThread, weak_idle_helper_ptr_));
 
+  int idle_task_type = static_cast<int>(TaskType::kMainThreadTaskQueueIdle);
+  scoped_refptr<base::SingleThreadTaskRunner> idle_queue_task_runner =
+      base::FeatureList::IsEnabled(
+          features::kUseBlinkSchedulerTaskRunnerWithCustomDeleter)
+          ? base::MakeRefCounted<BlinkSchedulerSingleThreadTaskRunner>(
+                idle_queue_->CreateTaskRunner(idle_task_type), nullptr)
+          : idle_queue_->CreateTaskRunner(idle_task_type);
   idle_task_runner_ = base::MakeRefCounted<SingleThreadIdleTaskRunner>(
-      idle_queue_->CreateTaskRunner(
-          static_cast<int>(TaskType::kMainThreadTaskQueueIdle)),
-      helper_->ControlTaskRunner(), this);
+      std::move(idle_queue_task_runner), helper_->ControlTaskRunner(), this);
 
   // This fence will block any idle tasks from running.
   idle_queue_->InsertFence(TaskQueue::InsertFencePosition::kBeginningOfTime);
-  idle_queue_->SetQueuePriority(TaskQueue::kBestEffortPriority);
+  idle_queue_->SetQueuePriority(TaskPriority::kBestEffortPriority);
 }
 
 IdleHelper::~IdleHelper() {
@@ -61,8 +72,6 @@ void IdleHelper::Shutdown() {
   EndIdlePeriod();
   is_shutdown_ = true;
   weak_factory_.InvalidateWeakPtrs();
-  // Belt & braces, might not be needed.
-  idle_queue_->ShutdownTaskQueue();
 }
 
 IdleHelper::Delegate::Delegate() = default;

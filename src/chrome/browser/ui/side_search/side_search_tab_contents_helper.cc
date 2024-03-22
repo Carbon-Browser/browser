@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,6 +13,7 @@
 #include "chrome/browser/ui/browser_finder.h"
 #include "chrome/browser/ui/prefs/prefs_tab_helper.h"
 #include "chrome/browser/ui/side_search/side_search_config.h"
+#include "chrome/browser/ui/side_search/side_search_metrics.h"
 #include "chrome/browser/ui/side_search/side_search_utils.h"
 #include "chrome/browser/ui/side_search/unified_side_search_helper.h"
 #include "chrome/browser/ui/ui_features.h"
@@ -33,7 +34,13 @@
 #include "chrome/browser/extensions/tab_helper.h"
 #endif  // BUILDFLAG(ENABLE_EXTENSIONS)
 
-SideSearchTabContentsHelper::~SideSearchTabContentsHelper() = default;
+SideSearchTabContentsHelper::~SideSearchTabContentsHelper() {
+  // Record the number of times we navigated back to a previous SRP before
+  // closing the tab. Only record this value if we actually navigated to a
+  // search page URL at some point during the life of the tab.
+  if (last_search_url_)
+    RecordSideSearchNumTimesReturnedBackToSRP(returned_to_previous_srp_count_);
+}
 
 void SideSearchTabContentsHelper::NavigateInTabContents(
     const content::OpenURLParams& params) {
@@ -62,10 +69,40 @@ content::WebContents* SideSearchTabContentsHelper::GetTabWebContents() {
   return web_contents();
 }
 
+void SideSearchTabContentsHelper::CarryOverSideSearchStateToNewTab(
+    const GURL& search_url,
+    content::WebContents* new_web_contents) {
+  DCHECK(new_web_contents);
+
+  // Ensure this function is called on a search result page.
+  if (GetConfig()->ShouldNavigateInSidePanel(search_url)) {
+    auto* new_helper =
+        SideSearchTabContentsHelper::FromWebContents(new_web_contents);
+
+    // "Open link in incognito window" yields a null new_helper.
+    if (new_helper) {
+      new_helper->last_search_url_ = search_url;
+    }
+  }
+}
+
 content::WebContents* SideSearchTabContentsHelper::OpenURLFromTab(
     content::WebContents* source,
     const content::OpenURLParams& params) {
   return delegate_ ? delegate_->OpenURLFromTab(source, params) : nullptr;
+}
+
+void SideSearchTabContentsHelper::DidOpenRequestedURL(
+    content::WebContents* new_contents,
+    content::RenderFrameHost* source_render_frame_host,
+    const GURL& url,
+    const content::Referrer& referrer,
+    WindowOpenDisposition disposition,
+    ui::PageTransition transition,
+    bool started_from_context_menu,
+    bool renderer_initiated) {
+  const GURL& current_url = GetTabWebContents()->GetLastCommittedURL();
+  CarryOverSideSearchStateToNewTab(current_url, new_contents);
 }
 
 void SideSearchTabContentsHelper::DidStartNavigation(
@@ -97,24 +134,27 @@ void SideSearchTabContentsHelper::DidFinishNavigation(
   auto* config = GetConfig();
 
   if (config->ShouldNavigateInSidePanel(url)) {
-    returned_to_previous_srp_ = navigation_handle->GetPageTransition() &
-                                ui::PAGE_TRANSITION_FORWARD_BACK;
+    // Keep track of how many times a user returned to the `last_search_url_`
+    // via back-navigation. Reset the count if navigating to a new SRP or
+    // forward through history to an existing SRP.
+    if (navigation_handle->GetNavigationEntryOffset() < 0 &&
+        url == last_search_url_) {
+      ++returned_to_previous_srp_count_;
+    } else {
+      // Record the number of times the user navigated to the previous SRP
+      // before resetting the value. Do not do so if this is the first
+      // navigation to a SRP in this tab.
+      if (last_search_url_.has_value()) {
+        RecordSideSearchNumTimesReturnedBackToSRP(
+            returned_to_previous_srp_count_);
+      }
+
+      returned_to_previous_srp_count_ = 0;
+    }
 
     // Capture the URL here in case the side contents is closed before the
     // navigation completes.
     last_search_url_ = url;
-
-    // Allow the page action label to be shown next time the entrypoint is
-    // revealed.
-    can_show_page_action_label_ = true;
-
-    // If the navigation to a search results page succeeds we should update the
-    // side panel availability bit accordingly.
-    // TODO(tluk): If we continue to use a service check for side search SRP
-    // availability independent of successfully committing to the search page
-    // in the main tab it should be done during idle time to avoid regressing
-    // page load metrics.
-    config->set_is_side_panel_srp_available(true);
 
     if (side_panel_contents_)
       UpdateSideContentsNavigation();
@@ -155,6 +195,12 @@ content::WebContents* SideSearchTabContentsHelper::GetSidePanelContents() {
   return side_panel_contents_.get();
 }
 
+void SideSearchTabContentsHelper::SetAutoTriggered(bool auto_triggered) {
+  if (!side_panel_contents_)
+    return;
+  GetSideContentsHelper()->set_auto_triggered(auto_triggered);
+}
+
 void SideSearchTabContentsHelper::ClearSidePanelContents() {
   // It is safe to reset this here as any views::WebViews hosting this
   // WebContents will clear their reference to this away during its destruction.
@@ -163,8 +209,7 @@ void SideSearchTabContentsHelper::ClearSidePanelContents() {
 
 bool SideSearchTabContentsHelper::CanShowSidePanelForCommittedNavigation() {
   const GURL& url = web_contents()->GetLastCommittedURL();
-  return last_search_url_ && GetConfig()->CanShowSidePanelForURL(url) &&
-         GetConfig()->is_side_panel_srp_available();
+  return last_search_url_ && GetConfig()->CanShowSidePanelForURL(url);
 }
 
 void SideSearchTabContentsHelper::
@@ -182,16 +227,6 @@ void SideSearchTabContentsHelper::SetDelegate(
   delegate_ = std::move(delegate);
 }
 
-void SideSearchTabContentsHelper::DidShowPageActionLabel() {
-  ++page_action_label_shown_count_;
-}
-
-bool SideSearchTabContentsHelper::GetAndResetCanShowPageActionLabel() {
-  const bool initial_can_show_page_action_label = can_show_page_action_label_;
-  can_show_page_action_label_ = false;
-  return initial_can_show_page_action_label;
-}
-
 void SideSearchTabContentsHelper::SetSidePanelContentsForTesting(
     std::unique_ptr<content::WebContents> side_panel_contents) {
   side_panel_contents_ = std::move(side_panel_contents);
@@ -205,9 +240,7 @@ SideSearchTabContentsHelper::SideSearchTabContentsHelper(
     : content::WebContentsObserver(web_contents),
       content::WebContentsUserData<SideSearchTabContentsHelper>(*web_contents) {
   config_observation_.Observe(GetConfig());
-  if (base::FeatureList::IsEnabled(features::kUnifiedSidePanel)) {
-    CreateUnifiedSideSearchController(this, web_contents);
-  }
+  CreateUnifiedSideSearchController(this, web_contents);
 }
 
 SideSearchSideContentsHelper*
@@ -215,6 +248,34 @@ SideSearchTabContentsHelper::GetSideContentsHelper() {
   DCHECK(side_panel_contents_);
   return SideSearchSideContentsHelper::FromWebContents(
       side_panel_contents_.get());
+}
+
+void SideSearchTabContentsHelper::OpenSidePanelFromContextMenuSearch(
+    const GURL& url) {
+  DCHECK(url.is_valid());
+  last_search_url_ = url;
+  if (!side_panel_contents_) {
+    CreateSidePanelContents();
+    auto* SideContentsHelper = GetSideContentsHelper();
+    DCHECK(SideContentsHelper);
+    SideContentsHelper->set_is_created_from_menu_option(true);
+  } else {
+    DCHECK(side_panel_contents_);
+    UpdateSideContentsNavigation();
+  }
+  delegate_->OpenSidePanel();
+}
+
+bool SideSearchTabContentsHelper::CanShowSidePanelFromContextMenuSearch() {
+  if (!delegate_)
+    return false;
+
+  SideSearchConfig* config =
+      SideSearchConfig::Get(web_contents()->GetBrowserContext());
+
+  //  Show the context menu option under only if side search can be shown
+  //  for the current page (ignore SRP / NTP pages etc).
+  return config->CanShowSidePanelForURL(web_contents()->GetLastCommittedURL());
 }
 
 void SideSearchTabContentsHelper::CreateSidePanelContents() {
@@ -250,7 +311,7 @@ void SideSearchTabContentsHelper::UpdateSideContentsNavigation() {
   DCHECK(side_panel_contents_);
   // Only update the side panel contents with the latest `last_search_url_` if
   // present.
-  if (last_search_url_ && GetConfig()->is_side_panel_srp_available()) {
+  if (last_search_url_) {
     GetSideContentsHelper()->LoadURL(last_search_url_.value());
     side_search::MaybeSaveSideSearchTabSessionData(web_contents());
   }
@@ -258,9 +319,8 @@ void SideSearchTabContentsHelper::UpdateSideContentsNavigation() {
 
 void SideSearchTabContentsHelper::ClearHelperState() {
   toggled_open_ = false;
-  simple_loader_.reset();
   last_search_url_.reset();
-  returned_to_previous_srp_ = false;
+  returned_to_previous_srp_count_ = 0;
   toggled_open_ = false;
 
   // Notify the side panel after resetting the above state but before clearing
@@ -270,80 +330,6 @@ void SideSearchTabContentsHelper::ClearHelperState() {
     delegate_->SidePanelAvailabilityChanged(true);
 
   ClearSidePanelContents();
-}
-
-void SideSearchTabContentsHelper::TestSRPAvailability() {
-  if (GetConfig()->is_side_panel_srp_available())
-    return;
-  // TODO(tluk): Add rate limiting to the SRP test to permanently disable the
-  // feature for a given session if the availability check fails enough times.
-  DCHECK(last_search_url_.has_value());
-  DCHECK(GetConfig()->ShouldNavigateInSidePanel(last_search_url_.value()));
-  auto traffic_annotation =
-      net::DefineNetworkTrafficAnnotation("side_search_availability_test", R"(
-        semantics {
-          sender: "Side Search Tab Helper"
-          description:
-            "After the user has successfully navigated to a search results "
-            "page (SRP) belonging to their set default search provider, a HEAD "
-            "request is made to the side search SRP URL.\n"
-            "The side search SRP URL is generated by taking the original SRP "
-            "URL and appending the side search param specified in the search "
-            "engine's prepopulated_engines.json entry.\n"
-            "This is only done once per session for the currently set default "
-            "search engine to check the availability of the side search SRP "
-            "before enabling the feature. This is also gated on the current "
-            "default search engine signalling participation in the feature "
-            "with appropriate updates to its prepopulated_engines.json entry."
-          trigger:
-            "After the user has successfully committed a navigation to a "
-            "default search engine SRP in a tab contents and the availability "
-            "bit for the default search engine has not already been set for "
-            "this session."
-          data:
-            "The HEAD request includes the original search URL with the "
-            "addition of the side search header but no PII data / cookies."
-          destination: WEBSITE
-        }
-        policy {
-          cookies_allowed: NO
-          setting:
-            "None"
-          chrome_policy {
-            SideSearchEnabled {
-              SideSearchEnabled: false
-            }
-          }
-        })");
-  auto url_loader_factory = web_contents()
-                                ->GetBrowserContext()
-                                ->GetDefaultStoragePartition()
-                                ->GetURLLoaderFactoryForBrowserProcess();
-  auto request = std::make_unique<network::ResourceRequest>();
-  // Ensure cookies are not propagated with the request.
-  request->credentials_mode = network::mojom::CredentialsMode::kOmit;
-  request->url = last_search_url_.value();
-  // Make a HEAD request to avoid generating an actual SRP page when checking
-  // for availability of the side panel SRP.
-  request->method = net::HttpRequestHeaders::kHeadMethod;
-  simple_loader_ =
-      network::SimpleURLLoader::Create(std::move(request), traffic_annotation);
-  simple_loader_->DownloadHeadersOnly(
-      url_loader_factory.get(),
-      base::BindOnce(&SideSearchTabContentsHelper::OnResponseLoaded,
-                     weak_ptr_factory_.GetWeakPtr()));
-}
-
-void SideSearchTabContentsHelper::OnResponseLoaded(
-    scoped_refptr<net::HttpResponseHeaders> headers) {
-  GetConfig()->set_is_side_panel_srp_available(simple_loader_->NetError() ==
-                                               net::OK);
-
-  // The test for availability is performed async so alert `delegate_` that the
-  // side panel SRP is available to give it the opportunity to update
-  // appropriately.
-  if (delegate_)
-    delegate_->SidePanelAvailabilityChanged(false);
 }
 
 SideSearchConfig* SideSearchTabContentsHelper::GetConfig() {

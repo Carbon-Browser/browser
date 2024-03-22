@@ -277,14 +277,12 @@ function filterToRegExp(text) {
 //      qualifySelector} = require("../common");
 //const {filterToRegExp} = require("../patterns");
 
-const DEFAULT_MIN_INVOCATION_INTERVAL = 3000;
+const DEFAULT_MIN_INVOCATION_INTERVAL = 2000;
 let minInvocationInterval = DEFAULT_MIN_INVOCATION_INTERVAL;
-const DEFAULT_MAX_SYCHRONOUS_PROCESSING_TIME = 50;
-let maxSynchronousProcessingTime = DEFAULT_MAX_SYCHRONOUS_PROCESSING_TIME;
+const DEFAULT_MAX_SYNCHRONOUS_PROCESSING_TIME = 50;
+let maxSynchronousProcessingTime = DEFAULT_MAX_SYNCHRONOUS_PROCESSING_TIME;
 
 let abpSelectorRegexp = /:(-abp-[\w-]+|has|has-text|xpath|not)\(/;
-
-let testInfo = null;
 
 function toCSSStyleDeclaration(value) {
   return Object.assign(document.createElement("test"), {style: value}).style;
@@ -545,9 +543,6 @@ class NotSelector {
           continue;
         }
 
-        if (testInfo)
-          testInfo.lastProcessedElements.add(element);
-
         if (!this._innerPattern.matches(element, subtree))
           yield element;
 
@@ -602,9 +597,6 @@ class HasSelector {
           yield null;
           continue;
         }
-
-        if (testInfo)
-          testInfo.lastProcessedElements.add(element);
 
         for (let selector of this._innerPattern.evaluate(element, targets)) {
           if (selector == null)
@@ -684,9 +676,6 @@ class ContainsSelector {
           yield null;
           continue;
         }
-
-        if (testInfo)
-          testInfo.lastProcessedElements.add(element);
 
         if (this._regexp && this._regexp.test(element.textContent))
           yield element;
@@ -951,21 +940,14 @@ function shouldObserveStyles(patterns) {
  * Manages the front-end processing of element hiding emulation filters.
  */
 class ElemHideEmulation {
-  /**
-   * @param {module:content/elemHideEmulation~hideElemsFunc} hideElemsFunc
-   *   A callback that should be provided to do the actual element hiding.
-   * @param {module:content/elemHideEmulation~unhideElemsFunc} unhideElemsFunc
-   *   A callback that should be provided to unhide previously hidden elements.
-   */
-  constructor(hideElemsFunc = () => {}, unhideElemsFunc = () => {}) {
+
+  constructor() {
     this._filteringInProgress = false;
     this._nextFilteringScheduled = false;
     this._lastInvocation = -minInvocationInterval;
     this._scheduledProcessing = null;
 
     this.document = document;
-    this.hideElemsFunc = hideElemsFunc;
-    this.unhideElemsFunc = unhideElemsFunc;
     this.observer = new MutationObserver(this.observe.bind(this));
     this.hiddenElements = new Set();
   }
@@ -1127,9 +1109,6 @@ class ElemHideEmulation {
    *    A promise that is fulfilled once all filtering is completed
    */
   async _addSelectors(stylesheets, mutations) {
-    if (testInfo)
-      testInfo.lastProcessedElements.clear();
-
     let deadline = newIdleDeadline();
 
     if (shouldObserveStyles(this.patterns))
@@ -1142,8 +1121,10 @@ class ElemHideEmulation {
     let targets = extractMutationTargets(mutations);
 
     let elementsToHide = [];
-    let elementFilters = [];
     let elementsToUnhide = new Set(this.hiddenElements);
+    let elementsToRemove = [];
+    let elementsToApplyCss = [];
+    let cssToApply = [];
 
     for (let pattern of patternsToCheck) {
       let evaluationTargets = targets;
@@ -1159,11 +1140,16 @@ class ElemHideEmulation {
       for (let selector of generator) {
         if (selector != null) {
           for (let element of this.document.querySelectorAll(selector)) {
-            if (!this.hiddenElements.has(element)) {
+            if (pattern.text !== "") {
+              if (pattern.text === "remove()") {
+                elementsToRemove.push(element);
+              } else {
+                elementsToApplyCss.push(element);
+                cssToApply.push(pattern.text);
+              }
+            } else if (!this.hiddenElements.has(element)) {
               elementsToHide.push(element);
-              elementFilters.push(pattern.text);
-            }
-            else {
+            } else {
               elementsToUnhide.delete(element);
             }
           }
@@ -1173,7 +1159,9 @@ class ElemHideEmulation {
           deadline = await yieldThread();
       }
     }
-    this._hideElems(elementsToHide, elementFilters);
+    this._hideElems(elementsToHide);
+    this._removeElems(elementsToRemove);
+    this._applyCssToElems(elementsToApplyCss, cssToApply);
 
     // The search for elements to hide it optimized to find new things
     // to hide quickly, by not checking all patterns and not checking
@@ -1189,7 +1177,7 @@ class ElemHideEmulation {
       }
       let matchesAny = this.patterns.some(pattern => pattern.matches(
         elem, this.document
-      ));
+      ) && (pattern.text === ""));
       if (matchesAny)
         elementsToUnhide.delete(elem);
 
@@ -1199,26 +1187,36 @@ class ElemHideEmulation {
     this._unhideElems(Array.from(elementsToUnhide));
   }
 
-  _hideElems(elementsToHide, elementFilters) {
-    if (elementsToHide.length > 0) {
-      this.hideElemsFunc(elementsToHide, elementFilters);
-      for (let elem of elementsToHide)
-        this.hiddenElements.add(elem);
+  _hideElems(elementsToHide) {
+    for (let elem of elementsToHide) {
+      if (elem.style.display != "none")
+        elem.style.display = "none";
+      this.hiddenElements.add(elem);
     }
   }
 
   _unhideElems(elementsToUnhide) {
-    if (elementsToUnhide.length > 0) {
-      this.unhideElemsFunc(elementsToUnhide);
-      for (let elem of elementsToUnhide)
-        this.hiddenElements.delete(elem);
+    for (let elem of elementsToUnhide) {
+      if (elem.style.display === "none")
+        elem.style.display = "";
+      this.hiddenElements.delete(elem);
     }
+  }
+
+  _removeElems(elementsToRemove) {
+    for (let elem of elementsToRemove)
+      elem.remove();
+  }
+
+  _applyCssToElems(elementsToApplyCss, cssToApply) {
+    for (let i=0; i < elementsToApplyCss.length; ++i)
+      elementsToApplyCss[i].style.cssText += cssToApply[i];
   }
 
   /**
    * Performed any scheduled processing.
    *
-   * This function is asyncronous, and should not be run multiple
+   * This function is asynchronous, and should not be run multiple
    * times in parallel. The flag `_filteringInProgress` is set and
    * unset so you can check if it's already running.
    * @return {Promise}
@@ -1228,11 +1226,6 @@ class ElemHideEmulation {
     if (this._filteringInProgress) {
       console.warn("ElemHideEmulation scheduling error: " +
                    "Tried to process filtering in parallel.");
-      if (testInfo) {
-        testInfo.failedAssertions.push(
-          "Tried to process filtering in parallel"
-        );
-      }
       return;
     }
     let params = this._scheduledProcessing || {};
@@ -1356,21 +1349,6 @@ class ElemHideEmulation {
   }
 
   observe(mutations) {
-    if (testInfo) {
-      // In test mode, filter out any mutations likely done by us
-      // (i.e. style="display: none !important"). This makes it easier to
-      // observe how the code responds to DOM mutations.
-      mutations = mutations.filter(
-        ({type, attributeName, target: {style: newValue}, oldValue}) =>
-          !(type == "attributes" && attributeName == "style" &&
-            newValue.display == "none" &&
-            toCSSStyleDeclaration(oldValue).display != "none")
-      );
-
-      if (mutations.length == 0)
-        return;
-    }
-
     this.queueFiltering(null, mutations);
   }
 
@@ -1379,7 +1357,7 @@ class ElemHideEmulation {
     for (let pattern of patterns) {
       let selectors = this.parseSelector(pattern.selector);
       if (selectors != null && selectors.length > 0)
-        this.patterns.push(new Pattern(selectors, pattern.text));
+        this.patterns.push(new Pattern(selectors, pattern.text !== undefined ? pattern.text : ""));
     }
 
     if (this.patterns.length > 0) {
@@ -1391,7 +1369,7 @@ class ElemHideEmulation {
         {
           childList: true,
           attributes,
-          attributeOldValue: attributes && !!testInfo,
+          attributeOldValue: attributes,
           characterData: shouldObserveCharacterData(this.patterns),
           subtree: true
         }
@@ -1406,31 +1384,23 @@ class ElemHideEmulation {
   }
 };
 
-
 // end of elemHideEmulation.js  ------------------------------
 
-
-
-// elemHidingEmulatedPatterns array definition is generated in adblock_utils.cc
+/*
+ * elemHidingEmulatedPatterns array definition is generated in element_hider_impl.cc
+ * Example:
+ * [
+ *  {selector: "#id_to_hide"},
+ *  {selector: "#id_to_remove", text: "remove()"},
+ *  {selector: "#id_to_apply_style", text: "background-color: #00FF00!important;"},
+ * ];
+*/
 
 let elemHidingEmulatedPatterns = [{{elemHidingEmulatedPatternsDef}}];
 
 // adopted from applyElemHideEmulation function in:
 // https://gitlab.com/eyeo/adblockplus/adblockpluscore/blob/master/test/browser/elemHideEmulation.js
 
-let elemHideEmulation = new ElemHideEmulation(
-  elems => {
-    for (let elem of elems) {
-      if (elem.style.display != "none")
-        elem.style.display = "none";
-    }
-  },
-  elems => {
-    for (let elem of elems) {
-      if (elem.style.display === "none")
-        elem.style.display = "";
-    }
-  }
-);
+let elemHideEmulation = new ElemHideEmulation();
 
 elemHideEmulation.apply(elemHidingEmulatedPatterns);

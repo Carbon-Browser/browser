@@ -1,16 +1,16 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "services/audio/loopback_stream.h"
 
-#include <algorithm>
 #include <string>
 
-#include "base/bind.h"
 #include "base/containers/contains.h"
+#include "base/functional/bind.h"
+#include "base/ranges/algorithm.h"
 #include "base/sync_socket.h"
-#include "base/threading/sequenced_task_runner_handle.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/time/default_tick_clock.h"
 #include "base/trace_event/trace_event.h"
 #include "media/base/audio_bus.h"
@@ -223,7 +223,7 @@ void LoopbackStream::OnError() {
 
   // Post a task to run the BindingLostCallback, since this method can be called
   // from the constructor.
-  base::SequencedTaskRunnerHandle::Get()->PostTask(
+  base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE,
       base::BindOnce(
           [](base::WeakPtr<LoopbackStream> weak_self,
@@ -260,7 +260,7 @@ void LoopbackStream::FlowNetwork::RemoveInput(SnooperNode* node) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(control_sequence_);
 
   base::AutoLock scoped_lock(lock_);
-  const auto it = std::find(inputs_.begin(), inputs_.end(), node);
+  const auto it = base::ranges::find(inputs_, node);
   DCHECK(it != inputs_.end());
   inputs_.erase(it);
 }
@@ -364,7 +364,8 @@ void LoopbackStream::FlowNetwork::GenerateMoreAudio() {
   }
 
   // Insert the result into the AudioDataPipe.
-  writer_->Write(mix_bus_.get(), output_volume, false, delayed_capture_time);
+  writer_->Write(mix_bus_.get(), output_volume, false, delayed_capture_time,
+                 {});
 
   // Determine when to generate more audio again. This is done by advancing the
   // frame count by one interval's worth, then computing the TimeTicks
@@ -402,7 +403,8 @@ void LoopbackStream::FlowNetwork::GenerateMoreAudio() {
   // started below will just run immediately and there will be no harmful
   // effects in the next GenerateMoreAudio() call. http://crbug.com/847487
   timer_->Start(FROM_HERE, next_generate_time_, this,
-                &FlowNetwork::GenerateMoreAudio, base::ExactDeadline(true));
+                &FlowNetwork::GenerateMoreAudio,
+                base::subtle::DelayPolicy::kPrecise);
 }
 
 }  // namespace audio

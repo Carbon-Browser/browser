@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,13 +9,11 @@
 namespace cc {
 
 std::unique_ptr<SnapSelectionStrategy>
-SnapSelectionStrategy::CreateForEndPosition(
-    const gfx::PointF& current_position,
-    bool scrolled_x,
-    bool scrolled_y,
-    SnapTargetsPrioritization prioritization) {
+SnapSelectionStrategy::CreateForEndPosition(const gfx::PointF& current_position,
+                                            bool scrolled_x,
+                                            bool scrolled_y) {
   return std::make_unique<EndPositionStrategy>(current_position, scrolled_x,
-                                               scrolled_y, prioritization);
+                                               scrolled_y);
 }
 
 std::unique_ptr<SnapSelectionStrategy>
@@ -96,9 +94,9 @@ bool EndPositionStrategy::ShouldPrioritizeSnapTargets() const {
   return snap_targets_prioritization_ == SnapTargetsPrioritization::kRequire;
 }
 
-const absl::optional<SnapSearchResult>& EndPositionStrategy::PickBestResult(
-    const absl::optional<SnapSearchResult>& closest,
-    const absl::optional<SnapSearchResult>& covering) const {
+const std::optional<SnapSearchResult>& EndPositionStrategy::PickBestResult(
+    const std::optional<SnapSearchResult>& closest,
+    const std::optional<SnapSearchResult>& covering) const {
   return covering.has_value() ? covering : closest;
 }
 
@@ -146,9 +144,9 @@ bool DirectionStrategy::IsValidSnapArea(SearchAxis axis,
           area.must_snap);
 }
 
-const absl::optional<SnapSearchResult>& DirectionStrategy::PickBestResult(
-    const absl::optional<SnapSearchResult>& closest,
-    const absl::optional<SnapSearchResult>& covering) const {
+const std::optional<SnapSearchResult>& DirectionStrategy::PickBestResult(
+    const std::optional<SnapSearchResult>& closest,
+    const std::optional<SnapSearchResult>& covering) const {
   // We choose the |closest| result only if the default landing position (using
   // the default step) is not a valid snap position (not making a snap area
   // covering the snapport), or the |closest| is closer than the default landing
@@ -217,9 +215,9 @@ bool EndAndDirectionStrategy::ShouldRespectSnapStop() const {
   return true;
 }
 
-const absl::optional<SnapSearchResult>& EndAndDirectionStrategy::PickBestResult(
-    const absl::optional<SnapSearchResult>& closest,
-    const absl::optional<SnapSearchResult>& covering) const {
+const std::optional<SnapSearchResult>& EndAndDirectionStrategy::PickBestResult(
+    const std::optional<SnapSearchResult>& closest,
+    const std::optional<SnapSearchResult>& covering) const {
   return covering.has_value() ? covering : closest;
 }
 

@@ -1,4 +1,4 @@
-// Copyright (c) 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,18 +12,16 @@
 #include "chrome/test/chromedriver/chrome/chrome_impl.h"
 
 class Device;
-struct DeviceMetrics;
 class DevToolsClient;
-class DevToolsHttpClient;
 
 class ChromeAndroidImpl : public ChromeImpl {
  public:
-  ChromeAndroidImpl(std::unique_ptr<DevToolsHttpClient> http_client,
+  ChromeAndroidImpl(BrowserInfo browser_info,
+                    std::set<WebViewInfo::Type> window_types,
                     std::unique_ptr<DevToolsClient> websocket_client,
                     std::vector<std::unique_ptr<DevToolsEventListener>>
                         devtools_event_listeners,
-                    std::unique_ptr<DeviceMetrics> device_metrics,
-                    SyncWebSocketFactory socket_factory,
+                    absl::optional<MobileDevice> mobile_device,
                     std::string page_load_strategy,
                     std::unique_ptr<Device> device);
   ~ChromeAndroidImpl() override;

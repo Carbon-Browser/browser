@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,6 +6,7 @@
 
 #include "ash/public/cpp/shell_window_ids.h"
 #include "ash/public/cpp/window_properties.h"
+#include "ash/wm/desks/desk.h"
 #include "ash/wm/desks/desks_controller.h"
 #include "ash/wm/desks/desks_util.h"
 #include "ash/wm/window_state.h"
@@ -25,8 +26,9 @@ AlwaysOnTopController::AlwaysOnTopController(
   DCHECK(!desks_util::IsDeskContainer(always_on_top_container_));
   DCHECK(!desks_util::IsDeskContainer(pip_container_));
   always_on_top_container_->SetLayoutManager(
-      new WorkspaceLayoutManager(always_on_top_container_));
-  pip_container_->SetLayoutManager(new WorkspaceLayoutManager(pip_container_));
+      std::make_unique<WorkspaceLayoutManager>(always_on_top_container_));
+  pip_container_->SetLayoutManager(
+      std::make_unique<WorkspaceLayoutManager>(pip_container_));
   // Container should be empty.
   DCHECK(always_on_top_container_->children().empty());
   DCHECK(pip_container_->children().empty());
@@ -57,14 +59,26 @@ aura::Window* AlwaysOnTopController::GetContainer(aura::Window* window) const {
       ui::ZOrderLevel::kNormal) {
     aura::Window* root = always_on_top_container_->GetRootWindow();
 
-    // TODO(afakhry): Do we need to worry about the context of |window| here? Or
-    // is it safe to assume that |window| should always be parented to the
-    // active desks' container.
+    DesksController* desks_controller = DesksController::Get();
+    const std::string* desk_uuid_string =
+        window->GetProperty(aura::client::kDeskUuidKey);
+    if (desk_uuid_string) {
+      const base::Uuid desk_guid =
+          base::Uuid::ParseLowercase(*desk_uuid_string);
+      if (desk_guid.is_valid()) {
+        if (Desk* target_desk = desks_controller->GetDeskByUuid(desk_guid)) {
+          if (auto* container = target_desk->GetDeskContainerForRoot(root)) {
+            return container;
+          }
+        }
+      }
+    }
+
     const int window_workspace =
         window->GetProperty(aura::client::kWindowWorkspaceKey);
     if (window_workspace != aura::client::kWindowWorkspaceUnassignedWorkspace) {
       auto* desk_container =
-          DesksController::Get()->GetDeskContainer(root, window_workspace);
+          desks_controller->GetDeskContainer(root, window_workspace);
       if (desk_container)
         return desk_container;
     }
@@ -83,7 +97,7 @@ void AlwaysOnTopController::ClearLayoutManagers() {
 
 void AlwaysOnTopController::SetLayoutManagerForTest(
     std::unique_ptr<WorkspaceLayoutManager> layout_manager) {
-  always_on_top_container_->SetLayoutManager(layout_manager.release());
+  always_on_top_container_->SetLayoutManager(std::move(layout_manager));
 }
 
 void AlwaysOnTopController::AddWindow(aura::Window* window) {
@@ -107,13 +121,13 @@ void AlwaysOnTopController::ReparentWindow(aura::Window* window) {
 
 void AlwaysOnTopController::OnWindowHierarchyChanged(
     const HierarchyChangeParams& params) {
-  if (params.old_parent == always_on_top_container_ ||
-      params.old_parent == pip_container_) {
+  if (params.old_parent == always_on_top_container_.get() ||
+      params.old_parent == pip_container_.get()) {
     RemoveWindow(params.target);
   }
 
-  if (params.new_parent == always_on_top_container_ ||
-      params.new_parent == pip_container_) {
+  if (params.new_parent == always_on_top_container_.get() ||
+      params.new_parent == pip_container_.get()) {
     AddWindow(params.target);
   }
 }

@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -29,7 +29,6 @@ enum Condition {
   kDefault,
   kMandatory,
   kRecommended,
-  kIgnoredByAtomicGroup,
 };
 
 enum class PoliciesSources {
@@ -39,6 +38,15 @@ enum class PoliciesSources {
   kHybrid = 3,
   kEnrollmentOnly = 4,
   kMaxValue = kEnrollmentOnly,
+};
+
+// Values for the BrowserSignin policy.
+// VALUES MUST COINCIDE WITH THE BrowserSignin POLICY DEFINITION.
+enum class BrowserSigninMode {
+  kDisabled = 0,
+  kEnabled = 1,
+  kForced = 2,
+  kMaxValue = kForced
 };
 
 // Manages regular updates of policy usage UMA histograms.
@@ -72,7 +80,7 @@ class POLICY_EXPORT PolicyStatisticsCollector {
   GetChromePolicyDetailsCallback get_details_;
   Schema chrome_schema_;
   raw_ptr<PolicyService> policy_service_;
-  raw_ptr<PrefService> prefs_;
+  raw_ptr<PrefService, AcrossTasksDanglingUntriaged> prefs_;
 
   base::CancelableOnceClosure update_callback_;
 

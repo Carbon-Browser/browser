@@ -1,10 +1,10 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 function assertNotNullOrUndefined(value, message) {
-  chrome.test.assertTrue(value !== null, message);
-  chrome.test.assertTrue(value !== undefined, message);
+  chrome.test.assertNe(null, value, message);
+  chrome.test.assertNe(undefined, value, message);
 }
 
 function testWriteFromFile() {

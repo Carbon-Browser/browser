@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,9 +7,14 @@
 
 #import "ios/chrome/browser/ui/toolbar/adaptive_toolbar_coordinator.h"
 
+@protocol ToolbarHeightDelegate;
+
 // Coordinator for the secondary part of the adaptive toolbar. It is the part
 // containing the controls displayed only on specific size classes.
 @interface SecondaryToolbarCoordinator : AdaptiveToolbarCoordinator
+
+/// Delegate that handles the toolbars height.
+@property(nonatomic, weak) id<ToolbarHeightDelegate> toolbarHeightDelegate;
 
 @end
 

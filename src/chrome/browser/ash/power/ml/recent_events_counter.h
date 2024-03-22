@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -71,14 +71,5 @@ class RecentEventsCounter {
 }  // namespace ml
 }  // namespace power
 }  // namespace ash
-
-// TODO(https://crbug.com/1164001): remove when ChromeOS code migration is done.
-namespace chromeos {
-namespace power {
-namespace ml {
-using ::ash::power::ml::RecentEventsCounter;
-}  // namespace ml
-}  // namespace power
-}  // namespace chromeos
 
 #endif  // CHROME_BROWSER_ASH_POWER_ML_RECENT_EVENTS_COUNTER_H_

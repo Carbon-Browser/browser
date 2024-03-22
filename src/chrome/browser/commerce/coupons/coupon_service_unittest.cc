@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -79,9 +79,15 @@ const CouponProto kEmptyExpected = {};
 
 struct CouponDataStruct {
   const int64_t id;
-  const GURL& origin;
-  const std::string& description;
-  const std::string& coupon_code;
+  // This field is not a raw_ref<> because it was filtered by the rewriter for:
+  // #constexpr-ctor-field-initializer
+  RAW_PTR_EXCLUSION const GURL& origin;
+  // This field is not a raw_ref<> because it was filtered by the rewriter for:
+  // #constexpr-ctor-field-initializer
+  RAW_PTR_EXCLUSION const std::string& description;
+  // This field is not a raw_ref<> because it was filtered by the rewriter for:
+  // #constexpr-ctor-field-initializer
+  RAW_PTR_EXCLUSION const std::string& coupon_code;
 };
 
 }  // namespace
@@ -149,7 +155,7 @@ class CouponServiceTest : public testing::Test {
     EXPECT_TRUE(result);
     DCHECK_EQ(found.size(), 1u);
     DCHECK_EQ(found[0].second.free_listing_coupons()[0].last_display_time() ==
-                  time_to_compare.ToJavaTime(),
+                  time_to_compare.InMillisecondsSinceUnixEpoch(),
               should_be_equal);
     std::move(closure).Run();
   }
@@ -213,20 +219,8 @@ class CouponServiceTest : public testing::Test {
   TestingProfile profile_;
   raw_ptr<CouponService> service_;
   raw_ptr<CouponDB> coupon_db_;
-  // TODO(crbug/1313126): These are only initialized here because
-  // AutofillOfferData does not have a default ctor, and are overwritten in
-  // tests. Change these to local-only or to pointers so that this throwaway
-  // initialization isn't necessary.
-  autofill::AutofillOfferData coupon_data_a_ =
-      BuildCouponOfferData(kMockCouponIdA,
-                           kMockMerchantA,
-                           kMockCouponDescriptionA,
-                           kMockCouponCodeA);
-  autofill::AutofillOfferData coupon_data_b_ =
-      BuildCouponOfferData(kMockCouponIdB,
-                           kMockMerchantB,
-                           kMockCouponDescriptionB,
-                           kMockCouponCodeB);
+  autofill::AutofillOfferData coupon_data_a_;
+  autofill::AutofillOfferData coupon_data_b_;
 };
 
 TEST_F(CouponServiceTest, TestGetCouponForUrl) {

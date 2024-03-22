@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,7 +13,6 @@
 #include "components/no_state_prefetch/renderer/prerender_observer.h"
 #include "components/plugins/renderer/loadable_plugin_placeholder.h"
 #include "content/public/renderer/render_thread_observer.h"
-#include "mojo/public/cpp/bindings/pending_remote.h"
 #include "mojo/public/cpp/bindings/receiver.h"
 #include "third_party/blink/public/mojom/context_menu/context_menu.mojom.h"
 
@@ -21,7 +20,6 @@ class ChromePluginPlaceholder final
     : public plugins::LoadablePluginPlaceholder,
       public content::RenderThreadObserver,
       public blink::mojom::ContextMenuClient,
-      public chrome::mojom::PluginRenderer,
       public prerender::PrerenderObserver,
       public gin::Wrappable<ChromePluginPlaceholder> {
  public:
@@ -51,8 +49,6 @@ class ChromePluginPlaceholder final
 
   void SetStatus(chrome::mojom::PluginStatus status);
 
-  mojo::PendingRemote<chrome::mojom::PluginRenderer> BindPluginRenderer();
-
  private:
   ChromePluginPlaceholder(content::RenderFrame* render_frame,
                           const blink::WebPluginParams& params,
@@ -62,8 +58,6 @@ class ChromePluginPlaceholder final
 
   // content::LoadablePluginPlaceholder overrides.
   blink::WebPlugin* CreatePlugin() override;
-  void OnBlockedContent(content::RenderFrame::PeripheralContentStatus status,
-                        bool is_same_origin) override;
 
   // gin::Wrappable (via PluginPlaceholder) method
   gin::ObjectTemplateBuilder GetObjectTemplateBuilder(
@@ -75,12 +69,6 @@ class ChromePluginPlaceholder final
 
   // content::RenderThreadObserver methods:
   void PluginListChanged() override;
-
-  // chrome::mojom::PluginRenderer methods.
-  void FinishedDownloading() override;
-  void UpdateDownloading() override;
-  void UpdateSuccess() override;
-  void UpdateFailure() override;
 
   // blink::mojom::ContextMenuClient methods.
   void CustomContextMenuAction(uint32_t action) override;
@@ -94,8 +82,6 @@ class ChromePluginPlaceholder final
   std::u16string title_;
 
   std::u16string plugin_name_;
-
-  mojo::Receiver<chrome::mojom::PluginRenderer> plugin_renderer_receiver_{this};
 
   mojo::AssociatedReceiver<blink::mojom::ContextMenuClient>
       context_menu_client_receiver_{this};

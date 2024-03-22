@@ -1,10 +1,11 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "components/metrics/field_trials_provider.h"
 
 #include "base/metrics/field_trial.h"
+#include "base/test/scoped_feature_list.h"
 #include "base/threading/platform_thread.h"
 #include "components/variations/active_field_trials.h"
 #include "components/variations/synthetic_trial_registry.h"
@@ -64,7 +65,8 @@ ActiveGroupId ToActiveGroupId(ActiveGroup active_group, std::string suffix) {
 
 class FieldTrialsProviderTest : public ::testing::Test {
  public:
-  FieldTrialsProviderTest() = default;
+  FieldTrialsProviderTest() { scope_.InitWithEmptyFeatureAndFieldTrialLists(); }
+
   ~FieldTrialsProviderTest() override = default;
 
  protected:
@@ -73,8 +75,8 @@ class FieldTrialsProviderTest : public ::testing::Test {
     for (const ActiveGroup& trial : kFieldTrials) {
       base::FieldTrial* field_trial = base::FieldTrialList::CreateFieldTrial(
           trial.trial_name, trial.group_name);
-      // Call group() to finalize and mark the field trial as active.
-      field_trial->group();
+      // Call Activate() to finalize and mark the field trial as active.
+      field_trial->Activate();
     }
   }
 
@@ -104,6 +106,7 @@ class FieldTrialsProviderTest : public ::testing::Test {
   }
 
   SyntheticTrialRegistry registry_;
+  base::test::ScopedFeatureList scope_;
 };
 
 TEST_F(FieldTrialsProviderTest, ProvideSyntheticTrials) {

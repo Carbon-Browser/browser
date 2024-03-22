@@ -1,47 +1,42 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #import "ios/chrome/browser/ui/settings/voice_search_table_view_controller.h"
 
-#include <memory>
+#import <memory>
 
-#include "base/compiler_specific.h"
-#include "base/files/file_path.h"
-#include "base/mac/foundation_util.h"
-#include "base/test/task_environment.h"
-#include "base/threading/thread_task_runner_handle.h"
-#include "components/prefs/pref_member.h"
-#include "components/prefs/pref_registry_simple.h"
-#include "components/prefs/testing_pref_service.h"
-#import "ios/chrome/browser/ui/table_view/cells/table_view_switch_cell.h"
-#import "ios/chrome/browser/ui/table_view/cells/table_view_switch_item.h"
-#import "ios/chrome/browser/ui/table_view/chrome_table_view_controller_test.h"
-#include "ios/chrome/browser/voice/speech_input_locale_config_impl.h"
-#include "ios/chrome/browser/voice/voice_search_prefs.h"
-#include "testing/gtest/include/gtest/gtest.h"
+#import "base/apple/foundation_util.h"
+#import "base/files/file_path.h"
+#import "base/test/task_environment.h"
+#import "components/prefs/pref_member.h"
+#import "components/prefs/pref_registry_simple.h"
+#import "components/prefs/testing_pref_service.h"
+#import "ios/chrome/browser/shared/ui/table_view/cells/table_view_detail_text_item.h"
+#import "ios/chrome/browser/shared/ui/table_view/cells/table_view_switch_cell.h"
+#import "ios/chrome/browser/shared/ui/table_view/cells/table_view_switch_item.h"
+#import "ios/chrome/browser/shared/ui/table_view/legacy_chrome_table_view_controller_test.h"
+#import "ios/chrome/browser/voice/model/speech_input_locale_config_impl.h"
+#import "ios/chrome/browser/voice/model/voice_search_prefs.h"
+#import "testing/gtest/include/gtest/gtest.h"
 #import "testing/gtest_mac.h"
-#include "testing/platform_test.h"
-#include "ui/base/l10n/l10n_util_mac.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
+#import "testing/platform_test.h"
+#import "ui/base/l10n/l10n_util_mac.h"
 
 namespace {
 
 class VoiceSearchTableViewControllerTest
-    : public ChromeTableViewControllerTest {
+    : public LegacyChromeTableViewControllerTest {
  protected:
   VoiceSearchTableViewControllerTest()
       : task_environment_(base::test::TaskEnvironment::MainThreadType::UI) {}
 
   void SetUp() override {
-    ChromeTableViewControllerTest::SetUp();
+    LegacyChromeTableViewControllerTest::SetUp();
     pref_service_ = CreateLocalState();
   }
 
-  ChromeTableViewController* InstantiateController() override {
+  LegacyChromeTableViewController* InstantiateController() override {
     return [[VoiceSearchTableViewController alloc]
         initWithPrefs:pref_service_.get()];
   }
@@ -55,7 +50,7 @@ class VoiceSearchTableViewControllerTest
   }
 
   TableViewSwitchCell* GetSwitchCell() {
-    return base::mac::ObjCCastStrict<TableViewSwitchCell>(
+    return base::apple::ObjCCastStrict<TableViewSwitchCell>(
         [controller().tableView
             cellForRowAtIndexPath:[NSIndexPath indexPathForItem:0
                                                       inSection:0]]);
@@ -145,6 +140,74 @@ TEST_F(VoiceSearchTableViewControllerTest,
 
   CreateController();
   TableViewSwitchItem* switchItem = GetTableViewItem(0, 0);
+  EXPECT_FALSE(switchItem.isOn);
+  EXPECT_FALSE(switchItem.isEnabled);
+}
+
+// Verifies that the TTS switch item is updated when the underlying preference
+// value changes.
+TEST_F(VoiceSearchTableViewControllerTest, TTSPrefToggled) {
+  // Enable the global TTS setting.
+  BooleanPrefMember textToSpeechEnabled;
+  textToSpeechEnabled.Init(prefs::kVoiceSearchTTS, pref_service_.get());
+  textToSpeechEnabled.SetValue(true);
+
+  CreateController();
+  TableViewSwitchItem* switchItem = GetTableViewItem(0, 0);
+  EXPECT_TRUE(switchItem.isOn);
+  EXPECT_TRUE(switchItem.isEnabled);
+
+  // Disable the global TTS setting.
+  textToSpeechEnabled.SetValue(false);
+  EXPECT_FALSE(switchItem.isOn);
+  EXPECT_TRUE(switchItem.isEnabled);
+
+  // Re-enable the global TTS setting.
+  textToSpeechEnabled.SetValue(true);
+  EXPECT_TRUE(switchItem.isOn);
+  EXPECT_TRUE(switchItem.isEnabled);
+}
+
+// Verifies that language items are updated when the underlying preference value
+// changes.
+TEST_F(VoiceSearchTableViewControllerTest, LanguagePrefChanged) {
+  // Enable the global TTS setting and set the selected language as the
+  // default language.
+  BooleanPrefMember textToSpeechEnabled;
+  textToSpeechEnabled.Init(prefs::kVoiceSearchTTS, pref_service_.get());
+  textToSpeechEnabled.SetValue(true);
+  StringPrefMember selectedLanguage;
+  selectedLanguage.Init(prefs::kVoiceSearchLocale, pref_service_.get());
+  selectedLanguage.SetValue("");
+
+  CreateController();
+  TableViewSwitchItem* switchItem = GetTableViewItem(0, 0);
+  EXPECT_TRUE(switchItem.isOn);
+  EXPECT_TRUE(switchItem.isEnabled);
+
+  TableViewDetailTextItem* defaultLanguageItem = GetTableViewItem(1, 0);
+  EXPECT_EQ(defaultLanguageItem.accessoryType,
+            UITableViewCellAccessoryCheckmark);
+
+  const std::vector<voice::SpeechInputLocale>& locales =
+      voice::SpeechInputLocaleConfig::GetInstance()->GetAvailableLocales();
+
+  // Add one to the available locale list size to account for the default locale
+  // preference.
+  ASSERT_EQ(locales.size() + 1,
+            static_cast<unsigned int>(NumberOfItemsInSection(1)));
+
+  TableViewDetailTextItem* lastLanguageItem =
+      GetTableViewItem(1, locales.size());
+  EXPECT_EQ(lastLanguageItem.accessoryType, UITableViewCellAccessoryNone);
+
+  // Update the language preference to the last language.
+  selectedLanguage.SetValue(locales[locales.size() - 1].code);
+  EXPECT_EQ(defaultLanguageItem.accessoryType, UITableViewCellAccessoryNone);
+  EXPECT_EQ(lastLanguageItem.accessoryType, UITableViewCellAccessoryCheckmark);
+
+  // Update the language preference to a language that doesn't support TTS.
+  selectedLanguage.SetValue("af-ZA");
   EXPECT_FALSE(switchItem.isOn);
   EXPECT_FALSE(switchItem.isEnabled);
 }

@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,9 +6,7 @@ package org.chromium.chrome.browser.net.nqe;
 
 import org.chromium.net.EffectiveConnectionType;
 
-/**
- * Interface for observing changes to the current Network Quality Estimate.
- */
+/** Interface for observing changes to the current Network Quality Estimate. */
 public interface NetworkQualityObserver {
     /**
      * Called when there is a change in the effective connection type.

@@ -37,14 +37,13 @@
 namespace blink {
 
 class ExceptionState;
-class ScriptState;
 
 class CORE_EXPORT HTMLScriptElement final : public HTMLElement,
                                             public ScriptElementBase {
   DEFINE_WRAPPERTYPEINFO();
 
  public:
-  static bool supports(ScriptState*, const AtomicString&);
+  static bool supports(const AtomicString&);
 
   HTMLScriptElement(Document&, const CreateElementFlags);
 
@@ -54,7 +53,7 @@ class CORE_EXPORT HTMLScriptElement final : public HTMLElement,
   String text() { return TextFromChildren(); }
   void setText(const String&);
   void setInnerTextForBinding(
-      const V8UnionStringTreatNullAsEmptyStringOrTrustedScript*
+      const V8UnionStringLegacyNullToEmptyStringOrTrustedScript*
           string_or_trusted_script,
       ExceptionState& exception_state) override;
   void setTextContentForBinding(const V8UnionStringOrTrustedScript* value,
@@ -91,7 +90,6 @@ class CORE_EXPORT HTMLScriptElement final : public HTMLElement,
 
   bool IsURLAttribute(const Attribute&) const override;
   bool HasLegalLinkAttribute(const QualifiedName&) const override;
-  const QualifiedName& SubResourceAttributeName() const override;
 
   // ScriptElementBase overrides:
   String SourceAttributeValue() const override;
@@ -122,12 +120,14 @@ class CORE_EXPORT HTMLScriptElement final : public HTMLElement,
                                const String& script_content) override;
   void DispatchLoadEvent() override;
   void DispatchErrorEvent() override;
+  bool HasLoadEventHandler() override;
+  bool HasErrorEventHandler() override;
 
   Type GetScriptElementType() override;
 
   Element& CloneWithoutAttributesAndChildren(Document&) const override;
 
-  // https://w3c.github.io/webappsec-trusted-types/dist/spec/#script-scripttext
+  // https://w3c.github.io/trusted-types/dist/spec/#script-scripttext
   ParkableString script_text_internal_slot_;
   bool children_changed_by_api_;
 

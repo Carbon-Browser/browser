@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -59,7 +59,7 @@ class ScreenlockMonitorTest : public testing::Test {
     screenlock_monitor_ = std::make_unique<ScreenlockMonitor>(
         std::unique_ptr<ScreenlockMonitorSource>(screenlock_monitor_source_));
   }
-  ~ScreenlockMonitorTest() override = default;
+  ~ScreenlockMonitorTest() override { screenlock_monitor_source_ = nullptr; }
 
  protected:
   raw_ptr<ScreenlockMonitorTestSource> screenlock_monitor_source_;

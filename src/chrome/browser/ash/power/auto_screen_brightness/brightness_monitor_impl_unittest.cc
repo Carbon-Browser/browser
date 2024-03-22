@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,7 +10,6 @@
 #include "base/test/metrics/histogram_tester.h"
 #include "base/test/scoped_feature_list.h"
 #include "base/test/task_environment.h"
-#include "base/threading/sequenced_task_runner_handle.h"
 #include "chromeos/dbus/power/fake_power_manager_client.h"
 #include "chromeos/dbus/power_manager/backlight.pb.h"
 #include "testing/gtest/include/gtest/gtest.h"
@@ -81,12 +80,12 @@ class BrightnessMonitorImplTest : public testing::Test {
   ~BrightnessMonitorImplTest() override {}
 
   // testing::Test:
-  void SetUp() override { PowerManagerClient::InitializeFake(); }
+  void SetUp() override { chromeos::PowerManagerClient::InitializeFake(); }
 
   void TearDown() override {
     test_observer_.reset();
     monitor_.reset();
-    PowerManagerClient::Shutdown();
+    chromeos::PowerManagerClient::Shutdown();
     base::ThreadPoolInstance::Get()->FlushForTesting();
   }
 
@@ -98,7 +97,7 @@ class BrightnessMonitorImplTest : public testing::Test {
     if (init_brightness >= 0) {
       power_manager::SetBacklightBrightnessRequest request;
       request.set_percent(init_brightness);
-      PowerManagerClient::Get()->SetScreenBrightness(request);
+      chromeos::PowerManagerClient::Get()->SetScreenBrightness(request);
     }
 
     if (!params.empty()) {
@@ -120,7 +119,8 @@ class BrightnessMonitorImplTest : public testing::Test {
     power_manager::BacklightBrightnessChange change;
     change.set_percent(level);
     change.set_cause(cause);
-    static_cast<FakePowerManagerClient*>(PowerManagerClient::Get())
+    static_cast<chromeos::FakePowerManagerClient*>(
+        chromeos::PowerManagerClient::Get())
         ->SendScreenBrightnessChanged(change);
     task_environment_.RunUntilIdle();
   }

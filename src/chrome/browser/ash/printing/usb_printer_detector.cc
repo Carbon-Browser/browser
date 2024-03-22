@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,12 +10,11 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/sequence_checker.h"
 #include "base/strings/strcat.h"
 #include "base/strings/utf_string_conversions.h"
-#include "base/threading/sequenced_task_runner_handle.h"
 #include "chrome/browser/ash/printing/ppd_provider_factory.h"
 #include "chrome/browser/ash/printing/printer_configurer.h"
 #include "chrome/browser/ash/printing/printer_event_tracker.h"
@@ -23,8 +22,8 @@
 #include "chrome/browser/ash/printing/synced_printers_manager_factory.h"
 #include "chrome/browser/ash/printing/usb_printer_util.h"
 #include "chrome/browser/browser_process.h"
-#include "chromeos/dbus/dbus_thread_manager.h"
-#include "chromeos/dbus/debug_daemon/debug_daemon_client.h"
+#include "chromeos/ash/components/dbus/dbus_thread_manager.h"
+#include "chromeos/ash/components/dbus/debug_daemon/debug_daemon_client.h"
 #include "chromeos/printing/ppd_provider.h"
 #include "chromeos/printing/usb_printer_id.h"
 #include "components/device_event_log/device_event_log.h"
@@ -40,13 +39,6 @@
 
 namespace ash {
 namespace {
-
-// Given a usb device, guesses the make and model for a driver lookup.
-std::string GuessEffectiveMakeAndModel(
-    const device::mojom::UsbDeviceInfo& device) {
-  return base::StrCat({base::UTF16ToUTF8(GetManufacturerName(device)), " ",
-                       base::UTF16ToUTF8(GetProductName(device))});
-}
 
 // The PrinterDetector that drives the flow for setting up a USB printer to use
 // CUPS backend.

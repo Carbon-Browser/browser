@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -150,14 +150,17 @@ base::WritableSharedMemoryRegion Broker::GetWritableSharedMemoryRegion(
     BufferResponseData* data;
     if (!GetBrokerMessageData(response.get(), &data))
       return base::WritableSharedMemoryRegion();
+    std::optional<base::UnguessableToken> guid =
+        base::UnguessableToken::Deserialize(data->guid_high, data->guid_low);
+    if (!guid.has_value()) {
+      return base::WritableSharedMemoryRegion();
+    }
     return base::WritableSharedMemoryRegion::Deserialize(
         base::subtle::PlatformSharedMemoryRegion::Take(
             CreateSharedMemoryRegionHandleFromPlatformHandles(std::move(handle),
                                                               PlatformHandle()),
             base::subtle::PlatformSharedMemoryRegion::Mode::kWritable,
-            num_bytes,
-            base::UnguessableToken::Deserialize(data->guid_high,
-                                                data->guid_low)));
+            num_bytes, guid.value()));
   }
 
   return base::WritableSharedMemoryRegion();

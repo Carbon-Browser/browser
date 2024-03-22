@@ -1,4 +1,4 @@
-// Copyright (c) 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,7 +8,7 @@
 #include "base/strings/string_piece.h"
 #include "net/base/net_export.h"
 #include "net/log/net_log_with_source.h"
-#include "net/third_party/quiche/src/quiche/spdy/core/spdy_header_block.h"
+#include "net/third_party/quiche/src/quiche/spdy/core/http2_header_block.h"
 #include "net/third_party/quiche/src/quiche/spdy/core/spdy_headers_handler_interface.h"
 
 namespace net {
@@ -21,7 +21,7 @@ class NET_EXPORT_PRIVATE HeaderCoalescer
 
   void OnHeaderBlockStart() override {}
 
-  void OnHeader(absl::string_view key, absl::string_view value) override;
+  void OnHeader(std::string_view key, absl::string_view value) override;
 
   void OnHeaderBlockEnd(size_t uncompressed_header_bytes,
                         size_t compressed_header_bytes) override {}

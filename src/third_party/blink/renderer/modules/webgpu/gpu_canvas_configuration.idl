@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -15,9 +15,6 @@ dictionary GPUCanvasConfiguration {
     GPUTextureUsageFlags usage = 16;  // GPUTextureUsage.RENDER_ATTACHMENT
     sequence<GPUTextureFormat> viewFormats = [];
     PredefinedColorSpace colorSpace = "srgb";
-    GPUCanvasAlphaMode alphaMode;
-
-    // TODO(crbug.com/1069302): Remove the following after a deprecation period.
-    GPUExtent3D size;
-    GPUCanvasAlphaMode compositingAlphaMode;
+    GPUCanvasAlphaMode alphaMode = "opaque";
+    [RuntimeEnabled=CanvasHDR] CanvasHighDynamicRangeOptions hdrOptions;
 };

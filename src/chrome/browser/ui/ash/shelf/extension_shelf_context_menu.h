@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -31,8 +31,11 @@ class ExtensionShelfContextMenu : public ShelfContextMenu {
   void GetMenuModel(GetMenuModelCallback callback) override;
 
   // ui::SimpleMenuModel::Delegate overrides:
+  ui::ImageModel GetIconForCommandId(int command_id) const override;
+  std::u16string GetLabelForCommandId(int command_id) const override;
   bool IsCommandIdChecked(int command_id) const override;
   bool IsCommandIdEnabled(int command_id) const override;
+  bool IsItemForCommandIdDynamic(int command_id) const override;
   void ExecuteCommand(int command_id, int event_flags) override;
 
  private:

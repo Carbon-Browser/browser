@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 //
@@ -41,6 +41,31 @@ namespace network {
 class SimpleURLLoader;
 }
 
+// The provider event types recorded as a result of prefetch and non-prefetch
+// requests for zero-prefix suggestions. Each event must be logged at most once
+// from when the provider is started until it is stopped.
+// These values are written to logs. New enum values can be added, but existing
+// enums must never be renumbered or deleted and reused.
+enum class RemoteRequestHistogramValue {
+  // Cached response was synchronously converted to displayed matches.
+  // Recorded for non-prefetch requests only.
+  kCachedResponseConvertedToMatches = 0,
+  // Remote request was sent.
+  kRequestSent = 1,
+  // Remote request was invalidated.
+  kRequestInvalidated = 2,
+  // Remote response was received asynchronously.
+  kRemoteResponseReceived = 3,
+  // Remote response was cached.
+  kRemoteResponseCached = 4,
+  // Remote response ended up being converted to displayed matches. This may
+  // happen due to an empty displayed result set or an empty remote result set.
+  // Recorded for non-prefetch requests only.
+  kRemoteResponseConvertedToMatches = 5,
+
+  kMaxValue = kRemoteResponseConvertedToMatches,
+};
+
 // Autocomplete provider for searches and suggestions from a search engine.
 //
 // After construction, the autocomplete controller repeatedly calls Start()
@@ -76,11 +101,17 @@ class SearchProvider : public BaseSearchProvider,
       bool allow_exact_keyword_match,
       bool prefer_keyword);
 
-  // AutocompleteProvider:
-  void ResetSession() override;
-
   // The verbatim score for an input which is not a URL.
   static const int kNonURLVerbatimRelevance = 1300;
+
+  // Returns whether the current page URL can be sent in the suggest requests.
+  // This method is virtual to mock for testing.
+  virtual bool CanSendCurrentPageURLInRequest(
+      const GURL& current_page_url,
+      const TemplateURL* template_url,
+      metrics::OmniboxEventProto::PageClassification page_classification,
+      const SearchTermsData& search_terms_data,
+      const AutocompleteProviderClient* client);
 
  protected:
   ~SearchProvider() override;
@@ -88,7 +119,6 @@ class SearchProvider : public BaseSearchProvider,
  private:
   friend class AutocompleteProviderTest;
   friend class BaseSearchProviderTest;
-  FRIEND_TEST_ALL_PREFIXES(SearchProviderTest, CanSendRequestWithURL);
   FRIEND_TEST_ALL_PREFIXES(SearchProviderTest,
                            DontInlineAutocompleteAsynchronously);
   FRIEND_TEST_ALL_PREFIXES(SearchProviderTest, NavigationInline);
@@ -110,6 +140,8 @@ class SearchProvider : public BaseSearchProvider,
   FRIEND_TEST_ALL_PREFIXES(SearchProviderTest,
                            DontTrimHttpsSchemeIfInputHasScheme);
   FRIEND_TEST_ALL_PREFIXES(SearchProviderTest, DoTrimHttpsScheme);
+  FRIEND_TEST_ALL_PREFIXES(SearchProviderRequestTest, SendRequestWithURL);
+  FRIEND_TEST_ALL_PREFIXES(SearchProviderRequestTest, SendRequestWithoutURL);
 
   // Manages the providers (TemplateURLs) used by SearchProvider. Two providers
   // may be used:
@@ -172,8 +204,6 @@ class SearchProvider : public BaseSearchProvider,
             bool due_to_user_inactivity) override;
 
   // BaseSearchProvider:
-  const TemplateURL* GetTemplateURL(bool is_keyword) const override;
-  const AutocompleteInput GetInput(bool is_keyword) const override;
   bool ShouldAppendExtraParams(
       const SearchSuggestionParser::SuggestResult& result) const override;
   void RecordDeletionResult(bool success) override;
@@ -181,8 +211,17 @@ class SearchProvider : public BaseSearchProvider,
   // TemplateURLServiceObserver:
   void OnTemplateURLServiceChanged() override;
 
+  // Returns the TemplateURL corresponding to the keyword or default
+  // provider based on the value of |is_keyword|.
+  const TemplateURL* GetTemplateURL(bool is_keyword) const;
+
+  // Returns the AutocompleteInput for keyword provider or default provider
+  // based on the value of |is_keyword|.
+  const AutocompleteInput GetInput(bool is_keyword) const;
+
   // Called back from SimpleURLLoader.
   void OnURLLoadComplete(const network::SimpleURLLoader* source,
+                         const int response_code,
                          std::unique_ptr<std::string> response_body);
 
   // Stops the suggest query.
@@ -359,12 +398,10 @@ class SearchProvider : public BaseSearchProvider,
   // indicates whether the results correspond to the keyword provider or default
   // provider. |use_aggressive_method| says whether this function can use a
   // method that gives high scores (1200+) rather than one that gives lower
-  // scores.  When using the aggressive method, scores may exceed 1300
-  // unless |prevent_search_history_inlining| is set.
+  // scores.  When using the aggressive method, scores may exceed 1300.
   int CalculateRelevanceForHistory(const base::Time& time,
                                    bool is_keyword,
-                                   bool use_aggressive_method,
-                                   bool prevent_search_history_inlining) const;
+                                   bool use_aggressive_method) const;
 
   // Returns an AutocompleteMatch for a navigational suggestion.
   AutocompleteMatch NavigationToMatch(

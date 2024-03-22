@@ -1,6 +1,10 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+//
+// This source code is a part of eyeo Chromium SDK.
+// Use of this source code is governed by the GPLv3 that can be found in the
+// components/adblock/LICENSE file.
 
 #include "base/one_shot_event.h"
 #include "chrome/browser/extensions/extension_browsertest.h"
@@ -56,6 +60,12 @@ IN_PROC_BROWSER_TEST_F(ExtensionFunctionRegistrationTest,
                            base::CompareCase::SENSITIVE)) {
         continue;
       }
+      // Eyeo extension API uses UNKNOWN; it's not used in histograms.
+      if (base::StartsWith(entry.function_name_, "adblockPrivate.") ||
+          base::StartsWith(entry.function_name_, "eyeoFilteringPrivate.")) {
+        continue;
+      }
+
       // Some undocumented, unlaunched APIs may also use UNKNOWN if it's unclear
       // (or unlikely) if they will ever launch.
       if (base::Contains(kAllowedUnknownHistogramEntries,

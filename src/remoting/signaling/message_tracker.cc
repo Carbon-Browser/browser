@@ -1,9 +1,10 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "remoting/signaling/message_tracker.h"
 
+#include "base/containers/contains.h"
 #include "base/containers/cxx20_erase.h"
 
 namespace remoting {
@@ -24,7 +25,7 @@ void MessageTracker::TrackId(const std::string& id) {
 }
 
 bool MessageTracker::IsIdTracked(const std::string& id) const {
-  return tracked_ids_.find(id) != tracked_ids_.end();
+  return base::Contains(tracked_ids_, id);
 }
 
 void MessageTracker::RemoveExpiredIds() {

@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,6 +10,7 @@
 #include <memory>
 
 #include "base/check_op.h"
+#include "base/containers/contains.h"
 #include "base/notreached.h"
 #include "base/rand_util.h"
 #include "base/strings/string_number_conversions.h"
@@ -404,8 +405,6 @@ FileSystemURL IsolatedContext::CreateCrackedFileSystemURL(
     const blink::StorageKey& storage_key,
     FileSystemType type,
     const base::FilePath& virtual_path) const {
-  // TODO(https://crbug.com/1221308): function will have StorageKey param in
-  // future CL; conversion from url::Origin is temporary
   return CrackFileSystemURL(FileSystemURL(storage_key, type, virtual_path));
 }
 
@@ -422,7 +421,7 @@ void IsolatedContext::RevokeFileSystemByPath(const base::FilePath& path_in) {
 
 void IsolatedContext::AddReference(const std::string& filesystem_id) {
   base::AutoLock locker(lock_);
-  DCHECK(instance_map_.find(filesystem_id) != instance_map_.end());
+  DCHECK(base::Contains(instance_map_, filesystem_id));
   instance_map_[filesystem_id]->AddRef();
 }
 
@@ -513,7 +512,7 @@ std::string IsolatedContext::GetNewFileSystemId() const {
   do {
     base::RandBytes(random_data, sizeof(random_data));
     id = base::HexEncode(random_data, sizeof(random_data));
-  } while (instance_map_.find(id) != instance_map_.end());
+  } while (base::Contains(instance_map_, id));
   return id;
 }
 

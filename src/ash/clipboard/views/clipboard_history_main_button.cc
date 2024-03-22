@@ -1,27 +1,23 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "ash/clipboard/views/clipboard_history_main_button.h"
 
 #include "ash/clipboard/views/clipboard_history_item_view.h"
-#include "ash/public/cpp/style/scoped_light_mode_as_default.h"
-#include "ash/style/ash_color_provider.h"
+#include "ash/style/ash_color_id.h"
 #include "ash/style/style_util.h"
-#include "base/bind.h"
+#include "base/functional/bind.h"
+#include "chromeos/constants/chromeos_features.h"
+#include "ui/base/metadata/metadata_impl_macros.h"
+#include "ui/chromeos/styles/cros_tokens_color_mappings.h"
+#include "ui/color/color_provider.h"
 #include "ui/gfx/canvas.h"
 #include "ui/views/accessibility/view_accessibility.h"
 #include "ui/views/animation/ink_drop.h"
 #include "ui/views/controls/focus_ring.h"
 
 namespace ash {
-namespace {
-
-// The menu background's color type.
-constexpr ash::AshColorProvider::BaseLayerType kMenuBackgroundColorType =
-    ash::AshColorProvider::BaseLayerType::kOpaque;
-
-}  // namespace
 
 ClipboardHistoryMainButton::ClipboardHistoryMainButton(
     ClipboardHistoryItemView* container)
@@ -33,7 +29,6 @@ ClipboardHistoryMainButton::ClipboardHistoryMainButton(
       container_(container) {
   SetFocusBehavior(views::View::FocusBehavior::ALWAYS);
   views::InkDrop::Get(this)->SetMode(views::InkDropHost::InkDropMode::ON);
-  SetID(ClipboardHistoryUtil::kMainButtonViewID);
 
   // Let the parent handle accessibility features.
   GetViewAccessibility().OverrideIsIgnored(/*value=*/true);
@@ -58,22 +53,6 @@ ClipboardHistoryMainButton::ClipboardHistoryMainButton(
 
 ClipboardHistoryMainButton::~ClipboardHistoryMainButton() = default;
 
-void ClipboardHistoryMainButton::OnHostPseudoFocusUpdated() {
-  SetShouldHighlight(container_->ShouldHighlight());
-}
-
-void ClipboardHistoryMainButton::SetShouldHighlight(bool should_highlight) {
-  if (should_highlight_ == should_highlight)
-    return;
-
-  should_highlight_ = should_highlight;
-  SchedulePaint();
-}
-
-const char* ClipboardHistoryMainButton::GetClassName() const {
-  return "ClipboardHistoryMainButton";
-}
-
 void ClipboardHistoryMainButton::OnClickCanceled(const ui::Event& event) {
   DCHECK(event.IsMouseEvent());
 
@@ -84,11 +63,6 @@ void ClipboardHistoryMainButton::OnClickCanceled(const ui::Event& event) {
 void ClipboardHistoryMainButton::OnThemeChanged() {
   views::Button::OnThemeChanged();
 
-  // Use the light mode as default because the light mode is the default mode
-  // of the native theme which decides the context menu's background color.
-  // TODO(andrewxu): remove this line after https://crbug.com/1143009 is
-  // fixed.
-  ScopedLightModeAsDefault scoped_light_mode_as_default;
   StyleUtil::ConfigureInkDropAttributes(
       this, StyleUtil::kBaseColor | StyleUtil::kInkDropOpacity);
 }
@@ -107,27 +81,25 @@ void ClipboardHistoryMainButton::OnGestureEvent(ui::GestureEvent* event) {
 }
 
 void ClipboardHistoryMainButton::PaintButtonContents(gfx::Canvas* canvas) {
-  if (!should_highlight_)
+  // Only paint a highlight when the button has pseudo focus.
+  if (!container_->IsMainButtonPseudoFocused()) {
     return;
-
-  // Use the light mode as default because the light mode is the default mode
-  // of the native theme which decides the context menu's background color.
-  // TODO(andrewxu): remove this line after https://crbug.com/1143009 is
-  // fixed.
-  ScopedLightModeAsDefault scoped_light_mode_as_default;
+  }
 
   // Highlight the background when the menu item is selected or pressed.
   cc::PaintFlags flags;
   flags.setAntiAlias(true);
 
-  auto* color_provider = AshColorProvider::Get();
-  const std::pair<SkColor, float> base_color_and_opacity =
-      color_provider->GetInkDropBaseColorAndOpacity(
-          color_provider->GetBaseLayerColor(kMenuBackgroundColorType));
-  flags.setColor(SkColorSetA(base_color_and_opacity.first,
-                             base_color_and_opacity.second * 0xFF));
+  const auto color_id =
+      chromeos::features::IsJellyEnabled()
+          ? static_cast<ui::ColorId>(cros_tokens::kCrosSysHoverOnSubtle)
+          : kColorAshInkDrop;
+  flags.setColor(GetColorProvider()->GetColor(color_id));
   flags.setStyle(cc::PaintFlags::kFill_Style);
   canvas->DrawRect(GetLocalBounds(), flags);
 }
+
+BEGIN_METADATA(ClipboardHistoryMainButton, views::Button)
+END_METADATA
 
 }  // namespace ash

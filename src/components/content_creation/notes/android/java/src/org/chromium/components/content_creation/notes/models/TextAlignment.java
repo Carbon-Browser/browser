@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,9 +6,7 @@ package org.chromium.components.content_creation.notes.models;
 
 import android.view.Gravity;
 
-/**
- * Enum with values corresponding to the C++ TextAlignment enum class.
- */
+/** Enum with values corresponding to the C++ TextAlignment enum class. */
 public enum TextAlignment {
     INVALID,
     START,
@@ -29,7 +27,7 @@ public enum TextAlignment {
 
     public static int toGravity(TextAlignment alignment) {
         switch (alignment) {
-            // Invalid will default to start.
+                // Invalid will default to start.
             case INVALID:
             case START:
                 return Gravity.START | Gravity.CENTER_VERTICAL;

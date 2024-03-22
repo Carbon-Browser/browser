@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,8 +8,8 @@
 
 #include "base/android/jni_android.h"
 #include "base/android/jni_string.h"
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
 #include "chrome/browser/profiles/profile_key_android.h"
@@ -31,7 +31,7 @@ class DownloadManagerServiceTest : public testing::Test {
  public:
   DownloadManagerServiceTest()
       : service_(new DownloadManagerService()),
-        coordinator_(base::NullCallback(), false),
+        coordinator_(base::NullCallback()),
         success_(false) {
     ON_CALL(manager_, GetDownloadByGuid(_))
         .WillByDefault(::testing::Invoke(

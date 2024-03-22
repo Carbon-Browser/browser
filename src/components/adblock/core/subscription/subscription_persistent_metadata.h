@@ -42,6 +42,8 @@ class SubscriptionPersistentMetadata : public KeyedService {
   // - Set to 1 day by default for the special case of HEAD-only request.
   virtual void SetExpirationInterval(const GURL& subscription_url,
                                      base::TimeDelta expires_in) = 0;
+  // Sets the last installation time to Now().
+  virtual void SetLastInstallationTime(const GURL& subscription_url) = 0;
   // The version of a subscription can be:
   // - parsed from the filter list (see Subscription::GetCurrentVersion())
   // - for HEAD requests, created by parsing the received "Date" header.
@@ -58,14 +60,12 @@ class SubscriptionPersistentMetadata : public KeyedService {
   // whether to fall back to an alternate download URL.
   // Incrementing the error count does *not* influence the success count.
   virtual void IncrementDownloadErrorCount(const GURL& subscription_url) = 0;
-
   // Returns whether the expiration time (see SetExpirationInterval()) is
   // earlier than Now().
   // A subscription for which SetExpirationInterval() was never called is
   // considered expired, as otherwise it would never be selected for updating.
   virtual bool IsExpired(const GURL& subscription_url) const = 0;
-  // Returns time of last installation/update time, which is set when
-  // SetExpirationInterval() is called.
+  // Returns time of the last installation set by SetLastInstallationTime().
   virtual base::Time GetLastInstallationTime(
       const GURL& subscription_url) const = 0;
   // Returns version set in SetVersion() or "0" when not set.

@@ -1,4 +1,4 @@
-# Copyright 2016 The Chromium Authors. All rights reserved.
+# Copyright 2016 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -22,8 +22,6 @@ blink_modules_sources("peerconnection") {
     "adapters/web_rtc_cross_thread_copier.h",
     "byte_buffer_queue.cc",
     "byte_buffer_queue.h",
-    "call_setup_state_tracker.cc",
-    "call_setup_state_tracker.h",
     "identifiability_metrics.cc",
     "identifiability_metrics.h",
     "media_stream_remote_video_source.cc",
@@ -34,6 +32,8 @@ blink_modules_sources("peerconnection") {
     "media_stream_video_webrtc_sink.h",
     "peer_connection_dependency_factory.cc",
     "peer_connection_dependency_factory.h",
+    "peer_connection_features.cc",
+    "peer_connection_features.h",
     "peer_connection_tracker.cc",
     "peer_connection_tracker.h",
     "rtc_certificate.cc",
@@ -58,6 +58,10 @@ blink_modules_sources("peerconnection") {
     "rtc_encoded_audio_receiver_sink_optimizer.h",
     "rtc_encoded_audio_receiver_source_optimizer.cc",
     "rtc_encoded_audio_receiver_source_optimizer.h",
+    "rtc_encoded_audio_sender_sink_optimizer.cc",
+    "rtc_encoded_audio_sender_sink_optimizer.h",
+    "rtc_encoded_audio_sender_source_optimizer.cc",
+    "rtc_encoded_audio_sender_source_optimizer.h",
     "rtc_encoded_audio_underlying_sink.cc",
     "rtc_encoded_audio_underlying_sink.h",
     "rtc_encoded_audio_underlying_source.cc",
@@ -66,6 +70,14 @@ blink_modules_sources("peerconnection") {
     "rtc_encoded_video_frame.h",
     "rtc_encoded_video_frame_delegate.cc",
     "rtc_encoded_video_frame_delegate.h",
+    "rtc_encoded_video_receiver_sink_optimizer.cc",
+    "rtc_encoded_video_receiver_sink_optimizer.h",
+    "rtc_encoded_video_receiver_source_optimizer.cc",
+    "rtc_encoded_video_receiver_source_optimizer.h",
+    "rtc_encoded_video_sender_sink_optimizer.cc",
+    "rtc_encoded_video_sender_sink_optimizer.h",
+    "rtc_encoded_video_sender_source_optimizer.cc",
+    "rtc_encoded_video_sender_source_optimizer.h",
     "rtc_encoded_video_underlying_sink.cc",
     "rtc_encoded_video_underlying_sink.h",
     "rtc_encoded_video_underlying_source.cc",
@@ -151,14 +163,15 @@ blink_modules_sources("peerconnection") {
 
   public_deps = [ "//third_party/webrtc_overrides:webrtc_component" ]
   deps = [
+    "//build:chromecast_buildflags",
     "//components/webrtc:thread_wrapper",
+    "//media/mojo/clients:clients",
     "//services/metrics/public/cpp:ukm_builders",
     "//third_party/abseil-cpp:absl",
     "//third_party/blink/public/mojom:web_feature_mojo_bindings",
     "//third_party/blink/renderer/modules/crypto",
     "//third_party/blink/renderer/modules/mediastream",
     "//third_party/blink/renderer/modules/webrtc",
-    "//third_party/re2",
   ]
 
   allow_circular_includes_from =
@@ -191,6 +204,7 @@ source_set("test_support") {
     "//testing/gmock",
     "//third_party/blink/public:test_headers",
     "//third_party/blink/renderer/modules",
+    "//third_party/blink/renderer/modules/mediastream:test_support",
     "//third_party/blink/renderer/platform",
     "//third_party/blink/renderer/platform:test_support",
     "//third_party/webrtc_overrides:webrtc_component",

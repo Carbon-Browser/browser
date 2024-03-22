@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -16,42 +16,46 @@
 #import "components/policy/core/common/policy_switches.h"
 #import "components/policy/policy_constants.h"
 #import "components/policy/test_support/embedded_policy_test_server.h"
+#import "components/policy/test_support/signature_provider.h"
+#import "components/safe_browsing/core/common/features.h"
 #import "components/strings/grit/components_strings.h"
-#include "components/strings/grit/components_strings.h"
-#import "ios/chrome/browser/chrome_url_constants.h"
+#import "components/sync/base/features.h"
+#import "ios/chrome/browser/policy/cloud/user_policy_constants.h"
 #import "ios/chrome/browser/policy/policy_app_interface.h"
 #import "ios/chrome/browser/policy/policy_earl_grey_utils.h"
-#import "ios/chrome/browser/pref_names.h"
-#import "ios/chrome/browser/translate/translate_app_interface.h"
+#import "ios/chrome/browser/shared/model/prefs/pref_names.h"
+#import "ios/chrome/browser/shared/model/url/chrome_url_constants.h"
+#import "ios/chrome/browser/shared/public/features/features.h"
+#import "ios/chrome/browser/signin/model/fake_system_identity.h"
+#import "ios/chrome/browser/translate/model/translate_app_interface.h"
 #import "ios/chrome/browser/ui/authentication/signin_earl_grey.h"
 #import "ios/chrome/browser/ui/authentication/signin_earl_grey_ui_test_util.h"
 #import "ios/chrome/browser/ui/content_suggestions/content_suggestions_constants.h"
-#import "ios/chrome/browser/ui/content_suggestions/content_suggestions_feature.h"
 #import "ios/chrome/browser/ui/ntp/new_tab_page_constants.h"
-#import "ios/chrome/browser/ui/ntp/new_tab_page_feature.h"
 #import "ios/chrome/browser/ui/popup_menu/popup_menu_constants.h"
 #import "ios/chrome/browser/ui/settings/autofill/autofill_constants.h"
 #import "ios/chrome/browser/ui/settings/elements/elements_constants.h"
 #import "ios/chrome/browser/ui/settings/language/language_settings_ui_constants.h"
+#import "ios/chrome/browser/ui/settings/password/password_settings/password_settings_constants.h"
+#import "ios/chrome/browser/ui/settings/password/password_settings_app_interface.h"
 #import "ios/chrome/browser/ui/settings/password/passwords_table_view_constants.h"
+#import "ios/chrome/browser/ui/settings/privacy/privacy_constants.h"
+#import "ios/chrome/browser/ui/settings/settings_root_table_constants.h"
 #import "ios/chrome/browser/ui/settings/settings_table_view_controller_constants.h"
 #import "ios/chrome/common/ui/table_view/table_view_cells_constants.h"
 #import "ios/chrome/grit/ios_strings.h"
+#import "ios/chrome/test/earl_grey/chrome_actions.h"
 #import "ios/chrome/test/earl_grey/chrome_earl_grey.h"
 #import "ios/chrome/test/earl_grey/chrome_earl_grey_app_interface.h"
 #import "ios/chrome/test/earl_grey/chrome_earl_grey_ui.h"
 #import "ios/chrome/test/earl_grey/chrome_matchers.h"
 #import "ios/chrome/test/earl_grey/chrome_test_case.h"
+#import "ios/chrome/test/earl_grey/scoped_disable_timer_tracking.h"
 #import "ios/chrome/test/earl_grey/test_switches.h"
-#import "ios/public/provider/chrome/browser/signin/fake_chrome_identity.h"
 #import "ios/testing/earl_grey/app_launch_configuration.h"
 #import "ios/testing/earl_grey/app_launch_manager.h"
 #import "net/test/embedded_test_server/embedded_test_server.h"
 #import "ui/base/l10n/l10n_util.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 using policy_test_utils::SetPolicy;
 
@@ -152,8 +156,28 @@ NSString* const kDomain2 = @"domain2.com";
   // Use commandline args to insert fake policy data into NSUserDefaults. To the
   // app, this policy data will appear under the
   // "com.apple.configuration.managed" key.
-  AppLaunchConfiguration config;
+  AppLaunchConfiguration config = [super appConfigurationForTestCase];
   config.relaunch_policy = NoForceRelaunchAndResetState;
+
+  if ([self isRunningTest:@selector(testPopupMenuItemWithUserPolicy)] ||
+      [self isRunningTest:@selector(testManagementPageManagedWithUserPolicy)]) {
+    config.features_enabled.push_back(
+        policy::kUserPolicyForSigninAndNoSyncConsentLevel);
+  } else {
+    config.features_disabled.push_back(
+        policy::kUserPolicyForSigninAndNoSyncConsentLevel);
+  }
+
+  if ([self isRunningTest:@selector
+            (testManagementPageManagedWithCBCMAndUserPolicyDifferentDomains)] ||
+      [self isRunningTest:@selector
+            (testManagementPageManagedWithCBCMAndUserPolicySameDomains)] ||
+      [self isRunningTest:@selector(testManagementPageManagedWithUserPolicy)] ||
+      [self isRunningTest:@selector(testPopupMenuItemWithUserPolicy)]) {
+    config.features_disabled.push_back(
+        syncer::kReplaceSyncPromosWithSignInPromos);
+  }
+
   return config;
 }
 
@@ -221,13 +245,28 @@ NSString* const kDomain2 = @"domain2.com";
       [ChromeEarlGrey
           userBooleanPref:password_manager::prefs::kCredentialsEnableService],
       @"Preference was unexpectedly true");
-  // Open settings menu and tap password settings.
+  // Open settings menu and tap password manager.
   [self openSettingsMenu];
+
+  // Mock successful reauth when opening the Password Manager.
+  [PasswordSettingsAppInterface setUpMockReauthenticationModule];
+  [PasswordSettingsAppInterface mockReauthenticationModuleExpectedResult:
+                                    ReauthenticationResult::kSuccess];
+
   [ChromeEarlGreyUI
       tapSettingsMenuButton:chrome_test_util::SettingsMenuPasswordsButton()];
 
-  VerifyManagedSettingItem(kSavePasswordManagedTableViewId,
-                           kPasswordsTableViewId);
+  // Open password settings.
+  [[EarlGrey selectElementWithMatcher:grey_accessibilityID(
+                                          kSettingsToolbarSettingsButtonId)]
+      performAction:grey_tap()];
+
+  VerifyManagedSettingItem(
+      kPasswordSettingsManagedSavePasswordSwitchTableViewId,
+      kPasswordsSettingsTableViewId);
+
+  // Remove mock to keep the app in the same state as before running the test.
+  [PasswordSettingsAppInterface removeMockReauthenticationModule];
 }
 
 // Tests for the AutofillAddressEnabled policy Settings UI.
@@ -317,8 +356,7 @@ NSString* const kDomain2 = @"domain2.com";
 
 // Tests that language detection is not performed and the tool manual trigger
 // button is disabled when the pref kOfferTranslateEnabled is set to false.
-// TODO(crbug.com/1341363): Disabled due to flakiness. Re-enabled when fixed.
-- (void)DISABLED_testTranslateEnabled {
+- (void)testTranslateEnabled {
   GREYAssertTrue(self.testServer->Start(), @"Test server failed to start.");
   const GURL testURL = self.testServer->GetURL("/pony.html");
   const std::string pageText = "pony";
@@ -345,10 +383,14 @@ NSString* const kDomain2 = @"domain2.com";
 
   // Make sure the Translate manual trigger button disabled.
   [ChromeEarlGreyUI openToolsMenu];
+  id<GREYMatcher> toolsMenuMatcher =
+      [ChromeEarlGrey isNewOverflowMenuEnabled]
+          ? grey_accessibilityID(kPopupMenuToolsMenuActionListId)
+          : grey_accessibilityID(kPopupMenuToolsMenuTableViewId);
   [[[EarlGrey selectElementWithMatcher:ToolsMenuTranslateButton()]
          usingSearchAction:grey_scrollInDirection(kGREYDirectionDown,
                                                   /*amount=*/200)
-      onElementWithMatcher:chrome_test_util::ToolsMenuView()]
+      onElementWithMatcher:toolsMenuMatcher]
       assertWithMatcher:grey_accessibilityTrait(
                             UIAccessibilityTraitNotEnabled)];
 
@@ -385,7 +427,7 @@ NSString* const kDomain2 = @"domain2.com";
   // Relaunch the app with Discover enabled, as it is required for this test.
   AppLaunchConfiguration config = [self appConfigurationForTestCase];
   config.relaunch_policy = ForceRelaunchByCleanShutdown;
-  config.features_enabled.push_back(kDiscoverFeedInNtp);
+  config.features_disabled.push_back(kEnableFeedAblation);
   [[AppLaunchManager sharedManager] ensureAppLaunchedWithConfiguration:config];
 
   NSString* feedTitle = l10n_util::GetNSString(IDS_IOS_DISCOVER_FEED_TITLE);
@@ -421,21 +463,84 @@ NSString* const kDomain2 = @"domain2.com";
                            kLanguageSettingsTableViewAccessibilityIdentifier);
 }
 
-// Tests whether the managed item will be shown if a policy is set.
-- (void)testPopupMenuItem {
+// Tests whether the managed item will be shown if a machine level policy is
+// set.
+- (void)testPopupMenuItemWithMachineLevelPolicy {
   // Setup a machine level policy.
   SetPolicy(false, policy::key::kTranslateEnabled);
 
   // Open the menu and click on the item.
   [ChromeEarlGreyUI openToolsMenu];
+  [[EarlGrey selectElementWithMatcher:grey_accessibilityID(
+                                          kPopupMenuToolsMenuActionListId)]
+      performAction:grey_scrollToContentEdge(kGREYContentEdgeBottom)];
   [ChromeEarlGreyUI
       tapToolsMenuAction:grey_accessibilityID(kTextMenuEnterpriseInfo)];
-  [ChromeEarlGrey waitForPageToFinishLoading];
+  [ChromeEarlGrey
+      waitForWebStateContainingText:l10n_util::GetStringUTF8(
+                                        IDS_IOS_MANAGEMENT_UI_DESC)];
 
   // Check the navigation.
   [[EarlGrey selectElementWithMatcher:chrome_test_util::OmniboxText(
                                           kChromeUIManagementURL)]
       assertWithMatcher:grey_notNil()];
+}
+
+// Tests whether the managed item will be shown if UserPolicy is enabled and
+// the browser is signed in with a managed account.
+- (void)testPopupMenuItemWithUserPolicy {
+  // Sign in with a managed account.
+  NSString* managedAccountEmail = base::SysUTF8ToNSString(
+      base::StrCat({"enterprise@", policy::SignatureProvider::kTestDomain1}));
+  FakeSystemIdentity* fakeManagedIdentity =
+      [FakeSystemIdentity identityWithEmail:managedAccountEmail
+                                     gaiaID:@"exampleManagedID"
+                                       name:@"Fake Managed"];
+  [SigninEarlGreyUI signinWithFakeIdentity:fakeManagedIdentity enableSync:NO];
+
+  // Open the menu and click on the item.
+  [ChromeEarlGreyUI openToolsMenu];
+  [[EarlGrey selectElementWithMatcher:grey_accessibilityID(
+                                          kPopupMenuToolsMenuActionListId)]
+      performAction:grey_scrollToContentEdge(kGREYContentEdgeBottom)];
+  [ChromeEarlGreyUI
+      tapToolsMenuAction:grey_accessibilityID(kTextMenuEnterpriseInfo)];
+  [ChromeEarlGrey
+      waitForWebStateContainingText:l10n_util::GetStringUTF8(
+                                        IDS_IOS_MANAGEMENT_UI_DESC)];
+
+  // Check the navigation without assert the content (which is done in another
+  // test case).
+  [[EarlGrey selectElementWithMatcher:chrome_test_util::OmniboxText(
+                                          kChromeUIManagementURL)]
+      assertWithMatcher:grey_notNil()];
+}
+
+// Tests whether the managed item won't be shown if the browser is signed in
+// with a managed account but UserPolicy is disabled.
+- (void)testPopupMenuItemWithManagedAccountButUserPolicyDisabled {
+  // Sign in with a managed account.
+  NSString* managedAccountEmail = base::SysUTF8ToNSString(
+      base::StrCat({"enterprise@", policy::SignatureProvider::kTestDomain1}));
+  FakeSystemIdentity* fakeManagedIdentity =
+      [FakeSystemIdentity identityWithEmail:managedAccountEmail
+                                     gaiaID:@"exampleManagedID"
+                                       name:@"Fake Managed"];
+  [SigninEarlGreyUI signinWithFakeIdentity:fakeManagedIdentity enableSync:NO];
+
+  // Open the menu and click on the item.
+  [ChromeEarlGreyUI openToolsMenu];
+
+  // Scroll to the bottom of the tools menu where the enterprise item is if
+  // displayed.
+  ScopedDisableTimerTracking disabler;
+  [[EarlGrey selectElementWithMatcher:chrome_test_util::ToolsMenuView()]
+      performAction:grey_scrollToContentEdge(kGREYContentEdgeBottom)];
+
+  // Check that the enterprise item isn't there.
+  [[EarlGrey
+      selectElementWithMatcher:grey_accessibilityID(kTextMenuEnterpriseInfo)]
+      assertWithMatcher:grey_nil()];
 }
 
 // Tests the chrome://management page when no machine level policy is set.
@@ -496,7 +601,14 @@ NSString* const kDomain2 = @"domain2.com";
 
 // Tests the chrome://management page when there are user level policies.
 - (void)testManagementPageManagedWithUserPolicy {
-  [PolicyAppInterface setUserCloudPolicyDataWithDomain:kDomain1];
+  // Sign in with a managed account.
+  NSString* managedAccountEmail =
+      [@"enterprise@" stringByAppendingString:kDomain1];
+  FakeSystemIdentity* fakeManagedIdentity =
+      [FakeSystemIdentity identityWithEmail:managedAccountEmail
+                                     gaiaID:@"exampleManagedID"
+                                       name:@"Fake Managed"];
+  [SigninEarlGreyUI signinWithFakeIdentity:fakeManagedIdentity enableSync:NO];
 
   // Open the management page and check if the content is expected.
   [ChromeEarlGrey loadURL:GURL(kChromeUIManagementURL)];
@@ -526,10 +638,23 @@ NSString* const kDomain2 = @"domain2.com";
   config.additional_args.push_back(
       base::StrCat({"--", policy::switches::kDeviceManagementUrl, "=",
                     _server->GetServiceURL().spec()}));
+  config.features_enabled.push_back(
+      policy::kUserPolicyForSigninOrSyncConsentLevel);
+  config.features_disabled.push_back(
+      syncer::kReplaceSyncPromosWithSignInPromos);
   [[AppLaunchManager sharedManager] ensureAppLaunchedWithConfiguration:config];
 
+  // Set CBCM policies.
   [PolicyAppInterface setBrowserCloudPolicyDataWithDomain:kDomain1];
-  [PolicyAppInterface setUserCloudPolicyDataWithDomain:kDomain2];
+
+  // Sign in with managed account to enable User Policy.
+  NSString* managedAccountEmail =
+      [@"enterprise@" stringByAppendingString:kDomain2];
+  FakeSystemIdentity* fakeManagedIdentity =
+      [FakeSystemIdentity identityWithEmail:managedAccountEmail
+                                     gaiaID:@"exampleManagedID"
+                                       name:@"Fake Managed"];
+  [SigninEarlGreyUI signinWithFakeIdentity:fakeManagedIdentity enableSync:NO];
 
   // Open the management page and check if the content is expected.
   [ChromeEarlGrey loadURL:GURL(kChromeUIManagementURL)];
@@ -561,10 +686,23 @@ NSString* const kDomain2 = @"domain2.com";
   config.additional_args.push_back(
       base::StrCat({"--", policy::switches::kDeviceManagementUrl, "=",
                     _server->GetServiceURL().spec()}));
+  config.features_enabled.push_back(
+      policy::kUserPolicyForSigninOrSyncConsentLevel);
+  config.features_disabled.push_back(
+      syncer::kReplaceSyncPromosWithSignInPromos);
   [[AppLaunchManager sharedManager] ensureAppLaunchedWithConfiguration:config];
 
+  // Set CBCM policies.
   [PolicyAppInterface setBrowserCloudPolicyDataWithDomain:kDomain1];
-  [PolicyAppInterface setUserCloudPolicyDataWithDomain:kDomain1];
+
+  // Sign in with managed account to enable User Policy.
+  NSString* managedAccountEmail =
+      [@"enterprise@" stringByAppendingString:kDomain1];
+  FakeSystemIdentity* fakeManagedIdentity =
+      [FakeSystemIdentity identityWithEmail:managedAccountEmail
+                                     gaiaID:@"exampleManagedID"
+                                       name:@"Fake Managed"];
+  [SigninEarlGreyUI signinWithFakeIdentity:fakeManagedIdentity enableSync:NO];
 
   // Open the management page and check if the content is expected.
   [ChromeEarlGrey loadURL:GURL(kChromeUIManagementURL)];
@@ -578,7 +716,7 @@ NSString* const kDomain2 = @"domain2.com";
 // Tests that when the BrowserSignin policy is updated while the app is not
 // launched, a policy screen is displayed at startup.
 - (void)testBrowserSignInDisabledAtStartup {
-  FakeChromeIdentity* fakeIdentity = [FakeChromeIdentity fakeIdentity1];
+  FakeSystemIdentity* fakeIdentity = [FakeSystemIdentity fakeIdentity1];
   [SigninEarlGreyUI signinWithFakeIdentity:fakeIdentity];
 
   // Create the config to relaunch Chrome.
@@ -622,7 +760,7 @@ NSString* const kDomain2 = @"domain2.com";
 // Tests that the UI notifying the user of their sign out is displayed when the
 // policy changes while the app is launched.
 - (void)testBrowserSignInDisabledWhileAppVisible {
-  FakeChromeIdentity* fakeIdentity = [FakeChromeIdentity fakeIdentity1];
+  FakeSystemIdentity* fakeIdentity = [FakeSystemIdentity fakeIdentity1];
   [SigninEarlGreyUI signinWithFakeIdentity:fakeIdentity];
 
   // Force sign out.
@@ -646,7 +784,7 @@ NSString* const kDomain2 = @"domain2.com";
 // Tests that the UI notifying the user of their sign out is displayed when the
 // primary account is restricted.
 - (void)testBrowserAccountRestrictedAlert {
-  FakeChromeIdentity* fakeIdentity = [FakeChromeIdentity fakeIdentity1];
+  FakeSystemIdentity* fakeIdentity = [FakeSystemIdentity fakeIdentity1];
   [SigninEarlGreyUI signinWithFakeIdentity:fakeIdentity];
 
   // Set restrictions.
@@ -673,7 +811,7 @@ NSString* const kDomain2 = @"domain2.com";
 // Tests that the UI notifying the user is displayed when sync is disabled by an
 // administrator while the app is launched.
 - (void)testSyncDisabledPromptWhileAppVisible {
-  FakeChromeIdentity* fakeIdentity = [FakeChromeIdentity fakeIdentity1];
+  FakeSystemIdentity* fakeIdentity = [FakeSystemIdentity fakeIdentity1];
   [SigninEarlGreyUI signinWithFakeIdentity:fakeIdentity];
 
   // Enable SyncDisabled policy.
@@ -682,9 +820,12 @@ NSString* const kDomain2 = @"domain2.com";
   // Check that the prompt is presented.
   ConditionBlock condition = ^{
     NSError* error = nil;
-    [[EarlGrey
-        selectElementWithMatcher:grey_accessibilityLabel(l10n_util::GetNSString(
-                                     IDS_IOS_ENTERPRISE_SYNC_DISABLED_TITLE))]
+    NSString* noticeTitle =
+        [ChromeEarlGrey isReplaceSyncWithSigninEnabled]
+            ? l10n_util::GetNSString(
+                  IDS_IOS_ENTERPRISE_SYNC_DISABLED_TITLE_WITH_UNO)
+            : l10n_util::GetNSString(IDS_IOS_ENTERPRISE_SYNC_DISABLED_TITLE);
+    [[EarlGrey selectElementWithMatcher:grey_accessibilityLabel(noticeTitle)]
         assertWithMatcher:grey_sufficientlyVisible()
                     error:&error];
     return error == nil;
@@ -692,6 +833,46 @@ NSString* const kDomain2 = @"domain2.com";
   bool promptPresented = base::test::ios::WaitUntilConditionOrTimeout(
       base::test::ios::kWaitForUIElementTimeout, condition);
   GREYAssertTrue(promptPresented, @"'Sync Disabled' prompt not shown");
+}
+
+// Tests enterprise mode in the Privacy Safe Browsing settings as if the
+// enterprise selected Enhanced Protection as the choice of protection.
+- (void)testEnhancedSafeBrowsing {
+  SetPolicy(2, policy::key::kSafeBrowsingProtectionLevel);
+  [ChromeEarlGreyUI openSettingsMenu];
+  [ChromeEarlGreyUI
+      tapSettingsMenuButton:chrome_test_util::SettingsMenuPrivacyButton()];
+  [ChromeEarlGreyUI
+      tapPrivacyMenuButton:chrome_test_util::ButtonWithAccessibilityLabelId(
+                               IDS_IOS_PRIVACY_SAFE_BROWSING_TITLE)];
+
+  // Tap the info button on row. Accessibility point has been changed in this
+  // TableViewInfoButtonItem to be on the center of the row instead of on the
+  // "i" button. To tap the "i" button, we select the info button as the matcher
+  // instead of the row.
+  [[EarlGrey
+      selectElementWithMatcher:
+          grey_allOf(grey_ancestor(grey_accessibilityID(
+                         kSettingsSafeBrowsingStandardProtectionCellId)),
+                     grey_accessibilityID(kTableViewCellInfoButtonViewId),
+                     grey_sufficientlyVisible(), nil)]
+      performAction:grey_tap()];
+
+  // Check if the contextual bubble is shown.
+  [[EarlGrey selectElementWithMatcher:grey_accessibilityID(
+                                          kEnterpriseInfoBubbleViewId)]
+      assertWithMatcher:grey_sufficientlyVisible()];
+
+  // Tap outside of the bubble.
+  [[EarlGrey
+      selectElementWithMatcher:
+          grey_accessibilityID(kSettingsSafeBrowsingStandardProtectionCellId)]
+      performAction:grey_tap()];
+
+  // Check if the contextual bubble is hidden.
+  [[EarlGrey selectElementWithMatcher:grey_accessibilityID(
+                                          kEnterpriseInfoBubbleViewId)]
+      assertWithMatcher:grey_notVisible()];
 }
 
 @end

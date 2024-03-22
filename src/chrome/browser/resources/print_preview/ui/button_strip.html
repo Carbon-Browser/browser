@@ -9,6 +9,11 @@
     padding-top: 16px;
   }
 
+  :host-context([chrome-refresh-2023]):host .controls {
+    padding-bottom: var(--print-preview-sidebar-margin);
+    padding-inline-end: var(--print-preview-sidebar-margin);
+  }
+
   @media (prefers-color-scheme: light) {
     :host {
       background-color: white;
@@ -23,7 +28,7 @@
     margin-inline-end: 0;
   }
 
-<if expr="chromeos_ash or chromeos_lacros">
+<if expr="is_chromeos">
   .error-message {
     color: red;
     margin: 16px 16px 0;
@@ -31,7 +36,7 @@
   }
 </if>
 </style>
-<if expr="chromeos_ash or chromeos_lacros">
+<if expr="is_chromeos">
 <div class="error-message"
     hidden="[[!showSheetsError_(destination.id, maxSheets, sheetCount)]]">
   [[errorMessage_]]

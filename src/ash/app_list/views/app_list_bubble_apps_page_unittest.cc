@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,25 +11,25 @@
 #include "ash/app_list/test/test_focus_change_listener.h"
 #include "ash/app_list/views/app_list_a11y_announcer.h"
 #include "ash/app_list/views/app_list_bubble_search_page.h"
+#include "ash/app_list/views/app_list_bubble_view.h"
 #include "ash/app_list/views/app_list_toast_container_view.h"
 #include "ash/app_list/views/app_list_toast_view.h"
 #include "ash/app_list/views/apps_grid_view_test_api.h"
 #include "ash/app_list/views/continue_section_view.h"
+#include "ash/app_list/views/recent_apps_view.h"
 #include "ash/app_list/views/scrollable_apps_grid_view.h"
 #include "ash/app_list/views/search_box_view.h"
-#include "ash/constants/ash_features.h"
 #include "ash/public/cpp/app_list/app_list_controller.h"
 #include "ash/shell.h"
 #include "ash/style/icon_button.h"
 #include "ash/test/ash_test_base.h"
-#include "ash/test/layer_animation_stopped_waiter.h"
 #include "base/test/bind.h"
 #include "base/test/metrics/histogram_tester.h"
-#include "base/test/scoped_feature_list.h"
 #include "base/time/time.h"
 #include "ui/compositor/layer.h"
 #include "ui/compositor/layer_animator.h"
 #include "ui/compositor/scoped_animation_duration_scale_mode.h"
+#include "ui/compositor/test/layer_animation_stopped_waiter.h"
 #include "ui/compositor/test/test_utils.h"
 #include "ui/events/keycodes/keyboard_codes_posix.h"
 #include "ui/views/accessibility/view_accessibility.h"
@@ -42,12 +42,7 @@ namespace {
 
 class AppListBubbleAppsPageTest : public AshTestBase {
  public:
-  AppListBubbleAppsPageTest() {
-    features_.InitWithFeatures(
-        {features::kProductivityLauncher,
-         features::kLauncherDismissButtonsOnSortNudgeAndToast},
-        {});
-  }
+  AppListBubbleAppsPageTest() = default;
 
   void OnReorderAnimationDone(base::OnceClosure closure,
                               bool expect_abort,
@@ -61,7 +56,7 @@ class AppListBubbleAppsPageTest : public AshTestBase {
   // Sorts app list with the specified order. If `wait` is true, wait for the
   // reorder animation to complete. The animation is expected to be aborted if
   // `expect_abort` is set to true.
-  void SortAppList(const absl::optional<AppListSortOrder>& order,
+  void SortAppList(const std::optional<AppListSortOrder>& order,
                    bool wait,
                    bool expect_abort = false) {
     AppListController::Get()->UpdateAppListWithNewTemporarySortOrder(
@@ -80,9 +75,6 @@ class AppListBubbleAppsPageTest : public AshTestBase {
             base::Unretained(this), run_loop.QuitClosure(), expect_abort));
     run_loop.Run();
   }
-
- private:
-  base::test::ScopedFeatureList features_;
 };
 
 TEST_F(AppListBubbleAppsPageTest, SlideViewIntoPositionCleansUpLayers) {
@@ -147,9 +139,45 @@ TEST_F(AppListBubbleAppsPageTest, AppsPageVisibleAfterQuicklyClearingSearch) {
   // Before the animation completes, delete the search. This should abort
   // animations, animate back to the apps page, and leave the apps page visible.
   PressAndReleaseKey(ui::VKEY_BACK);
-  LayerAnimationStoppedWaiter().Wait(apps_page->GetPageAnimationLayerForTest());
+  ui::LayerAnimationStoppedWaiter().Wait(
+      apps_page->GetPageAnimationLayerForTest());
   EXPECT_TRUE(apps_page->GetVisible());
   EXPECT_EQ(1.0f, apps_page->scroll_view()->contents()->layer()->opacity());
+}
+
+// Regression test for https://crbug.com/1349833
+TEST_F(AppListBubbleAppsPageTest,
+       AppsPageVisibleAfterQuicklyHidingAndShowingLauncherFromSearchPage) {
+  // Open the app list without animation.
+  ASSERT_EQ(ui::ScopedAnimationDurationScaleMode::duration_multiplier(),
+            ui::ScopedAnimationDurationScaleMode::ZERO_DURATION);
+  auto* helper = GetAppListTestHelper();
+  helper->AddAppItems(5);
+  helper->ShowAppList();
+
+  auto* apps_page = helper->GetBubbleAppsPage();
+  ASSERT_TRUE(apps_page->GetVisible());
+
+  // Type a key to trigger the animation to transition to the search page.
+  PressAndReleaseKey(ui::VKEY_A);
+  EXPECT_FALSE(apps_page->GetVisible());
+
+  // Enable animations.
+  ui::ScopedAnimationDurationScaleMode duration(
+      ui::ScopedAnimationDurationScaleMode::NORMAL_DURATION);
+
+  helper->GetBubbleView()->StartHideAnimation(/*is_side_shelf=*/false,
+                                              base::DoNothing());
+  helper->GetBubbleView()->StartShowAnimation(/*is_side_shelf=*/false);
+  apps_page->AbortAllAnimations();
+
+  ui::LayerAnimationStoppedWaiter().Wait(
+      apps_page->GetPageAnimationLayerForTest());
+
+  EXPECT_TRUE(apps_page->GetVisible());
+  EXPECT_EQ(1.0f, apps_page->scroll_view()->contents()->layer()->opacity());
+  EXPECT_EQ(gfx::Transform(),
+            apps_page->scroll_view()->contents()->layer()->transform());
 }
 
 TEST_F(AppListBubbleAppsPageTest, AnimateHidePage) {
@@ -171,7 +199,7 @@ TEST_F(AppListBubbleAppsPageTest, AnimateHidePage) {
   // Type a key to trigger the animation to transition to the search page.
   PressAndReleaseKey(ui::VKEY_A);
   ui::Layer* layer = apps_page->GetPageAnimationLayerForTest();
-  LayerAnimationStoppedWaiter().Wait(layer);
+  ui::LayerAnimationStoppedWaiter().Wait(layer);
 
   // Ensure there is one more frame presented after animation finishes to allow
   // animation throughput data to be passed from cc to ui.
@@ -210,7 +238,7 @@ TEST_F(AppListBubbleAppsPageTest, AnimateShowPage) {
   // Press escape to trigger animation back to the apps page.
   PressAndReleaseKey(ui::VKEY_ESCAPE);
   ui::Layer* layer = apps_page->GetPageAnimationLayerForTest();
-  LayerAnimationStoppedWaiter().Wait(layer);
+  ui::LayerAnimationStoppedWaiter().Wait(layer);
 
   // Ensure there is one more frame presented after animation finishes to allow
   // animation throughput data to be passed from cc to ui.
@@ -262,9 +290,6 @@ TEST_F(AppListBubbleAppsPageTest, ContinueSectionVisibleByDefault) {
 }
 
 TEST_F(AppListBubbleAppsPageTest, ContinueLabelHiddenWhenNoTasksAndNoRecents) {
-  base::test::ScopedFeatureList feature_list(
-      features::kLauncherHideContinueSection);
-
   // Show the app list with no continue suggestions and no recent apps.
   auto* helper = GetAppListTestHelper();
   helper->AddAppItems(5);
@@ -275,10 +300,7 @@ TEST_F(AppListBubbleAppsPageTest, ContinueLabelHiddenWhenNoTasksAndNoRecents) {
   EXPECT_FALSE(apps_page->continue_label_container_for_test()->GetVisible());
 }
 
-TEST_F(AppListBubbleAppsPageTest, CanHideContinueSection) {
-  base::test::ScopedFeatureList feature_list(
-      features::kLauncherHideContinueSection);
-
+TEST_F(AppListBubbleAppsPageTest, CanHideContinueSectionByClickingButton) {
   // Show the app list with enough items to make the continue section and
   // recent apps visible.
   auto* helper = GetAppListTestHelper();
@@ -307,10 +329,37 @@ TEST_F(AppListBubbleAppsPageTest, CanHideContinueSection) {
   EXPECT_TRUE(apps_page->separator_for_test()->GetVisible());
 }
 
-TEST_F(AppListBubbleAppsPageTest, HideContinueSectionPlaysAnimation) {
-  base::test::ScopedFeatureList feature_list(
-      features::kLauncherHideContinueSection);
+TEST_F(AppListBubbleAppsPageTest, CanHideContinueSectionByClickingHeader) {
+  // Show the app list with enough items to make the continue section and
+  // recent apps visible.
+  auto* helper = GetAppListTestHelper();
+  helper->AddContinueSuggestionResults(4);
+  helper->AddRecentApps(5);
+  helper->AddAppItems(5);
+  helper->ShowAppList();
 
+  // The toggle continue section button has the "hide" tooltip.
+  auto* apps_page = helper->GetBubbleAppsPage();
+  views::View* continue_label_container =
+      apps_page->continue_label_container_for_test();
+  ASSERT_TRUE(continue_label_container);
+
+  // Click on the container to hide the continue section.
+  LeftClickOn(continue_label_container);
+
+  // Continue section and recent apps are hidden.
+  EXPECT_FALSE(helper->GetBubbleContinueSectionView()->GetVisible());
+  EXPECT_FALSE(helper->GetBubbleRecentAppsView()->GetVisible());
+
+  // Tap on the container to show the continue section.
+  GestureTapOn(continue_label_container);
+
+  // Continue section and recent apps are shown.
+  EXPECT_TRUE(helper->GetBubbleContinueSectionView()->GetVisible());
+  EXPECT_TRUE(helper->GetBubbleRecentAppsView()->GetVisible());
+}
+
+TEST_F(AppListBubbleAppsPageTest, HideContinueSectionPlaysAnimation) {
   // Open the app list without animation.
   ASSERT_EQ(ui::ScopedAnimationDurationScaleMode::duration_multiplier(),
             ui::ScopedAnimationDurationScaleMode::ZERO_DURATION);
@@ -338,9 +387,6 @@ TEST_F(AppListBubbleAppsPageTest, HideContinueSectionPlaysAnimation) {
 }
 
 TEST_F(AppListBubbleAppsPageTest, CanShowContinueSectionByClickingButton) {
-  base::test::ScopedFeatureList feature_list(
-      features::kLauncherHideContinueSection);
-
   // Simulate a user with the continue section hidden on startup.
   Shell::Get()->app_list_controller()->SetHideContinueSection(true);
 
@@ -375,9 +421,6 @@ TEST_F(AppListBubbleAppsPageTest, CanShowContinueSectionByClickingButton) {
 }
 
 TEST_F(AppListBubbleAppsPageTest, ShowContinueSectionPlaysAnimation) {
-  base::test::ScopedFeatureList feature_list(
-      features::kLauncherHideContinueSection);
-
   // Simulate a user with the continue section hidden on startup.
   Shell::Get()->app_list_controller()->SetHideContinueSection(true);
 
@@ -421,9 +464,6 @@ TEST_F(AppListBubbleAppsPageTest, ShowContinueSectionPlaysAnimation) {
 
 // Regression test for https://crbug.com/1329227
 TEST_F(AppListBubbleAppsPageTest, HiddenContinueSectionDoesNotAnimateOnShow) {
-  base::test::ScopedFeatureList feature_list(
-      features::kLauncherHideContinueSection);
-
   // Simulate a user with the continue section hidden on startup.
   Shell::Get()->app_list_controller()->SetHideContinueSection(true);
 
@@ -456,9 +496,7 @@ TEST_F(AppListBubbleAppsPageTest, SortAppsMakesA11yAnnouncement) {
   helper->ShowAppList();
 
   auto* apps_page = helper->GetBubbleAppsPage();
-  views::View* announcement_view = apps_page->toast_container_for_test()
-                                       ->a11y_announcer_for_test()
-                                       ->announcement_view_for_test();
+  views::View* announcement_view = helper->GetAccessibilityAnnounceView();
   ASSERT_TRUE(announcement_view);
 
   // Add a callback to wait for an accessibility event.
@@ -500,7 +538,7 @@ TEST_F(AppListBubbleAppsPageTest, SortAppsMakesA11yAnnouncement) {
       }));
 
   // Simulate the sort undo by setting the new order to nullopt.
-  SortAppList(absl::nullopt, /*wait=*/false);
+  SortAppList(std::nullopt, /*wait=*/false);
   undo_run_loop.Run();
 
   EXPECT_EQ(event, ax::mojom::Event::kAlert);
@@ -542,7 +580,7 @@ TEST_F(AppListBubbleAppsPageTest, SortAppsWithItemFocused) {
 
   // Simulate the sort undo by setting the new order to nullopt. The focus
   // should be on the search box after undoing the sort.
-  SortAppList(absl::nullopt, /*wait=*/true);
+  SortAppList(std::nullopt, /*wait=*/true);
   EXPECT_TRUE(helper->GetBubbleSearchBoxView()->search_box()->HasFocus());
 }
 
@@ -639,7 +677,8 @@ TEST_F(AppListBubbleAppsPageTest, CloseReorderToast) {
 
   // Wait for the toast to finish fade out animation.
   EXPECT_EQ(toast_container->toast_view()->layer()->GetTargetOpacity(), 0.0f);
-  LayerAnimationStoppedWaiter().Wait(toast_container->toast_view()->layer());
+  ui::LayerAnimationStoppedWaiter().Wait(
+      toast_container->toast_view()->layer());
 
   EXPECT_FALSE(toast_container->IsToastVisible());
 }

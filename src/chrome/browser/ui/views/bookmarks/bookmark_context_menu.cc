@@ -1,25 +1,25 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/ui/views/bookmarks/bookmark_context_menu.h"
 
+#include <memory>
+
 #include "base/command_line.h"
 #include "base/i18n/rtl.h"
+#include "base/memory/ptr_util.h"
 #include "base/no_destructor.h"
 #include "base/strings/utf_string_conversions.h"
 #include "chrome/app/chrome_command_ids.h"
-#include "chrome/browser/chrome_notification_types.h"
 #include "chrome/common/chrome_switches.h"
 #include "components/bookmarks/browser/bookmark_model.h"
-#include "content/public/browser/notification_service.h"
 #include "ui/views/controls/menu/menu_item_view.h"
 #include "ui/views/controls/menu/menu_model_adapter.h"
 #include "ui/views/controls/menu/menu_runner.h"
 #include "ui/views/widget/widget.h"
 
 using bookmarks::BookmarkNode;
-using content::PageNavigator;
 
 namespace {
 
@@ -43,7 +43,6 @@ BookmarkContextMenu::BookmarkContextMenu(
     views::Widget* parent_widget,
     Browser* browser,
     Profile* profile,
-    base::RepeatingCallback<content::PageNavigator*()> get_navigator,
     BookmarkLaunchLocation opened_from,
     const BookmarkNode* parent,
     const std::vector<const BookmarkNode*>& selection,
@@ -53,18 +52,16 @@ BookmarkContextMenu::BookmarkContextMenu(
           this,
           browser,
           profile,
-          std::move(get_navigator),
           opened_from,
           parent,
           selection)),
       parent_widget_(parent_widget),
       menu_(new views::MenuItemView(this)),
-      menu_runner_(new views::MenuRunner(menu_,
-                                         views::MenuRunner::HAS_MNEMONICS |
-                                             views::MenuRunner::IS_NESTED |
-                                             views::MenuRunner::CONTEXT_MENU)),
-      observer_(nullptr),
       close_on_remove_(close_on_remove) {
+  menu_runner_ = std::make_unique<views::MenuRunner>(
+      base::WrapUnique<views::MenuItemView>(menu_),
+      views::MenuRunner::HAS_MNEMONICS | views::MenuRunner::IS_NESTED |
+          views::MenuRunner::CONTEXT_MENU);
   ui::SimpleMenuModel* menu_model = controller_->menu_model();
   for (size_t i = 0; i < menu_model->GetItemCount(); ++i) {
     views::MenuModelAdapter::AppendMenuItemFromModel(

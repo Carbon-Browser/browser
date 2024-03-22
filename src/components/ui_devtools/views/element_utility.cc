@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -20,7 +20,7 @@ void AppendLayerPropertiesMatchedStyle(
                     std::string(LayerTypeToString(layer->type())));
   ret->emplace_back("has-layer-mask",
                     layer->layer_mask_layer() ? "true" : "false");
-  ret->emplace_back("layer-is-drawn", layer->IsDrawn() ? "true" : "false");
+  ret->emplace_back("layer-is-visible", layer->IsVisible() ? "true" : "false");
   ret->emplace_back("layer-opacity", base::NumberToString((layer->opacity())));
   ret->emplace_back("layer-combined-opacity",
                     base::NumberToString(layer->GetCombinedOpacity()));

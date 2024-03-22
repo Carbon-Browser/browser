@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,9 +6,13 @@
 #define EXTENSIONS_RENDERER_BINDINGS_JS_RUNNER_H_
 
 #include <memory>
-
-#include "base/callback.h"
+#include <optional>
+#include "base/functional/callback.h"
 #include "v8/include/v8.h"
+
+namespace base {
+class Value;
+}
 
 namespace extensions {
 
@@ -32,7 +36,7 @@ class JSRunner {
   // ran).
   // NOTE(devlin): We could easily change that if desired.
   using ResultCallback = base::OnceCallback<void(v8::Local<v8::Context>,
-                                                 v8::MaybeLocal<v8::Value>)>;
+                                                 std::optional<base::Value>)>;
 
   // Calls the given |function| in the specified |context| and with the provided
   // arguments. JS may be executed asynchronously if it has been suspended in

@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,12 +8,12 @@
 #include <memory>
 #include <string>
 
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
-#include "base/time/time.h"
+#include "chrome/browser/ash/guest_os/guest_os_dlc_helper.h"
 #include "chrome/browser/ash/plugin_vm/plugin_vm_license_checker.h"
 #include "chromeos/ash/components/dbus/concierge/concierge_client.h"
-#include "chromeos/ash/components/dbus/concierge/concierge_service.pb.h"
-#include "chromeos/dbus/dlcservice/dlcservice_client.h"
+#include "chromeos/ash/components/dbus/vm_concierge/concierge_service.pb.h"
 #include "components/download/public/background_service/download_params.h"
 #include "components/keyed_service/core/keyed_service.h"
 #include "mojo/public/cpp/bindings/remote.h"
@@ -81,8 +81,10 @@ class PluginVmInstaller : public KeyedService,
     DOWNLOAD_FAILED_404 = 30,
     // Download appeared to succeed but downloaded image size was unexpected
     DOWNLOAD_SIZE_MISMATCH = 31,
+    // Image with the right name exists, but in a wrong location.
+    EXISTING_IMAGE_INVALID = 32,
 
-    kMaxValue = DOWNLOAD_SIZE_MISMATCH,
+    kMaxValue = EXISTING_IMAGE_INVALID,
   };
 
   enum class InstallingState {
@@ -194,13 +196,13 @@ class PluginVmInstaller : public KeyedService,
       absl::optional<vm_tools::concierge::ListVmDisksResponse> response);
 
   void CheckDiskSpace();
-  void OnAvailableDiskSpace(int64_t bytes);
+  void OnAvailableDiskSpace(absl::optional<int64_t> bytes);
 
   void StartDlcDownload();
   // Called repeatedly.
   void OnDlcDownloadProgressUpdated(double progress);
   void OnDlcDownloadCompleted(
-      const chromeos::DlcserviceClient::InstallResult& install_result);
+      guest_os::GuestOsDlcInstallation::Result install_result);
 
   void StartDispatcher();
   void OnDispatcherStarted(bool success);
@@ -212,10 +214,7 @@ class PluginVmInstaller : public KeyedService,
   // Download progress/completion happens in the public methods OnDownload*().
 
   void StartImport();
-  void DetectImageType();
-  void OnImageTypeDetected();
-  // Ran as a blocking task preparing the FD for the ImportDiskImage call.
-  absl::optional<base::ScopedFD> PrepareFD();
+  void OnImageTypeDetected(bool is_iso_image);
   // Calls CreateDiskImage or ImportDiskImage, depending on whether we are
   // creating a new VM from an ISO, or importing a prepared VM image.
   void OnFDPrepared(absl::optional<base::ScopedFD> maybe_fd);
@@ -271,12 +270,13 @@ class PluginVmInstaller : public KeyedService,
 
   device::mojom::WakeLock* GetWakeLock();
 
-  Profile* profile_ = nullptr;
-  Observer* observer_ = nullptr;
-  download::BackgroundDownloadService* download_service_ = nullptr;
+  raw_ptr<Profile, ExperimentalAsh> profile_ = nullptr;
+  raw_ptr<Observer, DanglingUntriaged | ExperimentalAsh> observer_ = nullptr;
+  raw_ptr<download::BackgroundDownloadService,
+          DanglingUntriaged | ExperimentalAsh>
+      download_service_ = nullptr;
   State state_ = State::kIdle;
   InstallingState installing_state_ = InstallingState::kInactive;
-  base::TimeTicks setup_start_tick_;
   std::string current_download_guid_;
   base::FilePath downloaded_image_;
   // Used to identify our running import with concierge.
@@ -287,6 +287,7 @@ class PluginVmInstaller : public KeyedService,
   double progress_ = 0;
   std::unique_ptr<PluginVmDriveImageDownloadService> drive_download_service_;
   std::unique_ptr<PluginVmLicenseChecker> license_checker_;
+  std::unique_ptr<guest_os::GuestOsDlcInstallation> dlc_installation_;
   bool using_drive_download_service_ = false;
 
   bool skip_license_check_for_testing_ = false;

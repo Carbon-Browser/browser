@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -20,13 +20,12 @@ import java.net.URL;
  * minidumps correctly.
  */
 public class TestHttpURLConnection extends HttpURLConnection {
-    static final String DEFAULT_EXPECTED_CONTENT_TYPE = String.format(
-            MinidumpUploader.CONTENT_TYPE_TMPL, MinidumpUploaderTestConstants.BOUNDARY);
+    static final String DEFAULT_EXPECTED_CONTENT_TYPE =
+            String.format(
+                    MinidumpUploader.CONTENT_TYPE_TMPL, MinidumpUploaderTestConstants.BOUNDARY);
     private final String mExpectedContentType;
 
-    /**
-     * The value of the "Content-Type" property if the property has been set.
-     */
+    /** The value of the "Content-Type" property if the property has been set. */
     private String mContentTypePropertyValue = "";
 
     public TestHttpURLConnection(URL url) {

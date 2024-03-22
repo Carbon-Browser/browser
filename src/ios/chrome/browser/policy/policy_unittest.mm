@@ -1,33 +1,28 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include <memory>
+#import <memory>
 
-#include "base/bind.h"
-#include "base/command_line.h"
-#include "base/files/file_path.h"
-#include "base/files/scoped_temp_dir.h"
-#include "base/path_service.h"
-#include "base/run_loop.h"
-#include "base/test/task_environment.h"
-#include "base/threading/thread_task_runner_handle.h"
-#include "components/policy/core/browser/policy_pref_mapping_test.h"
-#include "components/policy/core/common/mock_configuration_policy_provider.h"
-#include "components/policy/core/common/policy_map.h"
-#include "components/policy/policy_constants.h"
-#include "ios/chrome/browser/browser_state/test_chrome_browser_state.h"
-#include "ios/chrome/browser/chrome_paths.h"
-#include "ios/chrome/browser/policy/enterprise_policy_test_helper.h"
-#include "ios/chrome/browser/pref_names.h"
-#include "testing/gmock/include/gmock/gmock.h"
-#include "testing/gtest/include/gtest/gtest.h"
-#include "testing/gtest_mac.h"
-#include "testing/platform_test.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
+#import "base/command_line.h"
+#import "base/files/file_path.h"
+#import "base/files/scoped_temp_dir.h"
+#import "base/functional/bind.h"
+#import "base/path_service.h"
+#import "base/run_loop.h"
+#import "base/test/task_environment.h"
+#import "components/policy/core/browser/policy_pref_mapping_test.h"
+#import "components/policy/core/common/mock_configuration_policy_provider.h"
+#import "components/policy/core/common/policy_map.h"
+#import "components/policy/policy_constants.h"
+#import "ios/chrome/browser/shared/model/paths/paths.h"
+#import "ios/chrome/browser/policy/enterprise_policy_test_helper.h"
+#import "ios/chrome/browser/shared/model/browser_state/test_chrome_browser_state.h"
+#import "ios/chrome/browser/shared/model/prefs/pref_names.h"
+#import "testing/gmock/include/gmock/gmock.h"
+#import "testing/gtest/include/gtest/gtest.h"
+#import "testing/gtest_mac.h"
+#import "testing/platform_test.h"
 
 namespace {
 
@@ -41,12 +36,14 @@ class PolicyTest : public PlatformTest {
         state_directory_.GetPath());
     ASSERT_TRUE(enterprise_policy_helper_->GetBrowserState());
 
-    // Multiple tests use policy_test_cases.json, so compute its path once.
+    // Multiple tests use policy/pref_mapping, so compute its path
+    // once.
     base::FilePath test_data_directory;
     ASSERT_TRUE(
         base::PathService::Get(ios::DIR_TEST_DATA, &test_data_directory));
-    policy_test_cases_path_ = test_data_directory.Append(
-        FILE_PATH_LITERAL("policy/policy_test_cases.json"));
+    policy_test_cases_path_ =
+        test_data_directory.Append(FILE_PATH_LITERAL("policy"))
+            .Append(FILE_PATH_LITERAL("pref_mapping"));
   }
 
  protected:
@@ -59,7 +56,7 @@ class PolicyTest : public PlatformTest {
   // Enterprise policy boilerplate configuration.
   std::unique_ptr<EnterprisePolicyTestHelper> enterprise_policy_helper_;
 
-  // The path to |policy_test_cases.json|.
+  // The path to `policy_test_cases.json`.
   base::FilePath policy_test_cases_path_;
 };
 

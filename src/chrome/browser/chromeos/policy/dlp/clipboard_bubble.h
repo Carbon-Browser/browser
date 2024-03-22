@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,7 @@
 
 #include <string>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "ui/base/metadata/metadata_header_macros.h"
 #include "ui/gfx/geometry/size.h"
@@ -52,7 +52,7 @@ class ClipboardBlockBubble : public ClipboardBubbleView {
   // ClipboardBubbleView::
   gfx::Size GetBubbleSize() const override;
 
-  void SetDismissCallback(base::RepeatingCallback<void()> cb);
+  void SetDismissCallback(base::OnceClosure cb);
 
  private:
   raw_ptr<views::LabelButton> button_ = nullptr;
@@ -68,13 +68,21 @@ class ClipboardWarnBubble : public ClipboardBubbleView {
   // ClipboardBubbleView::
   gfx::Size GetBubbleSize() const override;
 
-  void SetDismissCallback(base::RepeatingCallback<void()> cb);
+  void SetDismissCallback(base::OnceClosure cb);
 
-  void SetProceedCallback(base::RepeatingCallback<void()> cb);
+  void SetProceedCallback(base::OnceClosure cb);
+
+  void set_paste_cb(base::OnceCallback<void(bool)> paste_cb) {
+    paste_cb_ = std::move(paste_cb);
+  }
+
+  base::OnceCallback<void(bool)> get_paste_cb() { return std::move(paste_cb_); }
 
  private:
   raw_ptr<views::LabelButton> cancel_button_ = nullptr;
   raw_ptr<views::LabelButton> paste_button_ = nullptr;
+  // Paste callback.
+  base::OnceCallback<void(bool)> paste_cb_;
 };
 
 }  // namespace policy

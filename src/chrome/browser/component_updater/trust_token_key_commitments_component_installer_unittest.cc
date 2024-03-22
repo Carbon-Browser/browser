@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -28,7 +28,8 @@ class TrustTokenKeyCommitmentsComponentInstallerTest : public ::testing::Test {
 
 TEST_F(TrustTokenKeyCommitmentsComponentInstallerTest, FeatureDisabled) {
   base::test::ScopedFeatureList scoped_list;
-  scoped_list.InitAndDisableFeature(network::features::kTrustTokens);
+  scoped_list.InitWithFeatures({}, {network::features::kPrivateStateTokens,
+                                    network::features::kFledgePst});
   auto service =
       std::make_unique<component_updater::MockComponentUpdateService>();
   EXPECT_CALL(*service, RegisterComponent(_)).Times(0);

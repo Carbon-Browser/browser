@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,6 +12,12 @@
 @interface FaviconContainerView : UIView
 
 @property(nonatomic, readonly, strong) FaviconView* faviconView;
+
+// Sets the favicon's background color. Can be nil to reset to original value.
+- (void)setFaviconBackgroundColor:(UIColor*)color;
+
+// Sets the favicon view border color. Can be nil to reset to original value.
+- (void)setFaviconBorderColor:(UIColor*)color;
 
 @end
 

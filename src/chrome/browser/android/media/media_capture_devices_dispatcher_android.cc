@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -52,5 +52,7 @@ void JNI_MediaCaptureDevicesDispatcherAndroid_NotifyStopped(
   scoped_refptr<MediaStreamCaptureIndicator> indicator =
       MediaCaptureDevicesDispatcher::GetInstance()
           ->GetMediaStreamCaptureIndicator();
-  indicator->NotifyStopped(web_contents);
+  indicator->StopMediaCapturing(
+      web_contents, MediaStreamCaptureIndicator::MediaType::kUserMedia |
+                        MediaStreamCaptureIndicator::MediaType::kDisplayMedia);
 }

@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,6 +9,10 @@
 #include "chrome/browser/ui/views/frame/browser_frame_view_layout_linux.h"
 #include "chrome/browser/ui/views/frame/opaque_browser_frame_view.h"
 #include "ui/linux/window_button_order_observer.h"
+
+namespace ui {
+class LinuxUi;
+}  // namespace ui
 
 // A specialization of OpaqueBrowserFrameView that is also able to
 // render client side decorations (shadow, border, and rounded corners).
@@ -26,14 +30,16 @@ class BrowserFrameViewLinux : public OpaqueBrowserFrameView,
 
   BrowserFrameViewLayoutLinux* layout() { return layout_; }
 
-  // Gets the rounded-rect that will be used to clip the window frame when
-  // drawing.  The region will be as if the window was restored, and will be in
-  // view coordinates.
-  SkRRect GetRestoredClipRegion() const;
+  // BrowserNonClientFrameView:
+  gfx::Insets MirroredFrameBorderInsets() const override;
+  gfx::Insets GetInputInsets() const override;
+  SkRRect GetRestoredClipRegion() const override;
+  int GetTranslucentTopAreaHeight() const override;
 
   // Gets the shadow metrics (radius, offset, and number of shadows).  This will
   // always return shadow values, even if shadows are not actually drawn.
-  static gfx::ShadowValues GetShadowValues();
+  // `active` indicates if the shadow will be drawn on a focused browser window.
+  static gfx::ShadowValues GetShadowValues(bool active);
 
  protected:
   // ui::WindowButtonOrderObserver:
@@ -55,6 +61,9 @@ class BrowserFrameViewLinux : public OpaqueBrowserFrameView,
 
  private:
   const raw_ptr<BrowserFrameViewLayoutLinux> layout_;
+
+  base::ScopedObservation<ui::LinuxUi, ui::WindowButtonOrderObserver>
+      window_button_order_observation_{this};
 };
 
 #endif  // CHROME_BROWSER_UI_VIEWS_FRAME_BROWSER_FRAME_VIEW_LINUX_H_

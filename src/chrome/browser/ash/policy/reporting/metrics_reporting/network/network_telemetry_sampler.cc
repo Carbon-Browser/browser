@@ -1,10 +1,9 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/ash/policy/reporting/metrics_reporting/network/network_telemetry_sampler.h"
 
-#include <algorithm>
 #include <string>
 #include <utility>
 #include <vector>
@@ -12,8 +11,9 @@
 #include "base/containers/contains.h"
 #include "base/containers/queue.h"
 #include "base/logging.h"
+#include "base/ranges/algorithm.h"
 #include "base/task/bind_post_task.h"
-#include "base/threading/sequenced_task_runner_handle.h"
+#include "base/task/sequenced_task_runner.h"
 #include "chrome/browser/ash/policy/reporting/metrics_reporting/network/wifi_signal_strength_rssi_fetcher.h"
 #include "chromeos/ash/components/network/device_state.h"
 #include "chromeos/ash/components/network/network_state.h"
@@ -22,10 +22,11 @@
 #include "chromeos/ash/services/cros_healthd/public/cpp/service_connection.h"
 #include "components/reporting/proto/synced/metric_data.pb.h"
 
-using ::chromeos::cros_healthd::mojom::NetworkInterfaceInfoPtr;
-
 namespace reporting {
+
 namespace {
+
+using ::ash::cros_healthd::mojom::NetworkInterfaceInfoPtr;
 
 ::ash::NetworkStateHandler::NetworkStateList GetNetworkStateList() {
   ::ash::NetworkStateHandler::NetworkStateList network_state_list;
@@ -40,8 +41,7 @@ namespace {
 
 NetworkInterfaceInfoPtr GetWifiNetworkInterfaceInfo(
     const std::string& device_path,
-    const ::chromeos::cros_healthd::mojom::TelemetryInfoPtr&
-        cros_healthd_telemetry) {
+    const ash::cros_healthd::mojom::TelemetryInfoPtr& cros_healthd_telemetry) {
   if (device_path.empty() || cros_healthd_telemetry.is_null() ||
       cros_healthd_telemetry->network_interface_result.is_null() ||
       !cros_healthd_telemetry->network_interface_result
@@ -60,8 +60,8 @@ NetworkInterfaceInfoPtr GetWifiNetworkInterfaceInfo(
   const auto& interface_info_list =
       cros_healthd_telemetry->network_interface_result
           ->get_network_interface_info();
-  const auto& interface_info_it = std::find_if(
-      interface_info_list.begin(), interface_info_list.end(),
+  const auto& interface_info_it = base::ranges::find_if(
+      interface_info_list,
       [&interface_name](const NetworkInterfaceInfoPtr& interface_info) {
         return !interface_info.is_null() &&
                interface_info->is_wireless_interface_info() &&
@@ -76,16 +76,44 @@ NetworkInterfaceInfoPtr GetWifiNetworkInterfaceInfo(
   return interface_info_it->Clone();
 }
 
-NetworkConnectionState GetNetworkConnectionState(
-    const chromeos::NetworkState* network) {
-  if (network->IsConnectedState() && network->IsCaptivePortal()) {
-    return NetworkConnectionState::PORTAL;
+NetworkType GetNetworkType(const ash::NetworkTypePattern& type) {
+  if (type.Equals(ash::NetworkTypePattern::Cellular())) {
+    return NetworkType::CELLULAR;
   }
-  if (network->IsConnectedState() && network->IsOnline()) {
-    return NetworkConnectionState::ONLINE;
+  if (type.MatchesPattern(ash::NetworkTypePattern::EthernetOrEthernetEAP())) {
+    return NetworkType::ETHERNET;
   }
+  if (type.Equals(ash::NetworkTypePattern::Tether())) {
+    return NetworkType::TETHER;
+  }
+  if (type.Equals(ash::NetworkTypePattern::VPN())) {
+    return NetworkType::VPN;
+  }
+  if (type.Equals(ash::NetworkTypePattern::WiFi())) {
+    return NetworkType::WIFI;
+  }
+  NOTREACHED() << "Unsupported network type: " << type.ToDebugString();
+  return NetworkType::NETWORK_TYPE_UNSPECIFIED;  // Unsupported
+}
+
+}  // namespace
+
+// static
+NetworkConnectionState NetworkTelemetrySampler::GetNetworkConnectionState(
+    const ash::NetworkState* network) {
   if (network->IsConnectedState()) {
-    return NetworkConnectionState::CONNECTED;
+    auto portal_state = network->GetPortalState();
+    switch (portal_state) {
+      case ash::NetworkState::PortalState::kUnknown:
+        return NetworkConnectionState::CONNECTED;
+      case ash::NetworkState::PortalState::kOnline:
+        return NetworkConnectionState::ONLINE;
+      case ash::NetworkState::PortalState::kPortalSuspected:
+      case ash::NetworkState::PortalState::kPortal:
+      case ash::NetworkState::PortalState::kProxyAuthRequired:
+      case ash::NetworkState::PortalState::kNoInternet:
+        return NetworkConnectionState::PORTAL;
+    }
   }
   if (network->IsConnectingState()) {
     return NetworkConnectionState::CONNECTING;
@@ -93,39 +121,7 @@ NetworkConnectionState GetNetworkConnectionState(
   return NetworkConnectionState::NOT_CONNECTED;
 }
 
-NetworkType GetNetworkType(const ::chromeos::NetworkTypePattern& type) {
-  if (type.Equals(::chromeos::NetworkTypePattern::Cellular())) {
-    return NetworkType::CELLULAR;
-  }
-  if (type.MatchesPattern(
-          ::chromeos::NetworkTypePattern::EthernetOrEthernetEAP())) {
-    return NetworkType::ETHERNET;
-  }
-  if (type.Equals(::chromeos::NetworkTypePattern::Tether())) {
-    return NetworkType::TETHER;
-  }
-  if (type.Equals(::chromeos::NetworkTypePattern::VPN())) {
-    return NetworkType::VPN;
-  }
-  if (type.Equals(::chromeos::NetworkTypePattern::WiFi())) {
-    return NetworkType::WIFI;
-  }
-  NOTREACHED() << "Unsupported network type: " << type.ToDebugString();
-  return NetworkType::NETWORK_TYPE_UNSPECIFIED;  // Unsupported
-}
-
-void OnHttpsLatencySamplerCompleted(OptionalMetricCallback callback,
-                                    MetricData network_data,
-                                    absl::optional<MetricData> latency_data) {
-  if (latency_data.has_value()) {
-    network_data.CheckTypeAndMergeFrom(latency_data.value());
-  }
-  std::move(callback).Run(std::move(network_data));
-}
-}  // namespace
-
-NetworkTelemetrySampler::NetworkTelemetrySampler(Sampler* https_latency_sampler)
-    : https_latency_sampler_(https_latency_sampler) {}
+NetworkTelemetrySampler::NetworkTelemetrySampler() = default;
 
 NetworkTelemetrySampler::~NetworkTelemetrySampler() = default;
 
@@ -133,16 +129,18 @@ void NetworkTelemetrySampler::MaybeCollect(OptionalMetricCallback callback) {
   auto handle_probe_result_cb =
       base::BindOnce(&NetworkTelemetrySampler::CollectWifiSignalStrengthRssi,
                      weak_ptr_factory_.GetWeakPtr(), std::move(callback));
-  ::ash::cros_healthd::ServiceConnection::GetInstance()->ProbeTelemetryInfo(
-      std::vector<chromeos::cros_healthd::mojom::ProbeCategoryEnum>{
-          chromeos::cros_healthd::mojom::ProbeCategoryEnum::kNetworkInterface},
-      base::BindPostTask(base::SequencedTaskRunnerHandle::Get(),
-                         std::move(handle_probe_result_cb)));
+  ash::cros_healthd::ServiceConnection::GetInstance()
+      ->GetProbeService()
+      ->ProbeTelemetryInfo(
+          std::vector<ash::cros_healthd::mojom::ProbeCategoryEnum>{
+              ash::cros_healthd::mojom::ProbeCategoryEnum::kNetworkInterface},
+          base::BindPostTaskToCurrentDefault(
+              std::move(handle_probe_result_cb)));
 }
 
 void NetworkTelemetrySampler::CollectWifiSignalStrengthRssi(
     OptionalMetricCallback callback,
-    ::chromeos::cros_healthd::mojom::TelemetryInfoPtr cros_healthd_telemetry) {
+    ash::cros_healthd::mojom::TelemetryInfoPtr cros_healthd_telemetry) {
   base::queue<std::string> service_paths;
   ::ash::NetworkStateHandler::NetworkStateList network_state_list =
       GetNetworkStateList();
@@ -169,13 +167,12 @@ void NetworkTelemetrySampler::CollectWifiSignalStrengthRssi(
                      std::move(cros_healthd_telemetry));
   FetchWifiSignalStrengthRssi(
       std::move(service_paths),
-      base::BindPostTask(base::SequencedTaskRunnerHandle::Get(),
-                         std::move(wifi_signal_rssi_cb)));
+      base::BindPostTaskToCurrentDefault(std::move(wifi_signal_rssi_cb)));
 }
 
 void NetworkTelemetrySampler::CollectNetworksStates(
     OptionalMetricCallback callback,
-    ::chromeos::cros_healthd::mojom::TelemetryInfoPtr cros_healthd_telemetry,
+    ash::cros_healthd::mojom::TelemetryInfoPtr cros_healthd_telemetry,
     base::flat_map<std::string, int> service_path_rssi_map) {
   if (cros_healthd_telemetry.is_null() ||
       cros_healthd_telemetry->network_interface_result.is_null()) {
@@ -195,7 +192,6 @@ void NetworkTelemetrySampler::CollectNetworksStates(
   }
 
   bool should_report = false;
-  bool should_collect_latency = false;
   for (const auto* network : network_state_list) {
     ::ash::NetworkTypePattern type =
         ::ash::NetworkTypePattern::Primitive(network->type());
@@ -208,9 +204,6 @@ void NetworkTelemetrySampler::CollectNetworksStates(
     }
 
     should_report = true;
-    if (network->IsOnline()) {
-      should_collect_latency = true;
-    }
 
     NetworkTelemetry* const network_telemetry =
         metric_data.mutable_telemetry_data()
@@ -276,12 +269,6 @@ void NetworkTelemetrySampler::CollectNetworksStates(
     }
   }
 
-  if (should_collect_latency) {
-    https_latency_sampler_->MaybeCollect(
-        base::BindOnce(OnHttpsLatencySamplerCompleted, std::move(callback),
-                       std::move(metric_data)));
-    return;
-  }
   if (should_report) {
     std::move(callback).Run(std::move(metric_data));
     return;

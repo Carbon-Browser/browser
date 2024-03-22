@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -122,7 +122,28 @@ namespace downloads {
   //     <dd>The user has accepted the dangerous download.</dd>
   // </dl>
   enum DangerType {
-    file, url, content, uncommon, host, unwanted, safe, accepted
+    file,
+    url,
+    content,
+    uncommon,
+    host,
+    unwanted,
+    safe,
+    accepted,
+    allowlistedByPolicy,
+    asyncScanning,
+    asyncLocalPasswordScanning,
+    passwordProtected,
+    blockedTooLarge,
+    sensitiveContentWarning,
+    sensitiveContentBlock,
+    unsupportedFileType,
+    deepScannedFailed,
+    deepScannedSafe,
+    deepScannedOpenedDangerous,
+    promptForScanning,
+    promptForLocalPasswordScanning,
+    accountCompromise
   };
 
   // <dl><dt>in_progress</dt>
@@ -539,6 +560,7 @@ namespace downloads {
     // one other extension has disabled it will return an error through
     // $(ref:runtime.lastError). Requires the <code>"downloads.shelf"</code>
     // permission in addition to the <code>"downloads"</code> permission.
+    [deprecated="Use $(ref:setUiOptions) instead."]
     static void setShelfEnabled(boolean enabled);
 
     // Change the download UI of every window associated with the current

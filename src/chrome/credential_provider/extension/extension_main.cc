@@ -1,4 +1,4 @@
-// Copyright (c) 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -90,7 +90,7 @@ int APIENTRY wWinMain(HINSTANCE hInstance,
   logging::SetEventSource("GCPW", GCPW_EXTENSION_CATEGORY, MSG_LOG_MESSAGE);
 
   if (GetGlobalFlagOrDefault(kRegEnableVerboseLogging, 0))
-    logging::SetMinLogLevel(logging::LOG_VERBOSE);
+    logging::SetMinLogLevel(logging::LOGGING_VERBOSE);
 
   // Make sure the process exits cleanly on unexpected errors.
   base::EnableTerminationOnHeapCorruption();

@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -28,17 +28,24 @@ chrome.test.runTests([
     });
   },
   function testCreateEventDispatched() {
-    let createdGroupId = -1;
-
-    chrome.tabGroups.onCreated.addListener((group) => {
-      chrome.test.assertEq(group.id, createdGroupId);
-      chrome.test.succeed();
+    let onCreatedPromise = new Promise((resolve) => {
+      chrome.tabGroups.onCreated.addListener((group) => {
+        resolve(group.id);
+      });
     });
 
-    chrome.tabs.create({}, (tab) => {
-      chrome.tabs.group({tabIds: tab.id}, (groupId) => {
-        createdGroupId = groupId;
+    let createPromise = new Promise((resolve) => {
+      chrome.tabs.create({}, (tab) => {
+        chrome.tabs.group({tabIds: tab.id}, (groupId) => {
+          resolve(groupId);
+        });
       });
+    });
+
+    Promise.allSettled([onCreatedPromise, createPromise]).then((results) => {
+      chrome.test.assertEq(results.length, 2);
+      chrome.test.assertEq(results[0], results[1]);
+      chrome.test.succeed();
     });
   }
 ]);

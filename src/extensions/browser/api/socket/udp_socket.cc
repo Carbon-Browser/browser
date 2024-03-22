@@ -1,15 +1,16 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "extensions/browser/api/socket/udp_socket.h"
 
-#include <algorithm>
 #include <utility>
 
-#include "base/bind.h"
 #include "base/containers/contains.h"
+#include "base/containers/cxx20_erase.h"
+#include "base/functional/bind.h"
 #include "base/lazy_instance.h"
+#include "base/ranges/algorithm.h"
 #include "extensions/browser/api/api_resource.h"
 #include "net/base/ip_address.h"
 #include "net/base/ip_endpoint.h"
@@ -83,8 +84,8 @@ void UDPSocket::Disconnect(bool socket_destroying) {
   is_connected_ = false;
   is_bound_ = false;
   socket_->Close();
-  local_addr_ = absl::nullopt;
-  peer_addr_ = absl::nullopt;
+  local_addr_ = std::nullopt;
+  peer_addr_ = std::nullopt;
   read_callback_.Reset();
   // TODO(devlin): Should we do this for all callbacks?
   if (!recv_from_callback_.is_null()) {
@@ -214,8 +215,8 @@ bool UDPSocket::IsConnectedOrBound() const {
 }
 
 void UDPSocket::OnReceived(int32_t result,
-                           const absl::optional<net::IPEndPoint>& src_addr,
-                           absl::optional<base::span<const uint8_t>> data) {
+                           const std::optional<net::IPEndPoint>& src_addr,
+                           std::optional<base::span<const uint8_t>> data) {
   DCHECK(!recv_from_callback_.is_null() || !read_callback_.is_null());
 
   std::string ip;
@@ -231,7 +232,8 @@ void UDPSocket::OnReceived(int32_t result,
     return;
   }
 
-  auto io_buffer = base::MakeRefCounted<net::IOBuffer>(data.value().size());
+  auto io_buffer =
+      base::MakeRefCounted<net::IOBufferWithSize>(data.value().size());
   memcpy(io_buffer->data(), data.value().data(), data.value().size());
 
   if (!read_callback_.is_null()) {
@@ -250,7 +252,7 @@ void UDPSocket::OnConnectCompleted(
     net::CompletionOnceCallback callback,
     const net::IPEndPoint& remote_addr,
     int result,
-    const absl::optional<net::IPEndPoint>& local_addr) {
+    const std::optional<net::IPEndPoint>& local_addr) {
   if (result != net::OK) {
     std::move(callback).Run(result);
     return;
@@ -264,7 +266,7 @@ void UDPSocket::OnConnectCompleted(
 void UDPSocket::OnBindCompleted(
     net::CompletionOnceCallback callback,
     int result,
-    const absl::optional<net::IPEndPoint>& local_addr) {
+    const std::optional<net::IPEndPoint>& local_addr) {
   if (result != net::OK) {
     std::move(callback).Run(result);
     return;
@@ -306,9 +308,7 @@ void UDPSocket::OnLeaveGroupCompleted(net::CompletionOnceCallback callback,
                                       const std::string& normalized_address,
                                       int result) {
   if (result == net::OK) {
-    auto find_result = std::find(multicast_groups_.begin(),
-                                 multicast_groups_.end(), normalized_address);
-    multicast_groups_.erase(find_result);
+    base::Erase(multicast_groups_, normalized_address);
   }
 
   std::move(callback).Run(result);
@@ -343,9 +343,7 @@ void UDPSocket::LeaveGroup(const std::string& address,
   }
 
   std::string normalized_address = ip.ToString();
-  auto find_result = std::find(multicast_groups_.begin(),
-                               multicast_groups_.end(), normalized_address);
-  if (find_result == multicast_groups_.end()) {
+  if (!base::Contains(multicast_groups_, normalized_address)) {
     std::move(callback).Run(net::ERR_ADDRESS_INVALID);
     return;
   }

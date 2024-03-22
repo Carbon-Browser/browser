@@ -1,12 +1,13 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 // clang-format off
 import {flush} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
-import {loadTimeData, Route, Router} from 'chrome://settings/settings.js';
+import {loadTimeData, Route, Router, SettingsRoutes} from 'chrome://settings/settings.js';
 import {assertEquals, assertFalse, assertTrue} from 'chrome://webui-test/chai_assert.js';
-import {eventToPromise, flushTasks} from 'chrome://webui-test/test_util.js';
+import {eventToPromise} from 'chrome://webui-test/test_util.js';
+import {flushTasks} from 'chrome://webui-test/polymer_test_util.js';
 
 import {setupPopstateListener} from './test_util.js';
 
@@ -48,11 +49,12 @@ suite('SettingsSubpage', function() {
       SYNC: peopleRoute.createChild('/syncSetup'),
     };
 
-    Router.resetInstanceForTesting(new Router(testRoutes));
+    Router.resetInstanceForTesting(
+        new Router(testRoutes as unknown as SettingsRoutes));
 
     setupPopstateListener();
 
-    document.body.innerHTML = '';
+    document.body.innerHTML = window.trustedTypes!.emptyHTML;
   });
 
   function createSettingsSubpageWithPreserveSearchTerm() {
@@ -80,6 +82,14 @@ suite('SettingsSubpage', function() {
     assertTrue(!!icon);
     // Check that the icon is forced to always use 'ltr' mode.
     assertEquals('ltr', icon!.getAttribute('dir'));
+    // Check that the icon has proper a11y label.
+    subpage.pageTitle = 'Title';
+    flush();
+    assertEquals(
+        icon.ariaLabel,
+        subpage.i18n('subpageLearnMoreAriaLabel', subpage.pageTitle));
+    assertEquals(
+        icon?.getAttribute('aria-description'), subpage.i18n('opensInNewTab'));
   });
 
   test('favicon', function() {
@@ -219,7 +229,7 @@ suite('SettingsSubpage', function() {
 
 suite('SettingsSubpageSearch', function() {
   test('host autofocus propagates to <cr-input>', function() {
-    document.body.innerHTML = '';
+    document.body.innerHTML = window.trustedTypes!.emptyHTML;
     const element = document.createElement('cr-search-field');
     element.toggleAttribute('autofocus', true);
     document.body.appendChild(element);

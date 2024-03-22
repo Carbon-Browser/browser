@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,16 +11,15 @@ import org.chromium.content.R;
 import java.util.Calendar;
 import java.util.TimeZone;
 
-/**
- * This class is heavily based on android.widget.DatePicker.
- */
+/** This class is heavily based on android.widget.DatePicker. */
 public class WeekPicker extends TwoFieldDatePicker {
 
     public WeekPicker(Context context, double minValue, double maxValue) {
         super(context, minValue, maxValue);
 
-        getPositionInYearSpinner().setContentDescription(
-                getResources().getString(R.string.accessibility_date_picker_week));
+        getPositionInYearSpinner()
+                .setContentDescription(
+                        getResources().getString(R.string.accessibility_date_picker_week));
 
         // initialize to current date
         Calendar cal = Calendar.getInstance(TimeZone.getTimeZone("UTC"));
@@ -30,9 +29,7 @@ public class WeekPicker extends TwoFieldDatePicker {
         init(getISOWeekYearForDate(cal), getWeekForDate(cal), null);
     }
 
-    /**
-     * Creates a date object from the |year| and |week|.
-     */
+    /** Creates a date object from the |year| and |week|. */
     public static Calendar createDateFromWeek(int year, int week) {
         Calendar date = Calendar.getInstance(TimeZone.getTimeZone("UTC"));
         date.clear();
@@ -44,9 +41,7 @@ public class WeekPicker extends TwoFieldDatePicker {
         return date;
     }
 
-    /**
-     * Creates a date object from the |value| which is milliseconds since epoch.
-     */
+    /** Creates a date object from the |value| which is milliseconds since epoch. */
     public static Calendar createDateFromValue(double value) {
         Calendar date = Calendar.getInstance(TimeZone.getTimeZone("UTC"));
         date.clear();

@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -215,11 +215,13 @@ class DisassemblerElf : public Disassembler {
 
   // Section header table, ordered by section id.
   elf::Elf32_Half sections_count_ = 0;
-  raw_ptr<const typename Traits::Elf_Shdr> sections_ = nullptr;
+  raw_ptr<const typename Traits::Elf_Shdr, AllowPtrArithmetic> sections_ =
+      nullptr;
 
   // Program header table.
   elf::Elf32_Half segments_count_ = 0;
-  raw_ptr<const typename Traits::Elf_Phdr> segments_ = nullptr;
+  raw_ptr<const typename Traits::Elf_Phdr, AllowPtrArithmetic> segments_ =
+      nullptr;
 
   // Bit fields to store the role each section may play.
   std::vector<int> section_judgements_;

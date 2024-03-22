@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,23 +8,21 @@
 #include <set>
 #include <string>
 
-#include "base/bind.h"
-#include "base/callback.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/unguessable_token.h"
 #include "chrome/browser/apps/app_service/app_service_proxy.h"
 #include "chrome/browser/apps/app_service/app_service_proxy_factory.h"
 #include "chrome/browser/apps/app_service/launch_utils.h"
+#include "chrome/browser/ash/app_list/arc/arc_app_utils.h"
 #include "chrome/browser/ash/child_accounts/time_limits/app_time_limit_utils.h"
 #include "chrome/browser/ash/child_accounts/time_limits/app_types.h"
 #include "chrome/browser/profiles/profile.h"
-#include "chrome/browser/ui/app_list/arc/arc_app_utils.h"
 #include "components/services/app_service/public/cpp/app_launch_util.h"
 #include "components/services/app_service/public/cpp/app_update.h"
-#include "components/services/app_service/public/cpp/features.h"
-#include "components/services/app_service/public/cpp/icon_types.h"
+#include "components/services/app_service/public/cpp/icon_effects.h"
 #include "components/services/app_service/public/cpp/instance_update.h"
 #include "components/services/app_service/public/cpp/types_util.h"
-#include "components/services/app_service/public/mojom/types.mojom.h"
 #include "extensions/browser/extension_registry.h"
 #include "extensions/common/constants.h"
 #include "extensions/common/extension.h"
@@ -73,8 +71,8 @@ apps::PauseData PauseAppInfoToPauseData(const PauseAppInfo& pause_info) {
 }  // namespace
 
 AppServiceWrapper::AppServiceWrapper(Profile* profile) : profile_(profile) {
-  apps::AppRegistryCache::Observer::Observe(&GetAppCache());
-  apps::InstanceRegistry::Observer::Observe(&GetInstanceRegistry());
+  app_registry_cache_observer_.Observe(&GetAppCache());
+  instance_registry_observation_.Observe(&GetInstanceRegistry());
 }
 
 AppServiceWrapper::~AppServiceWrapper() = default;
@@ -100,15 +98,9 @@ void AppServiceWrapper::ResumeApp(const AppId& app_id) {
 }
 
 void AppServiceWrapper::LaunchApp(const std::string& app_service_id) {
-  if (base::FeatureList::IsEnabled(apps::kAppServiceLaunchWithoutMojom)) {
-    GetAppProxy()->Launch(
-        app_service_id, ui::EF_NONE, apps::LaunchSource::kFromParentalControls,
-        std::make_unique<apps::WindowInfo>(display::kDefaultDisplayId));
-  } else {
-    GetAppProxy()->Launch(app_service_id, ui::EF_NONE,
-                          apps::mojom::LaunchSource::kFromParentalControls,
-                          apps::MakeWindowInfo(display::kDefaultDisplayId));
-  }
+  GetAppProxy()->Launch(
+      app_service_id, ui::EF_NONE, apps::LaunchSource::kFromParentalControls,
+      std::make_unique<apps::WindowInfo>(display::kDefaultDisplayId));
 }
 
 std::vector<AppId> AppServiceWrapper::GetInstalledApps() const {
@@ -181,8 +173,8 @@ void AppServiceWrapper::GetAppIcon(
   const std::string app_service_id = AppServiceIdFromAppId(app_id, profile_);
   DCHECK(!app_service_id.empty());
 
-  GetAppProxy()->LoadIconFromIconKey(
-      app_id.app_type(), app_service_id, apps::IconKey(),
+  GetAppProxy()->LoadIconWithIconEffects(
+      app_id.app_type(), app_service_id, apps::IconEffects::kNone,
       apps::IconType::kStandard, size_hint_in_dp,
       /* allow_placeholder_icon */ false,
       base::BindOnce(
@@ -249,7 +241,7 @@ void AppServiceWrapper::OnAppUpdate(const apps::AppUpdate& update) {
         }
       break;
     case apps::Readiness::kUninstalledByUser:
-    case apps::Readiness::kUninstalledByMigration:
+    case apps::Readiness::kUninstalledByNonUser:
       for (auto& listener : listeners_)
         listener.OnAppUninstalled(app_id);
       break;
@@ -266,7 +258,7 @@ void AppServiceWrapper::OnAppUpdate(const apps::AppUpdate& update) {
 
 void AppServiceWrapper::OnAppRegistryCacheWillBeDestroyed(
     apps::AppRegistryCache* cache) {
-  apps::AppRegistryCache::Observer::Observe(nullptr);
+  app_registry_cache_observer_.Reset();
 }
 
 void AppServiceWrapper::OnInstanceUpdate(const apps::InstanceUpdate& update) {
@@ -302,7 +294,7 @@ void AppServiceWrapper::OnInstanceUpdate(const apps::InstanceUpdate& update) {
 
 void AppServiceWrapper::OnInstanceRegistryWillBeDestroyed(
     apps::InstanceRegistry* cache) {
-  apps::InstanceRegistry::Observer::Observe(nullptr);
+  instance_registry_observation_.Reset();
 }
 
 apps::AppServiceProxy* AppServiceWrapper::GetAppProxy() const {

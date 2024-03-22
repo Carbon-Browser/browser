@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,7 +10,7 @@
 #include <unistd.h>
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
 #include "build/build_config.h"
 #include "net/base/net_errors.h"
@@ -50,7 +50,9 @@ bool UnixDomainServerSocket::GetPeerCredentials(SocketDescriptor socket,
 #endif
 }
 
-int UnixDomainServerSocket::Listen(const IPEndPoint& address, int backlog) {
+int UnixDomainServerSocket::Listen(const IPEndPoint& address,
+                                   int backlog,
+                                   absl::optional<bool> ipv6_only) {
   NOTIMPLEMENTED();
   return ERR_NOT_IMPLEMENTED;
 }

@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,7 +6,6 @@
 #define THIRD_PARTY_BLINK_RENDERER_MODULES_SERIAL_SERIAL_PORT_H_
 
 #include "mojo/public/cpp/bindings/pending_receiver.h"
-#include "services/device/public/mojom/serial.mojom-blink-forward.h"
 #include "services/device/public/mojom/serial.mojom-blink.h"
 #include "third_party/blink/public/mojom/serial/serial.mojom-blink.h"
 #include "third_party/blink/renderer/bindings/core/v8/active_script_wrappable.h"
@@ -19,6 +18,7 @@
 #include "third_party/blink/renderer/platform/mojo/heap_mojo_receiver.h"
 #include "third_party/blink/renderer/platform/mojo/heap_mojo_remote.h"
 #include "third_party/blink/renderer/platform/mojo/heap_mojo_wrapper_mode.h"
+#include "third_party/blink/renderer/platform/scheduler/public/frame_scheduler.h"
 
 namespace base {
 class UnguessableToken;
@@ -37,7 +37,7 @@ class SerialPortUnderlyingSink;
 class SerialPortUnderlyingSource;
 class WritableStream;
 
-class SerialPort final : public EventTargetWithInlineData,
+class SerialPort final : public EventTarget,
                          public ActiveScriptWrappable<SerialPort>,
                          public device::mojom::blink::SerialPortClient {
   DEFINE_WRAPPERTYPEINFO();
@@ -67,7 +67,7 @@ class SerialPort final : public EventTargetWithInlineData,
   ScriptPromise ContinueClose(ScriptState*);
   void AbortClose();
   void StreamsClosed();
-  bool IsClosing() const { return close_resolver_; }
+  bool IsClosing() const { return close_resolver_ != nullptr; }
 
   void Flush(device::mojom::blink::SerialPortFlushMode mode,
              device::mojom::blink::SerialPort::FlushCallback callback);
@@ -81,7 +81,7 @@ class SerialPort final : public EventTargetWithInlineData,
   // ActiveScriptWrappable
   bool HasPendingActivity() const override;
 
-  // EventTargetWithInlineData
+  // EventTarget
   ExecutionContext* GetExecutionContext() const override;
   const AtomicString& InterfaceName() const override;
   DispatchEventResult DispatchEventInternal(Event& event) override;
@@ -95,6 +95,7 @@ class SerialPort final : public EventTargetWithInlineData,
                       mojo::ScopedDataPipeConsumerHandle* consumer);
   void OnConnectionError();
   void OnOpen(mojo::PendingReceiver<device::mojom::blink::SerialPortClient>,
+              ScriptPromiseResolver*,
               mojo::PendingRemote<device::mojom::blink::SerialPort>);
   void OnGetSignals(ScriptPromiseResolver*,
                     device::mojom::blink::SerialPortControlSignalsPtr);
@@ -130,6 +131,9 @@ class SerialPort final : public EventTargetWithInlineData,
   HeapHashSet<Member<ScriptPromiseResolver>> signal_resolvers_;
   // Resolver for the Promise returned by close().
   Member<ScriptPromiseResolver> close_resolver_;
+
+  FrameScheduler::SchedulingAffectingFeatureHandle
+      feature_handle_for_scheduler_;
 };
 
 }  // namespace blink

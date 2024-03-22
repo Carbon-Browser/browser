@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -85,9 +85,26 @@ std::string VideoPixelFormatToString(VideoPixelFormat format) {
       return "PIXEL_FORMAT_YUV422AP10";
     case PIXEL_FORMAT_YUV444AP10:
       return "PIXEL_FORMAT_YUV444AP10";
+    case PIXEL_FORMAT_NV12A:
+      return "PIXEL_FORMAT_NV12A";
   }
   NOTREACHED() << "Invalid VideoPixelFormat provided: " << format;
   return "";
+}
+
+std::string VideoChromaSamplingToString(VideoChromaSampling chroma_sampling) {
+  switch (chroma_sampling) {
+    case VideoChromaSampling::kUnknown:
+      return "unknown chroma sampling";
+    case VideoChromaSampling::k400:
+      return "4:0:0";
+    case VideoChromaSampling::k420:
+      return "4:2:0";
+    case VideoChromaSampling::k444:
+      return "4:4:4";
+    case VideoChromaSampling::k422:
+      return "4:2:2";
+  }
 }
 
 std::ostream& operator<<(std::ostream& os, VideoPixelFormat format) {
@@ -114,6 +131,7 @@ bool IsYuvPlanar(VideoPixelFormat format) {
     case PIXEL_FORMAT_I420A:
     case PIXEL_FORMAT_I444:
     case PIXEL_FORMAT_NV12:
+    case PIXEL_FORMAT_NV12A:
     case PIXEL_FORMAT_NV21:
     case PIXEL_FORMAT_YUV420P9:
     case PIXEL_FORMAT_YUV420P10:
@@ -171,6 +189,7 @@ bool IsRGB(VideoPixelFormat format) {
     case PIXEL_FORMAT_I420A:
     case PIXEL_FORMAT_I444:
     case PIXEL_FORMAT_NV12:
+    case PIXEL_FORMAT_NV12A:
     case PIXEL_FORMAT_NV21:
     case PIXEL_FORMAT_UYVY:
     case PIXEL_FORMAT_YUY2:
@@ -226,6 +245,7 @@ bool IsOpaque(VideoPixelFormat format) {
     case PIXEL_FORMAT_XB30:
       return true;
     case PIXEL_FORMAT_I420A:
+    case PIXEL_FORMAT_NV12A:
     case PIXEL_FORMAT_ARGB:
     case PIXEL_FORMAT_ABGR:
     case PIXEL_FORMAT_BGRA:
@@ -251,6 +271,7 @@ size_t BitDepth(VideoPixelFormat format) {
     case PIXEL_FORMAT_I420A:
     case PIXEL_FORMAT_I444:
     case PIXEL_FORMAT_NV12:
+    case PIXEL_FORMAT_NV12A:
     case PIXEL_FORMAT_NV21:
     case PIXEL_FORMAT_YUY2:
     case PIXEL_FORMAT_UYVY:
@@ -286,8 +307,7 @@ size_t BitDepth(VideoPixelFormat format) {
     case PIXEL_FORMAT_RGBAF16:
       return 16;
   }
-  NOTREACHED();
-  return 0;
+  NOTREACHED_NORETURN();
 }
 
 }  // namespace media

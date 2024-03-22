@@ -1,14 +1,15 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef ASH_METRICS_STYLUS_METRICS_RECORDER_H_
 #define ASH_METRICS_STYLUS_METRICS_RECORDER_H_
 
+#include <optional>
+
 #include "ash/ash_export.h"
 #include "ash/system/power/peripheral_battery_listener.h"
 #include "chromeos/ash/components/feature_usage/feature_usage_metrics.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace ash {
 
@@ -54,7 +55,7 @@ class ASH_EXPORT StylusMetricsRecorder
  private:
   void UpdateStylusState();
 
-  absl::optional<bool> stylus_on_charge_ = absl::nullopt;
+  std::optional<bool> stylus_on_charge_ = std::nullopt;
 
   // Indicate whether a stylus garage is known to be present on this device:
   // garage refers to a charger that holds the stylus within the body of the

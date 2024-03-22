@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -19,7 +19,8 @@ void InProcessBrowserTest::OpenDevToolsWindow(
   // autorelease pool. Flush the pool when this function returns.
   @autoreleasepool {
     ASSERT_FALSE(content::DevToolsAgentHost::HasFor(web_contents));
-    DevToolsWindow::OpenDevToolsWindow(web_contents);
+    DevToolsWindow::OpenDevToolsWindow(web_contents,
+                                       DevToolsOpenedByAction::kUnknown);
     ASSERT_TRUE(content::DevToolsAgentHost::HasFor(web_contents));
   }
 }
@@ -84,7 +85,8 @@ Browser* InProcessBrowserTest::CreateBrowserForApp(const std::string& app_name,
   // autorelease pool. Flush the pool when this function returns.
   @autoreleasepool {
     Browser* browser = Browser::Create(Browser::CreateParams::CreateForApp(
-        app_name, false /* trusted_source */, gfx::Rect(), profile, true));
+        app_name, /*trusted_source=*/false, gfx::Rect(), profile,
+        /*user_gesture=*/true));
     AddBlankTabAndShow(browser);
     return browser;
   }

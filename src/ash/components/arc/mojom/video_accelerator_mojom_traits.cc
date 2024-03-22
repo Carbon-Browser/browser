@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -66,6 +66,23 @@ CHECK_PROFILE_ENUM(HEVCPROFILE_SCREEN_EXTENDED);
 CHECK_PROFILE_ENUM(HEVCPROFILE_SCALABLE_REXT);
 CHECK_PROFILE_ENUM(HEVCPROFILE_HIGH_THROUGHPUT_SCREEN_EXTENDED);
 CHECK_PROFILE_ENUM(HEVCPROFILE_EXT_MAX);
+CHECK_PROFILE_ENUM(VVCPROFILE_MIN);
+CHECK_PROFILE_ENUM(VVCPROFILE_MAIN10);
+CHECK_PROFILE_ENUM(VVCPROFILE_MAIN12);
+CHECK_PROFILE_ENUM(VVCPROFILE_MAIN12_INTRA);
+CHECK_PROFILE_ENUM(VVCPROIFLE_MULTILAYER_MAIN10);
+CHECK_PROFILE_ENUM(VVCPROFILE_MAIN10_444);
+CHECK_PROFILE_ENUM(VVCPROFILE_MAIN12_444);
+CHECK_PROFILE_ENUM(VVCPROFILE_MAIN16_444);
+CHECK_PROFILE_ENUM(VVCPROFILE_MAIN12_444_INTRA);
+CHECK_PROFILE_ENUM(VVCPROFILE_MAIN16_444_INTRA);
+CHECK_PROFILE_ENUM(VVCPROFILE_MULTILAYER_MAIN10_444);
+CHECK_PROFILE_ENUM(VVCPROFILE_MAIN10_STILL_PICTURE);
+CHECK_PROFILE_ENUM(VVCPROFILE_MAIN12_STILL_PICTURE);
+CHECK_PROFILE_ENUM(VVCPROFILE_MAIN10_444_STILL_PICTURE);
+CHECK_PROFILE_ENUM(VVCPROFILE_MAIN12_444_STILL_PICTURE);
+CHECK_PROFILE_ENUM(VVCPROFILE_MAIN16_444_STILL_PICTURE);
+CHECK_PROFILE_ENUM(VVCPROFILE_MAX);
 CHECK_PROFILE_ENUM(VIDEO_CODEC_PROFILE_MAX);
 
 #undef CHECK_PROFILE_ENUM
@@ -121,6 +138,21 @@ bool EnumTraits<arc::mojom::VideoCodecProfile, media::VideoCodecProfile>::
     case arc::mojom::VideoCodecProfile::AV1PROFILE_PROFILE_MAIN:
     case arc::mojom::VideoCodecProfile::AV1PROFILE_PROFILE_HIGH:
     case arc::mojom::VideoCodecProfile::AV1PROFILE_PROFILE_PRO:
+    case arc::mojom::VideoCodecProfile::VVCPROFILE_MAIN10:
+    case arc::mojom::VideoCodecProfile::VVCPROFILE_MAIN12:
+    case arc::mojom::VideoCodecProfile::VVCPROFILE_MAIN12_INTRA:
+    case arc::mojom::VideoCodecProfile::VVCPROIFLE_MULTILAYER_MAIN10:
+    case arc::mojom::VideoCodecProfile::VVCPROFILE_MAIN10_444:
+    case arc::mojom::VideoCodecProfile::VVCPROFILE_MAIN12_444:
+    case arc::mojom::VideoCodecProfile::VVCPROFILE_MAIN16_444:
+    case arc::mojom::VideoCodecProfile::VVCPROFILE_MAIN12_444_INTRA:
+    case arc::mojom::VideoCodecProfile::VVCPROFILE_MAIN16_444_INTRA:
+    case arc::mojom::VideoCodecProfile::VVCPROFILE_MULTILAYER_MAIN10_444:
+    case arc::mojom::VideoCodecProfile::VVCPROFILE_MAIN10_STILL_PICTURE:
+    case arc::mojom::VideoCodecProfile::VVCPROFILE_MAIN12_STILL_PICTURE:
+    case arc::mojom::VideoCodecProfile::VVCPROFILE_MAIN10_444_STILL_PICTURE:
+    case arc::mojom::VideoCodecProfile::VVCPROFILE_MAIN12_444_STILL_PICTURE:
+    case arc::mojom::VideoCodecProfile::VVCPROFILE_MAIN16_444_STILL_PICTURE:
       *output = static_cast<media::VideoCodecProfile>(input);
       return true;
   }
@@ -235,7 +267,7 @@ bool StructTraits<arc::mojom::VideoFrameLayoutDataView,
     return false;
   }
 
-  absl::optional<media::VideoFrameLayout> layout =
+  std::optional<media::VideoFrameLayout> layout =
       media::VideoFrameLayout::CreateWithPlanes(
           format, coded_size, std::move(planes), data.buffer_addr_align(),
           data.modifier());

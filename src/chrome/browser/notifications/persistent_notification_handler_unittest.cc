@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,8 +6,8 @@
 
 #include <memory>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
 #include "chrome/browser/history/history_service_factory.h"
@@ -18,6 +18,7 @@
 #include "chrome/browser/notifications/platform_notification_service_factory.h"
 #include "chrome/browser/notifications/platform_notification_service_impl.h"
 #include "chrome/test/base/testing_profile.h"
+#include "content/public/browser/permission_result.h"
 #include "content/public/common/persistent_notification_status.h"
 #include "content/public/test/browser_task_environment.h"
 #include "content/public/test/mock_permission_manager.h"
@@ -29,6 +30,7 @@
 
 using ::testing::_;
 using ::testing::Return;
+using PermissionStatus = blink::mojom::PermissionStatus;
 
 namespace {
 
@@ -49,11 +51,12 @@ class TestingProfileWithPermissionManager : public TestingProfile {
   ~TestingProfileWithPermissionManager() override = default;
 
   // Sets the notification permission status to |permission_status|.
-  void SetNotificationPermissionStatus(
-      blink::mojom::PermissionStatus permission_status) {
+  void SetNotificationPermissionStatus(PermissionStatus permission_status) {
     ON_CALL(*permission_manager_,
-            GetPermissionStatus(blink::PermissionType::NOTIFICATIONS, _, _))
-        .WillByDefault(Return(permission_status));
+            GetPermissionResultForOriginWithoutContext(
+                blink::PermissionType::NOTIFICATIONS, _, _))
+        .WillByDefault(Return(content::PermissionResult(
+            permission_status, content::PermissionStatusSource::UNSPECIFIED)));
   }
 
   // TestingProfile overrides:
@@ -109,8 +112,7 @@ class PersistentNotificationHandlerTest : public ::testing::Test {
 
 TEST_F(PersistentNotificationHandlerTest, OnClick_WithoutPermission) {
   EXPECT_CALL(*mock_logger_, LogPersistentNotificationClickWithoutPermission());
-  profile_.SetNotificationPermissionStatus(
-      blink::mojom::PermissionStatus::DENIED);
+  profile_.SetNotificationPermissionStatus(PermissionStatus::DENIED);
 
   std::unique_ptr<NotificationHandler> handler =
       std::make_unique<PersistentNotificationHandler>();
@@ -140,8 +142,7 @@ TEST_F(PersistentNotificationHandlerTest,
   ASSERT_TRUE(display_service_tester_.GetNotification(kExampleNotificationId));
 
   // Revoke permission for any origin to display notifications.
-  profile_.SetNotificationPermissionStatus(
-      blink::mojom::PermissionStatus::DENIED);
+  profile_.SetNotificationPermissionStatus(PermissionStatus::DENIED);
 
   // Now simulate a click on the notification. It should be automatically closed
   // by the PersistentNotificationHandler.
@@ -184,8 +185,8 @@ TEST_F(PersistentNotificationHandlerTest, DisableNotifications) {
   ASSERT_EQ(permission_context
                 ->GetPermissionStatus(nullptr /* render_frame_host */, origin_,
                                       origin_)
-                .content_setting,
-            CONTENT_SETTING_ASK);
+                .status,
+            PermissionStatus::ASK);
 
   std::unique_ptr<NotificationHandler> handler =
       std::make_unique<PersistentNotificationHandler>();
@@ -194,6 +195,6 @@ TEST_F(PersistentNotificationHandlerTest, DisableNotifications) {
   ASSERT_EQ(permission_context
                 ->GetPermissionStatus(nullptr /* render_frame_host */, origin_,
                                       origin_)
-                .content_setting,
-            CONTENT_SETTING_BLOCK);
+                .status,
+            PermissionStatus::DENIED);
 }

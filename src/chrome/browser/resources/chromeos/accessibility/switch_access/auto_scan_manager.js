@@ -1,10 +1,10 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 import {Navigator} from './navigator.js';
 import {SwitchAccess} from './switch_access.js';
-import {SAConstants} from './switch_access_constants.js';
+import {ErrorType, Mode} from './switch_access_constants.js';
 
 /**
  * Class to handle auto-scan behavior.
@@ -12,28 +12,10 @@ import {SAConstants} from './switch_access_constants.js';
 export class AutoScanManager {
   /** @private */
   constructor() {
-    /**
-     * Auto-scan interval ID.
-     * @private {number|undefined}
-     */
+    /** @private {number|undefined} */
     this.intervalID_;
 
-    /**
-     * Length of the auto-scan interval for most contexts, in milliseconds.
-     * @private {number}
-     */
-    this.primaryScanTime_ = AutoScanManager.NOT_INITIALIZED;
-
-    /**
-     * Length of auto-scan interval for the on-screen keyboard in milliseconds.
-     * @private {number}
-     */
-    this.keyboardScanTime_ = AutoScanManager.NOT_INITIALIZED;
-
-    /**
-     * Whether auto-scanning is enabled.
-     * @private {boolean}
-     */
+    /** @private {boolean} */
     this.isEnabled_ = false;
 
     /**
@@ -41,36 +23,39 @@ export class AutoScanManager {
      * @private {boolean}
      */
     this.inKeyboard_ = false;
+
+    /**
+     * Length of auto-scan interval for the on-screen keyboard in milliseconds.
+     * @private {number}
+     */
+    this.keyboardScanTime_ = NOT_INITIALIZED;
+
+    /**
+     * Length of the auto-scan interval for most contexts, in milliseconds.
+     * @private {number}
+     */
+    this.primaryScanTime_ = NOT_INITIALIZED;
   }
 
   // ============== Static Methods ================
 
-  static get instance() {
-    if (!AutoScanManager.instance_) {
-      AutoScanManager.instance_ = new AutoScanManager();
+  static init() {
+    if (AutoScanManager.instance) {
+      throw SwitchAccess.error(
+          ErrorType.DUPLICATE_INITIALIZATION,
+          'Cannot call AutoScanManager.init() more than once.');
     }
-    return AutoScanManager.instance_;
+    AutoScanManager.instance = new AutoScanManager();
   }
 
   /**
    * Restart auto-scan under the current settings if it is currently running.
    */
   static restartIfRunning() {
-    if (AutoScanManager.instance.isRunning_()) {
+    if (AutoScanManager.instance?.isRunning_()) {
       AutoScanManager.instance.stop_();
       AutoScanManager.instance.start_();
     }
-  }
-
-  /**
-   * Update this.primaryScanTime_ to |scanTime|. Then, if auto-scan is currently
-   * running, restart it.
-   *
-   * @param {number} scanTime Auto-scan interval time in milliseconds.
-   */
-  static setPrimaryScanTime(scanTime) {
-    AutoScanManager.instance.primaryScanTime_ = scanTime;
-    AutoScanManager.restartIfRunning();
   }
 
   /**
@@ -90,6 +75,14 @@ export class AutoScanManager {
   }
 
   /**
+   * Sets whether the keyboard scan time is used.
+   * @param {boolean} inKeyboard
+   */
+  static setInKeyboard(inKeyboard) {
+    AutoScanManager.instance.inKeyboard_ = inKeyboard;
+  }
+
+  /**
    * Update this.keyboardScanTime_ to |scanTime|.
    *
    * @param {number} scanTime Auto-scan interval time in milliseconds.
@@ -102,11 +95,13 @@ export class AutoScanManager {
   }
 
   /**
-   * Sets whether the keyboard scan time is used.
-   * @param {boolean} inKeyboard
+   * Update this.primaryScanTime_ to |scanTime|. Then, if auto-scan is currently
+   * running, restart it.
+   * @param {number} scanTime Auto-scan interval time in milliseconds.
    */
-  static setInKeyboard(inKeyboard) {
-    AutoScanManager.instance.inKeyboard_ = inKeyboard;
+  static setPrimaryScanTime(scanTime) {
+    AutoScanManager.instance.primaryScanTime_ = scanTime;
+    AutoScanManager.restartIfRunning();
   }
 
   // ============== Private Methods ================
@@ -117,7 +112,7 @@ export class AutoScanManager {
    * @private
    */
   isRunning_() {
-    return AutoScanManager.instance.isEnabled_;
+    return this.isEnabled_;
   }
 
   /**
@@ -130,20 +125,20 @@ export class AutoScanManager {
    * @private
    */
   start_() {
-    if (this.primaryScanTime_ === AutoScanManager.NOT_INITIALIZED ||
-        this.intervalID_ || SwitchAccess.mode === SAConstants.Mode.POINT_SCAN) {
+    if (this.primaryScanTime_ === NOT_INITIALIZED || this.intervalID_ ||
+        SwitchAccess.mode === Mode.POINT_SCAN) {
       return;
     }
 
     let currentScanTime = this.primaryScanTime_;
 
-    if (SwitchAccess.instance.improvedTextInputEnabled() && this.inKeyboard_ &&
-        this.keyboardScanTime_ !== AutoScanManager.NOT_INITIALIZED) {
+    if (SwitchAccess.improvedTextInputEnabled() && this.inKeyboard_ &&
+        this.keyboardScanTime_ !== NOT_INITIALIZED) {
       currentScanTime = this.keyboardScanTime_;
     }
 
-    this.intervalID_ = window.setInterval(() => {
-      if (SwitchAccess.mode === SAConstants.Mode.POINT_SCAN) {
+    this.intervalID_ = setInterval(() => {
+      if (SwitchAccess.mode === Mode.POINT_SCAN) {
         AutoScanManager.instance.stop_();
         return;
       }
@@ -156,13 +151,18 @@ export class AutoScanManager {
    * @private
    */
   stop_() {
-    window.clearInterval(this.intervalID_);
+    clearInterval(this.intervalID_);
     this.intervalID_ = undefined;
   }
 }
 
+/** @type {AutoScanManager} */
+AutoScanManager.instance;
+
+// Private to module.
+
 /**
  * Sentinel value that indicates an uninitialized scan time.
- * @type {number}
+ * @const {number}
  */
-AutoScanManager.NOT_INITIALIZED = -1;
+const NOT_INITIALIZED = -1;

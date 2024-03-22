@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -25,26 +25,37 @@ export class MetricsUtils {
   /** @param {!Macro} macro */
   static recordMacroRecognized(macro) {
     chrome.metricsPrivate.recordSparseValue(
-        MetricsUtils.MACRO_RECOGNIZED_METRIC, macro.getMacroName());
+        MetricsUtils.MACRO_RECOGNIZED_METRIC, macro.getName());
   }
 
   /** @param {!Macro} macro */
   static recordMacroSucceeded(macro) {
     chrome.metricsPrivate.recordSparseValue(
-        MetricsUtils.MACRO_SUCCEEDED_METRIC, macro.getMacroName());
+        MetricsUtils.MACRO_SUCCEEDED_METRIC, macro.getName());
   }
 
   /** @param {!Macro} macro */
   static recordMacroFailed(macro) {
     chrome.metricsPrivate.recordSparseValue(
-        MetricsUtils.MACRO_FAILED_METRIC, macro.getMacroName());
+        MetricsUtils.MACRO_FAILED_METRIC, macro.getName());
+  }
+
+  /** @param {boolean} used */
+  static recordPumpkinUsed(used) {
+    chrome.metricsPrivate.recordBoolean(MetricsUtils.PUMPKIN_USED_METRIC, used);
+  }
+
+  /** @param {boolean} succeeded */
+  static recordPumpkinSucceeded(succeeded) {
+    chrome.metricsPrivate.recordBoolean(
+        MetricsUtils.PUMPKIN_SUCCEEDED_METRIC, succeeded);
   }
 
   /** Records metrics when speech recognition starts. */
   recordSpeechRecognitionStarted() {
     chrome.metricsPrivate.recordBoolean(
         MetricsUtils.ON_DEVICE_SPEECH_METRIC, this.onDevice_);
-    chrome.metricsPrivate.recordSparseHashable(
+    chrome.metricsPrivate.recordSparseValueWithHashMetricName(
         MetricsUtils.LOCALE_METRIC, this.locale_);
     this.speechRecognitionStartTime_ = new Date();
   }
@@ -120,3 +131,18 @@ MetricsUtils.MACRO_SUCCEEDED_METRIC =
  * @const {string}
  */
 MetricsUtils.MACRO_FAILED_METRIC = 'Accessibility.CrosDictation.MacroFailed';
+
+/**
+ * The metric used to record whether or not Pumpkin was used for command
+ * parsing.
+ * @const {string}
+ */
+MetricsUtils.PUMPKIN_USED_METRIC = 'Accessibility.CrosDictation.UsedPumpkin';
+
+/**
+ * The metric used to record whether or not Pumpkin succeeded in parsing a
+ * command.
+ * @const {string}
+ */
+MetricsUtils.PUMPKIN_SUCCEEDED_METRIC =
+    'Accessibility.CrosDictation.PumpkinSucceeded';

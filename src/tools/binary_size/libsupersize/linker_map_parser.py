@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Copyright 2017 The Chromium Authors. All rights reserved.
+# Copyright 2017 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -552,7 +552,7 @@ class MapFileParserLld:
             # merged data. Feature request is filed under:
             # https://bugs.llvm.org/show_bug.cgi?id=35248
             if cur_obj == '<internal>':
-              if cur_section == '.rodata' and mangled_name == '':
+              if cur_section == '.rodata':
                 # Treat all <internal> sections within .rodata as as string
                 # literals. Some may hold numeric constants or other data, but
                 # there is currently no way to distinguish them.

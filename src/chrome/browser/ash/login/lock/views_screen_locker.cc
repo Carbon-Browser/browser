@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,17 +10,16 @@
 
 #include "ash/public/cpp/login_screen.h"
 #include "ash/public/cpp/login_screen_model.h"
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/i18n/time_formatting.h"
 #include "base/location.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/strings/utf_string_conversions.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "base/time/time.h"
-#include "chrome/browser/ash/authpolicy/authpolicy_helper.h"
 #include "chrome/browser/ash/lock_screen_apps/state_controller.h"
 #include "chrome/browser/ash/login/challenge_response_auth_keys_loader.h"
+#include "chrome/browser/ash/login/lock/screen_locker.h"
 #include "chrome/browser/ash/login/lock_screen_utils.h"
 #include "chrome/browser/ash/login/mojo_system_info_dispatcher.h"
 #include "chrome/browser/ash/login/quick_unlock/pin_backend.h"
@@ -118,22 +117,26 @@ void ViewsScreenLocker::HandleAuthenticateUserWithPasswordOrPin(
   const user_manager::User* const user =
       user_manager::UserManager::Get()->FindUser(account_id);
   DCHECK(user);
-  UserContext user_context(*user);
-  user_context.SetKey(
+  auto user_context = std::make_unique<UserContext>(*user);
+  user_context->SetKey(
       Key(Key::KEY_TYPE_PASSWORD_PLAIN, std::string(), password));
-  user_context.SetIsUsingPin(authenticated_by_pin);
-  user_context.SetSyncPasswordData(password_manager::PasswordHashData(
+  if (!authenticated_by_pin) {
+    user_context->SetLocalPasswordInput(LocalPasswordInput{password});
+  }
+  user_context->SetIsUsingPin(authenticated_by_pin);
+  user_context->SetSyncPasswordData(password_manager::PasswordHashData(
       account_id.GetUserEmail(), base::UTF8ToUTF16(password),
       false /*force_update*/));
-  if (account_id.GetAccountType() == AccountType::ACTIVE_DIRECTORY &&
-      (user_context.GetUserType() !=
-       user_manager::UserType::USER_TYPE_ACTIVE_DIRECTORY)) {
+  if (account_id.GetAccountType() == AccountType::ACTIVE_DIRECTORY) {
     LOG(FATAL) << "Incorrect Active Directory user type "
-               << user_context.GetUserType();
+               << user_context->GetUserType();
   }
-  ScreenLocker::default_screen_locker()->Authenticate(user_context,
-                                                      std::move(callback));
-  UpdatePinKeyboardState(account_id);
+
+  auto on_authenticated = base::BindOnce(&ViewsScreenLocker::OnAuthenticated,
+                                         weak_factory_.GetWeakPtr(), account_id,
+                                         std::move(callback));
+  ScreenLocker::default_screen_locker()->Authenticate(
+      std::move(user_context), std::move(on_authenticated));
 }
 
 void ViewsScreenLocker::HandleAuthenticateUserWithEasyUnlock(
@@ -148,18 +151,10 @@ void ViewsScreenLocker::HandleAuthenticateUserWithChallengeResponse(
       account_id, std::move(callback));
 }
 
-void ViewsScreenLocker::HandleHardlockPod(const AccountId& account_id) {
-  user_selection_screen_->HardLockPod(account_id);
-}
-
 void ViewsScreenLocker::HandleOnFocusPod(const AccountId& account_id) {
   user_selection_screen_->HandleFocusPod(account_id);
 
   WallpaperControllerClientImpl::Get()->ShowUserWallpaper(account_id);
-}
-
-void ViewsScreenLocker::HandleOnNoPodFocused() {
-  user_selection_screen_->HandleNoPodFocused();
 }
 
 bool ViewsScreenLocker::HandleFocusLockScreenApps(bool reverse) {
@@ -199,6 +194,19 @@ void ViewsScreenLocker::UnregisterLockScreenAppFocusHandler() {
 
 void ViewsScreenLocker::HandleLockScreenAppFocusOut(bool reverse) {
   LoginScreen::Get()->GetModel()->HandleFocusLeavingLockScreenApps(reverse);
+}
+
+void ViewsScreenLocker::OnAuthenticated(
+    const AccountId& account_id,
+    base::OnceCallback<void(bool)> success_callback,
+    bool success) {
+  std::move(success_callback).Run(success);
+
+  if (!success) {
+    // Asynchronously update pin keyboard state. The pin might be locked due to
+    // too many attempts, in which case we might hide the pin keyboard.
+    UpdatePinKeyboardState(account_id);
+  }
 }
 
 void ViewsScreenLocker::UpdatePinKeyboardState(const AccountId& account_id) {

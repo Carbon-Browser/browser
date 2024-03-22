@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,7 @@
 #include <memory>
 
 #include "base/android/jni_string.h"
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "chrome/android/chrome_jni_headers/ServiceTabLauncher_jni.h"
 #include "content/public/browser/browser_context.h"
 #include "content/public/browser/page_navigator.h"

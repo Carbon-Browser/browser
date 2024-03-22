@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -38,8 +38,8 @@ std::unique_ptr<JSONArray> DisplayItemList::DisplayItemsAsJSON(
 
       if (flags & kShowPaintRecords) {
         if (const auto* drawing_item = DynamicTo<DrawingDisplayItem>(item)) {
-          if (const auto* record = drawing_item->GetPaintRecord().get())
-            json->SetArray("record", RecordAsJSON(*record));
+          json->SetArray("record",
+                         RecordAsJSON(drawing_item->GetPaintRecord()));
         }
       }
 

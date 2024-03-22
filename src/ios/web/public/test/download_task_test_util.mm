@@ -1,21 +1,17 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #import "ios/web/public/test/download_task_test_util.h"
 
-#import "base/bind.h"
-#import "base/callback.h"
 #import "base/check.h"
 #import "base/files/file_path.h"
+#import "base/functional/bind.h"
+#import "base/functional/callback.h"
 #import "base/notreached.h"
 #import "base/run_loop.h"
 #import "ios/web/public/download/download_task.h"
 #import "ios/web/public/download/download_task_observer.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 namespace web {
 namespace test {

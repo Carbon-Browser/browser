@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -49,8 +49,7 @@ class Extension;
 //  2) If a 16px icon was requested, the favicon for extension's launch URL.
 //  3) The default extension / application icon if there are still no matches.
 //
-class ExtensionIconSource : public content::URLDataSource,
-                            public base::SupportsWeakPtr<ExtensionIconSource> {
+class ExtensionIconSource : public content::URLDataSource {
  public:
   explicit ExtensionIconSource(Profile* profile);
 
@@ -77,7 +76,7 @@ class ExtensionIconSource : public content::URLDataSource,
 
   // content::URLDataSource implementation.
   std::string GetSource() override;
-  std::string GetMimeType(const std::string&) override;
+  std::string GetMimeType(const GURL&) override;
   void StartDataRequest(
       const GURL& url,
       const content::WebContents::Getter& wc_getter,
@@ -148,7 +147,7 @@ class ExtensionIconSource : public content::URLDataSource,
   // Removes temporary data associated with |request_id|.
   void ClearData(int request_id);
 
-  raw_ptr<Profile> profile_;
+  raw_ptr<Profile, FlakyDanglingUntriaged> profile_;
 
   // Maps tracker ids to request ids.
   std::map<int, int> tracker_map_;
@@ -161,6 +160,8 @@ class ExtensionIconSource : public content::URLDataSource,
   std::unique_ptr<SkBitmap> default_extension_data_;
 
   base::CancelableTaskTracker cancelable_task_tracker_;
+
+  base::WeakPtrFactory<ExtensionIconSource> weak_ptr_factory_{this};
 };
 
 }  // namespace extensions

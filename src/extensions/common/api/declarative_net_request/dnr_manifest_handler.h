@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,8 +7,7 @@
 
 #include "extensions/common/manifest_handler.h"
 
-namespace extensions {
-namespace declarative_net_request {
+namespace extensions::declarative_net_request {
 
 // Parses the kDeclarativeNetRequestKey manifest key.
 class DNRManifestHandler : public ManifestHandler {
@@ -28,7 +27,6 @@ class DNRManifestHandler : public ManifestHandler {
   base::span<const char* const> Keys() const override;
 };
 
-}  // namespace declarative_net_request
-}  // namespace extensions
+}  // namespace extensions::declarative_net_request
 
 #endif  // EXTENSIONS_COMMON_API_DECLARATIVE_NET_REQUEST_DNR_MANIFEST_HANDLER_H_

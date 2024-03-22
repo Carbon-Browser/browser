@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -17,6 +17,8 @@
 #include "cc/metrics/compositor_frame_reporter.h"
 #include "cc/metrics/event_metrics.h"
 #include "cc/metrics/frame_sequence_metrics.h"
+#include "cc/metrics/predictor_jank_tracker.h"
+#include "cc/metrics/scroll_jank_dropped_frame_tracker.h"
 
 namespace viz {
 struct FrameTimingDetails;
@@ -41,6 +43,7 @@ class CC_EXPORT CompositorFrameReportingController {
   enum PipelineStage {
     kBeginImplFrame = 0,
     kBeginMainFrame,
+    kReadyToCommit,
     kCommit,
     kActivate,
     kNumPipelineStages
@@ -92,9 +95,6 @@ class CC_EXPORT CompositorFrameReportingController {
   void SetThreadAffectsSmoothness(
       FrameInfo::SmoothEffectDrivingThread thread_type,
       bool affects_smoothness);
-  bool is_main_thread_driving_smoothness() const {
-    return is_main_thread_driving_smoothness_;
-  }
 
   void set_tick_clock(const base::TickClock* tick_clock) {
     DCHECK(tick_clock);
@@ -118,6 +118,10 @@ class CC_EXPORT CompositorFrameReportingController {
     begin_main_frame_start_time_ = begin_main_frame_start_time;
   }
 
+  bool HasReporterAt(PipelineStage stage) const;
+
+  void SetVisible(bool visible);
+
  protected:
   struct SubmittedCompositorFrame {
     uint32_t frame_token;
@@ -130,7 +134,6 @@ class CC_EXPORT CompositorFrameReportingController {
   };
   base::TimeTicks Now() const;
 
-  bool HasReporterAt(PipelineStage stage) const;
   bool next_activate_has_invalidation() const {
     return next_activate_has_invalidation_;
   }
@@ -157,6 +160,12 @@ class CC_EXPORT CompositorFrameReportingController {
   // instances should still be created for these frames. The following
   // functions accomplish this.
   void ProcessSkippedFramesIfNecessary(const viz::BeginFrameArgs& args);
+  void MaybePassEventMetricsFromDroppedFrames(
+      CompositorFrameReporter& reporter,
+      uint32_t frame_token,
+      bool next_reporter_from_same_frame);
+  void StoreEventMetricsFromDroppedFrames(CompositorFrameReporter& reporter,
+                                          uint32_t frame_token);
   void CreateReportersForDroppedFrames(
       const viz::BeginFrameArgs& old_args,
       const viz::BeginFrameArgs& new_args) const;
@@ -194,6 +203,9 @@ class CC_EXPORT CompositorFrameReportingController {
   // DO NOT reorder this line and the ones below. The latency_ukm_reporter_
   // must outlive the objects in |submitted_compositor_frames_|.
   std::unique_ptr<LatencyUkmReporter> latency_ukm_reporter_;
+  std::unique_ptr<PredictorJankTracker> predictor_jank_tracker_;
+  std::unique_ptr<ScrollJankDroppedFrameTracker>
+      scroll_jank_dropped_frame_tracker_;
 
   std::unique_ptr<CompositorFrameReporter>
       reporters_[PipelineStage::kNumPipelineStages];
@@ -226,9 +238,12 @@ class CC_EXPORT CompositorFrameReportingController {
 
   // When a frame with events metrics fails to be presented, its events metrics
   // will be added to this map. The first following presented frame will get
-  // these metrics and report them.
-  std::map<viz::BeginFrameId, EventMetrics::List>
-      events_metrics_from_dropped_frames_;
+  // these metrics and report them. The key of map is submission frame token.
+  // Frame token is chosen over BeginFrameId as key due to the fact that frames
+  // can drop while a long running main still eventually presents, in which
+  // cases its more appropriate to check against frame_token instead of
+  // BeginFrameId.
+  std::map<uint32_t, EventMetricsSet> events_metrics_from_dropped_frames_;
 
   // Tracking the swap times in a queue to measure delta of multiple swaps in
   // each vsync.
@@ -237,14 +252,20 @@ class CC_EXPORT CompositorFrameReportingController {
   // interval of last begin frame args.
   base::TimeDelta last_interval_;
 
-  // These variables store the breakdown stage latency predictions made based
-  // on impl and main reporter's previous frames.
-  std::vector<base::TimeDelta> previous_latency_predictions_main_;
-  std::vector<base::TimeDelta> previous_latency_predictions_impl_;
+  CompositorFrameReporter::CompositorLatencyInfo
+      previous_latency_predictions_main_;
+  CompositorFrameReporter::CompositorLatencyInfo
+      previous_latency_predictions_impl_;
 
-  // Container that stores the EventLatency dispatch stage latency predictions
-  // based on previous event traces.
-  std::vector<base::TimeDelta> dispatch_latency_predictions_;
+  // Container that stores the EventLatency stage latency predictions based on
+  // previous event traces.
+  CompositorFrameReporter::EventLatencyInfo event_latency_predictions_;
+
+  // Reporting controller needs to track transition of the page from invisible
+  // to visible in order to discard EventsMetrics impacted by duration of page
+  // being invisible
+  bool visible_ = true;
+  bool waiting_for_did_present_after_visible_ = false;
 };
 
 }  // namespace cc

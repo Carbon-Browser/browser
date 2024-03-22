@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,9 +7,9 @@
 
 #include <string>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "components/autofill/core/browser/logging/log_receiver.h"
-#import "ios/chrome/browser/browser_state/chrome_browser_state.h"
+#import "ios/chrome/browser/shared/model/browser_state/chrome_browser_state.h"
 #import "ios/web/public/webui/web_ui_ios_message_handler.h"
 
 namespace autofill {
@@ -46,7 +46,7 @@ class InternalsUIHandler : public web::WebUIIOSMessageHandler,
   void RegisterMessages() override;
 
   // LogReceiver implementation.
-  void LogEntry(const base::Value& entry) override;
+  void LogEntry(const base::Value::Dict& entry) override;
 
   void StartSubscription();
   void EndSubscription();

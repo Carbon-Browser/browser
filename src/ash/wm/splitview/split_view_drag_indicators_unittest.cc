@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -17,16 +17,15 @@
 #include "ash/wm/splitview/split_view_controller.h"
 #include "ash/wm/tablet_mode/tablet_mode_controller.h"
 #include "base/command_line.h"
+#include "base/memory/raw_ptr.h"
 #include "base/test/metrics/histogram_tester.h"
-#include "base/test/scoped_feature_list.h"
-#include "chromeos/ui/wm/features.h"
+#include "split_view_drag_indicators.h"
 #include "ui/aura/client/aura_constants.h"
 #include "ui/aura/env.h"
 #include "ui/aura/window.h"
 #include "ui/compositor/presentation_time_recorder.h"
 #include "ui/display/display_switches.h"
 #include "ui/events/test/event_generator.h"
-#include "ui/views/widget/widget.h"
 
 namespace ash {
 
@@ -67,28 +66,29 @@ class SplitViewDragIndicatorsTest : public AshTestBase {
 
     if (!overview_controller->InOverviewSession()) {
       overview_session_ = nullptr;
-      split_view_drag_indicators_ = nullptr;
       return;
     }
 
     overview_session_ = Shell::Get()->overview_controller()->overview_session();
     ASSERT_TRUE(overview_session_);
-    split_view_drag_indicators_ =
-        overview_session_->grid_list()[0]->split_view_drag_indicators();
   }
 
   SplitViewController* split_view_controller() {
     return SplitViewController::Get(Shell::GetPrimaryRootWindow());
   }
 
-  SplitViewDragIndicators::WindowDraggingState window_dragging_state() {
-    DCHECK(split_view_drag_indicators_);
-    return split_view_drag_indicators_->current_window_dragging_state();
+  const SplitViewDragIndicators* split_view_drag_indicators() const {
+    return overview_session_->grid_list()[0]->split_view_drag_indicators();
+  }
+
+  SplitViewDragIndicators::WindowDraggingState window_dragging_state() const {
+    CHECK(split_view_drag_indicators());
+    return split_view_drag_indicators()->current_window_dragging_state();
   }
 
   bool IsPreviewAreaShowing() {
     return SplitViewDragIndicators::GetSnapPosition(window_dragging_state()) !=
-           SplitViewController::NONE;
+           SplitViewController::SnapPosition::kNone;
   }
 
   float GetEdgeInset(int screen_width) const {
@@ -105,8 +105,8 @@ class SplitViewDragIndicatorsTest : public AshTestBase {
   }
 
  protected:
-  SplitViewDragIndicators* split_view_drag_indicators_ = nullptr;
-  OverviewSession* overview_session_ = nullptr;
+  raw_ptr<OverviewSession, DanglingUntriaged | ExperimentalAsh>
+      overview_session_ = nullptr;
 };
 
 TEST_F(SplitViewDragIndicatorsTest, Dragging) {
@@ -120,8 +120,8 @@ TEST_F(SplitViewDragIndicatorsTest, Dragging) {
   ui::test::EventGenerator* generator = GetEventGenerator();
 
   ToggleOverview();
-  OverviewItem* left_item = GetOverviewItemForWindow(left_window.get());
-  OverviewItem* right_item = GetOverviewItemForWindow(right_window.get());
+  auto* left_item = GetOverviewItemForWindow(left_window.get());
+  auto* right_item = GetOverviewItemForWindow(right_window.get());
 
   // The inset on each side of the screen which is a snap region. Items dragged
   // to and released under this region will get snapped.
@@ -228,13 +228,14 @@ TEST_F(SplitViewDragIndicatorsTest, PreviewAreaVisibility) {
 
   // Verify the preview area is visible when |item|'s x is in the
   // range [0, edge_inset] or [screen_width - edge_inset - 1, screen_width].
-  OverviewItem* item = GetOverviewItemForWindow(window.get());
+  auto* item = GetOverviewItemForWindow(window.get());
   ASSERT_TRUE(item);
   const gfx::PointF start_location(item->target_bounds().CenterPoint());
   // Drag horizontally to avoid activating drag to close.
   const float y = start_location.y();
   overview_session_->InitiateDrag(item, start_location,
-                                  /*is_touch_dragging=*/false);
+                                  /*is_touch_dragging=*/false,
+                                  /*event_source_item=*/item);
   EXPECT_FALSE(IsPreviewAreaShowing());
   overview_session_->Drag(item, gfx::PointF(edge_inset + 1, y));
   EXPECT_FALSE(IsPreviewAreaShowing());
@@ -262,10 +263,11 @@ TEST_F(SplitViewDragIndicatorsTest, PreviewAreaVisibilityUnsnappableWindow) {
   std::unique_ptr<aura::Window> window(CreateUnsnappableWindow());
   ToggleOverview();
 
-  OverviewItem* item = GetOverviewItemForWindow(window.get());
+  auto* item = GetOverviewItemForWindow(window.get());
   const gfx::PointF start_location(item->target_bounds().CenterPoint());
   overview_session_->InitiateDrag(item, start_location,
-                                  /*is_touch_dragging=*/false);
+                                  /*is_touch_dragging=*/false,
+                                  /*event_source_item=*/item);
   EXPECT_FALSE(IsPreviewAreaShowing());
   overview_session_->Drag(item, gfx::PointF(0.f, 1.f));
   EXPECT_FALSE(IsPreviewAreaShowing());
@@ -289,10 +291,11 @@ TEST_F(SplitViewDragIndicatorsTest,
   ToggleOverview();
 
   // Start dragging from overview.
-  OverviewItem* item = GetOverviewItemForWindow(window1.get());
+  auto* item = GetOverviewItemForWindow(window1.get());
   gfx::PointF start_location(item->target_bounds().CenterPoint());
   overview_session_->InitiateDrag(item, start_location,
-                                  /*is_touch_dragging=*/false);
+                                  /*is_touch_dragging=*/false,
+                                  /*event_source_item=*/item);
   EXPECT_EQ(SplitViewDragIndicators::WindowDraggingState::kNoDrag,
             window_dragging_state());
   overview_session_->StartNormalDragMode(start_location);
@@ -305,31 +308,33 @@ TEST_F(SplitViewDragIndicatorsTest,
   // Verify the width of a snap area.
   const float y_position = start_location.y();
   overview_session_->InitiateDrag(item, start_location,
-                                  /*is_touch_dragging=*/false);
+                                  /*is_touch_dragging=*/false,
+                                  /*event_source_item=*/item);
   EXPECT_EQ(SplitViewDragIndicators::WindowDraggingState::kNoDrag,
             window_dragging_state());
   overview_session_->Drag(item, gfx::PointF(edge_inset + 1, y_position));
   EXPECT_EQ(SplitViewDragIndicators::WindowDraggingState::kFromOverview,
             window_dragging_state());
   overview_session_->Drag(item, gfx::PointF(edge_inset, y_position));
-  EXPECT_EQ(SplitViewDragIndicators::WindowDraggingState::kToSnapLeft,
+  EXPECT_EQ(SplitViewDragIndicators::WindowDraggingState::kToSnapPrimary,
             window_dragging_state());
 
   // Snap window to the left.
   overview_session_->CompleteDrag(item, gfx::PointF(edge_inset, y_position));
   ASSERT_TRUE(split_view_controller()->InSplitViewMode());
-  ASSERT_EQ(SplitViewController::State::kLeftSnapped,
+  ASSERT_EQ(SplitViewController::State::kPrimarySnapped,
             split_view_controller()->state());
 
   // Drag from overview and snap to the right.
   item = GetOverviewItemForWindow(window2.get());
   start_location = item->target_bounds().CenterPoint();
   overview_session_->InitiateDrag(item, start_location,
-                                  /*is_touch_dragging=*/false);
+                                  /*is_touch_dragging=*/false,
+                                  /*event_source_item=*/item);
   EXPECT_EQ(SplitViewDragIndicators::WindowDraggingState::kNoDrag,
             window_dragging_state());
   overview_session_->Drag(item, gfx::PointF(screen_width - 1, y_position));
-  EXPECT_EQ(SplitViewDragIndicators::WindowDraggingState::kToSnapRight,
+  EXPECT_EQ(SplitViewDragIndicators::WindowDraggingState::kToSnapSecondary,
             window_dragging_state());
   overview_session_->CompleteDrag(item, start_location);
 }
@@ -340,10 +345,11 @@ TEST_F(SplitViewDragIndicatorsTest,
   std::unique_ptr<aura::Window> unsnappable_window(CreateUnsnappableWindow());
   ToggleOverview();
 
-  OverviewItem* item = GetOverviewItemForWindow(unsnappable_window.get());
+  auto* item = GetOverviewItemForWindow(unsnappable_window.get());
   gfx::PointF start_location(item->target_bounds().CenterPoint());
   overview_session_->InitiateDrag(item, start_location,
-                                  /*is_touch_dragging=*/false);
+                                  /*is_touch_dragging=*/false,
+                                  /*event_source_item=*/item);
   overview_session_->StartNormalDragMode(start_location);
   EXPECT_EQ(SplitViewDragIndicators::WindowDraggingState::kFromOverview,
             window_dragging_state());
@@ -398,10 +404,10 @@ TEST_F(SplitViewDragIndicatorsTest, SplitViewDragIndicatorsVisibility) {
 
   // Verify that only one highlight shows up for the snap states.
   indicator->SetWindowDraggingState(
-      SplitViewDragIndicators::WindowDraggingState::kToSnapLeft);
+      SplitViewDragIndicators::WindowDraggingState::kToSnapPrimary);
   check_helper(indicator.get(), to_int(IndicatorType::kLeftHighlight));
   indicator->SetWindowDraggingState(
-      SplitViewDragIndicators::WindowDraggingState::kToSnapRight);
+      SplitViewDragIndicators::WindowDraggingState::kToSnapSecondary);
   check_helper(indicator.get(), to_int(IndicatorType::kRightHighlight));
 
   // Verify that only snap previews are shown for window dragging from shelf.
@@ -411,13 +417,13 @@ TEST_F(SplitViewDragIndicatorsTest, SplitViewDragIndicatorsVisibility) {
       SplitViewDragIndicators::WindowDraggingState::kFromShelf);
   check_helper(indicator.get(), 0);
   indicator->SetWindowDraggingState(
-      SplitViewDragIndicators::WindowDraggingState::kToSnapLeft);
+      SplitViewDragIndicators::WindowDraggingState::kToSnapPrimary);
   check_helper(indicator.get(), to_int(IndicatorType::kLeftHighlight));
   indicator->SetWindowDraggingState(
       SplitViewDragIndicators::WindowDraggingState::kFromShelf);
   check_helper(indicator.get(), 0);
   indicator->SetWindowDraggingState(
-      SplitViewDragIndicators::WindowDraggingState::kToSnapRight);
+      SplitViewDragIndicators::WindowDraggingState::kToSnapSecondary);
   check_helper(indicator.get(), to_int(IndicatorType::kRightHighlight));
   indicator->SetWindowDraggingState(
       SplitViewDragIndicators::WindowDraggingState::kFromShelf);
@@ -436,7 +442,7 @@ TEST_F(SplitViewDragIndicatorsTest, SplitViewDragIndicatorsVisibility) {
       SplitViewDragIndicators::WindowDraggingState::kFromTop);
   check_helper(indicator.get(), 0);
   indicator->SetWindowDraggingState(
-      SplitViewDragIndicators::WindowDraggingState::kToSnapRight);
+      SplitViewDragIndicators::WindowDraggingState::kToSnapSecondary);
   check_helper(indicator.get(), to_int(IndicatorType::kRightHighlight));
   indicator->SetWindowDraggingState(
       SplitViewDragIndicators::WindowDraggingState::kFromTop);
@@ -455,47 +461,33 @@ TEST_F(SplitViewDragIndicatorsTest, SplitViewDragIndicatorsVisibility) {
       SplitViewDragIndicators::WindowDraggingState::kFromTop);
   check_helper(indicator.get(), 0);
   indicator->SetWindowDraggingState(
-      SplitViewDragIndicators::WindowDraggingState::kToSnapRight);
+      SplitViewDragIndicators::WindowDraggingState::kToSnapSecondary);
   indicator->SetWindowDraggingState(
       SplitViewDragIndicators::WindowDraggingState::kFromTop);
   check_helper(indicator.get(), 0);
 }
 
 // Defines a test fixture to test behavior of SplitViewDragIndicators on
-// multi-display in clamshell mode, parameterized to run with the feature
-// |chromeos::wm::features::kVerticalSnap| enabled and disabled.
+// multi-display in clamshell mode.
 class ClamshellMultiDisplaySplitViewDragIndicatorsTest
-    : public SplitViewDragIndicatorsTest,
-      public ::testing::WithParamInterface<bool> {
+    : public SplitViewDragIndicatorsTest {
  public:
   ClamshellMultiDisplaySplitViewDragIndicatorsTest() = default;
   ~ClamshellMultiDisplaySplitViewDragIndicatorsTest() override = default;
 
   // SplitViewDragIndicatorsTest:
   void SetUp() override {
-    if (GetParam())
-      scoped_feature_list_.InitAndEnableFeature(
-          chromeos::wm::features::kVerticalSnap);
-    else
-      scoped_feature_list_.InitAndDisableFeature(
-          chromeos::wm::features::kVerticalSnap);
     SplitViewDragIndicatorsTest::SetUp();
     // Disable tablet mode that is enabled in
     // `SplitViewDragIndicatorsTest::SetUp()` to test clamshell mode.
     Shell::Get()->tablet_mode_controller()->SetEnabledForTest(false);
     base::RunLoop().RunUntilIdle();
   }
-
-  bool IsVerticalSnapEnabled() const { return GetParam(); }
-
- protected:
-  base::test::ScopedFeatureList scoped_feature_list_;
 };
 
 // Tests that dragging a window to external portrait display will layout
-// split view drag indicators vertically instead of horizontally if
-// |chromeos::wm::features::kVerticalSnap| is enabled.
-TEST_P(ClamshellMultiDisplaySplitViewDragIndicatorsTest,
+// split view drag indicators vertically instead of horizontally.
+TEST_F(ClamshellMultiDisplaySplitViewDragIndicatorsTest,
        IndicatorsLayoutWhileDraggingWindowToPortraitDisplay) {
   UpdateDisplay("800x600,600x800");
   aura::Window::Windows root_windows = Shell::GetAllRootWindows();
@@ -516,10 +508,11 @@ TEST_P(ClamshellMultiDisplaySplitViewDragIndicatorsTest,
       IndicatorType::kRightText));
 
   // Start dragging from overview in the landscape display.
-  OverviewItem* item = GetOverviewItemForWindow(window1.get());
+  auto* item = GetOverviewItemForWindow(window1.get());
   gfx::PointF start_location(item->target_bounds().CenterPoint());
   overview_session_->InitiateDrag(item, start_location,
-                                  /*is_touch_dragging=*/false);
+                                  /*is_touch_dragging=*/false,
+                                  /*event_source_item=*/item);
   EXPECT_EQ(SplitViewDragIndicators::WindowDraggingState::kNoDrag,
             window_dragging_state());
   overview_session_->Drag(item, gfx::PointF(400, 300));
@@ -540,8 +533,9 @@ TEST_P(ClamshellMultiDisplaySplitViewDragIndicatorsTest,
   overview_session_->ResetDraggedWindowGesture();
 
   // Drag a window to the portrait display.
-  overview_session_->InitiateDrag(item, start_location,
-                                  /*is_touch_dragging=*/false);
+  overview_session_->InitiateDrag(item, /*event_source_item=*/start_location,
+                                  /*is_touch_dragging=*/false,
+                                  /*event_source_item=*/item);
   Shell::Get()->cursor_manager()->SetDisplay(portrait_display);
   overview_session_->Drag(item, gfx::PointF(1100, 400));
   EXPECT_EQ(SplitViewDragIndicators::WindowDraggingState::kOtherDisplay,
@@ -558,20 +552,9 @@ TEST_P(ClamshellMultiDisplaySplitViewDragIndicatorsTest,
   // Otherwise, the left indicator should be on the left and its height span
   // the work area height.
   left_indicator_bounds = indicators->GetLeftHighlightViewBounds();
-  if (IsVerticalSnapEnabled()) {
-    EXPECT_EQ(left_indicator_bounds.width(),
-              portrait_display.work_area().width() -
-                  2 * kHighlightScreenEdgePaddingDp);
-  } else {
-    EXPECT_EQ(left_indicator_bounds.height(),
-              portrait_display.work_area().height() -
-                  2 * kHighlightScreenEdgePaddingDp);
-  }
+  EXPECT_EQ(
+      left_indicator_bounds.width(),
+      portrait_display.work_area().width() - 2 * kHighlightScreenEdgePaddingDp);
 }
 
-// Instantiate the Boolean which is used to toggle the feature
-// |chromeos::wm::features::kVerticalSnap| in the parameterized tests.
-INSTANTIATE_TEST_SUITE_P(All,
-                         ClamshellMultiDisplaySplitViewDragIndicatorsTest,
-                         ::testing::Bool());
 }  // namespace ash

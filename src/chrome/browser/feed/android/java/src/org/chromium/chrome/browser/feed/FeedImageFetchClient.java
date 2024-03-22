@@ -1,18 +1,17 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 package org.chromium.chrome.browser.feed;
 
+import org.jni_zero.CalledByNative;
+import org.jni_zero.JNINamespace;
+import org.jni_zero.NativeMethods;
+
 import org.chromium.base.ThreadUtils;
-import org.chromium.base.annotations.CalledByNative;
-import org.chromium.base.annotations.JNINamespace;
-import org.chromium.base.annotations.NativeMethods;
 import org.chromium.chrome.browser.xsurface.ImageFetchClient;
 
-/**
- * Implementation of xsurface's ImageFetchClient. Calls through to the native network stack.
- */
+/** Implementation of xsurface's ImageFetchClient. Calls through to the native network stack. */
 @JNINamespace("feed")
 public class FeedImageFetchClient implements ImageFetchClient {
     private static class HttpResponseImpl implements ImageFetchClient.HttpResponse {
@@ -62,6 +61,7 @@ public class FeedImageFetchClient implements ImageFetchClient {
     @NativeMethods
     interface Natives {
         int sendRequest(String url, ImageFetchClient.HttpResponseConsumer responseConsumer);
+
         void cancel(int requestId);
     }
 }

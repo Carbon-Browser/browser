@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -27,6 +27,11 @@ class InMemoryMetadataChangeList : public MetadataChangeList {
   // Moves all currently accumulated changes into |*other|, resetting the state
   // of |*this| to the default, empty state.
   void TransferChangesTo(MetadataChangeList* other);
+
+  // Allows ignoring metadata changes reported by the processor, for advanced
+  // cases where ignoring a change should also ignore changes to tracked
+  // metadata.
+  void DropMetadataChangeForStorageKey(const std::string& storage_key);
 
   // MetadataChangeList implementation.
   void UpdateModelTypeState(

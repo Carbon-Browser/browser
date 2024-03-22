@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,7 +8,6 @@
 #include <set>
 #include <vector>
 
-#include "ash/components/tpm/stub_install_attributes.h"
 #include "ash/display/screen_orientation_controller.h"
 #include "ash/display/screen_orientation_controller_test_api.h"
 #include "ash/multi_user/multi_user_window_manager_impl.h"
@@ -28,10 +27,11 @@
 #include "ash/wm/tablet_mode/tablet_mode_window_manager.h"
 #include "ash/wm/window_state.h"
 #include "ash/wm/wm_event.h"
-#include "base/bind.h"
 #include "base/check.h"
 #include "base/compiler_specific.h"
+#include "base/functional/bind.h"
 #include "base/memory/ptr_util.h"
+#include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
 #include "base/strings/string_piece.h"
 #include "base/strings/string_util.h"
@@ -54,6 +54,7 @@
 #include "chrome/test/base/testing_browser_process.h"
 #include "chrome/test/base/testing_profile.h"
 #include "chrome/test/base/testing_profile_manager.h"
+#include "chromeos/ash/components/install_attributes/stub_install_attributes.h"
 #include "components/account_id/account_id.h"
 #include "components/user_manager/scoped_user_manager.h"
 #include "components/user_manager/user_info.h"
@@ -122,7 +123,7 @@ class MultiProfileSupportTest : public ChromeAshTestBase {
  public:
   MultiProfileSupportTest()
       : fake_user_manager_(new FakeChromeUserManager),
-        user_manager_enabler_(base::WrapUnique(fake_user_manager_)) {}
+        user_manager_enabler_(base::WrapUnique(fake_user_manager_.get())) {}
 
   MultiProfileSupportTest(const MultiProfileSupportTest&) = delete;
   MultiProfileSupportTest& operator=(const MultiProfileSupportTest&) = delete;
@@ -169,7 +170,7 @@ class MultiProfileSupportTest : public ChromeAshTestBase {
   // Delete the window at the given index, and set the referefence to NULL.
   void delete_window_at(size_t index) {
     delete windows_[index];
-    windows_[index] = NULL;
+    windows_[index] = nullptr;
   }
 
   ash::MultiUserWindowManager* multi_user_window_manager() {
@@ -278,7 +279,8 @@ class MultiProfileSupportTest : public ChromeAshTestBase {
   aura::Window::Windows windows_;
 
   // Owned by |user_manager_enabler_|.
-  FakeChromeUserManager* fake_user_manager_ = nullptr;
+  raw_ptr<FakeChromeUserManager, DanglingUntriaged | ExperimentalAsh>
+      fake_user_manager_ = nullptr;
 
   std::unique_ptr<TestingProfileManager> profile_manager_;
 
@@ -813,7 +815,7 @@ TEST_F(MultiProfileSupportTest, ActiveWindowTests) {
   StartUserTransitionAnimation(account_id_C);
   ::wm::ActivationClient* activation_client =
       ::wm::GetActivationClient(window(0)->GetRootWindow());
-  EXPECT_EQ(NULL, activation_client->GetActiveWindow());
+  EXPECT_EQ(nullptr, activation_client->GetActiveWindow());
 
   // Now test that a minimized window stays minimized upon switch and back.
   StartUserTransitionAnimation(account_id_A);

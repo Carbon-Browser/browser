@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -31,7 +31,7 @@ void CustomWindowStateDelegate::ToggleLockedFullscreen(
   // Sets up the shell environment as appropriate for locked Lacros or Ash
   // chrome sessions including disabling ARC.
   ash::Shell::Get()->shell_delegate()->SetUpEnvironmentForLockedFullscreen(
-      window_state->IsPinned());
+      *window_state);
 }
 
 std::unique_ptr<ash::PresentationTimeRecorder>

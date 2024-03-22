@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -49,6 +49,9 @@ class VIEWS_EXPORT ButtonController {
   virtual bool OnKeyPressed(const ui::KeyEvent& event);
   virtual bool OnKeyReleased(const ui::KeyEvent& event);
   virtual void OnGestureEvent(ui::GestureEvent* event);
+
+  // Cause the button to notify the listener that a click occurred.
+  virtual void NotifyClick();
 
   // Updates |node_data| for a button based on the functionality.
   virtual void UpdateAccessibleNodeData(ui::AXNodeData* node_data);

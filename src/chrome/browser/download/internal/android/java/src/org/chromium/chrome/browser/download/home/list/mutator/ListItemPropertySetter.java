@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -48,16 +48,22 @@ public class ListItemPropertySetter implements ListConsumer {
 
         for (int i = 0; i < listItems.size(); i++) {
             ListItem currentItem = listItems.get(i);
-            boolean currentItemIsImage = currentItem instanceof OfflineItemListItem
-                    && ((OfflineItemListItem) currentItem).item.filter == OfflineItemFilter.IMAGE;
+            boolean currentItemIsImage =
+                    currentItem instanceof OfflineItemListItem
+                            && ((OfflineItemListItem) currentItem).item.filter
+                                    == OfflineItemFilter.IMAGE;
             if (!currentItemIsImage) continue;
 
             ListItem previousItem = i == 0 ? null : listItems.get(i - 1);
             ListItem nextItem = i >= listItems.size() - 1 ? null : listItems.get(i + 1);
-            boolean previousItemIsImage = previousItem instanceof OfflineItemListItem
-                    && ((OfflineItemListItem) previousItem).item.filter == OfflineItemFilter.IMAGE;
-            boolean nextItemIsImage = nextItem instanceof OfflineItemListItem
-                    && ((OfflineItemListItem) nextItem).item.filter == OfflineItemFilter.IMAGE;
+            boolean previousItemIsImage =
+                    previousItem instanceof OfflineItemListItem
+                            && ((OfflineItemListItem) previousItem).item.filter
+                                    == OfflineItemFilter.IMAGE;
+            boolean nextItemIsImage =
+                    nextItem instanceof OfflineItemListItem
+                            && ((OfflineItemListItem) nextItem).item.filter
+                                    == OfflineItemFilter.IMAGE;
 
             if (!previousItemIsImage && !nextItemIsImage) {
                 ((OfflineItemListItem) currentItem).spanFullWidth = true;

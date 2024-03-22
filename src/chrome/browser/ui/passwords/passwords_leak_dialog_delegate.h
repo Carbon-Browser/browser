@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -22,10 +22,6 @@ class PasswordsLeakDialogDelegate {
   // Open a new tab pointing to Password Checkup.
   virtual void NavigateToPasswordCheckup(
       password_manager::PasswordCheckReferrer referrer) = 0;
-
-  // Initiate an automated password change flow in the current tab.
-  virtual void StartAutomatedPasswordChange(const GURL& origin,
-                                            const std::u16string& username) = 0;
 
  protected:
   virtual ~PasswordsLeakDialogDelegate() = default;

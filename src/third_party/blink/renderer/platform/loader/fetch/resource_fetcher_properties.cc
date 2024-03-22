@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -25,7 +25,6 @@ void DetachableResourceFetcherProperties::Detach() {
   load_complete_ = properties_->IsLoadComplete();
   is_subframe_deprioritization_enabled_ =
       properties_->IsSubframeDeprioritizationEnabled();
-  web_bundle_physical_url_ = properties_->WebBundlePhysicalUrl();
   outstanding_throttled_limit_ = properties_->GetOutstandingThrottledLimit();
 
   properties_ = nullptr;

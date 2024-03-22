@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,9 +9,10 @@
 #include <string>
 #include <utility>
 
-#include "base/bind.h"
+#include <optional>
 #include "base/command_line.h"
 #include "base/feature_list.h"
+#include "base/functional/bind.h"
 #include "base/lazy_instance.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/memory/weak_ptr.h"
@@ -20,6 +21,7 @@
 #include "base/process/process_handle.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/task/deferred_sequenced_task_runner.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/task/single_thread_task_runner.h"
 #include "build/build_config.h"
 #include "chromecast/browser/cast_content_browser_client.h"
@@ -42,7 +44,6 @@
 #include "services/service_manager/service_manager.h"
 #include "services/service_manager/service_process_host.h"
 #include "services/service_manager/service_process_launcher.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "ui/base/buildflags.h"
 #include "ui/base/ui_base_features.h"
 
@@ -241,7 +242,8 @@ class ServiceManagerContext::InProcessServiceManagerContext
         FROM_HERE,
         base::BindOnce(
             &InProcessServiceManagerContext::StartOnServiceManagerThread, this,
-            std::move(manifests), base::ThreadTaskRunnerHandle::Get(),
+            std::move(manifests),
+            base::SingleThreadTaskRunner::GetCurrentDefault(),
             std::move(system_remote), std::move(request_handler)));
   }
 
@@ -314,7 +316,7 @@ ServiceManagerContext::ServiceManagerContext(
   manifests.push_back(GetBrowserManifest());
   manifests.push_back(GetSystemManifest(cast_content_browser_client_));
   for (auto& manifest : manifests) {
-    absl::optional<service_manager::Manifest> overlay =
+    std::optional<service_manager::Manifest> overlay =
         cast_content_browser_client_->GetServiceManifestOverlay(
             manifest.service_name);
     if (overlay)

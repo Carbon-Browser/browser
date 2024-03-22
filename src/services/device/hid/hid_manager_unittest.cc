@@ -1,9 +1,11 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include <string_view>
+
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
 #include "base/run_loop.h"
@@ -15,8 +17,8 @@
 #include "mojo/public/cpp/bindings/remote.h"
 #include "services/device/device_service_test_base.h"
 #include "services/device/hid/hid_manager_impl.h"
-#include "services/device/hid/mock_hid_connection.h"
-#include "services/device/hid/mock_hid_service.h"
+#include "services/device/public/cpp/test/mock_hid_connection.h"
+#include "services/device/public/cpp/test/mock_hid_service.h"
 #include "services/device/public/mojom/hid.mojom.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
@@ -424,7 +426,7 @@ TEST_F(HidManagerTest, TestHidConnectionInterface) {
     client->GetConnection()->Read(base::BindLambdaForTesting(
         [&](bool success, uint8_t report_id,
             const absl::optional<std::vector<uint8_t>>& buffer) {
-          constexpr base::StringPiece kExpected = "TestRead";
+          constexpr std::string_view kExpected = "TestRead";
           EXPECT_TRUE(success);
           EXPECT_EQ(report_id, 1u);
           ASSERT_TRUE(buffer);
@@ -454,7 +456,7 @@ TEST_F(HidManagerTest, TestHidConnectionInterface) {
         base::BindLambdaForTesting(
             [&](bool success,
                 const absl::optional<std::vector<uint8_t>>& buffer) {
-              constexpr base::StringPiece kExpected = "TestGetFeatureReport";
+              constexpr std::string_view kExpected = "TestGetFeatureReport";
               EXPECT_TRUE(success);
               ASSERT_TRUE(buffer);
               EXPECT_THAT(*buffer, ElementsAreArray(kExpected));

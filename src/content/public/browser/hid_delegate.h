@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -35,7 +35,8 @@ class CONTENT_EXPORT HidDelegate {
     virtual void OnDeviceChanged(const device::mojom::HidDeviceInfo&) = 0;
     virtual void OnHidManagerConnectionError() = 0;
 
-    // Event forwarded from permissions::ChooserContextBase::PermissionObserver:
+    // Event forwarded from
+    // permissions::ObjectPermissionContextBase::PermissionObserver:
     virtual void OnPermissionRevoked(const url::Origin& origin) = 0;
   };
 
@@ -86,7 +87,8 @@ class CONTENT_EXPORT HidDelegate {
   // object.
   virtual void AddObserver(BrowserContext* browser_context,
                            Observer* observer) = 0;
-  virtual void RemoveObserver(Observer* observer) = 0;
+  virtual void RemoveObserver(BrowserContext* browser_context,
+                              Observer* observer) = 0;
 
   // Returns true if |origin| is allowed to bypass the HID blocklist and
   // access reports contained in FIDO collections.
@@ -100,6 +102,15 @@ class CONTENT_EXPORT HidDelegate {
   virtual const device::mojom::HidDeviceInfo* GetDeviceInfo(
       BrowserContext* browser_context,
       const std::string& guid) = 0;
+
+  // Notify the delegate a connection is created on |origin| by
+  // |browser_context|.
+  virtual void IncrementConnectionCount(BrowserContext* browser_context,
+                                        const url::Origin& origin) = 0;
+  // Notify the delegate a connection is closed on |origin| by
+  // |browser_context|.
+  virtual void DecrementConnectionCount(BrowserContext* browser_context,
+                                        const url::Origin& origin) = 0;
 };
 
 }  // namespace content

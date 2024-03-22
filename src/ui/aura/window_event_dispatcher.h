@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,10 +9,9 @@
 #include <queue>
 #include <vector>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/gtest_prod_util.h"
 #include "base/memory/raw_ptr.h"
-#include "base/memory/ref_counted.h"
 #include "base/memory/weak_ptr.h"
 #include "base/scoped_multi_source_observation.h"
 #include "cc/metrics/events_metrics_manager.h"
@@ -318,7 +317,8 @@ class AURA_EXPORT WindowEventDispatcher : public ui::EventProcessor,
   std::unique_ptr<ui::LocatedEvent> held_repostable_event_;
 
   // Set when dispatching a held event.
-  raw_ptr<ui::LocatedEvent> dispatching_held_event_ = nullptr;
+  raw_ptr<ui::LocatedEvent, DanglingUntriaged> dispatching_held_event_ =
+      nullptr;
 
   base::ScopedMultiSourceObservation<aura::Window, aura::WindowObserver>
       observation_manager_{this};
@@ -341,10 +341,11 @@ class AURA_EXPORT WindowEventDispatcher : public ui::EventProcessor,
   // a scroll sequence or not.
   bool has_seen_gesture_scroll_update_after_begin_ = false;
 
-  // A stack of scoped monitors for events to track metrics for the currently
-  // active event.
-  std::vector<std::unique_ptr<cc::EventsMetricsManager::ScopedMonitor>>
-      event_metrics_monitors_;
+  // Tracks metrics for the event currently being dispatched. For nested events,
+  // e.g. mouse drag events during dragging, the new event concludes the
+  // previous one.
+  std::unique_ptr<cc::EventsMetricsManager::ScopedMonitor>
+      event_metrics_monitor_;
 
   bool in_shutdown_ = false;
 

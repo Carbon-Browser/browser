@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,6 +12,7 @@
 #include "content/public/browser/navigation_handle.h"
 #include "content/public/browser/web_contents_observer.h"
 #include "third_party/blink/public/common/input/web_input_event.h"
+#include "third_party/blink/public/mojom/input/input_handler.mojom-forward.h"
 #include "ui/events/android/gesture_event_type.h"
 #include "ui/events/blink/did_overscroll_params.h"
 #include "ui/gfx/geometry/size_f.h"
@@ -80,7 +81,7 @@ class GestureListenerManager::ResetScrollObserver : public WebContentsObserver {
   ResetScrollObserver(const ResetScrollObserver&) = delete;
   ResetScrollObserver& operator=(const ResetScrollObserver&) = delete;
 
-  void DidFinishNavigation(NavigationHandle* navigation_handle) override;
+  void PrimaryPageChanged(Page& page) override;
   void PrimaryMainFrameRenderProcessGone(
       base::TerminationStatus status) override;
 
@@ -93,9 +94,8 @@ GestureListenerManager::ResetScrollObserver::ResetScrollObserver(
     GestureListenerManager* manager)
     : WebContentsObserver(web_contents), manager_(manager) {}
 
-void GestureListenerManager::ResetScrollObserver::DidFinishNavigation(
-    NavigationHandle* navigation_handle) {
-  manager_->OnNavigationFinished(navigation_handle);
+void GestureListenerManager::ResetScrollObserver::PrimaryPageChanged(Page&) {
+  manager_->OnPrimaryPageChanged();
 }
 
 void GestureListenerManager::ResetScrollObserver::
@@ -142,19 +142,20 @@ void GestureListenerManager::SetMultiTouchZoomSupportEnabled(
     rwhva_->SetMultiTouchZoomSupportEnabled(enabled);
 }
 
-void GestureListenerManager::SetHasListenersAttached(JNIEnv* env,
-                                                     jboolean enabled) {
-  if (has_listeners_attached_ == enabled)
-    return;
-
-  has_listeners_attached_ = enabled;
+void GestureListenerManager::SetRootScrollOffsetUpdateFrequency(
+    JNIEnv* env,
+    jint frequency) {
+  auto new_frequency =
+      static_cast<cc::mojom::RootScrollOffsetUpdateFrequency>(frequency);
+  root_scroll_offset_update_frequency_ = new_frequency;
   if (rwhva_)
-    rwhva_->UpdateReportAllRootScrolls();
+    rwhva_->UpdateRootScrollOffsetUpdateFrequency();
 }
 
 void GestureListenerManager::GestureEventAck(
     const blink::WebGestureEvent& event,
-    blink::mojom::InputEventResultState ack_result) {
+    blink::mojom::InputEventResultState ack_result,
+    blink::mojom::ScrollResultDataPtr scroll_result_data) {
   // This is called to fix crash happening while WebContents is being
   // destroyed. See https://crbug.com/803244#c20
   if (web_contents_->IsBeingDestroyed())
@@ -175,8 +176,14 @@ void GestureListenerManager::GestureEventAck(
         env, j_obj, /*isDirectionUp*/ event.data.scroll_begin.delta_y_hint > 0);
     return;
   }
+  float x = -1.f, y = -1.f;
+  if (scroll_result_data && scroll_result_data->root_scroll_offset) {
+    x = scroll_result_data->root_scroll_offset->x();
+    y = scroll_result_data->root_scroll_offset->y();
+  }
+
   Java_GestureListenerManagerImpl_onEventAck(
-      env, j_obj, static_cast<int>(event.GetType()), consumed);
+      env, j_obj, static_cast<int>(event.GetType()), consumed, x, y);
 }
 
 void GestureListenerManager::DidStopFlinging() {
@@ -276,13 +283,8 @@ void GestureListenerManager::UpdateRenderProcessConnection(
   rwhva_ = new_rwhva;
 }
 
-void GestureListenerManager::OnNavigationFinished(
-    NavigationHandle* navigation_handle) {
-  if (navigation_handle->IsInPrimaryMainFrame() &&
-      navigation_handle->HasCommitted() &&
-      !navigation_handle->IsSameDocument()) {
-    ResetPopupsAndInput(false);
-  }
+void GestureListenerManager::OnPrimaryPageChanged() {
+  ResetPopupsAndInput(false);
 }
 
 void GestureListenerManager::OnRenderProcessGone() {

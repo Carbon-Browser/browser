@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,7 +12,7 @@ import androidx.annotation.Nullable;
 import org.chromium.base.supplier.ObservableSupplier;
 import org.chromium.base.supplier.ObservableSupplierImpl;
 import org.chromium.chrome.browser.tab.Tab;
-import org.chromium.chrome.browser.tabmodel.TabCreator;
+import org.chromium.chrome.browser.tabmodel.AsyncTabLauncher;
 import org.chromium.url.GURL;
 
 import java.io.Serializable;
@@ -42,17 +42,19 @@ public interface HistoryClustersDelegate {
      * specifying a list of additional urls to open with the same options.
      */
     @Nullable
-    <SerializableList extends List<String> & Serializable> Intent getOpenUrlIntent(GURL gurl,
-            boolean inIncognito, boolean createNewTab, boolean inTabGroup,
+    <SerializableList extends List<String> & Serializable> Intent getOpenUrlIntent(
+            GURL gurl,
+            boolean inIncognito,
+            boolean createNewTab,
+            boolean inTabGroup,
             @Nullable SerializableList additionalUrls);
 
     /** Returns a toggle view that swaps between the Journeys UI and the "normal" History UI. */
     @Nullable
     ViewGroup getToggleView(ViewGroup parent);
 
-    /** Returns an object that can create new tabs. */
-    @Nullable
-    default TabCreator getTabCreator(boolean isIncognito) {
+    /** Returns an object that can launch new tabs. */
+    default @Nullable AsyncTabLauncher getTabLauncher(boolean isIncognito) {
         return null;
     }
 
@@ -60,8 +62,7 @@ public interface HistoryClustersDelegate {
      * Returns a view containing a disclaimer about the presence of other forms of browsing
      * history.
      */
-    @Nullable
-    default ViewGroup getPrivacyDisclaimerView(ViewGroup parent) {
+    default @Nullable ViewGroup getPrivacyDisclaimerView(ViewGroup parent) {
         return null;
     }
 
@@ -73,9 +74,16 @@ public interface HistoryClustersDelegate {
     /** Called when the info header's visibility should be toggled. */
     default void toggleInfoHeaderVisibility() {}
 
+    /**
+     * Returns whether the user has other forms of browsing history, indicating the need to show a
+     * disclaimer.
+     */
+    default boolean hasOtherFormsOfBrowsingHistory() {
+        return false;
+    }
+
     /** Returns a view containing a link to a UI where the user can clear their browsing data. */
-    @Nullable
-    default ViewGroup getClearBrowsingDataView(ViewGroup parent) {
+    default @Nullable ViewGroup getClearBrowsingDataView(ViewGroup parent) {
         return null;
     }
 
@@ -92,9 +100,15 @@ public interface HistoryClustersDelegate {
     default String getSearchEmptyString() {
         return "";
     }
+
     /**
      * Called when the user opts out of the Journeys feature to signal to the embedding component
      * that it should remove the HistoryClusters UI.
      */
     default void onOptOut() {}
+
+    /** Whether the rename from "Journeys" to "Groups" is enabled. */
+    default boolean isRenameEnabled() {
+        return true;
+    }
 }

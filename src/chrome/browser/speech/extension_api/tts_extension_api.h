@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -51,6 +51,7 @@ class TtsResumeFunction : public ExtensionFunction {
 class TtsIsSpeakingFunction : public ExtensionFunction {
  private:
   ~TtsIsSpeakingFunction() override {}
+  void OnIsSpeakingComplete(bool speaking);
   ResponseAction Run() override;
   DECLARE_EXTENSION_FUNCTION("tts.isSpeaking", TTS_ISSPEAKING)
 };

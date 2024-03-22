@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -157,6 +157,35 @@ TEST(RectFTest, UnionEvenIfEmpty) {
   EXPECT_RECTF_EQ(RectF(2.2f, 3.3f, 8.8f, 6.6f),
                   UnionRectsEvenIfEmpty(RectF(2.2f, 3.3f, 4.4f, 5.5f),
                                         RectF(8.8f, 9.9f, 2.2f, 0)));
+}
+
+TEST(RectFTest, UnionEnsuresContainWithFloatingError) {
+  for (float f = 0.1f; f < 5; f += 0.1f) {
+    RectF r1(1, 2, 3, 4);
+    r1.Scale(f, f + 0.05f);
+    RectF r2 = r1 + Vector2dF(10.f + f, f - 10.f);
+    RectF r3 = UnionRects(r1, r2);
+    EXPECT_TRUE(r3.Contains(r1));
+    EXPECT_TRUE(r3.Contains(r2));
+  }
+}
+
+TEST(RectFTest, UnionIfEmptyResultTinySize) {
+  RectF r1(1e-15f, 0, 0, 0);
+  RectF r2(0, 1e-15f, 0, 0);
+  RectF r3 = UnionRectsEvenIfEmpty(r1, r2);
+  EXPECT_FALSE(r3.IsEmpty());
+  EXPECT_TRUE(r3.Contains(r1));
+  EXPECT_TRUE(r3.Contains(r2));
+}
+
+TEST(RectFTest, UnionMaxRects) {
+  constexpr float kMaxFloat = std::numeric_limits<float>::max();
+  constexpr float kMinFloat = std::numeric_limits<float>::min();
+  gfx::RectF r1(kMinFloat, 0, kMaxFloat, kMaxFloat);
+  gfx::RectF r2(0, kMinFloat, kMaxFloat, kMaxFloat);
+  // This should not trigger DCHECK failure.
+  r1.Union(r2);
 }
 
 TEST(RectFTest, CenterPoint) {

@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -17,8 +17,9 @@
 #include "ash/shell.h"
 #include "ash/shell_delegate.h"
 #include "ash/style/dark_light_mode_controller_impl.h"
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/strings/utf_string_conversions.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/time/time.h"
 #include "components/prefs/pref_service.h"
 #include "services/media_session/public/cpp/media_session_service.h"
@@ -44,63 +45,6 @@ namespace ash {
 
 namespace {
 
-// A layer delegate used for mask layer, with left and right gradient fading out
-// zones.
-class FadeoutLayerDelegate : public ui::LayerDelegate {
- public:
-  FadeoutLayerDelegate() : layer_(ui::LAYER_TEXTURED) {
-    layer_.set_delegate(this);
-    layer_.SetFillsBoundsOpaquely(false);
-  }
-
-  ~FadeoutLayerDelegate() override { layer_.set_delegate(nullptr); }
-
-  ui::Layer* layer() { return &layer_; }
-
- private:
-  // ui::LayerDelegate:
-  void OnPaintLayer(const ui::PaintContext& context) override {
-    const gfx::Size& size = layer()->size();
-    gfx::Rect left_rect(0, 0, kMediaStringGradientWidthDip, size.height());
-    gfx::Rect right_rect(size.width() - kMediaStringGradientWidthDip, 0,
-                         kMediaStringGradientWidthDip, size.height());
-
-    views::PaintInfo paint_info =
-        views::PaintInfo::CreateRootPaintInfo(context, size);
-    const auto& prs = paint_info.paint_recording_size();
-
-    // Pass the scale factor when constructing PaintRecorder so the MaskLayer
-    // size is not incorrectly rounded (see https://crbug.com/921274).
-    ui::PaintRecorder recorder(context, paint_info.paint_recording_size(),
-                               static_cast<float>(prs.width()) / size.width(),
-                               static_cast<float>(prs.height()) / size.height(),
-                               nullptr);
-
-    gfx::Canvas* canvas = recorder.canvas();
-    // Clear the canvas.
-    canvas->DrawColor(SK_ColorBLACK, SkBlendMode::kSrc);
-    // Draw left gradient zone.
-    cc::PaintFlags flags;
-    flags.setBlendMode(SkBlendMode::kSrc);
-    flags.setAntiAlias(false);
-    flags.setShader(gfx::CreateGradientShader(
-        gfx::Point(), gfx::Point(kMediaStringGradientWidthDip, 0),
-        SK_ColorTRANSPARENT, SK_ColorBLACK));
-    canvas->DrawRect(left_rect, flags);
-
-    // Draw right gradient zone.
-    flags.setShader(gfx::CreateGradientShader(
-        gfx::Point(size.width() - kMediaStringGradientWidthDip, 0),
-        gfx::Point(size.width(), 0), SK_ColorBLACK, SK_ColorTRANSPARENT));
-    canvas->DrawRect(right_rect, flags);
-  }
-
-  void OnDeviceScaleFactorChanged(float old_device_scale_factor,
-                                  float new_device_scale_factor) override {}
-
-  ui::Layer layer_;
-};
-
 // Typography.
 constexpr char16_t kMiddleDotSeparator[] = u" • ";
 
@@ -120,8 +64,8 @@ bool ShouldShowOnLockScreen() {
 
 }  // namespace
 
-MediaStringView::MediaStringView(Settings settings)
-    : settings_(std::move(settings)) {
+MediaStringView::MediaStringView(MediaStringView::Delegate* delegate)
+    : delegate_(delegate) {
   SetID(AmbientViewID::kAmbientMediaStringView);
   InitLayout();
 }
@@ -131,19 +75,25 @@ MediaStringView::~MediaStringView() = default;
 void MediaStringView::OnThemeChanged() {
   views::View::OnThemeChanged();
   media_text_->SetShadows(ambient::util::GetTextShadowValues(
-      GetColorProvider(), settings_.text_shadow_elevation));
+      GetColorProvider(), delegate_->GetSettings().text_shadow_elevation));
 
   const bool dark_mode_enabled =
       DarkLightModeControllerImpl::Get()->IsDarkModeEnabled();
   DCHECK(icon_);
-  icon_->SetImage(gfx::CreateVectorIcon(kMusicNoteIcon, kMusicNoteIconSizeDip,
-                                        dark_mode_enabled
-                                            ? settings_.icon_dark_mode_color
-                                            : settings_.icon_light_mode_color));
+  icon_->SetImage(gfx::CreateVectorIcon(
+      kMusicNoteIcon, kMusicNoteIconSizeDip,
+      dark_mode_enabled ? delegate_->GetSettings().icon_dark_mode_color
+                        : delegate_->GetSettings().icon_light_mode_color));
   DCHECK(media_text_);
-  media_text_->SetEnabledColor(dark_mode_enabled
-                                   ? settings_.text_dark_mode_color
-                                   : settings_.text_light_mode_color);
+  media_text_->SetEnabledColor(
+      dark_mode_enabled ? delegate_->GetSettings().text_dark_mode_color
+                        : delegate_->GetSettings().text_light_mode_color);
+  gfx::Insets shadow_insets =
+      gfx::ShadowValue::GetMargin(ambient::util::GetTextShadowValues(
+          nullptr, delegate_->GetSettings().text_shadow_elevation));
+  // Compensate the shadow insets to put the text middle align with the icon.
+  media_text_->SetBorder(views::CreateEmptyBorder(
+      gfx::Insets::TLBR(-shadow_insets.bottom(), 0, -shadow_insets.top(), 0)));
 }
 
 void MediaStringView::OnViewBoundsChanged(views::View* observed_view) {
@@ -172,7 +122,7 @@ void MediaStringView::MediaSessionInfoChanged(
 }
 
 void MediaStringView::MediaSessionMetadataChanged(
-    const absl::optional<media_session::MediaMetadata>& metadata) {
+    const std::optional<media_session::MediaMetadata>& metadata) {
   media_session::MediaMetadata session_metadata =
       metadata.value_or(media_session::MediaMetadata());
 
@@ -238,7 +188,7 @@ void MediaStringView::InitLayout() {
   text_layout->SetOrientation(views::LayoutOrientation::kHorizontal);
   text_layout->SetMainAxisAlignment(views::LayoutAlignment::kStart);
   text_layout->SetCrossAxisAlignment(views::LayoutAlignment::kCenter);
-  observed_view_.Observe(media_text_container_);
+  observed_view_.Observe(media_text_container_.get());
 
   media_text_ =
       media_text_container_->AddChildView(std::make_unique<views::Label>());
@@ -256,12 +206,6 @@ void MediaStringView::InitLayout() {
           .DeriveWithSizeDelta(kMediaStringFontSizeDip - kDefaultFontSizeDip)
           .DeriveWithWeight(gfx::Font::Weight::MEDIUM));
   media_text_->SetElideBehavior(gfx::ElideBehavior::NO_ELIDE);
-  gfx::Insets shadow_insets =
-      gfx::ShadowValue::GetMargin(ambient::util::GetTextShadowValues(
-          nullptr, settings_.text_shadow_elevation));
-  // Compensate the shadow insets to put the text middle align with the icon.
-  media_text_->SetBorder(views::CreateEmptyBorder(
-      gfx::Insets::TLBR(-shadow_insets.bottom(), 0, -shadow_insets.top(), 0)));
 
   BindMediaControllerObserver();
 }
@@ -289,17 +233,28 @@ void MediaStringView::BindMediaControllerObserver() {
 
 void MediaStringView::UpdateMaskLayer() {
   if (!NeedToAnimate()) {
-    media_text_container_->layer()->SetMaskLayer(nullptr);
+    media_text_container_->layer()->SetGradientMask(
+        gfx::LinearGradient::GetEmpty());
     return;
   }
 
-  if (!fadeout_layer_delegate_) {
-    fadeout_layer_delegate_ = std::make_unique<FadeoutLayerDelegate>();
-    fadeout_layer_delegate_->layer()->SetBounds(
-        media_text_container_->layer()->bounds());
+  // Invalid container width.
+  if (media_text_container_->layer()->size().width() == 0) {
+    media_text_container_->layer()->SetGradientMask(
+        gfx::LinearGradient::GetEmpty());
+    return;
   }
-  media_text_container_->layer()->SetMaskLayer(
-      fadeout_layer_delegate_->layer());
+
+  if (!media_text_container_->layer()->HasGradientMask()) {
+    float fade_position = static_cast<float>(kMediaStringGradientWidthDip) /
+                          media_text_container_->layer()->size().width();
+    gfx::LinearGradient gradient_mask(/*angle=*/0);
+    gradient_mask.AddStep(/*fraction=*/0, /*alpha=*/0);
+    gradient_mask.AddStep(fade_position, 255);
+    gradient_mask.AddStep(1 - fade_position, 255);
+    gradient_mask.AddStep(1, 0);
+    media_text_container_->layer()->SetGradientMask(gradient_mask);
+  }
 }
 
 bool MediaStringView::NeedToAnimate() const {
@@ -320,7 +275,7 @@ void MediaStringView::ScheduleScrolling(bool is_initial) {
   if (!GetVisible())
     return;
 
-  base::SequencedTaskRunnerHandle::Get()->PostTask(
+  base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE, base::BindOnce(&MediaStringView::StartScrolling,
                                 weak_factory_.GetWeakPtr(), is_initial));
 }
@@ -331,10 +286,11 @@ void MediaStringView::StartScrolling(bool is_initial) {
   {
     // Desired speed is 10 seconds for kMediaStringMaxWidthDip.
     const int text_width = media_text_->GetPreferredSize().width();
-    const int shadow_width = gfx::ShadowValue::GetMargin(
-                                 ambient::util::GetTextShadowValues(
-                                     nullptr, settings_.text_shadow_elevation))
-                                 .width();
+    const int shadow_width =
+        gfx::ShadowValue::GetMargin(
+            ambient::util::GetTextShadowValues(
+                nullptr, delegate_->GetSettings().text_shadow_elevation))
+            .width();
     const int start_x = text_layer->GetTargetTransform().To2dTranslation().x();
     const int end_x = -(text_width + shadow_width) / 2;
     const int transform_distance = start_x - end_x;

@@ -1,12 +1,17 @@
-# Copyright 2022 The Chromium Authors. All rights reserved.
+# Copyright 2022 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
+
+import("//build/config/chromeos/ui_mode.gni")
 
 static_library("browser") {
   public = [
     "base_signals_collector.h",
     "file_system_signals_collector.h",
     "metrics_utils.h",
+    "pref_names.h",
+    "settings_client.h",
+    "settings_signals_collector.h",
     "signals_aggregator.h",
     "signals_aggregator_impl.h",
     "signals_collector.h",
@@ -22,6 +27,8 @@ static_library("browser") {
     "base_signals_collector.cc",
     "file_system_signals_collector.cc",
     "metrics_utils.cc",
+    "pref_names.cc",
+    "settings_signals_collector.cc",
     "signals_aggregator_impl.cc",
     "signals_types.cc",
     "user_context.cc",
@@ -37,18 +44,35 @@ static_library("browser") {
 
   deps = [
     "//components/device_signals/core/common",
+    "//components/device_signals/core/common:features",
     "//components/policy/core/common",
+    "//components/prefs",
     "//components/signin/public/identity_manager",
   ]
 
   if (is_win) {
     public_deps += [ "//components/device_signals/core/common/win" ]
   }
+
+  if (is_win || is_mac) {
+    public += [
+      "agent_signals_collector.h",
+      "crowdstrike_client.h",
+    ]
+    sources += [
+      "agent_signals_collector.cc",
+      "crowdstrike_client.cc",
+    ]
+
+    deps += [ "//services/data_decoder/public/cpp" ]
+  }
 }
 
 static_library("test_support") {
   testonly = true
   sources = [
+    "mock_settings_client.cc",
+    "mock_settings_client.h",
     "mock_signals_aggregator.cc",
     "mock_signals_aggregator.h",
     "mock_signals_collector.cc",
@@ -74,6 +98,7 @@ source_set("unit_tests") {
   testonly = true
   sources = [
     "file_system_signals_collector_unittest.cc",
+    "settings_signals_collector_unittest.cc",
     "signals_aggregator_impl_unittest.cc",
     "user_permission_service_impl_unittest.cc",
   ]
@@ -83,14 +108,33 @@ source_set("unit_tests") {
     ":test_support",
     "//base/test:test_support",
     "//components/device_signals/core/common",
+    "//components/device_signals/core/common:features",
     "//components/policy/core/common",
     "//components/policy/core/common:test_support",
+    "//components/prefs",
+    "//components/prefs:test_support",
     "//components/signin/public/identity_manager",
     "//components/signin/public/identity_manager:test_support",
     "//testing/gtest",
   ]
 
+  if (is_win || is_mac) {
+    sources += [
+      "agent_signals_collector_unittest.cc",
+      "crowdstrike_client_unittest.cc",
+    ]
+    deps += [ "//services/data_decoder/public/cpp:test_support" ]
+  }
+
   if (is_win) {
     deps += [ "//components/device_signals/core/browser/win:unit_tests" ]
+  }
+
+  if (is_mac) {
+    deps += [ "//components/device_signals/core/browser/mac:unit_tests" ]
+  }
+
+  if (is_chromeos_ash) {
+    deps += [ "//components/device_signals/core/browser/ash:unit_tests" ]
   }
 }

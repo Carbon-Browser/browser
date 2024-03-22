@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,14 +9,14 @@
 #include <vector>
 
 #include "base/memory/ref_counted.h"
-#include "components/password_manager/core/browser/fake_password_store_backend.h"
 #include "components/password_manager/core/browser/origin_credential_store.h"
 #include "components/password_manager/core/browser/password_form.h"
 #include "components/password_manager/core/browser/password_hash_data.h"
 #include "components/password_manager/core/browser/password_reuse_detector.h"
 #include "components/password_manager/core/browser/password_reuse_detector_consumer.h"
 #include "components/password_manager/core/browser/password_reuse_manager.h"
-#include "components/password_manager/core/browser/password_store.h"
+#include "components/password_manager/core/browser/password_store/fake_password_store_backend.h"
+#include "components/password_manager/core/browser/password_store/password_store_interface.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "url/gurl.h"
 
@@ -29,8 +29,7 @@ namespace password_manager {
 template <class Context, class Store>
 scoped_refptr<RefcountedKeyedService> BuildPasswordStore(Context* context) {
   scoped_refptr<password_manager::PasswordStore> store(new Store);
-  if (!store->Init(/*prefs=*/nullptr, /*affiliated_match_helper=*/nullptr))
-    return nullptr;
+  store->Init(/*prefs=*/nullptr, /*affiliated_match_helper=*/nullptr);
   return store;
 }
 
@@ -51,8 +50,7 @@ scoped_refptr<RefcountedKeyedService> BuildPasswordStoreWithArgs(
     Context* context) {
   scoped_refptr<password_manager::PasswordStore> store(
       new Store(std::forward<Args>(args)...));
-  if (!store->Init(/*prefs=*/nullptr, /*affiliated_match_helper=*/nullptr))
-    return nullptr;
+  store->Init(/*prefs=*/nullptr, /*affiliated_match_helper=*/nullptr);
   return store;
 }
 
@@ -100,8 +98,7 @@ std::unique_ptr<PasswordForm> FillPasswordFormWithData(
 std::unique_ptr<PasswordForm> CreateEntry(const std::string& username,
                                           const std::string& password,
                                           const GURL& origin_url,
-                                          bool is_psl_match,
-                                          bool is_affiliation_based_match);
+                                          PasswordForm::MatchType match_type);
 
 // Checks whether the PasswordForms pointed to in |actual_values| are in some
 // permutation pairwise equal to those in |expectations|. Returns true in case
@@ -154,35 +151,37 @@ class MockPasswordReuseDetectorConsumer : public PasswordReuseDetectorConsumer {
               OnReuseCheckDone,
               (bool,
                size_t,
-               absl::optional<PasswordHashData>,
+               std::optional<PasswordHashData>,
                const std::vector<MatchingReusedCredential>&,
-               int),
+               int,
+               const std::string&,
+               uint64_t),
               (override));
 };
 
 // Matcher class used to compare PasswordHashData in tests.
 class PasswordHashDataMatcher
-    : public ::testing::MatcherInterface<absl::optional<PasswordHashData>> {
+    : public ::testing::MatcherInterface<std::optional<PasswordHashData>> {
  public:
-  explicit PasswordHashDataMatcher(absl::optional<PasswordHashData> expected);
+  explicit PasswordHashDataMatcher(std::optional<PasswordHashData> expected);
 
   PasswordHashDataMatcher(const PasswordHashDataMatcher&) = delete;
   PasswordHashDataMatcher& operator=(const PasswordHashDataMatcher&) = delete;
 
-  ~PasswordHashDataMatcher() override = default;
+  ~PasswordHashDataMatcher() override;
 
   // ::testing::MatcherInterface overrides
-  bool MatchAndExplain(absl::optional<PasswordHashData> hash_data,
+  bool MatchAndExplain(std::optional<PasswordHashData> hash_data,
                        ::testing::MatchResultListener* listener) const override;
   void DescribeTo(::std::ostream* os) const override;
   void DescribeNegationTo(::std::ostream* os) const override;
 
  private:
-  const absl::optional<PasswordHashData> expected_;
+  const std::optional<PasswordHashData> expected_;
 };
 
-::testing::Matcher<absl::optional<PasswordHashData>> Matches(
-    absl::optional<PasswordHashData> expected);
+::testing::Matcher<std::optional<PasswordHashData>> Matches(
+    std::optional<PasswordHashData> expected);
 
 }  // namespace password_manager
 

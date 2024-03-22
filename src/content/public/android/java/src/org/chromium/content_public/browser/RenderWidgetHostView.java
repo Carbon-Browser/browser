@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -20,9 +20,7 @@ public interface RenderWidgetHostView {
      */
     boolean isReady();
 
-    /**
-     * Get the Background color from underlying RenderWidgetHost for this WebContent.
-     */
+    /** Get the Background color from underlying RenderWidgetHost for this WebContent. */
     int getBackgroundColor();
 
     /**
@@ -37,8 +35,6 @@ public interface RenderWidgetHostView {
     void writeContentBitmapToDiskAsync(
             int width, int height, String path, Callback<String> callback);
 
-    /**
-     * Notifies that the Visual Viewport inset has changed its bottom value.
-     */
+    /** Notifies that the Visual Viewport inset has changed its bottom value. */
     void onViewportInsetBottomChanged();
 }

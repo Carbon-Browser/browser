@@ -1,4 +1,4 @@
-// Copyright (c) 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,17 +6,18 @@
 
 #include <memory>
 
+#include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/stringprintf.h"
 #include "base/test/task_environment.h"
 #include "base/values.h"
-#include "chromeos/dbus/shill/shill_clients.h"
-#include "chromeos/dbus/shill/shill_manager_client.h"
+#include "chromeos/ash/components/dbus/shill/shill_clients.h"
+#include "chromeos/ash/components/dbus/shill/shill_manager_client.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "third_party/cros_system_api/dbus/service_constants.h"
 
-namespace chromeos {
+namespace ash {
 
 class GeolocationHandlerTest : public testing::Test {
  public:
@@ -56,23 +57,23 @@ class GeolocationHandlerTest : public testing::Test {
   // This should remain in sync with the format of shill (chromeos) dict entries
   // Shill provides us Cell ID and LAC in hex, but all other fields in decimal.
   void AddAccessPoint(int idx) {
-    base::Value properties(base::Value::Type::DICTIONARY);
     std::string mac_address =
         base::StringPrintf("%02X:%02X:%02X:%02X:%02X:%02X",
                            idx, 0, 0, 0, 0, 0);
     std::string channel = base::NumberToString(idx);
     std::string strength = base::NumberToString(idx * 10);
-    properties.SetKey(shill::kGeoMacAddressProperty, base::Value(mac_address));
-    properties.SetKey(shill::kGeoChannelProperty, base::Value(channel));
-    properties.SetKey(shill::kGeoSignalStrengthProperty, base::Value(strength));
-    manager_test_->AddGeoNetwork(shill::kGeoWifiAccessPointsProperty,
-                                 properties);
+
+    manager_test_->AddGeoNetwork(
+        shill::kGeoWifiAccessPointsProperty,
+        base::Value::Dict()
+            .Set(shill::kGeoMacAddressProperty, mac_address)
+            .Set(shill::kGeoChannelProperty, channel)
+            .Set(shill::kGeoSignalStrengthProperty, strength));
     base::RunLoop().RunUntilIdle();
   }
 
   // This should remain in sync with the format of shill (chromeos) dict entries
   void AddCellTower(int idx) {
-    base::Value properties(base::Value::Type::DICTIONARY);
     // Multiplications, additions, and string concatenations
     // are intended solely to differentiate the various fields
     // in a predictable way, while preserving 3 digits for MCC and MNC.
@@ -81,19 +82,22 @@ class GeolocationHandlerTest : public testing::Test {
     std::string mcc = base::NumberToString(idx * 100);
     std::string mnc = base::NumberToString(idx * 100 + 1);
 
-    properties.SetKey(shill::kGeoCellIdProperty, base::Value(ci));
-    properties.SetKey(shill::kGeoLocationAreaCodeProperty, base::Value(lac));
-    properties.SetKey(shill::kGeoMobileCountryCodeProperty, base::Value(mcc));
-    properties.SetKey(shill::kGeoMobileNetworkCodeProperty, base::Value(mnc));
-
-    manager_test_->AddGeoNetwork(shill::kGeoCellTowersProperty, properties);
+    manager_test_->AddGeoNetwork(
+        shill::kGeoCellTowersProperty,
+        base::Value::Dict()
+            .Set(shill::kGeoCellIdProperty, ci)
+            .Set(shill::kGeoLocationAreaCodeProperty, lac)
+            .Set(shill::kGeoMobileCountryCodeProperty, mcc)
+            .Set(shill::kGeoMobileNetworkCodeProperty, mnc));
     base::RunLoop().RunUntilIdle();
   }
 
  protected:
   base::test::SingleThreadTaskEnvironment task_environment_;
   std::unique_ptr<GeolocationHandler> geolocation_handler_;
-  ShillManagerClient::TestInterface* manager_test_ = nullptr;
+  raw_ptr<ShillManagerClient::TestInterface,
+          DanglingUntriaged | ExperimentalAsh>
+      manager_test_ = nullptr;
   WifiAccessPointVector wifi_access_points_;
   CellTowerVector cell_towers_;
 };
@@ -200,4 +204,4 @@ TEST_F(GeolocationHandlerTest, MultipleGeolocations) {
   EXPECT_EQ("101", cell_towers_[0].mnc);
 }
 
-}  // namespace chromeos
+}  // namespace ash

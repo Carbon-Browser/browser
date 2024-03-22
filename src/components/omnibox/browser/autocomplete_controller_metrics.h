@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,6 +8,7 @@
 #include <string>
 
 #include "base/memory/raw_ptr.h"
+#include "base/memory/raw_ref.h"
 #include "components/omnibox/browser/autocomplete_result.h"
 
 class AutocompleteController;
@@ -48,12 +49,12 @@ class AutocompleteControllerMetrics {
   // updated for the new request.
   void OnStart();
 
-  // Called when `AutocompleteController::UpdateResult()` is called. Will log
+  // Called when `AutocompleteController::NotifyChanged()` is called. Will log
   // metrics on how many suggestions changed with this update. If the controller
   // is done, will also log suggestion finalization metrics; otherwise, future
   // calls to `OnProviderUpdate()`, `OnStop()`, or `OnStart()` will log
   // suggestion finalization metrics.
-  void OnUpdateResult(
+  void OnNotifyChanged(
       std::vector<AutocompleteResult::MatchDedupComparator> last_result,
       std::vector<AutocompleteResult::MatchDedupComparator> new_result);
 
@@ -102,17 +103,15 @@ class AutocompleteControllerMetrics {
                                          bool completed,
                                          const base::TimeTicks end_time) const;
 
-  // Logs 'Omnibox.CrossInputMatchStability.MatchChange' or
-  // 'Omnibox.MatchStability.AsyncMatchChange2' depending on
-  // `controller_.in_start()`.
-  void LogSuggestionChangedMetrics(size_t change_index) const;
+  // Logs 'Omnibox.MatchStability.MatchChangeIndex'. Additionally logs
+  // '*.CrossInput' or '*.Async' depending on `controller_.in_start()`.
+  void LogSuggestionChangeIndexMetrics(size_t change_index) const;
 
-  // Logs 'Omnibox.CrossInputMatchStability.MatchChangedInAnyPosition' or
-  // 'Omnibox.MatchStability.AsyncMatchChangedInAnyPosition' depending on
-  // `controller_.in_start()`.
-  void LogAnySuggestionChangedMetrics(bool changed) const;
+  // Logs 'Omnibox.MatchStability.MatchChangeInAnyPosition'. Additionally logs
+  // '*.CrossInput' or '*.Async' depending on `controller_.in_start()`.
+  void LogSuggestionChangeInAnyPositionMetrics(bool changed) const;
 
-  const AutocompleteController& controller_;
+  const raw_ref<const AutocompleteController> controller_;
 
   // When `OnStart()` was last invoked. Used for measuring latency. Valid even
   // if `controller_.in_start_` is false.

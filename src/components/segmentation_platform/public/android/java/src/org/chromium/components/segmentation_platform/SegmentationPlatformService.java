@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -20,27 +20,28 @@ public interface SegmentationPlatformService {
     void getSelectedSegment(String segmentationKey, Callback<SegmentSelectionResult> callback);
 
     /**
+     * Gets a classification result asynchronously from segmentation. It's the java counterpart to
+     * GetClassificationResult in segmentation_platform_service.h.
+     * @param segmentationKey The key to be used to distinguish between different segmentation
+     *         usages.
+     * @param predictionOptions Options to get the classification result (e.g. whether to get a
+     *         cached result or run the model).
+     * @param inputContext (Optional) Instance of InputContext with input signals to model.
+     * @param callback Callback containing the classification result.
+     */
+    void getClassificationResult(
+            String segmentationKey,
+            PredictionOptions predictionOptions,
+            InputContext inputContext,
+            Callback<ClassificationResult> callback);
+
+    /**
      * Called to get the segment selection result synchronously from the backend.
+     * @deprecated in favor of {@link getSelectedSegment}.
      * @param segmentationKey The key to be used to distinguish between different segmentation
      *         usages.
      * @return The result of segment selection
      */
+    @Deprecated
     SegmentSelectionResult getCachedSegmentResult(String segmentationKey);
-
-    /**
-     * Called to register a callback to be invoked after a segment selection. Only used for
-     * on-demand segment selection.
-     * @param segmentationKey The key to be used to distinguish between different clients.
-     * @param callback The callback to be invoked after a segment selection is computed.
-     * @return A callback ID to be used when unregistering.
-     */
-    int registerOnDemandSegmentSelectionCallback(
-            String segmentationKey, Callback<OnDemandSegmentSelectionResult> callback);
-
-    /**
-     * Called to unregister a previously registered callback for segment selection result.
-     * @param segmentationKey The key to be used to distinguish between different clients.
-     * @param callbackId The associated callback ID obtained when registering.
-     */
-    void unregisterOnDemandSegmentSelectionCallback(String segmentationKey, int callbackId);
 }

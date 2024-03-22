@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -22,16 +22,16 @@
 #include <utility>
 #include <vector>
 
-#include "base/callback.h"
 #include "base/files/file_path.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
-#include "base/memory/ref_counted.h"
+#include "base/memory/scoped_refptr.h"
 #include "base/task/task_traits.h"
 #include "build/build_config.h"
 #include "build/buildflag.h"
 #include "net/base/net_export.h"
-#include "net/base/network_change_notifier.h"
 #include "net/base/network_delegate.h"
+#include "net/base/network_handle.h"
 #include "net/base/proxy_delegate.h"
 #include "net/disk_cache/disk_cache.h"
 #include "net/dns/host_resolver.h"
@@ -44,10 +44,7 @@
 #include "net/ssl/ssl_config_service.h"
 #include "net/third_party/quiche/src/quiche/quic/core/quic_packets.h"
 #include "net/url_request/url_request_job_factory.h"
-
-namespace base::android {
-class ApplicationStatusListener;
-}  // namespace base::android
+#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace net {
 
@@ -129,8 +126,7 @@ class NET_EXPORT URLRequestContextBuilder {
 #if BUILDFLAG(IS_ANDROID)
     // If this is set, will override the default ApplicationStatusListener. This
     // is useful if the cache will not be in the main process.
-    raw_ptr<base::android::ApplicationStatusListener> app_status_listener =
-        nullptr;
+    disk_cache::ApplicationStatusListenerGetter app_status_listener_getter;
 #endif
   };
 
@@ -144,14 +140,17 @@ class NET_EXPORT URLRequestContextBuilder {
   // Sets whether Brotli compression is enabled.  Disabled by default;
   void set_enable_brotli(bool enable_brotli) { enable_brotli_ = enable_brotli; }
 
+  // Sets whether Zstd compression is enabled. Disabled by default.
+  void set_enable_zstd(bool enable_zstd) { enable_zstd_ = enable_zstd; }
+
   // Sets the |check_cleartext_permitted| flag, which controls whether to check
   // system policy before allowing a cleartext http or ws request.
   void set_check_cleartext_permitted(bool value) {
     check_cleartext_permitted_ = value;
   }
 
-  void set_require_network_isolation_key(bool value) {
-    require_network_isolation_key_ = value;
+  void set_require_network_anonymization_key(bool value) {
+    require_network_anonymization_key_ = value;
   }
 
   // Unlike most other setters, the builder does not take ownership of the
@@ -281,9 +280,6 @@ class NET_EXPORT URLRequestContextBuilder {
   void set_throttling_enabled(bool throttling_enabled) {
     throttling_enabled_ = throttling_enabled;
   }
-  void set_first_party_sets_enabled(bool enabled) {
-    first_party_sets_enabled_ = enabled;
-  }
 
   void set_ct_policy_enforcer(
       std::unique_ptr<CTPolicyEnforcer> ct_policy_enforcer);
@@ -345,11 +341,15 @@ class NET_EXPORT URLRequestContextBuilder {
   }
 
   // Sets a ClientSocketFactory when the network service sandbox is enabled. The
-  // unique_ptr is moved to a URLRequestContextStorage once Build() is called.
+  // unique_ptr is moved to a URLRequestContext once Build() is called.
   void set_client_socket_factory(
       std::unique_ptr<ClientSocketFactory> client_socket_factory) {
     set_client_socket_factory(client_socket_factory.get());
     client_socket_factory_ = std::move(client_socket_factory);
+  }
+
+  void set_cookie_deprecation_label(const std::string& label) {
+    cookie_deprecation_label_ = label;
   }
 
   // Binds the context to `network`. All requests scheduled through the context
@@ -360,7 +360,7 @@ class NET_EXPORT URLRequestContextBuilder {
   // * By design, QUIC connection migration will be turned off.
   // Only implemented for Android (API level > 23).
   void BindToNetwork(
-      NetworkChangeNotifier::NetworkHandle network,
+      handles::NetworkHandle network,
       absl::optional<HostResolver::ManagerOptions> options = absl::nullopt);
 
   // Creates a mostly self-contained URLRequestContext. May only be called once
@@ -404,22 +404,23 @@ class NET_EXPORT URLRequestContextBuilder {
   }
 
   bool enable_brotli_ = false;
+  bool enable_zstd_ = false;
   bool check_cleartext_permitted_ = false;
-  bool require_network_isolation_key_ = false;
+  bool require_network_anonymization_key_ = false;
   raw_ptr<NetworkQualityEstimator> network_quality_estimator_ = nullptr;
 
   std::string accept_language_;
   std::string user_agent_;
   std::unique_ptr<HttpUserAgentSettings> http_user_agent_settings_;
 
+  absl::optional<std::string> cookie_deprecation_label_;
+
   bool http_cache_enabled_ = true;
   bool throttling_enabled_ = false;
   bool cookie_store_set_by_client_ = false;
   bool suppress_setting_socket_performance_watcher_factory_for_testing_ = false;
-  bool first_party_sets_enabled_ = false;
 
-  NetworkChangeNotifier::NetworkHandle bound_network_ =
-      NetworkChangeNotifier::kInvalidNetworkHandle;
+  handles::NetworkHandle bound_network_ = handles::kInvalidNetworkHandle;
   // Used only if the context is bound to a network to customize the
   // HostResolver created internally.
   HostResolver::ManagerOptions manager_options_;
@@ -433,7 +434,8 @@ class NET_EXPORT URLRequestContextBuilder {
   raw_ptr<NetLog> net_log_ = nullptr;
   std::unique_ptr<HostResolver> host_resolver_;
   std::string host_mapping_rules_;
-  raw_ptr<HostResolverManager> host_resolver_manager_ = nullptr;
+  raw_ptr<HostResolverManager, DanglingUntriaged> host_resolver_manager_ =
+      nullptr;
   raw_ptr<HostResolver::Factory> host_resolver_factory_ = nullptr;
   std::unique_ptr<ProxyConfigService> proxy_config_service_;
   bool pac_quick_check_enabled_ = true;

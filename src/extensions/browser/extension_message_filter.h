@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,9 @@
 
 #include "base/callback_list.h"
 #include "content/public/browser/browser_message_filter.h"
+#include "extensions/buildflags/buildflags.h"
 
+#if BUILDFLAG(ENABLE_EXTENSIONS_LEGACY_IPC)
 namespace content {
 class BrowserContext;
 }
@@ -61,5 +63,6 @@ class ExtensionMessageFilter : public content::BrowserMessageFilter {
 };
 
 }  // namespace extensions
+#endif
 
 #endif  // EXTENSIONS_BROWSER_EXTENSION_MESSAGE_FILTER_H_

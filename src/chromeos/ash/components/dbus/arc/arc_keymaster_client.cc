@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,9 +7,10 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
+#include "base/functional/callback_helpers.h"
+#include "base/memory/raw_ptr.h"
 #include "chromeos/ash/components/dbus/arc/fake_arc_keymaster_client.h"
 #include "dbus/bus.h"
 #include "dbus/message.h"
@@ -22,7 +23,7 @@ namespace {
 
 ArcKeymasterClient* g_instance = nullptr;
 
-void OnVoidDBusMethod(VoidDBusMethodCallback callback,
+void OnVoidDBusMethod(chromeos::VoidDBusMethodCallback callback,
                       dbus::Response* response) {
   std::move(callback).Run(response != nullptr);
 }
@@ -36,8 +37,9 @@ class ArcKeymasterClientImpl : public ArcKeymasterClient {
 
   ~ArcKeymasterClientImpl() override = default;
 
-  void BootstrapMojoConnection(base::ScopedFD fd,
-                               VoidDBusMethodCallback callback) override {
+  void BootstrapMojoConnection(
+      base::ScopedFD fd,
+      chromeos::VoidDBusMethodCallback callback) override {
     dbus::MethodCall method_call(
         arc::keymaster::kArcKeymasterInterfaceName,
         arc::keymaster::kBootstrapMojoConnectionMethod);
@@ -56,7 +58,7 @@ class ArcKeymasterClientImpl : public ArcKeymasterClient {
 
  private:
   // Owned by the D-Bus implementation, who outlives this class.
-  dbus::ObjectProxy* proxy_ = nullptr;
+  raw_ptr<dbus::ObjectProxy, ExperimentalAsh> proxy_ = nullptr;
 };
 
 }  // namespace

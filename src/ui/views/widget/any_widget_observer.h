@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,7 @@
 
 #include <string>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "base/observer_list_types.h"
 #include "base/run_loop.h"
@@ -38,10 +38,10 @@ class Widget;
 // details. Uses in tests can be done freely using
 // views::test::AnyWidgetTestPasskey.
 //
-// This class is useful when doing something like this:
+// This class can be used for waiting for a particular View being shown, as in:
 //
 //    RunLoop run_loop;
-//    AnyWidgetCallbackObserver observer(views::test::AnyWidgetTestPasskey{});
+//    AnyWidgetObserver observer(views::test::AnyWidgetTestPasskey{});
 //    Widget* widget;
 //    observer.set_initialized_callback(
 //        base::BindLambdaForTesting([&](Widget* w) {
@@ -63,6 +63,15 @@ class Widget;
 //        views::test::AnyWidgetTestPasskey{}, "MyWidget");
 //    ThingThatCreatesAndShowsWidget();
 //    Widget* widget = waiter.WaitIfNeededAndGet();
+//
+// This class can also be used to make sure a named widget is _not_ shown, as
+// this particular example (intended for testing code) shows:
+//
+// AnyWidgetObserver observer(views::test::AnyWidgetTestPasskey{});
+// observer.set_shown_callback(
+//    base::BindLambdaForTesting([&](views::Widget* widget) {
+//        ASSERT_FALSE(widget->GetName() == "MyWidget");
+//      }));
 //
 // TODO(ellyjones): Add Widget::SetDebugName and add a remark about that here.
 //
@@ -174,14 +183,14 @@ class VIEWS_EXPORT NamedWidgetShownWaiter {
   void OnAnyWidgetShown(Widget* widget);
 
   AnyWidgetObserver observer_;
-  raw_ptr<Widget> widget_ = nullptr;
+  raw_ptr<Widget, AcrossTasksDanglingUntriaged> widget_ = nullptr;
   base::RunLoop run_loop_;
   const std::string name_;
 };
 
 class AnyWidgetPasskey {
  private:
-  AnyWidgetPasskey();
+  AnyWidgetPasskey();  // NOLINT
 
   // Add friend classes here that are allowed to use AnyWidgetObserver in
   // production code.

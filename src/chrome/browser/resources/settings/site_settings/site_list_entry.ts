@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,27 +6,27 @@
  * @fileoverview
  * 'site-list-entry' shows an Allowed and Blocked site for a given category.
  */
-import 'chrome://resources/cr_elements/cr_icon_button/cr_icon_button.m.js';
-import 'chrome://resources/cr_elements/icons.m.js';
-import 'chrome://resources/cr_elements/policy/cr_policy_pref_indicator.m.js';
-import 'chrome://resources/cr_elements/policy/cr_tooltip_icon.m.js';
+import 'chrome://resources/cr_elements/cr_icon_button/cr_icon_button.js';
+import 'chrome://resources/cr_elements/icons.html.js';
+import 'chrome://resources/cr_elements/policy/cr_policy_pref_indicator.js';
+import 'chrome://resources/cr_elements/policy/cr_tooltip_icon.js';
 import 'chrome://resources/polymer/v3_0/iron-icon/iron-icon.js';
 import '../icons.html.js';
 import '../settings_shared.css.js';
 import '../site_favicon.js';
 
-import {assert, assertNotReached} from 'chrome://resources/js/assert_ts.js';
-import {FocusRowBehavior} from 'chrome://resources/js/cr/ui/focus_row_behavior.m.js';
-import {mixinBehaviors, PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
+import {FocusRowMixin} from 'chrome://resources/cr_elements/focus_row_mixin.js';
+import {assert, assertNotReached} from 'chrome://resources/js/assert.js';
+import {PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 
-import {BaseMixin, BaseMixinInterface} from '../base_mixin.js';
+import {BaseMixin} from '../base_mixin.js';
 import {loadTimeData} from '../i18n_setup.js';
 import {routes} from '../route.js';
 import {Router} from '../router.js';
 
-import {ChooserType, ContentSettingsTypes, SITE_EXCEPTION_WILDCARD} from './constants.js';
+import {ChooserType, ContentSettingsTypes, CookiesExceptionType, SITE_EXCEPTION_WILDCARD} from './constants.js';
 import {getTemplate} from './site_list_entry.html.js';
-import {SiteSettingsMixin, SiteSettingsMixinInterface} from './site_settings_mixin.js';
+import {SiteSettingsMixin} from './site_settings_mixin.js';
 import {SiteException} from './site_settings_prefs_browser_proxy.js';
 
 export interface SiteListEntryElement {
@@ -37,9 +37,7 @@ export interface SiteListEntryElement {
 }
 
 const SiteListEntryElementBase =
-    mixinBehaviors(
-        [FocusRowBehavior], BaseMixin(SiteSettingsMixin(PolymerElement))) as
-    {new (): PolymerElement & BaseMixinInterface & SiteSettingsMixinInterface};
+    FocusRowMixin(BaseMixin(SiteSettingsMixin(PolymerElement)));
 
 export class SiteListEntryElement extends SiteListEntryElementBase {
   static get is() {
@@ -96,6 +94,12 @@ export class SiteListEntryElement extends SiteListEntryElementBase {
         type: Boolean,
         value: false,
       },
+
+      /**
+       * Type of cookies exceptions based on the use of wildcard in the
+       * patterns. See `CookiesExceptionType`.
+       */
+      cookiesExceptionType: String,
     };
   }
 
@@ -105,6 +109,7 @@ export class SiteListEntryElement extends SiteListEntryElementBase {
   private chooserObject: object;
   private showPolicyPrefIndicator_: boolean;
   private allowNavigateToSiteDetail_: boolean;
+  cookiesExceptionType: CookiesExceptionType;
 
   private onShowTooltip_() {
     const indicator =
@@ -127,30 +132,44 @@ export class SiteListEntryElement extends SiteListEntryElementBase {
     this.fire('show-tooltip', {target: tooltip, text});
   }
 
-  private shouldHideResetButton_(): boolean {
-    if (this.model === undefined) {
-      return false;
-    }
-
-    return this.model.enforcement ===
-        chrome.settingsPrivate.Enforcement.ENFORCED ||
-        !(this.readOnlyList || !!this.model.embeddingOrigin);
+  private isIsolatedWebApp_(): boolean {
+    return this.model.origin.startsWith('isolated-app://');
   }
 
-  private shouldHideActionMenu_(): boolean {
+  /**
+   * Returns true if this site exception can be edited by the user. Note that
+   * this is not the same as readonly; an exception can be removable but not
+   * editable.
+   */
+  private isUserEditable_(): boolean {
+    return !this.readOnlyList && !this.model.embeddingOrigin &&
+        !this.isIsolatedWebApp_();
+  }
+
+  private shouldShowResetButton_(): boolean {
     if (this.model === undefined) {
       return false;
     }
 
-    return this.model.enforcement ===
-        chrome.settingsPrivate.Enforcement.ENFORCED ||
-        this.readOnlyList || !!this.model.embeddingOrigin;
+    return this.model.enforcement !==
+        chrome.settingsPrivate.Enforcement.ENFORCED &&
+        !this.isUserEditable_();
+  }
+
+  private shouldShowActionMenu_(): boolean {
+    if (this.model === undefined) {
+      return false;
+    }
+
+    return this.model.enforcement !==
+        chrome.settingsPrivate.Enforcement.ENFORCED &&
+        this.isUserEditable_();
   }
 
   /**
    * A handler for selecting a site (by clicking on the origin).
    */
-  private onOriginTap_() {
+  private onOriginClick_() {
     if (!this.allowNavigateToSiteDetail_) {
       return;
     }
@@ -194,7 +213,12 @@ export class SiteListEntryElement extends SiteListEntryElementBase {
   private computeSiteDescription_(): string {
     let description = '';
 
-    if (this.model.isEmbargoed) {
+    // If a description has been set by the handler, have it override others.
+    // TODO(crbug.com/1467504): Move all possible descriptions in to this
+    // field C++ side so this function can be greatly simplified.
+    if (this.model.description) {
+      description = this.model.description;
+    } else if (this.model.isEmbargoed) {
       assert(
           !this.model.embeddingOrigin,
           'Embedding origin should be empty for embargoed origin.');
@@ -202,8 +226,12 @@ export class SiteListEntryElement extends SiteListEntryElementBase {
     } else if (this.model.embeddingOrigin) {
       if (this.model.category === ContentSettingsTypes.COOKIES &&
           this.model.origin.trim() === SITE_EXCEPTION_WILDCARD) {
-        description = loadTimeData.getString(
-            'siteSettingsCookiesThirdPartyExceptionLabel');
+        // Apply special label only if cookies exceptions are displayed in the
+        // mixed list.
+        if (this.cookiesExceptionType === CookiesExceptionType.COMBINED) {
+          description = loadTimeData.getString(
+              'siteSettingsCookiesThirdPartyExceptionLabel');
+        }
       } else {
         description = loadTimeData.getStringF(
             'embeddedOnHost', this.sanitizePort(this.model.embeddingOrigin));
@@ -212,14 +240,15 @@ export class SiteListEntryElement extends SiteListEntryElementBase {
       description = loadTimeData.getString('embeddedOnAnyHost');
     }
 
-    // <if expr="chromeos_ash">
-    if (this.model.category === ContentSettingsTypes.NOTIFICATIONS &&
-        this.model.showAndroidSmsNote) {
-      description = loadTimeData.getString('androidSmsNote');
+    try {
+      const url = new URL(this.model.origin);
+      if (url.protocol === 'chrome-extension:') {
+        description = loadTimeData.getStringF(
+            'siteSettingsExtensionIdDescription', url.hostname);
+      }
+    } finally {
+      return description;
     }
-    // </if>
-
-    return description;
   }
 
   private computeShowPolicyPrefIndicator_(): boolean {
@@ -228,12 +257,11 @@ export class SiteListEntryElement extends SiteListEntryElementBase {
         !!this.model.controlledBy;
   }
 
-  private onResetButtonTap_() {
+  private onResetButtonClick_() {
     // Use the appropriate method to reset a chooser exception.
     if (this.chooserType !== ChooserType.NONE && this.chooserObject !== null) {
       this.browserProxy.resetChooserExceptionForSite(
-          this.chooserType, this.model.origin, this.model.embeddingOrigin,
-          this.chooserObject);
+          this.chooserType, this.model.origin, this.chooserObject);
       return;
     }
 
@@ -242,7 +270,7 @@ export class SiteListEntryElement extends SiteListEntryElementBase {
         this.model.incognito);
   }
 
-  private onShowActionMenuTap_() {
+  private onShowActionMenuClick_() {
     // Chooser exceptions do not support the action menu, so do nothing.
     if (this.chooserType !== ChooserType.NONE) {
       return;

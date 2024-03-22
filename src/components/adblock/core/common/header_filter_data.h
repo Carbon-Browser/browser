@@ -18,19 +18,19 @@
 #ifndef COMPONENTS_ADBLOCK_CORE_COMMON_HEADER_FILTER_DATA_H_
 #define COMPONENTS_ADBLOCK_CORE_COMMON_HEADER_FILTER_DATA_H_
 
-#include <string>
+#include <string_view>
 
 #include "url/gurl.h"
 
 namespace adblock {
 
 struct HeaderFilterData {
-  base::StringPiece header_filter;
+  std::string_view header_filter;
   GURL subscription_url;
   // required by std::set
   bool operator<(const HeaderFilterData& other) const {
     return (header_filter < other.header_filter);
-  };
+  }
 };
 
 }  // namespace adblock

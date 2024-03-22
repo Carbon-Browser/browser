@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,17 +6,17 @@
 
 #include <utility>
 
-#include "components/viz/common/resources/resource_format_utils.h"
-#include "gpu/command_buffer/client/shared_image_interface.h"
+#include "base/metrics/histogram_macros.h"
+#include "components/viz/common/resources/shared_image_format_utils.h"
+#include "components/viz/service/display/skia_output_surface.h"
 #include "gpu/command_buffer/common/shared_image_usage.h"
-#include "gpu/command_buffer/common/sync_token.h"
 
 namespace viz {
 
-BufferQueue::BufferQueue(gpu::SharedImageInterface* sii,
+BufferQueue::BufferQueue(SkiaOutputSurface* skia_output_surface,
                          gpu::SurfaceHandle surface_handle,
                          size_t number_of_buffers)
-    : sii_(sii),
+    : skia_output_surface_(skia_output_surface),
       surface_handle_(surface_handle),
       number_of_buffers_(number_of_buffers) {}
 
@@ -94,17 +94,30 @@ void BufferQueue::SwapBuffersSkipped(const gfx::Rect& damage) {
 bool BufferQueue::Reshape(const gfx::Size& size,
                           const gfx::ColorSpace& color_space,
                           gfx::BufferFormat format) {
-  if (size == size_ && color_space == color_space_ && format == format_)
+  if (size == size_ && color_space == color_space_ && format == format_) {
     return false;
+  }
 
   size_ = size;
   color_space_ = color_space;
   format_ = format;
 
+  if (buffers_destroyed_) {
+    return true;
+  }
+
   FreeAllBuffers();
   AllocateBuffers(number_of_buffers_);
 
   return true;
+}
+
+void BufferQueue::RecreateBuffers() {
+  if (buffers_destroyed_) {
+    return;
+  }
+  FreeAllBuffers();
+  AllocateBuffers(number_of_buffers_);
 }
 
 void BufferQueue::FreeAllBuffers() {
@@ -128,20 +141,23 @@ void BufferQueue::FreeBuffer(std::unique_ptr<AllocatedBuffer> buffer) {
     return;
   }
   DCHECK(!buffer->mailbox.IsZero());
-  sii_->DestroySharedImage(gpu::SyncToken(), buffer->mailbox);
+  skia_output_surface_->DestroySharedImage(buffer->mailbox);
 }
 
 void BufferQueue::AllocateBuffers(size_t n) {
   DCHECK(format_);
-  const ResourceFormat format = GetResourceFormat(format_.value());
+  const SharedImageFormat format =
+      GetSinglePlaneSharedImageFormat(format_.value());
+
+  constexpr uint32_t usage = gpu::SHARED_IMAGE_USAGE_DISPLAY_READ |
+                             gpu::SHARED_IMAGE_USAGE_DISPLAY_WRITE |
+                             gpu::SHARED_IMAGE_USAGE_SCANOUT;
 
   available_buffers_.reserve(available_buffers_.size() + n);
   for (size_t i = 0; i < n; ++i) {
-    const gpu::Mailbox mailbox = sii_->CreateSharedImage(
-        format, size_, color_space_, kTopLeft_GrSurfaceOrigin,
-        kPremul_SkAlphaType,
-        gpu::SHARED_IMAGE_USAGE_SCANOUT | gpu::SHARED_IMAGE_USAGE_DISPLAY,
-        surface_handle_);
+    const gpu::Mailbox mailbox = skia_output_surface_->CreateSharedImage(
+        format, size_, color_space_, RenderPassAlphaType::kPremul, usage,
+        "VizBufferQueue", surface_handle_);
     DCHECK(!mailbox.IsZero());
 
     available_buffers_.push_back(
@@ -150,6 +166,8 @@ void BufferQueue::AllocateBuffers(size_t n) {
 }
 
 std::unique_ptr<BufferQueue::AllocatedBuffer> BufferQueue::GetNextBuffer() {
+  RecreateBuffersIfDestroyed();
+
   DCHECK(!available_buffers_.empty());
 
   std::unique_ptr<AllocatedBuffer> buffer =
@@ -158,16 +176,66 @@ std::unique_ptr<BufferQueue::AllocatedBuffer> BufferQueue::GetNextBuffer() {
   return buffer;
 }
 
+gpu::Mailbox BufferQueue::GetLastSwappedBuffer() {
+  if (buffers_destroyed_) {
+    // Buffers will not be destroyed on platforms where we need to use a buffer
+    // for overlay testing (Ash).
+    return gpu::Mailbox();
+  }
+
+  // The last swapped buffer will generally be in displayed_buffer_, as long as
+  // SwapBuffersComplete() has been called at least once for a non-empty swap
+  // since the last Reshape().
+  if (displayed_buffer_) {
+    return displayed_buffer_->mailbox;
+  }
+
+  // If displayed_buffer_ is null then any available buffer will do.
+  if (!available_buffers_.empty()) {
+    return available_buffers_.back()->mailbox;
+  }
+
+  // If there's nothing displayed or available, then we should have no buffers
+  // allocated because Reshape() hasn't been called yet, so a zero-mailbox is
+  // returned.
+  // If any buffers are in flight at this point then BufferQueue is being used
+  // incorrectly. We should not be Swap()ing all available buffers before
+  // receiving any SwapBuffersComplete() calls.
+  DCHECK(in_flight_buffers_.empty());
+  return gpu::Mailbox();
+}
+
 void BufferQueue::EnsureMinNumberOfBuffers(size_t n) {
   if (n <= number_of_buffers_) {
     return;
   }
 
   // If Reshape hasn't been called yet we can't allocate the buffers.
-  if (!size_.IsEmpty()) {
+  if (!size_.IsEmpty() && !buffers_destroyed_) {
     AllocateBuffers(n - number_of_buffers_);
   }
   number_of_buffers_ = n;
+}
+
+void BufferQueue::DestroyBuffers() {
+  if (buffers_destroyed_) {
+    return;
+  }
+  buffers_destroyed_ = true;
+  destroyed_timer_ = base::ElapsedTimer();
+  FreeAllBuffers();
+}
+
+void BufferQueue::RecreateBuffersIfDestroyed() {
+  if (!buffers_destroyed_) {
+    return;
+  }
+  AllocateBuffers(number_of_buffers_);
+  buffers_destroyed_ = false;
+  base::TimeDelta elapsed = destroyed_timer_->Elapsed();
+  UMA_HISTOGRAM_TIMES("Compositing.BufferQueue.TimeUntilBuffersRecreatedMs",
+                      elapsed);
+  destroyed_timer_.reset();
 }
 
 BufferQueue::AllocatedBuffer::AllocatedBuffer(const gpu::Mailbox& mailbox,

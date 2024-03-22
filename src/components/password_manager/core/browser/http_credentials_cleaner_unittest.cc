@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,7 +12,7 @@
 #include "base/test/task_environment.h"
 #include "base/time/time.h"
 #include "components/password_manager/core/browser/password_manager_util.h"
-#include "components/password_manager/core/browser/test_password_store.h"
+#include "components/password_manager/core/browser/password_store/test_password_store.h"
 #include "components/password_manager/core/common/password_manager_pref_names.h"
 #include "components/prefs/pref_registry_simple.h"
 #include "components/prefs/testing_pref_service.h"
@@ -144,8 +144,7 @@ TEST_P(HttpCredentialCleanerTest, ReportHttpMigrationMetrics) {
   static const std::u16string password[2] = {u"pass0", u"pass1"};
 
   base::test::TaskEnvironment task_environment;
-  ASSERT_TRUE(
-      store_->Init(/*prefs=*/nullptr, /*affiliated_match_helper=*/nullptr));
+  store_->Init(/*prefs=*/nullptr, /*affiliated_match_helper=*/nullptr);
   TestCase test = GetParam();
   SCOPED_TRACE(testing::Message()
                << "is_hsts_enabled=" << test.is_hsts_enabled
@@ -219,7 +218,7 @@ TEST_P(HttpCredentialCleanerTest, ReportHttpMigrationMetrics) {
   task_environment.RunUntilIdle();
 
   histogram_tester.ExpectUniqueSample(
-      "PasswordManager.HttpCredentials",
+      "PasswordManager.HttpCredentials2",
       static_cast<HttpCredentialCleaner::HttpCredentialType>(
           static_cast<int>(test.expected) * 2 + test.is_hsts_enabled),
       1);
@@ -255,10 +254,11 @@ TEST(HttpCredentialCleaner, StartCleanUpTest) {
 
     base::test::TaskEnvironment task_environment;
     auto password_store = base::MakeRefCounted<TestPasswordStore>();
-    ASSERT_TRUE(password_store->Init(/*prefs=*/nullptr,
-                                     /*affiliated_match_helper=*/nullptr));
+    password_store->Init(/*prefs=*/nullptr,
+                         /*affiliated_match_helper=*/nullptr);
 
-    double last_time = (base::Time::Now() - base::Minutes(10)).ToDoubleT();
+    double last_time =
+        (base::Time::Now() - base::Minutes(10)).InSecondsFSinceUnixEpoch();
     if (should_start_clean_up) {
       // Simulate that the clean-up was performed
       // (HttpCredentialCleaner::kCleanUpDelayInDays + 1) days ago.
@@ -268,7 +268,7 @@ TEST(HttpCredentialCleaner, StartCleanUpTest) {
       // clean-ups)
       last_time = (base::Time::Now() -
                    base::Days(HttpCredentialCleaner::kCleanUpDelayInDays + 1))
-                      .ToDoubleT();
+                      .InSecondsFSinceUnixEpoch();
     }
 
     TestingPrefServiceSimple prefs;

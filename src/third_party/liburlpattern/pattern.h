@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Copyright 2014 Blake Embrey (hello@blakeembrey.com)
 // Use of this source code is governed by an MIT-style license that can be
 // found in the LICENSE file or at https://opensource.org/licenses/MIT.
@@ -134,6 +134,9 @@ class COMPONENT_EXPORT(LIBURLPATTERN) Pattern {
       std::vector<std::string>* name_list_out = nullptr) const;
 
   const std::vector<Part>& PartList() const { return part_list_; }
+
+  // Returns true if the pattern has at least one kRegex part.
+  bool HasRegexGroups() const;
 
   // Returns true if the pattern can match input strings using `DirectMatch()`.
   bool CanDirectMatch() const;

@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -120,6 +120,20 @@ bool StructTraits<device::mojom::GamepadHapticActuatorDataView,
   out->not_null = true;
   if (!data.ReadType(&out->type))
     return false;
+  return true;
+}
+
+// static
+bool StructTraits<device::mojom::GamepadTouchDataView, device::GamepadTouch>::
+    Read(device::mojom::GamepadTouchDataView data, device::GamepadTouch* out) {
+  out->touch_id = data.touch_id();
+  out->surface_id = data.surface_id();
+  out->x = data.x();
+  out->y = data.y();
+  out->has_surface_dimensions = data.has_surface_dimensions();
+  out->surface_width = data.surface_width();
+  out->surface_height = data.surface_height();
+
   return true;
 }
 
@@ -283,6 +297,12 @@ bool StructTraits<device::mojom::GamepadDataView, device::Gamepad>::Read(
   if (!data.ReadPose(&out->pose)) {
     return false;
   }
+
+  base::span<device::GamepadTouch> touch_events(out->touch_events);
+  if (!data.ReadTouchEvents(&touch_events)) {
+    return false;
+  }
+  out->touch_events_length = static_cast<uint32_t>(touch_events.size());
 
   device::GamepadHand hand;
   if (!data.ReadHand(&hand)) {

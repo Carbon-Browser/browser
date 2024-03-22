@@ -35,13 +35,15 @@
 
 #include <stdint.h>
 
+#include "base/test/scoped_feature_list.h"
 #include "testing/gtest/include/gtest/gtest.h"
-#include "third_party/blink/renderer/platform/scheduler/public/thread.h"
+#include "third_party/blink/renderer/platform/scheduler/public/non_main_thread.h"
 #include "third_party/blink/renderer/platform/weborigin/scheme_registry.h"
 #include "third_party/blink/renderer/platform/wtf/std_lib_extras.h"
 #include "third_party/blink/renderer/platform/wtf/text/wtf_string.h"
 #include "url/gurl.h"
 #include "url/gurl_abstract_tests.h"
+#include "url/url_features.h"
 #include "url/url_util.h"
 
 namespace blink {
@@ -646,7 +648,7 @@ TEST(KURLTest, Empty) {
   EXPECT_FALSE(kurl.IsValid());
   EXPECT_TRUE(kurl.IsNull());
   EXPECT_TRUE(kurl.GetString().IsNull());
-  EXPECT_TRUE(kurl.GetString().IsEmpty());
+  EXPECT_TRUE(kurl.GetString().empty());
 
   // Test resolving a null URL on an empty string.
   const KURL kurl2(kurl, "");
@@ -654,9 +656,9 @@ TEST(KURLTest, Empty) {
   EXPECT_TRUE(kurl2.IsEmpty());
   EXPECT_FALSE(kurl2.IsValid());
   EXPECT_FALSE(kurl2.GetString().IsNull());
-  EXPECT_TRUE(kurl2.GetString().IsEmpty());
+  EXPECT_TRUE(kurl2.GetString().empty());
   EXPECT_FALSE(kurl2.GetString().IsNull());
-  EXPECT_TRUE(kurl2.GetString().IsEmpty());
+  EXPECT_TRUE(kurl2.GetString().empty());
 
   // Resolve the null URL on a null string.
   const KURL kurl22(kurl, String());
@@ -664,9 +666,9 @@ TEST(KURLTest, Empty) {
   EXPECT_TRUE(kurl22.IsEmpty());
   EXPECT_FALSE(kurl22.IsValid());
   EXPECT_FALSE(kurl22.GetString().IsNull());
-  EXPECT_TRUE(kurl22.GetString().IsEmpty());
+  EXPECT_TRUE(kurl22.GetString().empty());
   EXPECT_FALSE(kurl22.GetString().IsNull());
-  EXPECT_TRUE(kurl22.GetString().IsEmpty());
+  EXPECT_TRUE(kurl22.GetString().empty());
 
   // Test non-hierarchical schemes resolving. The actual URLs will be different.
   // WebKit's one will set the string to "something.gif" and we'll set it to an
@@ -681,7 +683,7 @@ TEST(KURLTest, Empty) {
   EXPECT_TRUE(kurl4.IsEmpty());
   EXPECT_FALSE(kurl4.IsValid());
   EXPECT_TRUE(kurl4.GetString().IsNull());
-  EXPECT_TRUE(kurl4.GetString().IsEmpty());
+  EXPECT_TRUE(kurl4.GetString().empty());
 
   // Resolving an empty URL on an invalid string.
   const KURL kurl5("foo.js");
@@ -696,7 +698,7 @@ TEST(KURLTest, Empty) {
   EXPECT_TRUE(kurl6.IsEmpty());
   EXPECT_FALSE(kurl6.IsValid());
   EXPECT_FALSE(kurl6.GetString().IsNull());
-  EXPECT_TRUE(kurl6.GetString().IsEmpty());
+  EXPECT_TRUE(kurl6.GetString().empty());
 
   // Non-empty but invalid C string as input.
   const KURL kurl7("foo.js");
@@ -878,7 +880,9 @@ TEST(KURLTest, urlStrippedForUseAsReferrerRespectsReferrerScheme) {
   const String foobar_scheme = String::FromUTF8("foobar");
 
   EXPECT_EQ("", foobar_url.StrippedForUseAsReferrer().Utf8());
-
+#if DCHECK_IS_ON()
+  WTF::SetIsBeforeThreadCreatedForTest();  // Required for next operation:
+#endif
   SchemeRegistry::RegisterURLSchemeAsAllowedForReferrer(foobar_scheme);
   EXPECT_EQ("foobar://somepage/", foobar_url.StrippedForUseAsReferrer());
   SchemeRegistry::RemoveURLSchemeAsAllowedForReferrer(foobar_scheme);
@@ -924,8 +928,8 @@ TEST(KURLTest, ThreadSafesStaticKurlGetters) {
   KURL null_url = NullURL();
   EXPECT_TRUE(null_url.IsNull());
 
-  auto thread =
-      Thread::CreateThread(ThreadCreationParams(ThreadType::kTestThread));
+  auto thread = NonMainThread::CreateThread(
+      ThreadCreationParams(ThreadType::kTestThread));
   thread->GetTaskRunner()->PostTask(FROM_HERE, base::BindOnce([]() {
                                       // Reference each of the static KURLs
                                       // again, from the background thread,
@@ -985,10 +989,10 @@ TEST(KURL, SetProtocolToFileFromInvalidURL) {
   // reflects the validity after the transformation. All the URLs are
   // invalid before it.
   constexpr URLAndExpectedValidity kInvalidURLs[] = {
-      {"http://@/", kValid},          {"http://@@/", kValid},
+      {"http://@/", kValid},          {"http://@@/", kInvalid},
       {"http://::/", kInvalid},       {"http://:/", kValid},
       {"http://:@/", kValid},         {"http://@:/", kValid},
-      {"http://:@:/", kValid},        {"http://foo@/", kValid},
+      {"http://:@:/", kValid},        {"http://foo@/", kInvalid},
       {"http://localhost:/", kValid},
   };
 
@@ -1052,9 +1056,10 @@ TEST(KURLTest, SetFileProtocolFromNonSpecial) {
 
 TEST(KURLTest, SetFileProtocolToNonSpecial) {
   KURL url("file:///path");
+  EXPECT_EQ(url.GetPath(), "/path");
   EXPECT_TRUE(url.SetProtocol("non-special-scheme"));
-  EXPECT_EQ(url.Protocol(), "non-special-scheme");
-  EXPECT_EQ(url.GetPath(), "///path");
+  EXPECT_EQ(url.Protocol(), "file");
+  EXPECT_EQ(url.GetPath(), "/path");
 }
 
 TEST(KURLTest, InvalidKURLToGURL) {
@@ -1078,6 +1083,41 @@ TEST(KURLTest, InvalidKURLToGURL) {
   // becomes an escaped percent sign (%25), and the invalid UTF-8
   // character becomes REPLACEMENT CHARACTER' (U+FFFD) encoded as UTF-8.
   EXPECT_EQ(gurl.host_piece(), "%25t%EF%BF%BD");
+}
+
+TEST(KURLTest, HasIDNA2008DeviationCharacters) {
+  // èxample.com:
+  EXPECT_FALSE(
+      KURL("http://\xE8xample.com/path").HasIDNA2008DeviationCharacter());
+  // faß.de (contains Sharp-S):
+  EXPECT_TRUE(KURL(u"http://fa\u00df.de/path").HasIDNA2008DeviationCharacter());
+  // βόλος.com (contains Greek Final Sigma):
+  EXPECT_TRUE(KURL(u"http://\u03b2\u03cc\u03bb\u03bf\u03c2.com/path")
+                  .HasIDNA2008DeviationCharacter());
+  // ශ්‍රී.com (contains Zero Width Joiner):
+  EXPECT_TRUE(KURL(u"http://\u0DC1\u0DCA\u200D\u0DBB\u0DD3.com")
+                  .HasIDNA2008DeviationCharacter());
+  // http://نامه\u200cای.com (contains Zero Width Non-Joiner):
+  EXPECT_TRUE(KURL(u"http://\u0646\u0627\u0645\u0647\u200C\u0627\u06CC.com")
+                  .HasIDNA2008DeviationCharacter());
+
+  // Copying the URL from a canonical string presently doesn't copy the boolean.
+  KURL url1(u"http://\u03b2\u03cc\u03bb\u03bf\u03c2.com/path");
+  std::string url_string = url1.GetString().Utf8();
+  KURL url2(AtomicString::FromUTF8(url_string.data(), url_string.length()),
+            url1.GetParsed(), url1.IsValid());
+  EXPECT_FALSE(url2.HasIDNA2008DeviationCharacter());
+}
+
+TEST(KURLTest, IPv4EmbeddedIPv6Address) {
+  EXPECT_TRUE(KURL(u"http://[::1.2.3.4]/").IsValid());
+  EXPECT_FALSE(KURL(u"http://[::1.2.3.4.5]/").IsValid());
+  EXPECT_FALSE(KURL(u"http://[::.1.2]/").IsValid());
+  EXPECT_FALSE(KURL(u"http://[::.]/").IsValid());
+
+  EXPECT_FALSE(KURL(u"http://[::1.2.3.4.]/").IsValid());
+  EXPECT_FALSE(KURL(u"http://[::1.2]/").IsValid());
+  EXPECT_FALSE(KURL(u"http://[::1.2.]/").IsValid());
 }
 
 enum class PortIsValid {
@@ -1130,19 +1170,20 @@ const PortTestCase port_test_cases[] = {
     {"65534", 65534, 65534, PortIsValid::kAlways},
     {"65535", 65535, 65535, PortIsValid::kAlways},
     {"65535junk", 0, 65535, PortIsValid::kInSetHostAndPort},
-    {"65536", 0, 0, PortIsValid::kInSetPort},
-    {"65537", 0, 1, PortIsValid::kInSetPort},
-    {"65537junk", 0, 1, PortIsValid::kInSetPort},
-    {"2147483647", 0, 65535, PortIsValid::kInSetPort},
-    {"2147483648", 0, 0, PortIsValid::kInSetPort},
-    {"2147483649", 0, 1, PortIsValid::kInSetPort},
-    {"4294967295", 0, 65535, PortIsValid::kInSetPort},
-    {"4294967296", 0, 0, PortIsValid::kInSetPort},
-    {"4294967297", 0, 0, PortIsValid::kInSetPort},
-    {"18446744073709551615", 0, 0, PortIsValid::kInSetPort},
-    {"18446744073709551616", 0, 0, PortIsValid::kInSetPort},
-    {"18446744073709551617", 0, 0, PortIsValid::kInSetPort},
-    {"9999999999999999999999999999990999999999", 0, 0, PortIsValid::kInSetPort},
+    {"65536", 0, kNoopPort, PortIsValid::kInSetPort},
+    {"65537", 0, kNoopPort, PortIsValid::kInSetPort},
+    {"65537junk", 0, kNoopPort, PortIsValid::kInSetPort},
+    {"2147483647", 0, kNoopPort, PortIsValid::kInSetPort},
+    {"2147483648", 0, kNoopPort, PortIsValid::kInSetPort},
+    {"2147483649", 0, kNoopPort, PortIsValid::kInSetPort},
+    {"4294967295", 0, kNoopPort, PortIsValid::kInSetPort},
+    {"4294967296", 0, kNoopPort, PortIsValid::kInSetPort},
+    {"4294967297", 0, kNoopPort, PortIsValid::kInSetPort},
+    {"18446744073709551615", 0, kNoopPort, PortIsValid::kInSetPort},
+    {"18446744073709551616", 0, kNoopPort, PortIsValid::kInSetPort},
+    {"18446744073709551617", 0, kNoopPort, PortIsValid::kInSetPort},
+    {"9999999999999999999999999999990999999999", 0, kNoopPort,
+     PortIsValid::kInSetPort},
 };
 
 void PrintTo(const PortTestCase& port_test_case, ::std::ostream* os) {

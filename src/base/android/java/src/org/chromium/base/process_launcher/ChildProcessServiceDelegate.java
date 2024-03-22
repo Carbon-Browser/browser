@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,9 +12,7 @@ import android.util.SparseArray;
 
 import java.util.List;
 
-/**
- * The interface that embedders should implement to specialize child service creation.
- */
+/** The interface that embedders should implement to specialize child service creation. */
 public interface ChildProcessServiceDelegate {
     /** Invoked when the service was created. This is the first method invoked on the delegate. */
     void onServiceCreated();

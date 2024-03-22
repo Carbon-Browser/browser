@@ -1,4 +1,4 @@
-// Copyright 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,7 +11,6 @@
 #include "android_webview/common/mojom/frame.mojom.h"
 #include "android_webview/common/url_constants.h"
 #include "android_webview/renderer/aw_content_settings_client.h"
-#include "android_webview/renderer/aw_key_systems.h"
 #include "android_webview/renderer/aw_print_render_frame_helper_delegate.h"
 #include "android_webview/renderer/aw_render_frame_ext.h"
 #include "android_webview/renderer/aw_render_view_ext.h"
@@ -24,7 +23,10 @@
 #include "base/metrics/histogram_macros.h"
 #include "base/strings/string_util.h"
 #include "components/android_system_error_page/error_page_populator.h"
+#include "components/autofill/core/common/autofill_features.h"
+#include "components/cdm/renderer/key_system_support_update.h"
 #include "components/js_injection/renderer/js_communication.h"
+#include "components/network_hints/renderer/web_prescient_networking_impl.h"
 #include "components/page_load_metrics/renderer/metrics_render_frame_observer.h"
 #include "components/printing/renderer/print_render_frame_helper.h"
 #include "components/visitedlink/renderer/visitedlink_reader.h"
@@ -36,10 +38,12 @@
 #include "mojo/public/cpp/bindings/binder_map.h"
 #include "third_party/blink/public/common/associated_interfaces/associated_interface_provider.h"
 #include "third_party/blink/public/platform/platform.h"
+#include "third_party/blink/public/platform/web_runtime_features.h"
 #include "third_party/blink/public/platform/web_string.h"
 #include "third_party/blink/public/platform/web_url.h"
 #include "third_party/blink/public/platform/web_url_request.h"
 #include "third_party/blink/public/web/web_frame.h"
+#include "third_party/blink/public/web/web_local_frame.h"
 #include "third_party/blink/public/web/web_navigation_type.h"
 #include "third_party/blink/public/web/web_security_policy.h"
 #include "url/gurl.h"
@@ -156,8 +160,9 @@ void AwContentRendererClient::RenderFrameCreated(
   if (main_frame && main_frame != render_frame) {
     // Avoid any race conditions from having the browser's UI thread tell the IO
     // thread that a subframe was created.
-    GetRenderMessageFilter()->SubFrameCreated(main_frame->GetRoutingID(),
-                                              render_frame->GetRoutingID());
+    GetRenderMessageFilter()->SubFrameCreated(
+        main_frame->GetWebFrame()->GetLocalFrameToken(),
+        render_frame->GetWebFrame()->GetLocalFrameToken());
   }
 
 #if BUILDFLAG(ENABLE_SPELLCHECK)
@@ -168,8 +173,25 @@ void AwContentRendererClient::RenderFrameCreated(
   new page_load_metrics::MetricsRenderFrameObserver(render_frame);
 }
 
-void AwContentRendererClient::WebViewCreated(blink::WebView* web_view,
-                                             bool was_created_by_renderer) {
+std::unique_ptr<blink::WebPrescientNetworking>
+AwContentRendererClient::CreatePrescientNetworking(
+    content::RenderFrame* render_frame) {
+  return std::make_unique<network_hints::WebPrescientNetworkingImpl>(
+      render_frame);
+}
+
+void AwContentRendererClient::
+    SetRuntimeFeaturesDefaultsBeforeBlinkInitialization() {
+  if (base::FeatureList::IsEnabled(
+          autofill::features::kAutofillSharedAutofill)) {
+    blink::WebRuntimeFeatures::EnableSharedAutofill(true);
+  }
+}
+
+void AwContentRendererClient::WebViewCreated(
+    blink::WebView* web_view,
+    bool was_created_by_renderer,
+    const url::Origin* outermost_origin) {
   AwRenderViewExt::WebViewCreated(web_view, was_created_by_renderer);
 }
 
@@ -204,9 +226,8 @@ void AwContentRendererClient::RunScriptsAtDocumentStart(
 
 void AwContentRendererClient::GetSupportedKeySystems(
     media::GetSupportedKeySystemsCB cb) {
-  media::KeySystemPropertiesVector key_systems;
-  AwAddKeySystems(&key_systems);
-  std::move(cb).Run(std::move(key_systems));
+  // WebView always allows persisting data.
+  cdm::GetSupportedKeySystemsUpdates(/*can_persist_data=*/true, std::move(cb));
 }
 
 std::unique_ptr<blink::WebSocketHandshakeThrottleProvider>

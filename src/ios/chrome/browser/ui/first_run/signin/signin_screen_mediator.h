@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,15 +12,19 @@
 @class AuthenticationFlow;
 class AuthenticationService;
 class ChromeAccountManagerService;
-@class ChromeIdentity;
 class PrefService;
 @protocol SigninScreenConsumer;
 namespace signin {
 class IdentityManager;
 }  // namespace
+namespace signin_metrics {
+enum class AccessPoint : int;
+enum class PromoAction : int;
+}  // namespace signin_metrics
 namespace syncer {
 class SyncService;
 }  // syncer
+@protocol SystemIdentity;
 
 // Mediator that handles the sign-in operation.
 @interface SigninScreenMediator : NSObject
@@ -28,7 +32,7 @@ class SyncService;
 // Consumer for this mediator.
 @property(nonatomic, weak) id<SigninScreenConsumer> consumer;
 // The identity currently selected.
-@property(nonatomic, strong, readwrite) ChromeIdentity* selectedIdentity;
+@property(nonatomic, strong) id<SystemIdentity> selectedIdentity;
 // Contains the user choice for UMA reporting. This value is set to the default
 // value when the coordinator is initialized.
 @property(nonatomic, assign) BOOL UMAReportingUserChoice;
@@ -38,6 +42,8 @@ class SyncService;
 @property(nonatomic, assign) BOOL UMALinkWasTapped;
 // Whether an account has been added. Must be set externally.
 @property(nonatomic, assign) BOOL addedAccount;
+// Whether dismiss gestures should be ignored (e.g. swipe away).
+@property(nonatomic, assign, readonly) BOOL ignoreDismissGesture;
 
 // The designated initializer.
 // `accountManagerService` account manager service.
@@ -45,7 +51,6 @@ class SyncService;
 // `localPrefService` application local pref.
 // `prefService` user pref.
 // `syncService` sync service.
-// `showFREConsent` YES if the screen needs to display the term of service.
 - (instancetype)
     initWithAccountManagerService:
         (ChromeAccountManagerService*)accountManagerService
@@ -54,7 +59,8 @@ class SyncService;
                  localPrefService:(PrefService*)localPrefService
                       prefService:(PrefService*)prefService
                       syncService:(syncer::SyncService*)syncService
-                   showFREConsent:(BOOL)showFREConsent
+                      accessPoint:(signin_metrics::AccessPoint)accessPoint
+                      promoAction:(signin_metrics::PromoAction)promoAction
     NS_DESIGNATED_INITIALIZER;
 
 - (instancetype)init NS_UNAVAILABLE;

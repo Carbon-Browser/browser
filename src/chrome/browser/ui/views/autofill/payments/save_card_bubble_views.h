@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -70,12 +70,13 @@ class SaveCardBubbleViews : public AutofillBubbleBase,
   void Init() override;
 
   void OnDialogAccepted();
-  void OnDialogCancelled();
 
   ~SaveCardBubbleViews() override;
 
  private:
   friend class SaveCardBubbleViewsFullFormBrowserTest;
+
+  std::unique_ptr<views::View> GetCardIdentifierView();
 
   raw_ptr<views::View> footnote_view_ = nullptr;
 

@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,11 +6,10 @@
 
 #include <memory>
 
-#include "base/callback_helpers.h"
 #include "base/containers/contains.h"
+#include "base/functional/callback_helpers.h"
 #include "base/test/bind.h"
 #include "content/browser/service_worker/embedded_worker_test_helper.h"
-#include "content/browser/service_worker/service_worker_context_core.h"
 #include "content/browser/service_worker/service_worker_context_core_observer.h"
 #include "content/browser/service_worker/service_worker_context_wrapper.h"
 #include "content/browser/service_worker/service_worker_registration.h"
@@ -82,7 +81,8 @@ class ServiceWorkerContextCoreTest : public testing::Test,
               registration_id = result_registration_id;
               loop.Quit();
             }),
-        /*requesting_frame_id=*/GlobalRenderFrameHostId());
+        /*requesting_frame_id=*/GlobalRenderFrameHostId(),
+        PolicyContainerPolicies());
     loop.Run();
     EXPECT_EQ(blink::ServiceWorkerStatusCode::kOk, status);
     scoped_refptr<ServiceWorkerRegistration> registration =
@@ -207,7 +207,7 @@ TEST_F(ServiceWorkerContextCoreTest, DeleteForStorageKey) {
   const GURL script("https://www.example.com/a/sw.js");
   const GURL scope("https://www.example.com/a");
   const url::Origin origin = url::Origin::Create(scope);
-  const blink::StorageKey key(origin);
+  const blink::StorageKey key = blink::StorageKey::CreateFirstParty(origin);
 
   // Register a service worker.
   blink::mojom::ServiceWorkerRegistrationOptions options;
@@ -227,7 +227,7 @@ TEST_F(ServiceWorkerContextCoreTest, DeleteForStorageKeyAbortsQueuedJobs) {
   const GURL script("https://www.example.com/a/sw.js");
   const GURL scope("https://www.example.com/a");
   const url::Origin origin = url::Origin::Create(scope);
-  const blink::StorageKey key(origin);
+  const blink::StorageKey key = blink::StorageKey::CreateFirstParty(origin);
 
   // Register a service worker.
   blink::mojom::ServiceWorkerRegistrationOptions options;
@@ -247,7 +247,8 @@ TEST_F(ServiceWorkerContextCoreTest, DeleteForStorageKeyAbortsQueuedJobs) {
             register_job_status = result_status;
             register_job_loop.Quit();
           }),
-      /*requesting_frame_id=*/GlobalRenderFrameHostId());
+      /*requesting_frame_id=*/GlobalRenderFrameHostId(),
+      PolicyContainerPolicies());
 
   EXPECT_EQ(blink::ServiceWorkerStatusCode::kOk, DeleteForStorageKey(key));
 
@@ -261,7 +262,7 @@ TEST_F(ServiceWorkerContextCoreTest,
   const GURL script("https://www.example.com/a/sw.js");
   const GURL scope("https://www.example.com/a");
   const url::Origin origin = url::Origin::Create(scope);
-  const blink::StorageKey key(origin);
+  const blink::StorageKey key = blink::StorageKey::CreateFirstParty(origin);
 
   // Register a service worker.
   blink::mojom::ServiceWorkerRegistrationOptions options;
@@ -279,8 +280,9 @@ TEST_F(ServiceWorkerContextCoreTest,
   EXPECT_EQ(blink::ServiceWorkerStatusCode::kOk, Unregister(scope, key));
 
   // Queue an Update job.
-  context()->UpdateServiceWorker(registration.get(),
-                                 /*force_bypass_cache=*/false);
+  context()->UpdateServiceWorkerWithoutExecutionContext(
+      registration.get(),
+      /*force_bypass_cache=*/false);
 
   // Queue a register job.
   base::RunLoop register_job_loop;
@@ -294,7 +296,8 @@ TEST_F(ServiceWorkerContextCoreTest,
             register_job_status = result_status;
             register_job_loop.Quit();
           }),
-      /*requesting_frame_id=*/GlobalRenderFrameHostId());
+      /*requesting_frame_id=*/GlobalRenderFrameHostId(),
+      PolicyContainerPolicies());
 
   EXPECT_EQ(blink::ServiceWorkerStatusCode::kOk, DeleteForStorageKey(key));
 
@@ -309,7 +312,7 @@ TEST_F(ServiceWorkerContextCoreTest, DeleteForStorageKey_UnregisterFail) {
   const GURL script("https://www.example.com/a/sw.js");
   const GURL scope("https://www.example.com/a");
   const url::Origin origin = url::Origin::Create(scope);
-  const blink::StorageKey key(origin);
+  const blink::StorageKey key = blink::StorageKey::CreateFirstParty(origin);
 
   // Register a service worker.
   blink::mojom::ServiceWorkerRegistrationOptions options;

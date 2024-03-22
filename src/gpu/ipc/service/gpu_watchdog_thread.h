@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,7 @@
 
 #include "base/atomicops.h"
 #include "base/memory/raw_ptr.h"
-#include "base/memory/ref_counted.h"
+#include "base/memory/raw_ptr_exclusion.h"
 #include "base/memory/weak_ptr.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/power_monitor/power_observer.h"
@@ -93,12 +93,19 @@ class GPU_IPC_SERVICE_EXPORT GpuWatchdogThread
  public:
   static std::unique_ptr<GpuWatchdogThread> Create(
       bool start_backgrounded,
+      bool software_rendering,
+      const std::string& thread_name);
+
+  // Use the existing GpuWatchdogThread to create a second one. This is used
+  // for DrDC thread only.
+  static std::unique_ptr<GpuWatchdogThread> Create(
+      bool start_backgrounded,
+      const GpuWatchdogThread* existing_watchdog,
       const std::string& thread_name);
 
   static std::unique_ptr<GpuWatchdogThread> Create(
       bool start_backgrounded,
       base::TimeDelta timeout,
-      int init_factor,
       int restart_factor,
       bool test_mode,
       const std::string& thread_name);
@@ -130,8 +137,17 @@ class GPU_IPC_SERVICE_EXPORT GpuWatchdogThread
   // Continue the watchdog after a pause.
   void ResumeWatchdog();
 
+  // In this mode, when the GPU detects a hang, it will record the crash state
+  // and report it without terminating the GPU process, and things will move on
+  // as if the Watchdog thread did not interfere.
+  void EnableReportOnlyMode();
+  // Disable report only mode.
+  void DisableReportOnlyMode();
+
   // For gpu testing only. Return status for the watchdog tests
   bool IsGpuHangDetectedForTesting();
+  // For gpu testing only. Return status for the watchdog tests
+  bool IsGpuHangDetectedWithoutKillForTesting();
 
   // Implements base::Thread.
   void Init() override;
@@ -160,13 +176,13 @@ class GPU_IPC_SERVICE_EXPORT GpuWatchdogThread
   };
 
   GpuWatchdogThread(base::TimeDelta timeout,
-                    int init_factor,
                     int restart_factor,
                     bool test_mode,
                     const std::string& thread_name);
   void AddPowerObserver();
   void RestartWatchdogTimeoutTask(PauseResumeSource source_of_request);
   void StopWatchdogTimeoutTask(PauseResumeSource source_of_request);
+  void SetReportOnlyModeTask(bool enabled);
   void UpdateInitializationFlag();
   void Arm();
   void Disarm();
@@ -217,9 +233,6 @@ class GPU_IPC_SERVICE_EXPORT GpuWatchdogThread
   // Timeout on the watchdog thread to check if gpu hangs.
   base::TimeDelta watchdog_timeout_;
 
-  // The one-time watchdog timeout multiplier in the gpu initialization.
-  const int watchdog_init_factor_;
-
   // The one-time watchdog timeout multiplier after the watchdog pauses and
   // restarts.
   const int watchdog_restart_factor_;
@@ -258,7 +271,9 @@ class GPU_IPC_SERVICE_EXPORT GpuWatchdogThread
   base::TimeDelta remaining_watched_thread_ticks_;
 
   // The Windows thread hanndle of the watched GPU main thread.
-  void* watched_thread_handle_ = nullptr;
+  // This field is not a raw_ptr<> because it was filtered by the rewriter for:
+  // #addr-of
+  RAW_PTR_EXCLUSION void* watched_thread_handle_ = nullptr;
 
   // After GPU hang detected, how many times has the GPU thread been allowed to
   // continue due to not enough thread time.
@@ -271,7 +286,13 @@ class GPU_IPC_SERVICE_EXPORT GpuWatchdogThread
 #endif
 
 #if BUILDFLAG(IS_LINUX) && !BUILDFLAG(IS_CASTOS)
-  raw_ptr<FILE> tty_file_ = nullptr;
+  struct Deleter {
+    inline void operator()(FILE* f) {
+      if (f)
+        fclose(f);
+    }
+  };
+  std::unique_ptr<FILE, Deleter> tty_file_;
   int host_tty_ = -1;
   int active_tty_ = -1;
   int last_active_tty_ = -1;
@@ -289,6 +310,17 @@ class GPU_IPC_SERVICE_EXPORT GpuWatchdogThread
 
   // The GPU watchdog is paused. The timeout task is temporarily stopped.
   bool is_paused_ = false;
+
+  // The lock between the GpuMainThread and GpuWatchdogThread for stopping
+  // GpuWatchdog.
+  base::Lock skip_lock_;
+  bool skip_for_pause_ GUARDED_BY(skip_lock_) = false;
+  bool skip_for_backgrounded_ GUARDED_BY(skip_lock_) = false;
+
+  // The GPU watchdog is in report only mode. The watchdog will behave as though
+  // the thread which it found to be hung has made progress during crash
+  // reporting.
+  bool in_report_only_mode_ = false;
 
   // whether GpuWatchdogThreadEvent::kGpuWatchdogStart has been recorded.
   bool is_watchdog_start_histogram_recorded_ = false;
@@ -314,6 +346,8 @@ class GPU_IPC_SERVICE_EXPORT GpuWatchdogThread
 
   // Set by the watchdog thread and Read by the test thread.
   base::AtomicFlag test_result_timeout_and_gpu_hang_;
+  // Set by the watchdog thread and Read by the test thread.
+  base::AtomicFlag test_result_timeout_and_gpu_hang_without_kill_;
 
   SEQUENCE_CHECKER(watchdog_thread_sequence_checker_);
   SEQUENCE_CHECKER(watched_thread_sequence_checker_);

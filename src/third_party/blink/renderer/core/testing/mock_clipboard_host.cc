@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -28,11 +28,27 @@ void MockClipboardHost::Reset() {
   plain_text_ = g_empty_string;
   html_text_ = g_empty_string;
   svg_text_ = g_empty_string;
+  rtf_text_ = g_empty_string;
+  files_ = mojom::blink::ClipboardFiles::New();
   url_ = KURL();
   png_.clear();
   custom_data_.clear();
   write_smart_paste_ = false;
   needs_reset_ = false;
+}
+
+void MockClipboardHost::WriteRtf(const String& rtf_text) {
+  if (needs_reset_) {
+    Reset();
+  }
+  rtf_text_ = rtf_text;
+}
+
+void MockClipboardHost::WriteFiles(mojom::blink::ClipboardFilesPtr files) {
+  if (needs_reset_) {
+    Reset();
+  }
+  files_ = std::move(files);
 }
 
 void MockClipboardHost::GetSequenceNumber(
@@ -43,13 +59,13 @@ void MockClipboardHost::GetSequenceNumber(
 
 Vector<String> MockClipboardHost::ReadStandardFormatNames() {
   Vector<String> types;
-  if (!plain_text_.IsEmpty())
+  if (!plain_text_.empty())
     types.push_back("text/plain");
-  if (!html_text_.IsEmpty())
+  if (!html_text_.empty())
     types.push_back("text/html");
-  if (!svg_text_.IsEmpty())
+  if (!svg_text_.empty())
     types.push_back("image/svg+xml");
-  if (!png_.IsEmpty())
+  if (!png_.empty())
     types.push_back("image/png");
   for (auto& it : custom_data_) {
     CHECK(!base::Contains(types, it.key));
@@ -72,10 +88,10 @@ void MockClipboardHost::IsFormatAvailable(
   bool result = false;
   switch (format) {
     case mojom::ClipboardFormat::kPlaintext:
-      result = !plain_text_.IsEmpty();
+      result = !plain_text_.empty();
       break;
     case mojom::ClipboardFormat::kHtml:
-      result = !html_text_.IsEmpty();
+      result = !html_text_.empty();
       break;
     case mojom::ClipboardFormat::kSmartPaste:
       result = write_smart_paste_;
@@ -104,7 +120,7 @@ void MockClipboardHost::ReadSvg(mojom::ClipboardBuffer clipboard_buffer,
 
 void MockClipboardHost::ReadRtf(mojom::ClipboardBuffer clipboard_buffer,
                                 ReadRtfCallback callback) {
-  std::move(callback).Run(g_empty_string);
+  std::move(callback).Run(rtf_text_);
 }
 
 void MockClipboardHost::ReadPng(mojom::ClipboardBuffer clipboard_buffer,
@@ -114,7 +130,7 @@ void MockClipboardHost::ReadPng(mojom::ClipboardBuffer clipboard_buffer,
 
 void MockClipboardHost::ReadFiles(mojom::ClipboardBuffer clipboard_buffer,
                                   ReadFilesCallback callback) {
-  std::move(callback).Run(mojom::blink::ClipboardFiles::New());
+  std::move(callback).Run(std::move(files_));
 }
 
 void MockClipboardHost::ReadCustomData(mojom::ClipboardBuffer clipboard_buffer,

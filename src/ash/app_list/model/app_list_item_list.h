@@ -1,4 +1,4 @@
-// Copyright (c) 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,6 +13,7 @@
 
 #include "ash/app_list/model/app_list_item_list_observer.h"
 #include "ash/app_list/model/app_list_model_export.h"
+#include "base/memory/raw_ptr.h"
 #include "base/observer_list.h"
 #include "components/sync/model/string_ordinal.h"
 
@@ -71,9 +72,6 @@ class APP_LIST_MODEL_EXPORT AppListItemList {
   // shares the similar functionality with a delegate but is only available to
   // external classes. Fixing this issue can eliminate such confusion.
   bool SetItemPosition(AppListItem* item, syncer::StringOrdinal new_position);
-
-  // Add a "page break" item right after the specified item in item list.
-  AppListItem* AddPageBreakItemAfter(const AppListItem* previous_item);
 
   AppListItem* item_at(size_t index) {
     DCHECK_LT(index, app_list_items_.size());
@@ -134,7 +132,7 @@ class APP_LIST_MODEL_EXPORT AppListItemList {
   void FixItemPosition(size_t index);
 
   // Used to initiate updates on app list item positions from the ash side.
-  AppListModelDelegate* const app_list_model_delegate_;
+  const raw_ptr<AppListModelDelegate, ExperimentalAsh> app_list_model_delegate_;
 
   std::vector<std::unique_ptr<AppListItem>> app_list_items_;
   base::ObserverList<AppListItemListObserver, true> observers_;

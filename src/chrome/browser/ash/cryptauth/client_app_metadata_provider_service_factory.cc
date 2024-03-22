@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,7 +9,6 @@
 #include "chrome/browser/profiles/incognito_helpers.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chromeos/ash/components/network/network_handler.h"
-#include "components/keyed_service/content/browser_context_dependency_manager.h"
 
 namespace ash {
 
@@ -26,24 +25,31 @@ ClientAppMetadataProviderServiceFactory::GetForProfile(Profile* profile) {
 // static
 ClientAppMetadataProviderServiceFactory*
 ClientAppMetadataProviderServiceFactory::GetInstance() {
-  return base::Singleton<ClientAppMetadataProviderServiceFactory>::get();
+  static base::NoDestructor<ClientAppMetadataProviderServiceFactory> instance;
+  return instance.get();
 }
 
 ClientAppMetadataProviderServiceFactory::
     ClientAppMetadataProviderServiceFactory()
-    : BrowserContextKeyedServiceFactory(
+    : ProfileKeyedServiceFactory(
           "ClientAppMetadataProviderService",
-          BrowserContextDependencyManager::GetInstance()) {
+          ProfileSelections::Builder()
+              .WithRegular(ProfileSelection::kOriginalOnly)
+              // TODO(crbug.com/1418376): Check if this service is needed in
+              // Guest mode.
+              .WithGuest(ProfileSelection::kOriginalOnly)
+              .Build()) {
   DependsOn(instance_id::InstanceIDProfileServiceFactory::GetInstance());
 }
 
 ClientAppMetadataProviderServiceFactory::
     ~ClientAppMetadataProviderServiceFactory() = default;
 
-KeyedService* ClientAppMetadataProviderServiceFactory::BuildServiceInstanceFor(
+std::unique_ptr<KeyedService>
+ClientAppMetadataProviderServiceFactory::BuildServiceInstanceForBrowserContext(
     content::BrowserContext* browser_context) const {
   Profile* profile = Profile::FromBrowserContext(browser_context);
-  return new ClientAppMetadataProviderService(
+  return std::make_unique<ClientAppMetadataProviderService>(
       profile->GetPrefs(), NetworkHandler::Get()->network_state_handler(),
       instance_id::InstanceIDProfileServiceFactory::GetForProfile(profile));
 }

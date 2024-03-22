@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,6 +8,8 @@
 #include "ash/app_menu/notification_menu_header_view.h"
 #include "ash/app_menu/notification_overflow_view.h"
 #include "ash/public/cpp/app_menu_constants.h"
+#include "base/ranges/algorithm.h"
+#include "ui/base/metadata/metadata_impl_macros.h"
 #include "ui/base/models/menu_separator_types.h"
 #include "ui/gfx/geometry/point.h"
 #include "ui/gfx/geometry/rect.h"
@@ -149,7 +151,7 @@ void NotificationMenuView::OnNotificationRemoved(
 
   if (overflow_view_ && overflow_view_->is_empty()) {
     // Remove and delete |overflow_view_|.
-    RemoveChildViewT(overflow_view_);
+    RemoveChildViewT(overflow_view_.get());
     overflow_view_ = nullptr;
     PreferredSizeChanged();
     notification_item_view_delegate_->OnOverflowAddedOrRemoved();
@@ -174,9 +176,11 @@ const std::string& NotificationMenuView::GetDisplayedNotificationID() const {
 
 NotificationMenuView::NotificationItemViews::iterator
 NotificationMenuView::NotificationIterForId(const std::string& id) {
-  return std::find_if(
-      notification_item_views_.begin(), notification_item_views_.end(),
-      [id](const auto& item) { return item->notification_id() == id; });
+  return base::ranges::find(notification_item_views_, id,
+                            &NotificationItemView::notification_id);
 }
+
+BEGIN_METADATA(NotificationMenuView)
+END_METADATA
 
 }  // namespace ash

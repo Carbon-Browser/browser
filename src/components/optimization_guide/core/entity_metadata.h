@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,6 +6,7 @@
 #define COMPONENTS_OPTIMIZATION_GUIDE_CORE_ENTITY_METADATA_H_
 
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include "base/containers/flat_map.h"
@@ -109,7 +110,8 @@ PageEntityCollection GetPageEntityCollectionForString(
     const std::string& collection_str);
 
 // Returns a label for the given raw entity collection string.
-std::string GetPageEntityCollectionLabel(const std::string& collection_str);
+std::string_view GetPageEntityCollectionLabel(
+    const std::string& collection_str);
 
 // The metadata associated with a single entity.
 struct EntityMetadata {

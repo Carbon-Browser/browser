@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -15,6 +15,7 @@
 #include "base/memory/weak_ptr.h"
 #include "build/build_config.h"
 #include "content/browser/media/audio_stream_monitor.h"
+#include "content/browser/media/media_devices_util.h"
 #include "content/browser/media/media_power_experiment_manager.h"
 #include "content/browser/media/session/media_session_controllers_manager.h"
 #include "content/common/content_export.h"
@@ -163,7 +164,7 @@ class CONTENT_EXPORT MediaWebContentsObserver
     ~MediaPlayerHostImpl() override;
 
     // Used to bind receivers via the BrowserInterfaceBroker.
-    void BindMediaPlayerHostReceiver(
+    void AddMediaPlayerHostReceiver(
         mojo::PendingAssociatedReceiver<media::mojom::MediaPlayerHost>
             receiver);
 
@@ -211,11 +212,17 @@ class CONTENT_EXPORT MediaWebContentsObserver
     void OnAudioOutputSinkChanged(const std::string& hashed_device_id) override;
     void OnUseAudioServiceChanged(bool uses_audio_service) override;
     void OnAudioOutputSinkChangingDisabled() override;
+    void OnRemotePlaybackMetadataChange(
+        media_session::mojom::RemotePlaybackMetadataPtr
+            remote_playback_metadata) override;
 
    private:
     PlayerInfo* GetPlayerInfo();
     void NotifyAudioStreamMonitorIfNeeded();
 
+    void OnReceivedMediaDeviceSalt(
+        const std::string& hashed_device_id,
+        const content::MediaDeviceSaltAndOrigin& salt_and_origin);
     void OnReceivedTranslatedDeviceId(
         const absl::optional<std::string>& translated_id);
 
@@ -243,7 +250,7 @@ class CONTENT_EXPORT MediaWebContentsObserver
       base::flat_map<MediaPlayerId,
                      mojo::AssociatedRemote<media::mojom::MediaPlayer>>;
 
-  // Communicates with the MediaSessionControllerManager to find or create (if
+  // Communicates with the MediaSessionControllersManager to find or create (if
   // needed) a MediaSessionController identified by |player_id|, in order to
   // bind its mojo remote for media::mojom::MediaPlayer.
   void OnMediaPlayerAdded(
@@ -268,6 +275,9 @@ class CONTENT_EXPORT MediaWebContentsObserver
   void OnAudioOutputSinkChangedWithRawDeviceId(
       const MediaPlayerId& player_id,
       const std::string& raw_device_id);
+  void OnRemotePlaybackMetadataChange(
+      const MediaPlayerId& player_id,
+      media_session::mojom::RemotePlaybackMetadataPtr remote_playback_metadata);
 
   // Used to notify when the renderer -> browser mojo connection via the
   // interface media::mojom::MediaPlayerObserver gets disconnected.

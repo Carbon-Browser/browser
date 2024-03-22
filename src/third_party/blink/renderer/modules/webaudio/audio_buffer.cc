@@ -29,10 +29,10 @@
 #include "third_party/blink/renderer/modules/webaudio/audio_buffer.h"
 
 #include <memory>
+
 #include "third_party/blink/renderer/bindings/modules/v8/v8_audio_buffer_options.h"
 #include "third_party/blink/renderer/modules/webaudio/base_audio_context.h"
 #include "third_party/blink/renderer/platform/audio/audio_bus.h"
-#include "third_party/blink/renderer/platform/audio/audio_file_reader.h"
 #include "third_party/blink/renderer/platform/audio/audio_utilities.h"
 #include "third_party/blink/renderer/platform/bindings/exception_messages.h"
 #include "third_party/blink/renderer/platform/bindings/exception_state.h"
@@ -160,7 +160,7 @@ AudioBuffer::AudioBuffer(unsigned number_of_channels,
                          float sample_rate,
                          InitializationPolicy policy)
     : sample_rate_(sample_rate), length_(number_of_frames) {
-  channels_.ReserveCapacity(number_of_channels);
+  channels_.reserve(number_of_channels);
 
   for (unsigned i = 0; i < number_of_channels; ++i) {
     DOMFloat32Array* channel_data_array =
@@ -179,7 +179,7 @@ AudioBuffer::AudioBuffer(AudioBus* bus)
     : sample_rate_(bus->SampleRate()), length_(bus->length()) {
   // Copy audio data from the bus to the Float32Arrays we manage.
   unsigned number_of_channels = bus->NumberOfChannels();
-  channels_.ReserveCapacity(number_of_channels);
+  channels_.reserve(number_of_channels);
   for (unsigned i = 0; i < number_of_channels; ++i) {
     DOMFloat32Array* channel_data_array =
         CreateFloat32ArrayOrNull(length_, kDontInitialize);
@@ -246,8 +246,10 @@ void AudioBuffer::copyFromChannel(NotShared<DOMFloat32Array> destination,
 
   size_t data_length = channel_data->length();
 
-  if (buffer_offset >= data_length) {
-    // Nothing to copy if the buffer offset is past the end of the AudioBuffer.
+  // We don't need to copy anything if a) the buffer offset is past the end of
+  // the AudioBuffer or b) the internal `Data()` of is a zero-length
+  // `Float32Array`, which can result a nullptr.
+  if (buffer_offset >= data_length || destination->length() <= 0) {
     return;
   }
 

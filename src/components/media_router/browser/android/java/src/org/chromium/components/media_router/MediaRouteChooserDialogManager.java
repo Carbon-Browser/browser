@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -19,9 +19,7 @@ import androidx.mediarouter.app.MediaRouteChooserDialogFragment;
 import androidx.mediarouter.media.MediaRouteSelector;
 import androidx.mediarouter.media.MediaRouter;
 
-/**
- * Manages the dialog responsible for selecting a {@link MediaSink}.
- */
+/** Manages the dialog responsible for selecting a {@link MediaSink}. */
 public class MediaRouteChooserDialogManager extends BaseMediaRouteDialogManager {
     private static final String DIALOG_FRAGMENT_TAG =
             "android.support.v7.mediarouter:MediaRouteChooserDialogFragment";
@@ -31,9 +29,7 @@ public class MediaRouteChooserDialogManager extends BaseMediaRouteDialogManager 
         super(sourceId, routeSelector, delegate);
     }
 
-    /**
-     * Fragment implementation for MediaRouteChooserDialogManager.
-     */
+    /** Fragment implementation for MediaRouteChooserDialogManager. */
     public static class Fragment extends MediaRouteChooserDialogFragment {
         private final Handler mHandler = new Handler();
         private final SystemVisibilitySaver mVisibilitySaver = new SystemVisibilitySaver();
@@ -41,12 +37,13 @@ public class MediaRouteChooserDialogManager extends BaseMediaRouteDialogManager 
         private boolean mIsSinkSelected;
 
         public Fragment() {
-            mHandler.post(new Runnable() {
-                @Override
-                public void run() {
-                    Fragment.this.dismiss();
-                }
-            });
+            mHandler.post(
+                    new Runnable() {
+                        @Override
+                        public void run() {
+                            Fragment.this.dismiss();
+                        }
+                    });
         }
 
         public Fragment(BaseMediaRouteDialogManager manager) {
@@ -105,15 +102,18 @@ public class MediaRouteChooserDialogManager extends BaseMediaRouteDialogManager 
             // Chrome desktop.
             private void recordSinkCountWithDelay() {
                 Handler handler = new Handler();
-                handler.postDelayed(new Runnable() {
-                    @Override
-                    public void run() {
-                        ListView listView = (ListView) findViewById(R.id.mr_chooser_list);
-                        if (listView != null) {
-                            MediaRouteUmaRecorder.recordDeviceCountWithDelay(listView.getCount());
-                        }
-                    }
-                }, 3000);
+                handler.postDelayed(
+                        new Runnable() {
+                            @Override
+                            public void run() {
+                                ListView listView = (ListView) findViewById(R.id.mr_chooser_list);
+                                if (listView != null) {
+                                    MediaRouteUmaRecorder.recordDeviceCountWithDelay(
+                                            listView.getCount());
+                                }
+                            }
+                        },
+                        3000);
             }
         }
 

@@ -1,5 +1,5 @@
 <!--
-Copyright 2021 The Chromium Authors. All rights reserved.
+Copyright 2021 The Chromium Authors
 Use of this source code is governed by a BSD-style license that can be
 found in the LICENSE file.
 -->
@@ -35,7 +35,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="ChromeOS.HPS.QuickDim.Enabled" enum="BooleanEnabled"
-    expires_after="2023-05-31">
+    expires_after="2024-03-24">
   <owner>evanbenn@chromium.org</owner>
   <owner>avg@chromium.org</owner>
   <owner>chromeos-hps-swe@google.com</owner>
@@ -52,6 +52,18 @@ chromium-metrics-reviews@google.com.
   <summary>
     Records when users change the kSnoopingProtectionEnabled setting on the
     privacy page.
+  </summary>
+</histogram>
+
+<histogram name="ChromeOS.HPS.SnoopingProtection.FlakeyDetection"
+    enum="BooleanPresent" expires_after="2023-05-31">
+  <owner>charleszhao@chromium.org</owner>
+  <owner>evanbenn@chromium.org</owner>
+  <owner>martis@chromium.org</owner>
+  <owner>chromeos-hps-swe@google.com</owner>
+  <summary>
+    Records when a potentially-flakey negative signal appears for snooping
+    protection. We may also log flakey positive signals in future.
   </summary>
 </histogram>
 
@@ -83,7 +95,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="ChromeOS.HPS.TurnOn.Result" enum="HpsTurnOnResult"
-    expires_after="2023-05-31">
+    expires_after="2024-04-28">
   <owner>evanbenn@chromium.org</owner>
   <owner>avg@chromium.org</owner>
   <owner>chromeos-hps-swe@google.com</owner>

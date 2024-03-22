@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -71,7 +71,8 @@ TEST_F(MediaControlToggleClosedCaptionsButtonElementTest,
   EXPECT_EQ(String(), GetOverflowMenuSubtitleString());
 
   // After adding a text track, the subtitle string should be off.
-  MediaElement()->addTextTrack("subtitles", kEnglishLabel, "en",
+  MediaElement()->addTextTrack(AtomicString("subtitles"),
+                               AtomicString(kEnglishLabel), AtomicString("en"),
                                ASSERT_NO_EXCEPTION);
   EXPECT_EQ(kTextTracksOffString, GetOverflowMenuSubtitleString());
 

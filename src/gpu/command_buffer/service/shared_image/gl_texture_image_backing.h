@@ -1,24 +1,25 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef GPU_COMMAND_BUFFER_SERVICE_SHARED_IMAGE_GL_TEXTURE_IMAGE_BACKING_H_
 #define GPU_COMMAND_BUFFER_SERVICE_SHARED_IMAGE_GL_TEXTURE_IMAGE_BACKING_H_
 
-#include "gpu/command_buffer/service/shared_image/gl_texture_image_backing_helper.h"
+#include "gpu/command_buffer/service/shared_image/gl_common_image_backing_factory.h"
+#include "gpu/command_buffer/service/shared_image/gl_texture_holder.h"
 
-namespace gl {
-class GLImageEGL;
-}
+class GrPromiseImageTexture;
 
 namespace gpu {
 
-// Implementation of SharedImageBacking that creates a GL Texture that is not
-// backed by a GLImage.
+// Implementation of SharedImageBacking that uses GL Textures as storage.
 class GLTextureImageBacking : public ClearTrackingSharedImageBacking {
  public:
+  static bool SupportsPixelUploadWithFormat(viz::SharedImageFormat format);
+  static bool SupportsPixelReadbackWithFormat(viz::SharedImageFormat format);
+
   GLTextureImageBacking(const Mailbox& mailbox,
-                        viz::ResourceFormat format,
+                        viz::SharedImageFormat format,
                         const gfx::Size& size,
                         const gfx::ColorSpace& color_space,
                         GrSurfaceOrigin surface_origin,
@@ -30,25 +31,17 @@ class GLTextureImageBacking : public ClearTrackingSharedImageBacking {
   ~GLTextureImageBacking() override;
 
   void InitializeGLTexture(
-      GLuint service_id,
-      const GLTextureImageBackingHelper::InitializeGLTextureParams& params);
-  void SetCompatibilitySwizzle(
-      const gles2::Texture::CompatibilitySwizzle* swizzle);
-
-  GLenum GetGLTarget() const;
-  GLuint GetGLServiceId() const;
-  void CreateEGLImage();
+      const std::vector<GLCommonImageBackingFactory::FormatInfo>& format_info,
+      base::span<const uint8_t> pixel_data,
+      gl::ProgressReporter* progress_reporter,
+      bool framebuffer_attachment_angle,
+      std::string debug_label);
 
  private:
   // SharedImageBacking:
-  void OnMemoryDump(const std::string& dump_name,
-                    base::trace_event::MemoryAllocatorDump* dump,
-                    base::trace_event::ProcessMemoryDump* pmd,
-                    uint64_t client_tracing_id) override;
   SharedImageBackingType GetType() const override;
   gfx::Rect ClearedRect() const final;
   void SetClearedRect(const gfx::Rect& cleared_rect) final;
-  bool ProduceLegacyMailbox(MailboxManager* mailbox_manager) final;
   std::unique_ptr<GLTextureImageRepresentation> ProduceGLTexture(
       SharedImageManager* manager,
       MemoryTypeTracker* tracker) final;
@@ -58,22 +51,23 @@ class GLTextureImageBacking : public ClearTrackingSharedImageBacking {
   std::unique_ptr<DawnImageRepresentation> ProduceDawn(
       SharedImageManager* manager,
       MemoryTypeTracker* tracker,
-      WGPUDevice device,
-      WGPUBackendType backend_type) final;
-  std::unique_ptr<SkiaImageRepresentation> ProduceSkia(
+      const wgpu::Device& device,
+      wgpu::BackendType backend_type,
+      std::vector<wgpu::TextureFormat> view_formats) final;
+  std::unique_ptr<SkiaGaneshImageRepresentation> ProduceSkiaGanesh(
       SharedImageManager* manager,
       MemoryTypeTracker* tracker,
       scoped_refptr<SharedContextState> context_state) override;
   void Update(std::unique_ptr<gfx::GpuFence> in_fence) override;
+  bool UploadFromMemory(const std::vector<SkPixmap>& pixmaps) override;
+  bool ReadbackToMemory(const std::vector<SkPixmap>& pixmaps) override;
 
   bool IsPassthrough() const { return is_passthrough_; }
 
   const bool is_passthrough_;
-  gles2::Texture* texture_ = nullptr;
-  scoped_refptr<gles2::TexturePassthrough> passthrough_texture_;
 
-  sk_sp<SkPromiseImageTexture> cached_promise_texture_;
-  scoped_refptr<gl::GLImageEGL> image_egl_;
+  std::vector<GLTextureHolder> textures_;
+  std::vector<sk_sp<GrPromiseImageTexture>> cached_promise_textures_;
 };
 
 }  // namespace gpu

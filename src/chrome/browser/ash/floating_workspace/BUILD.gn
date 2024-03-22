@@ -1,4 +1,4 @@
-# Copyright 2022 The Chromium Authors. All rights reserved.
+# Copyright 2022 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -12,6 +12,8 @@ source_set("floating_workspace_service") {
     "//components/sync_sessions",
   ]
   sources = [
+    "floating_workspace_metrics_util.cc",
+    "floating_workspace_metrics_util.h",
     "floating_workspace_service.cc",
     "floating_workspace_service.h",
     "floating_workspace_service_factory.cc",

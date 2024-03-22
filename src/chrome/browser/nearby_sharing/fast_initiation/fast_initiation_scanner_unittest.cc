@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,6 +7,7 @@
 #include <memory>
 
 #include "base/memory/ptr_util.h"
+#include "base/memory/raw_ptr.h"
 #include "base/unguessable_token.h"
 #include "device/bluetooth/bluetooth_adapter.h"
 #include "device/bluetooth/bluetooth_adapter_factory.h"
@@ -102,7 +103,8 @@ class NearbySharingFastInitiationScannerTest : public testing::Test {
 
   scoped_refptr<NiceMock<device::MockBluetoothAdapter>> mock_bluetooth_adapter_;
   std::unique_ptr<FastInitiationScanner> scanner_;
-  device::MockBluetoothLowEnergyScanSession* mock_scan_session_ = nullptr;
+  raw_ptr<device::MockBluetoothLowEnergyScanSession, ExperimentalAsh>
+      mock_scan_session_ = nullptr;
   std::unique_ptr<device::BluetoothLowEnergyScanFilter> scan_session_filter_;
   base::WeakPtr<device::BluetoothLowEnergyScanSession::Delegate>
       scan_session_delegate_;

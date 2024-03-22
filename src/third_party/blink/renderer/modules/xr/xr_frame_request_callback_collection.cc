@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -57,8 +57,8 @@ void XRFrameRequestCallbackCollection::ExecuteCallbacks(XRSession* session,
   // of ids for iteration purposes.  current_callback_ids is the set of ids for
   // callbacks we will call, and is kept in sync with current_callbacks_ but
   // safe to iterate over.
-  DCHECK(current_callback_frame_requests_.IsEmpty());
-  DCHECK(current_callback_async_tasks_.IsEmpty());
+  DCHECK(current_callback_frame_requests_.empty());
+  DCHECK(current_callback_async_tasks_.empty());
   current_callback_frame_requests_.swap(callback_frame_requests_);
   current_callback_async_tasks_.swap(callback_async_tasks_);
 
@@ -75,7 +75,6 @@ void XRFrameRequestCallbackCollection::ExecuteCallbacks(XRSession* session,
     DCHECK_NE(current_callback_async_tasks_.end(), it_async_task);
 
     probe::AsyncTask async_task(context_, it_async_task->value.get());
-    probe::UserCallback probe(context_, "XRRequestFrame", AtomicString(), true);
     it_frame_request->value->InvokeAndReportException(session, timestamp,
                                                       frame);
   }

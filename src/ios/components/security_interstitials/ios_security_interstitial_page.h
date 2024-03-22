@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,7 +12,6 @@
 #include "url/gurl.h"
 
 namespace web {
-class WebFrame;
 class WebState;
 }  // namespace web
 
@@ -39,10 +38,12 @@ class IOSSecurityInterstitialPage {
 
   // Handles `command` from the interstitial page. Overridden in subclasses
   // to handle actions specific to the type of interstitial.
-  virtual void HandleCommand(SecurityInterstitialCommand command,
-                             const GURL& origin_url,
-                             bool user_is_interacting,
-                             web::WebFrame* sender_frame) = 0;
+  virtual void HandleCommand(SecurityInterstitialCommand command) = 0;
+
+  // Returns the type relating to the sub-class of the interstitial instance.
+  // It allows checking the type of the interstitial at runtime before a
+  // cast to a sub-class.
+  virtual std::string_view GetInterstitialType() const;
 
  protected:
   // Returns true if the interstitial should create a new navigation item.
@@ -65,7 +66,7 @@ class IOSSecurityInterstitialPage {
   web::WebState* web_state_;
   const GURL request_url_;
 
-  // Used to interact with the embedder. Unowned pointer; must outlive |this|
+  // Used to interact with the embedder. Unowned pointer; must outlive `this`
   // instance.
   IOSBlockingPageControllerClient* const client_ = nullptr;
 };

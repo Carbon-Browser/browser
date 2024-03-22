@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -54,7 +54,7 @@ PasswordAutoSignInView::PasswordAutoSignInView(
   credential->SetEnabled(false);
 
   // Setup the observer and maybe start the timer.
-  Browser* browser = chrome::FindBrowserWithWebContents(GetWebContents());
+  Browser* browser = chrome::FindBrowserWithTab(GetWebContents());
   DCHECK(browser);
 
   // Sign-in dialogs opened for inactive browser windows do not auto-close on

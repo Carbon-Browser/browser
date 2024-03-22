@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -90,6 +90,21 @@ bool ReadEntireStream(ReadStream* stream, std::vector<uint8_t>* data) {
     data->insert(data->end(), buffer, &buffer[bytes_read]);
   } while (bytes_read != 0);
 
+  return true;
+}
+
+bool CopyStreamToFile(ReadStream* source, base::File& dest) {
+  dest.Seek(base::File::Whence::FROM_BEGIN, 0);
+  uint8_t buffer[1024];
+  size_t bytes_read = 0;
+  do {
+    if (!source->Read(buffer, sizeof(buffer), &bytes_read)) {
+      return false;
+    }
+    if (!dest.WriteAtCurrentPosAndCheck(base::make_span(buffer, bytes_read))) {
+      return false;
+    }
+  } while (bytes_read > 0);
   return true;
 }
 

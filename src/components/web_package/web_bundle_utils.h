@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,6 +13,14 @@
 class GURL;
 
 namespace web_package {
+
+// These values are persisted to logs. Entries should not be renumbered and
+// numeric values should never be reused.
+enum class ScriptWebBundleOriginType {
+  kSameOrigin = 0,
+  kCrossOrigin = 1,
+  kMaxValue = kCrossOrigin,
+};
 
 // The max memory limit per process of subrsource web bundles.
 //

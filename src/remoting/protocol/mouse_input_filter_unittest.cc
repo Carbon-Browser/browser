@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,8 +14,7 @@
 using ::testing::_;
 using ::testing::InSequence;
 
-namespace remoting {
-namespace protocol {
+namespace remoting::protocol {
 
 using test::EqualsMouseMoveEvent;
 
@@ -54,8 +53,9 @@ class MouseInputFilterTest : public testing::Test {
 
   void InjectMouse(const Point& point, bool swap = false) {
     mouse_filter_.InjectMouseEvent(MouseMoveEvent(point.x, point.y));
-    if (swap)
+    if (swap) {
       mouse_filter_.InjectMouseEvent(MouseMoveEvent(point.y, point.x));
+    }
   }
 
   void ExpectNoMouse() {
@@ -79,12 +79,14 @@ class MouseInputFilterTest : public testing::Test {
                      bool swap = false) {
     {
       InSequence s;
-      for (unsigned int i = 0; i < len; ++i)
+      for (unsigned int i = 0; i < len; ++i) {
         ExpectMouse(expected[i], swap);
+      }
     }
 
-    for (unsigned int i = 0; i < len; ++i)
+    for (unsigned int i = 0; i < len; ++i) {
       InjectMouse(injected[i], swap);
+    }
   }
 
  protected:
@@ -265,5 +267,4 @@ TEST_F(MouseInputFilterTest, MultimonRightDefault_ShowRightDisplay) {
   RunMouseTests(std::size(expected), injected, expected);
 }
 
-}  // namespace protocol
-}  // namespace remoting
+}  // namespace remoting::protocol

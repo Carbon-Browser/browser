@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -26,7 +26,8 @@ TEST_F(OmniboxPedalProviderTest, QueriesTriggerPedals) {
   MockAutocompleteProviderClient client;
   std::unordered_map<OmniboxPedalId, scoped_refptr<OmniboxPedal>> pedals;
   const auto add = [&](OmniboxPedal* pedal) {
-    pedals.insert(std::make_pair(pedal->id(), base::WrapRefCounted(pedal)));
+    pedals.insert(
+        std::make_pair(pedal->PedalId(), base::WrapRefCounted(pedal)));
   };
   add(new TestOmniboxPedalClearBrowsingData());
   client.set_pedal_provider(

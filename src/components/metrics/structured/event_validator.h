@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -38,13 +38,17 @@ class EventValidator {
       const std::string& metric_name) const = 0;
 
   uint64_t event_hash() const;
+  bool can_force_record() const;
 
  protected:
   // Should not be constructed directly.
-  explicit EventValidator(uint64_t event_hash);
+  explicit EventValidator(uint64_t event_hash, bool force_record);
 
  private:
   uint64_t event_hash_;
+  // Flag for whether an event can be recorded, not uploaded, before a user has
+  // been able to opt-in.
+  bool force_record_;
 };
 
 }  // namespace structured

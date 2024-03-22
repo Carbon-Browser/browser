@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -102,9 +102,8 @@ class AnnouncementNotificationServiceTest : public testing::Test {
             int current_version,
             bool new_profile,
             bool guest_profile = false) {
-    std::vector<base::test::ScopedFeatureList::FeatureAndParams>
-        enabled_features;
-    std::vector<base::Feature> disabled_features;
+    std::vector<base::test::FeatureRefAndParams> enabled_features;
+    std::vector<base::test::FeatureRef> disabled_features;
     if (enable_feature)
       enabled_features.emplace_back(kAnnouncementNotification, parameters);
     else
@@ -151,10 +150,8 @@ class AnnouncementNotificationServiceTest : public testing::Test {
     // Setup test target objects.
     auto delegate = std::make_unique<NiceMock<MockDelegate>>();
     delegate_ = delegate.get();
-    service_ = base::WrapUnique<AnnouncementNotificationService>(
-        AnnouncementNotificationService::Create(test_profile_.get(),
-                                                pref_service_.get(),
-                                                std::move(delegate), &clock_));
+    service_ = AnnouncementNotificationService::Create(
+        test_profile_.get(), pref_service_.get(), std::move(delegate), &clock_);
   }
 
  private:

@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -33,10 +33,9 @@ FileSystemAccessCapacityTracker::FileSystemAccessCapacityTracker(
     base::PassKey<FileSystemAccessRegularFileDelegate>)
     : capacity_allocation_host_(context),
       file_size_(file_size),
-      file_capacity_(file_size),
-      task_runner_(context->GetTaskRunner(TaskType::kMiscPlatformAPI)) {
+      file_capacity_(file_size) {
   capacity_allocation_host_.Bind(std::move(capacity_allocation_host_remote),
-                                 task_runner_);
+                                 context->GetTaskRunner(TaskType::kStorage));
   DCHECK(capacity_allocation_host_.is_bound());
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 }
@@ -65,8 +64,9 @@ void FileSystemAccessCapacityTracker::RequestFileCapacityChange(
   }
   capacity_allocation_host_->RequestCapacityChange(
       capacity_delta,
-      WTF::Bind(&FileSystemAccessCapacityTracker::DidRequestCapacityChange,
-                WrapPersistent(this), required_capacity, std::move(callback)));
+      WTF::BindOnce(&FileSystemAccessCapacityTracker::DidRequestCapacityChange,
+                    WrapPersistent(this), required_capacity,
+                    std::move(callback)));
 }
 
 bool FileSystemAccessCapacityTracker::RequestFileCapacityChangeSync(
@@ -103,7 +103,7 @@ bool FileSystemAccessCapacityTracker::RequestFileCapacityChangeSync(
   return file_capacity_ >= required_capacity;
 }
 
-void FileSystemAccessCapacityTracker::CommitFileSizeChange(int64_t new_size) {
+void FileSystemAccessCapacityTracker::OnFileContentsModified(int64_t new_size) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   DCHECK_GE(file_size_, 0) << "A file's size should never be negative.";
   DCHECK_GE(file_capacity_, file_size_)
@@ -111,6 +111,8 @@ void FileSystemAccessCapacityTracker::CommitFileSizeChange(int64_t new_size) {
   DCHECK_GE(new_size, 0) << "A file's size should never be negative.";
 
   file_size_ = new_size;
+
+  capacity_allocation_host_->OnContentsModified();
 }
 
 void FileSystemAccessCapacityTracker::DidRequestCapacityChange(

@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -34,8 +34,9 @@ class MediaControlPopupMenuElementTest : public PageTestBase {
     PageTestBase::SetUp();
     media_element_ = MakeGarbageCollected<HTMLVideoElement>(GetDocument());
     media_element_->SetBooleanAttribute(html_names::kControlsAttr, true);
-    media_element_->setAttribute(html_names::kPreloadAttr, "none");
-    media_element_->SetSrc("http://example.com/foo.mp4");
+    media_element_->setAttribute(html_names::kPreloadAttr,
+                                 AtomicString("none"));
+    media_element_->SetSrc(AtomicString("http://example.com/foo.mp4"));
     GetDocument().body()->AppendChild(media_element_);
     test::RunPendingTasks();
     UpdateAllLifecyclePhasesForTest();

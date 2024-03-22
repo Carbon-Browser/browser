@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,26 +11,33 @@
 
 namespace ash {
 
-// Controls the ChromeOS /proc/sys/vm/min_filelist_kb swap tunable, if the
-// feature is enabled it will use the value (in MB) from the feature param.
-extern const base::Feature kCrOSTuneMinFilelist;
-extern const base::FeatureParam<int> kCrOSTuneMinFilelistMb;
+// Controls the threshold at which memory pressure signals are sent for
+// arc-disabled devices.
+COMPONENT_EXPORT(ASH_MEMORY)
+BASE_DECLARE_FEATURE(kCrOSMemoryPressureSignalStudyNonArc);
 
-// Controls the ChromeOS /sys/kernel/mm/chromeos-low_mem/ram_vs_swap_weight
-// tunable. The number is a zero or positive number which represents how well
-// zram based swap is compressed in physical ram.
-extern const base::Feature kCrOSTuneRamVsSwapWeight;
-extern const base::FeatureParam<int> kCrOSRamVsSwapWeight;
+COMPONENT_EXPORT(ASH_MEMORY)
+extern const base::FeatureParam<int>
+    kCrOSMemoryPressureSignalStudyNonArcCriticalBps;
 
-// Controls the ChromeOS /proc/sys/vm/extra_free_kbytes tunable. The number is a
-// zero or positive number which represents how much additional memory the
-// kernel will keep around. Raising this number has the affect of causing
-// swapping earlier.
-extern const base::Feature kCrOSTuneExtraFree;
-extern const base::FeatureParam<int> kCrOSExtraFreeMb;
+COMPONENT_EXPORT(ASH_MEMORY)
+extern const base::FeatureParam<int>
+    kCrOSMemoryPressureSignalStudyNonArcModerateBps;
+
+// Similar to above but for arc-enabled devices.
+COMPONENT_EXPORT(ASH_MEMORY)
+BASE_DECLARE_FEATURE(kCrOSMemoryPressureSignalStudyArc);
+
+COMPONENT_EXPORT(ASH_MEMORY)
+extern const base::FeatureParam<int>
+    kCrOSMemoryPressureSignalStudyArcCriticalBps;
+
+COMPONENT_EXPORT(ASH_MEMORY)
+extern const base::FeatureParam<int>
+    kCrOSMemoryPressureSignalStudyArcModerateBps;
 
 // This feature and params control the zram writeback behavior.
-extern const base::Feature kCrOSEnableZramWriteback;
+COMPONENT_EXPORT(ASH_MEMORY) BASE_DECLARE_FEATURE(kCrOSEnableZramWriteback);
 
 // Controls the period in which the controller will check to see if we can write
 // back. It does not guarantee a writeback will actually happen.
@@ -88,8 +95,10 @@ struct ZramWritebackParams {
 };
 
 // Configure swap will configure any swap related experiments that this user may
-// be opted into.
-COMPONENT_EXPORT(ASH_MEMORY) void ConfigureSwap();
+// be opted into. This method should be called at most once. It should be called
+// after the user logs in, since that is the only time when we know if arc is
+// enabled or not.
+COMPONENT_EXPORT(ASH_MEMORY) void ConfigureSwap(bool arc_enabled);
 
 }  // namespace ash
 

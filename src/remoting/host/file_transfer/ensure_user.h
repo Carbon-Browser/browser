@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -18,6 +18,9 @@ namespace remoting {
 // returned. If something else goes wrong, the error type will be
 // UNEXPECTED_ERROR.
 protocol::FileTransferResult<absl::monostate> EnsureUserContext();
+
+// Makes `EnsureUserContext` always return success, for use during unittests.
+void DisableUserContextCheckForTesting();
 
 }  // namespace remoting
 

@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Copyright 2017 The Chromium Authors. All rights reserved.
+# Copyright 2017 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -42,7 +42,7 @@ $RUNNER
 
 adb shell am instrument -w -e mode rebaseline -e class \
     $PACKAGE_NAME.WebViewLayoutTest \
-    $PACKAGE_NAME/android.support.test.runner.AndroidJUnitRunner
+    $PACKAGE_NAME/androidx.test.runner.AndroidJUnitRunner
 adb pull $DEVICE_WEBVIEW_TEST_PATH ../test_rebaseline/
 
 exit 0

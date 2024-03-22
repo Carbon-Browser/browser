@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,6 +13,7 @@
 #include "chrome/browser/task_manager/mock_web_contents_task_manager.h"
 #include "chrome/browser/task_manager/providers/web_contents/web_contents_tags_manager.h"
 #include "chrome/browser/ui/browser.h"
+#include "chrome/browser/ui/tabs/tab_enums.h"
 #include "chrome/browser/ui/tabs/tab_strip_model.h"
 #include "chrome/common/chrome_paths.h"
 #include "chrome/grit/generated_resources.h"
@@ -151,7 +152,7 @@ class TabContentsTagTest : public InProcessBrowserTest {
 
   void CloseTabAt(int index) {
     browser()->tab_strip_model()->CloseWebContentsAt(index,
-                                                     TabStripModel::CLOSE_NONE);
+                                                     TabCloseTypes::CLOSE_NONE);
   }
 
   std::u16string GetTestPageExpectedTitle(const TestPageData& page_data) const {
@@ -329,8 +330,8 @@ IN_PROC_BROWSER_TEST_F(TabContentsTagTest, NavigateToPageNoFavicon) {
     // When ProactivelySwapBrowsingInstance or RenderDocument is enabled on
     // same-site main frame navigations, we'll get a new task because we are
     // changing RenderFrameHosts. Note that the previous page's task might still
-    // be around if the previous page is saved in the back-forward cache.
-    if (content::BackForwardCache::IsSameSiteBackForwardCacheFeatureEnabled()) {
+    // be around if the previous page is saved in the back/forward cache.
+    if (content::BackForwardCache::IsBackForwardCacheFeatureEnabled()) {
       ASSERT_EQ(2U, task_manager.tasks().size());
       ASSERT_EQ(
           l10n_util::GetStringFUTF16(IDS_TASK_MANAGER_BACK_FORWARD_CACHE_PREFIX,

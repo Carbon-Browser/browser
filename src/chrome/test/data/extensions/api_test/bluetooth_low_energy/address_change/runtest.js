@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,7 +9,7 @@ function testAddressChanged() {
     chrome.test.sendMessage('fail');
     chrome.test.fail(error);
   }
-  chrome.test.assertTrue(service != null);
+  chrome.test.assertNe(null, service);
 
   chrome.test.assertEq(serviceId, service.instanceId);
 

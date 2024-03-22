@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,6 +9,7 @@
 
 #include "base/memory/raw_ptr.h"
 #include "base/scoped_observation.h"
+#include "content/browser/renderer_host/coop_swap_result.h"
 #include "content/public/browser/render_process_host.h"
 #include "content/public/browser/render_process_host_observer.h"
 #include "services/network/public/cpp/cross_origin_opener_policy.h"
@@ -19,7 +20,7 @@
 
 namespace net {
 class IsolationInfo;
-class NetworkIsolationKey;
+class NetworkAnonymizationKey;
 }  // namespace net
 
 namespace content {
@@ -28,6 +29,18 @@ class FrameTreeNode;
 class NavigationRequest;
 class StoragePartition;
 struct ChildProcessTerminationInfo;
+
+// Helper function that returns whether the BrowsingInstance should change
+// following COOP rules defined in:
+//
+// https://gist.github.com/annevk/6f2dd8c79c77123f39797f6bdac43f3e#changes-to-navigation
+CONTENT_EXPORT CoopSwapResult
+ShouldSwapBrowsingInstanceForCrossOriginOpenerPolicy(
+    network::mojom::CrossOriginOpenerPolicyValue initiator_coop,
+    const url::Origin& initiator_origin,
+    bool is_navigation_from_initial_empty_document,
+    network::mojom::CrossOriginOpenerPolicyValue destination_coop,
+    const url::Origin& destination_origin);
 
 // Groups information used to apply COOP during navigations. This class will be
 // used to trigger a number of mechanisms such as BrowsingInstance switch or
@@ -44,20 +57,21 @@ class CrossOriginOpenerPolicyStatus : public RenderProcessHostObserver {
       network::mojom::URLResponseHead* response);
 
   // Called when receiving a redirect or the final response.
-  void EnforceCOOP(const network::CrossOriginOpenerPolicy& response_coop,
-                   const url::Origin& response_origin,
-                   const net::NetworkIsolationKey& network_isolation_key);
+  void EnforceCOOP(
+      const network::CrossOriginOpenerPolicy& response_coop,
+      const url::Origin& response_origin,
+      const net::NetworkAnonymizationKey& network_anonymization_key);
 
-  // Set to true whenever the Cross-Origin-Opener-Policy spec requires a
-  // "BrowsingContext group" swap:
-  // https://gist.github.com/annevk/6f2dd8c79c77123f39797f6bdac43f3e
-  // This forces the new RenderFrameHost to use a different BrowsingInstance
-  // than the current one. If other pages had JavaScript references to the
-  // Window object for the frame (via window.opener, window.open(), et cetera),
-  // those references will be broken; window.name will also be reset to an empty
-  // string.
-  bool require_browsing_instance_swap() const {
-    return require_browsing_instance_swap_;
+  // Force a browsing instance swap, even if the COOP rules do not require it.
+  // Calling this function is safe because it can only tighten security.
+  // This is used by _unfencedTop in fenced frames to ensure that navigations
+  // leaving the fenced context create a new browsing instance.
+  void ForceBrowsingInstanceSwap() {
+    browsing_instance_swap_result_ = CoopSwapResult::kSwap;
+  }
+
+  CoopSwapResult browsing_instance_swap_result() const {
+    return browsing_instance_swap_result_;
   }
 
   // The virtual browsing context group of the document to commit. Initially,
@@ -127,7 +141,10 @@ class CrossOriginOpenerPolicyStatus : public RenderProcessHostObserver {
   base::ScopedObservation<RenderProcessHost, RenderProcessHostObserver>
       previous_document_rph_observation_{this};
 
-  bool require_browsing_instance_swap_ = false;
+  // Tracks whether the new document created by the navigation needs to be
+  // created in a different BrowsingContext group. This is updated after every
+  // redirect, and after receiving the final response.
+  CoopSwapResult browsing_instance_swap_result_ = CoopSwapResult::kNoSwap;
 
   int virtual_browsing_context_group_;
 

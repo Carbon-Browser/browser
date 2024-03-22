@@ -1,10 +1,11 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef SERVICES_DEVICE_COMPUTE_PRESSURE_PRESSURE_MANAGER_IMPL_H_
 #define SERVICES_DEVICE_COMPUTE_PRESSURE_PRESSURE_MANAGER_IMPL_H_
 
+#include <map>
 #include <memory>
 
 #include "base/sequence_checker.h"
@@ -14,20 +15,19 @@
 #include "mojo/public/cpp/bindings/pending_remote.h"
 #include "mojo/public/cpp/bindings/receiver_set.h"
 #include "mojo/public/cpp/bindings/remote_set.h"
-#include "services/device/compute_pressure/pressure_sample.h"
-#include "services/device/compute_pressure/pressure_sampler.h"
 #include "services/device/public/mojom/pressure_manager.mojom.h"
+#include "services/device/public/mojom/pressure_update.mojom.h"
 
 namespace device {
 
 class CpuProbe;
 
-// Handles the communication between the browser process and services.
+// Handles the communication between the renderer process and services.
 //
-// This class owns one instance of PressureSampler. The PressureSampler
+// This class owns one instance of probe for each PressureSource. The probe
 // instance keeps collecting compute pressure information from the
-// underlying operating system when `clients_` is not empty and stops
-// collecting when `clients_` becomes empty.
+// underlying operating system when its `clients_` is not empty and stops
+// collecting when its `clients_` becomes empty.
 //
 // DeviceService owns one instance of this class.
 //
@@ -41,11 +41,6 @@ class PressureManagerImpl : public mojom::PressureManager {
   // Factory method for production instances.
   static std::unique_ptr<PressureManagerImpl> Create();
 
-  // Factory method with dependency injection support for testing.
-  static std::unique_ptr<PressureManagerImpl> CreateForTesting(
-      std::unique_ptr<CpuProbe> cpu_probe,
-      base::TimeDelta sampling_interval);
-
   ~PressureManagerImpl() override;
 
   PressureManagerImpl(const PressureManagerImpl&) = delete;
@@ -55,26 +50,32 @@ class PressureManagerImpl : public mojom::PressureManager {
 
   // device::mojom::PressureManager implementation.
   void AddClient(mojo::PendingRemote<mojom::PressureClient> client,
+                 mojom::PressureSource source,
                  AddClientCallback callback) override;
 
+  void SetCpuProbeForTesting(std::unique_ptr<CpuProbe>);
+
  private:
-  PressureManagerImpl(std::unique_ptr<CpuProbe> cpu_probe,
-                      base::TimeDelta sampling_interval);
+  friend class PressureManagerImplTest;
 
-  // Called periodically by PressureSampler.
-  void UpdateClients(PressureSample sample);
+  explicit PressureManagerImpl(base::TimeDelta sampling_interval);
 
-  // Stop `sampler_` once there is no client.
-  void OnClientRemoteDisconnected(mojo::RemoteSetElementId /*id*/);
+  // Called periodically by probe for each PressureSource.
+  void UpdateClients(mojom::PressureSource source, mojom::PressureState state);
+
+  // Stop corresponding probe once there is no client.
+  void OnClientRemoteDisconnected(mojom::PressureSource source,
+                                  mojo::RemoteSetElementId /*id*/);
 
   SEQUENCE_CHECKER(sequence_checker_);
 
-  PressureSampler sampler_ GUARDED_BY_CONTEXT(sequence_checker_);
+  // Probe for retrieving the compute pressure state for CPU.
+  std::unique_ptr<CpuProbe> cpu_probe_ GUARDED_BY_CONTEXT(sequence_checker_);
 
   mojo::ReceiverSet<mojom::PressureManager> receivers_
       GUARDED_BY_CONTEXT(sequence_checker_);
-  mojo::RemoteSet<mojom::PressureClient> clients_
-      GUARDED_BY_CONTEXT(sequence_checker_);
+  std::map<mojom::PressureSource, mojo::RemoteSet<mojom::PressureClient>>
+      clients_ GUARDED_BY_CONTEXT(sequence_checker_);
 };
 
 }  // namespace device

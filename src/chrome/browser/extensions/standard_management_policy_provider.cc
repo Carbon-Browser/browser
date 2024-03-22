@@ -1,4 +1,4 @@
-// Copyright 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -31,11 +31,21 @@ bool AdminPolicyIsModifiable(const Extension* source_extension,
       (Manifest::IsComponentLocation(source_extension->location()) ||
        Manifest::IsPolicyLocation(source_extension->location()));
 
+  // We also specifically disallow the Webstore to modify force installed
+  // extensions even though it is a component extension, because it doesn't
+  // need this capability and it can open up interesting attacks if it's
+  // leveraged via bookmarklets or devtools.
+  // TODO(crbug.com/1365660): This protection should be expanded by also
+  // blocking bookmarklets on the Webstore Origin through checks on the Blink
+  // side.
+  const bool is_webstore_hosted_app =
+      source_extension && source_extension->id() == extensions::kWebStoreAppId;
+
   bool is_modifiable = true;
 
   if (Manifest::IsComponentLocation(extension->location()))
     is_modifiable = false;
-  if (!component_or_force_installed &&
+  if ((!component_or_force_installed || is_webstore_hosted_app) &&
       Manifest::IsPolicyLocation(extension->location())) {
     is_modifiable = false;
   }
@@ -66,7 +76,7 @@ std::string
 #if DCHECK_IS_ON()
   return "extension management policy controlled settings";
 #else
-  IMMEDIATE_CRASH();
+  base::ImmediateCrash();
 #endif
 }
 
@@ -116,6 +126,15 @@ bool StandardManagementPolicyProvider::UserMayLoad(
   if (installation_mode == ExtensionManagement::INSTALLATION_BLOCKED ||
       installation_mode == ExtensionManagement::INSTALLATION_REMOVED) {
     return ReturnLoadError(extension, error);
+  }
+
+  if (!settings_->IsAllowedManifestVersion(extension)) {
+    if (error) {
+      *error = l10n_util::GetStringFUTF16(
+          IDS_EXTENSION_MANIFEST_VERSION_NOT_SUPPORTED,
+          base::UTF8ToUTF16(extension->name()));
+    }
+    return false;
   }
 
   return true;
@@ -171,6 +190,19 @@ bool StandardManagementPolicyProvider::MustRemainDisabled(
     }
     return true;
   }
+
+  if (!settings_->IsAllowedByUnpublishedAvailabilityPolicy(extension)) {
+    if (reason) {
+      *reason = disable_reason::DISABLE_PUBLISHED_IN_STORE_REQUIRED_BY_POLICY;
+    }
+    if (error) {
+      *error = l10n_util::GetStringFUTF16(
+          IDS_EXTENSION_DISABLED_PUBLISHED_IN_STORE_REQUIRED_BY_POLICY,
+          base::UTF8ToUTF16(extension->name()));
+    }
+    return true;
+  }
+
   return false;
 }
 

@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,9 +8,9 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/containers/circular_deque.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/location.h"
 #include "base/memory/raw_ptr.h"
 #include "base/strings/string_util.h"
@@ -19,9 +19,8 @@
 #include "base/threading/thread.h"
 #include "base/threading/thread_checker.h"
 #include "base/threading/thread_restrictions.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "net/base/net_errors.h"
-#include "net/base/network_isolation_key.h"
+#include "net/base/network_anonymization_key.h"
 #include "net/log/net_log.h"
 #include "net/log/net_log_event_type.h"
 #include "net/log/net_log_with_source.h"
@@ -30,7 +29,7 @@
 
 namespace net {
 
-class NetworkIsolationKey;
+class NetworkAnonymizationKey;
 
 // http://crbug.com/69710
 class MultiThreadedProxyResolverScopedAllowJoinOnIO
@@ -125,7 +124,7 @@ class MultiThreadedProxyResolver : public ProxyResolver,
 
   // ProxyResolver implementation:
   int GetProxyForURL(const GURL& url,
-                     const NetworkIsolationKey& network_isolation_key,
+                     const NetworkAnonymizationKey& network_anonymization_key,
                      ProxyInfo* results,
                      CompletionOnceCallback callback,
                      std::unique_ptr<Request>* request,
@@ -208,7 +207,7 @@ class Job : public base::RefCountedThreadSafe<Job> {
   virtual ~Job() = default;
 
  private:
-  raw_ptr<Executor> executor_ = nullptr;
+  raw_ptr<Executor, DanglingUntriaged> executor_ = nullptr;
   bool was_cancelled_ = false;
 };
 
@@ -262,7 +261,7 @@ class CreateResolverJob : public Job {
   }
 
   const scoped_refptr<PacFileData> script_data_;
-  raw_ptr<ProxyResolverFactory> factory_;
+  raw_ptr<ProxyResolverFactory, AcrossTasksDanglingUntriaged> factory_;
   std::unique_ptr<ProxyResolver> resolver_;
 };
 
@@ -273,7 +272,7 @@ class MultiThreadedProxyResolver::GetProxyForURLJob : public Job {
   // |url|         -- the URL of the query.
   // |results|     -- the structure to fill with proxy resolve results.
   GetProxyForURLJob(const GURL& url,
-                    const NetworkIsolationKey& network_isolation_key,
+                    const NetworkAnonymizationKey& network_anonymization_key,
                     ProxyInfo* results,
                     CompletionOnceCallback callback,
                     const NetLogWithSource& net_log)
@@ -281,7 +280,7 @@ class MultiThreadedProxyResolver::GetProxyForURLJob : public Job {
         results_(results),
         net_log_(net_log),
         url_(url),
-        network_isolation_key_(network_isolation_key) {
+        network_anonymization_key_(network_anonymization_key) {
     DCHECK(callback_);
   }
 
@@ -308,9 +307,9 @@ class MultiThreadedProxyResolver::GetProxyForURLJob : public Job {
   void Run(scoped_refptr<base::SingleThreadTaskRunner> origin_runner) override {
     ProxyResolver* resolver = executor()->resolver();
     DCHECK(resolver);
-    int rv =
-        resolver->GetProxyForURL(url_, network_isolation_key_, &results_buf_,
-                                 CompletionOnceCallback(), nullptr, net_log_);
+    int rv = resolver->GetProxyForURL(url_, network_anonymization_key_,
+                                      &results_buf_, CompletionOnceCallback(),
+                                      nullptr, net_log_);
     DCHECK_NE(rv, ERR_IO_PENDING);
 
     origin_runner->PostTask(
@@ -336,13 +335,13 @@ class MultiThreadedProxyResolver::GetProxyForURLJob : public Job {
   CompletionOnceCallback callback_;
 
   // Must only be used on the "origin" thread.
-  raw_ptr<ProxyInfo> results_;
+  raw_ptr<ProxyInfo, DanglingUntriaged> results_;
 
   // Can be used on either "origin" or worker thread.
   NetLogWithSource net_log_;
 
   const GURL url_;
-  const NetworkIsolationKey network_isolation_key_;
+  const NetworkAnonymizationKey network_anonymization_key_;
 
   // Usable from within DoQuery on the worker thread.
   ProxyInfo results_buf_;
@@ -371,7 +370,8 @@ void Executor::StartJob(scoped_refptr<Job> job) {
   job->FinishedWaitingForThread();
   thread_->task_runner()->PostTask(
       FROM_HERE,
-      base::BindOnce(&Job::Run, job, base::ThreadTaskRunnerHandle::Get()));
+      base::BindOnce(&Job::Run, job,
+                     base::SingleThreadTaskRunner::GetCurrentDefault()));
 }
 
 void Executor::OnJobCompleted(Job* job) {
@@ -444,7 +444,7 @@ MultiThreadedProxyResolver::~MultiThreadedProxyResolver() {
 
 int MultiThreadedProxyResolver::GetProxyForURL(
     const GURL& url,
-    const NetworkIsolationKey& network_isolation_key,
+    const NetworkAnonymizationKey& network_anonymization_key,
     ProxyInfo* results,
     CompletionOnceCallback callback,
     std::unique_ptr<Request>* request,
@@ -453,7 +453,7 @@ int MultiThreadedProxyResolver::GetProxyForURL(
   DCHECK(!callback.is_null());
 
   auto job = base::MakeRefCounted<GetProxyForURLJob>(
-      url, network_isolation_key, results, std::move(callback), net_log);
+      url, network_anonymization_key, results, std::move(callback), net_log);
 
   // Completion will be notified through |callback|, unless the caller cancels
   // the request using |request|.
@@ -566,8 +566,9 @@ class MultiThreadedProxyResolverFactory::Job
     std::move(callback_).Run(error);
   }
 
-  raw_ptr<MultiThreadedProxyResolverFactory> factory_;
-  const raw_ptr<std::unique_ptr<ProxyResolver>> resolver_out_;
+  raw_ptr<MultiThreadedProxyResolverFactory, DanglingUntriaged> factory_;
+  const raw_ptr<std::unique_ptr<ProxyResolver>, DanglingUntriaged>
+      resolver_out_;
   std::unique_ptr<ProxyResolverFactory> resolver_factory_;
   const size_t max_num_threads_;
   scoped_refptr<PacFileData> script_data_;

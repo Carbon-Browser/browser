@@ -1,9 +1,11 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "third_party/blink/renderer/controller/blink_leak_detector.h"
 
+#include "base/task/single_thread_task_runner.h"
+#include "mojo/public/cpp/bindings/self_owned_receiver.h"
 #include "third_party/blink/public/platform/platform.h"
 #include "third_party/blink/renderer/bindings/core/v8/v8_binding_for_core.h"
 #include "third_party/blink/renderer/bindings/core/v8/v8_gc_controller.h"
@@ -21,16 +23,15 @@
 #include "third_party/blink/renderer/platform/instrumentation/instance_counters.h"
 #include "third_party/blink/renderer/platform/loader/fetch/memory_cache.h"
 #include "third_party/blink/renderer/platform/loader/fetch/resource_fetcher.h"
+#include "third_party/blink/renderer/platform/scheduler/public/main_thread.h"
+#include "third_party/blink/renderer/platform/scheduler/public/main_thread_scheduler.h"
 
 namespace blink {
 
-BlinkLeakDetector& GetLeakDetector() {
-  DEFINE_STATIC_LOCAL(BlinkLeakDetector, leak_detector, ());
-  return leak_detector;
-}
-
-BlinkLeakDetector::BlinkLeakDetector()
-    : delayed_gc_timer_(Thread::Current()->GetTaskRunner(),
+BlinkLeakDetector::BlinkLeakDetector(
+    base::PassKey<BlinkLeakDetector> pass_key,
+    scoped_refptr<base::SingleThreadTaskRunner> task_runner)
+    : delayed_gc_timer_(std::move(task_runner),
                         this,
                         &BlinkLeakDetector::TimerFiredGC) {}
 
@@ -38,35 +39,42 @@ BlinkLeakDetector::~BlinkLeakDetector() = default;
 
 // static
 void BlinkLeakDetector::Bind(
+    scoped_refptr<base::SingleThreadTaskRunner> task_runner,
     mojo::PendingReceiver<mojom::blink::LeakDetector> receiver) {
-  // This should be called only once per process on RenderProcessWillLaunch.
-  DCHECK(!GetLeakDetector().receiver_.is_bound());
-  GetLeakDetector().receiver_.Bind(std::move(receiver));
+  mojo::MakeSelfOwnedReceiver(
+      std::make_unique<BlinkLeakDetector>(base::PassKey<BlinkLeakDetector>(),
+                                          task_runner),
+      std::move(receiver), task_runner);
 }
 
 void BlinkLeakDetector::PerformLeakDetection(
     PerformLeakDetectionCallback callback) {
   callback_ = std::move(callback);
 
-  v8::Isolate* isolate = v8::Isolate::GetCurrent();
-  v8::HandleScope handle_scope(isolate);
+  Thread::MainThread()
+      ->Scheduler()
+      ->ToMainThreadScheduler()
+      ->ForEachMainThreadIsolate(WTF::BindRepeating([](v8::Isolate* isolate) {
+        v8::HandleScope handle_scope(isolate);
 
-  // Instruct V8 to drop its non-essential internal caches. In contrast to
-  // a memory pressure notification, this method does its work synchronously.
-  isolate->ClearCachesForTesting();
+        // Instruct V8 to drop its non-essential internal caches. In contrast to
+        // a memory pressure notification, this method does its work
+        // synchronously.
+        isolate->ClearCachesForTesting();
 
-  // For example, calling isValidEmailAddress in EmailInputType.cpp with a
-  // non-empty string creates a static ScriptRegexp value which holds a
-  // V8PerContextData indirectly. This affects the number of V8PerContextData.
-  // To ensure that context data is created, call ensureScriptRegexpContext
-  // here.
-  V8PerIsolateData::From(isolate)->EnsureScriptRegexpContext();
+        // For example, calling isValidEmailAddress in EmailInputType.cpp with a
+        // non-empty string creates a static ScriptRegexp value which holds a
+        // V8PerContextData indirectly. This affects the number of
+        // V8PerContextData. To ensure that context data is created, call
+        // ensureScriptRegexpContext here.
+        V8PerIsolateData::From(isolate)->EnsureScriptRegexpContext();
 
-  GetMemoryCache()->EvictResources();
+        MemoryCache::Get()->EvictResources();
 
-  // FIXME: HTML5 Notification should be closed because notification affects
-  // the result of number of DOM objects.
-  V8PerIsolateData::From(isolate)->ClearScriptRegexpContext();
+        // FIXME: HTML5 Notification should be closed because notification
+        // affects the result of number of DOM objects.
+        V8PerIsolateData::From(isolate)->ClearScriptRegexpContext();
+      }));
 
   // Clear lazily loaded style sheets.
   CSSDefaultStyleSheets::Instance().PrepareForLeakDetection();

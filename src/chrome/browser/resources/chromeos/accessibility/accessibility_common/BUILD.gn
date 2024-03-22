@@ -1,32 +1,29 @@
-# Copyright 2019 The Chromium Authors. All rights reserved.
+# Copyright 2019 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
 import("//build/config/chromeos/ui_mode.gni")
 import("//build/config/features.gni")
 import(
-    "//chrome/browser/resources/chromeos/accessibility/accessibility_common/dictation/buildflags.gni")
-import(
     "//chrome/browser/resources/chromeos/accessibility/tools/run_jsbundler.gni")
-import("//chrome/test/base/js2gtest.gni")
+import("//chrome/test/base/ash/js2gtest.gni")
+import("//extensions/buildflags/buildflags.gni")
 import("//testing/test.gni")
-import("//third_party/closure_compiler/compile_js.gni")
 
 assert(is_chromeos_ash)
+
+declare_args() {
+  include_mediapipe_task_vision_files_for_facegaze = false
+}
 
 accessibility_common_dir =
     "$root_out_dir/resources/chromeos/accessibility/accessibility_common"
 
 group("build") {
-  deps = [
-    ":accessibility_common_copied_files",
-    ":pumpkin_availability_files",
-  ]
+  deps = [ ":accessibility_common_copied_files" ]
 
-  # Only copy pumpkin files if Dictation will use Pumpkin. This keeps the build
-  # size from being inflated during Pumpkin development.
-  if (enable_pumpkin_for_dictation) {
-    deps += [ ":unzip_pumpkin_files" ]
+  if (include_mediapipe_task_vision_files_for_facegaze) {
+    deps += [ ":extract_mediapipe_task_vision_files" ]
   }
 }
 
@@ -38,6 +35,7 @@ run_jsbundler("accessibility_common_copied_files") {
     "accessibility_common_loader.js",
     "autoclick/autoclick.js",
     "background.html",
+    "dictation/context_checker.js",
     "dictation/dictation.js",
     "dictation/earcons/audio_end.wav",
     "dictation/earcons/audio_initiate.wav",
@@ -47,12 +45,12 @@ run_jsbundler("accessibility_common_copied_files") {
     "dictation/input_controller.js",
     "dictation/locale_info.js",
     "dictation/macros/delete_prev_sent_macro.js",
-    "dictation/macros/hidden_macro_manager.js",
     "dictation/macros/input_text_view_macro.js",
     "dictation/macros/list_commands_macro.js",
     "dictation/macros/macro.js",
     "dictation/macros/macro_names.js",
     "dictation/macros/nav_sent_macro.js",
+    "dictation/macros/repeat_macro.js",
     "dictation/macros/repeatable_key_press_macro.js",
     "dictation/macros/smart_delete_phrase_macro.js",
     "dictation/macros/smart_insert_before_macro.js",
@@ -62,10 +60,15 @@ run_jsbundler("accessibility_common_copied_files") {
     "dictation/metrics_utils.js",
     "dictation/parse/input_text_strategy.js",
     "dictation/parse/parse_strategy.js",
+    "dictation/parse/pumpkin/pumpkin_constants.js",
     "dictation/parse/pumpkin_parse_strategy.js",
+    "dictation/parse/sandboxed_pumpkin_tagger.js",
     "dictation/parse/simple_parse_strategy.js",
     "dictation/parse/speech_parser.js",
     "dictation/ui_controller.js",
+    "facegaze/camera_stream.html",
+    "facegaze/camera_stream.js",
+    "facegaze/facegaze.js",
     "magnifier/magnifier.js",
   ]
   rewrite_rules = [
@@ -74,42 +77,18 @@ run_jsbundler("accessibility_common_copied_files") {
   ]
 }
 
-if (enable_pumpkin_for_dictation) {
-  pumpkin_output_dir = "$accessibility_common_dir/dictation/parse/pumpkin"
-
-  action("unzip_pumpkin_files") {
-    script = "dictation/parse/pumpkin/unzip_pumpkin.py"
-    sources = [ "dictation/parse/pumpkin/pumpkin_files.zip" ]
-    args = [
-      "--output-dir=resources/chromeos/accessibility/accessibility_common/dictation/parse/pumpkin",
-      rebase_path("dictation/parse/pumpkin/pumpkin_files.zip", root_build_dir),
-    ]
-    outputs = [
-      "$pumpkin_output_dir/js_pumpkin_tagger_bin.js",
-      "$pumpkin_output_dir/tagger_wasm_main.js",
-      "$pumpkin_output_dir/tagger_wasm_main.wasm",
-      "$pumpkin_output_dir/en_us/action_config.binarypb",
-      "$pumpkin_output_dir/en_us/pumpkin_config.binarypb",
-    ]
-  }
-}
-
-copy("pumpkin_availability_files") {
-  if (enable_pumpkin_for_dictation) {
-    sources = [ "dictation/parse/pumpkin/include_pumpkin.js" ]
-  } else {
-    sources = [ "dictation/parse/pumpkin/exclude_pumpkin.js" ]
-  }
-  outputs = [
-    "$accessibility_common_dir/dictation/parse/pumpkin/pumpkin_availability.js",
-  ]
-}
-
 source_set("browser_tests") {
   testonly = true
   assert(enable_extensions)
 
-  deps = [ ":accessibility_common_extjs_tests" ]
+  deps = [
+    ":accessibility_common_extjs_tests",
+    ":pumpkin_test_files",
+  ]
+
+  if (include_mediapipe_task_vision_files_for_facegaze) {
+    deps += [ ":extract_mediapipe_task_vision_files" ]
+  }
 
   data = [
     "$root_out_dir/chrome_100_percent.pak",
@@ -122,7 +101,6 @@ source_set("browser_tests") {
     # The test uses data from the original location, not the copied one.
     "//chrome/browser/resources/chromeos/accessibility/accessibility_common/",
     "//chrome/browser/resources/chromeos/accessibility/common/",
-    "//ui/webui/resources/js/cr.js",
   ]
   data += js2gtest_js_libraries
 }
@@ -140,14 +118,21 @@ js2gtest("accessibility_common_extjs_tests") {
     "dictation/locale_info_test.js",
     "dictation/macros/dictation_macros_test.js",
     "dictation/parse/dictation_parse_test.js",
+    "dictation/parse/dictation_pumpkin_parse_test.js",
     "magnifier/magnifier_test.js",
   ]
+  if (include_mediapipe_task_vision_files_for_facegaze) {
+    sources += [ "facegaze/facegaze_mediapipe_test.js" ]
+  }
+
   gen_include_files = [
     "../common/rect_util.js",
     "../common/testing/accessibility_test_base.js",
     "../common/testing/callback_helper.js",
+    "../common/testing/common_e2e_test_base.js",
     "../common/testing/e2e_test_base.js",
     "../common/testing/mock_accessibility_private.js",
+    "../common/testing/mock_audio.js",
     "../common/testing/mock_input_ime.js",
     "../common/testing/mock_input_method_private.js",
     "../common/testing/mock_language_settings_private.js",
@@ -165,154 +150,57 @@ js2gtest("accessibility_common_extjs_tests") {
   defines = [ "HAS_OUT_OF_PROC_TEST_RUNNER" ]
 }
 
-js_type_check("closure_compile") {
-  deps = [ ":accessibility_common" ]
+group("closure_compile") {
 }
 
-js_library("accessibility_common") {
-  sources = [ "accessibility_common_loader.js" ]
-  deps = [
-    ":autoclick",
-    ":dictation",
-    ":magnifier",
-    "../common:automation_predicate",
-    "../common:chrome_event_handler",
-    "../common:constants",
-    "../common:event_generator",
-    "../common:event_handler",
-    "../common:instance_checker",
-    "../common:rect_util",
+action("pumpkin_test_files") {
+  testonly = true
+
+  pumpkin_output_dir = "$accessibility_common_dir/dictation/parse/pumpkin"
+  script = "dictation/parse/pumpkin/unpack_pumpkin.py"
+  sources = [ "dictation/parse/pumpkin/pumpkin-3.0.tar.xz" ]
+  files_to_extract = [
+    "$pumpkin_output_dir/js_pumpkin_tagger_bin.js",
+    "$pumpkin_output_dir/tagger_wasm_main.js",
+    "$pumpkin_output_dir/tagger_wasm_main.wasm",
+    "$pumpkin_output_dir/en_us/action_config.binarypb",
+    "$pumpkin_output_dir/en_us/pumpkin_config.binarypb",
+    "$pumpkin_output_dir/fr_fr/action_config.binarypb",
+    "$pumpkin_output_dir/fr_fr/pumpkin_config.binarypb",
+    "$pumpkin_output_dir/it_it/action_config.binarypb",
+    "$pumpkin_output_dir/it_it/pumpkin_config.binarypb",
+    "$pumpkin_output_dir/de_de/action_config.binarypb",
+    "$pumpkin_output_dir/de_de/pumpkin_config.binarypb",
+    "$pumpkin_output_dir/es_es/action_config.binarypb",
+    "$pumpkin_output_dir/es_es/pumpkin_config.binarypb",
   ]
-  externs_list = [
-    "$externs_path/chrome_extensions.js",
-    "$externs_path/accessibility_features.js",
-    "$externs_path/accessibility_private.js",
-    "$externs_path/automation.js",
-    "$externs_path/command_line_private.js",
-    "$externs_path/input_method_private.js",
-    "$externs_path/metrics_private.js",
-    "$externs_path/language_settings_private.js",
-    "$externs_path/speech_recognition_private.js",
+  args = [
+    "--dest-dir=resources/chromeos/accessibility/accessibility_common/dictation/parse/pumpkin",
+    rebase_path("dictation/parse/pumpkin/pumpkin-3.0.tar.xz", root_build_dir),
+    string_join(",", files_to_extract),
+    pumpkin_output_dir,
   ]
+  outputs = files_to_extract
 }
 
-js_library("autoclick") {
-  sources = [ "autoclick/autoclick.js" ]
-  deps = [ "../common:event_handler" ]
-  externs_list = [
-    "$externs_path/accessibility_private.js",
-    "$externs_path/automation.js",
-  ]
-}
-
-js_library("magnifier") {
-  sources = [ "magnifier/magnifier.js" ]
-  externs_list = [ "$externs_path/settings_private.js" ]
-}
-
-js_library("dictation") {
-  sources = [ "dictation/dictation.js" ]
-  deps = [
-    ":dictation_editing_util",
-    ":dictation_focus_handler",
-    ":dictation_input_controller",
-    ":dictation_locale_info",
-    ":dictation_metrics",
-    ":dictation_ui_controller",
-    ":speech_parsing",
-  ]
-  externs_list = [
-    "$externs_path/accessibility_private.js",
-    "$externs_path/speech_recognition_private.js",
-    "dictation/parse/pumpkin/pumpkin_tagger_externs.js",
-  ]
-}
-
-js_library("dictation_input_controller") {
-  sources = [ "dictation/input_controller.js" ]
-  deps = [
-    ":dictation_editing_util",
-    ":dictation_focus_handler",
-    ":dictation_locale_info",
-  ]
-  externs_list = [
-    "$externs_path/input_method_private.js",
-    "$externs_path/language_settings_private.js",
-    "$externs_path/automation.js",
-  ]
-}
-
-js_library("dictation_ui_controller") {
-  sources = [ "dictation/ui_controller.js" ]
-  deps = [ ":dictation_locale_info" ]
-  externs_list = [ "$externs_path/accessibility_private.js" ]
-}
-
-js_library("dictation_macros") {
-  sources = [
-    "dictation/macros/delete_prev_sent_macro.js",
-    "dictation/macros/hidden_macro_manager.js",
-    "dictation/macros/input_text_view_macro.js",
-    "dictation/macros/list_commands_macro.js",
-    "dictation/macros/macro.js",
-    "dictation/macros/macro_names.js",
-    "dictation/macros/nav_sent_macro.js",
-    "dictation/macros/repeatable_key_press_macro.js",
-    "dictation/macros/smart_delete_phrase_macro.js",
-    "dictation/macros/smart_insert_before_macro.js",
-    "dictation/macros/smart_replace_phrase_macro.js",
-    "dictation/macros/smart_select_between_macro.js",
-    "dictation/macros/stop_listening_macro.js",
-  ]
-  deps = [
-    ":dictation_input_controller",
-    ":dictation_locale_info",
-    "../common:event_generator",
-    "../common:key_code",
-  ]
-}
-
-js_library("speech_parsing") {
-  sources = [
-    "dictation/parse/input_text_strategy.js",
-    "dictation/parse/parse_strategy.js",
-    "dictation/parse/pumpkin_parse_strategy.js",
-    "dictation/parse/simple_parse_strategy.js",
-    "dictation/parse/speech_parser.js",
-  ]
-  if (enable_pumpkin_for_dictation) {
-    sources += [ "dictation/parse/pumpkin/include_pumpkin.js" ]
-  } else {
-    sources += [ "dictation/parse/pumpkin/exclude_pumpkin.js" ]
+if (include_mediapipe_task_vision_files_for_facegaze) {
+  action("extract_mediapipe_task_vision_files") {
+    out_dir = "$accessibility_common_dir/facegaze/mediapipe_task_vision"
+    script = "facegaze/mediapipe_task_vision/unpack.py"
+    sources = [ "facegaze/mediapipe_task_vision/mediapipe_task_vision.tar.xz" ]
+    files_to_extract = [
+      "$out_dir/face_landmarker.task",
+      "$out_dir/task_vision.js",
+      "$out_dir/vision_wasm_internal.js",
+      "$out_dir/vision_wasm_internal.wasm",
+    ]
+    args = [
+      "--dest-dir=resources/chromeos/accessibility/accessibility_common/facegaze/mediapipe_task_vision",
+      rebase_path("facegaze/mediapipe_task_vision/mediapipe_task_vision.tar.xz",
+                  root_build_dir),
+      string_join(",", files_to_extract),
+      out_dir,
+    ]
+    outputs = files_to_extract
   }
-  deps = [
-    ":dictation_input_controller",
-    ":dictation_locale_info",
-    ":dictation_macros",
-  ]
-}
-
-js_library("dictation_metrics") {
-  sources = [ "dictation/metrics_utils.js" ]
-  externs_list = [
-    "$externs_path/metrics_private.js",
-    "$externs_path/speech_recognition_private.js",
-  ]
-}
-
-js_library("dictation_focus_handler") {
-  sources = [ "dictation/focus_handler.js" ]
-  deps = [
-    "../common:automation_predicate",
-    "../common:constants",
-  ]
-  externs_list = [ "$externs_path/automation.js" ]
-}
-
-js_library("dictation_editing_util") {
-  sources = [ "dictation/editing_util.js" ]
-}
-
-js_library("dictation_locale_info") {
-  sources = [ "dictation/locale_info.js" ]
 }

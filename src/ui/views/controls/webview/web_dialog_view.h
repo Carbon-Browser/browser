@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -50,7 +50,9 @@ class ObservableWebView : public WebView {
   void ResetDelegate();
 
  private:
-  raw_ptr<ui::WebDialogDelegate> delegate_;
+  // TODO(https://crbug.com/1484794): Resolve the lifetime issues around this
+  // member, then mark this as triaged.
+  raw_ptr<ui::WebDialogDelegate, DanglingUntriaged> delegate_;
 };
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -78,7 +80,8 @@ class WEBVIEW_EXPORT WebDialogView : public ClientView,
   // client frame view.
   WebDialogView(content::BrowserContext* context,
                 ui::WebDialogDelegate* delegate,
-                std::unique_ptr<WebContentsHandler> handler);
+                std::unique_ptr<WebContentsHandler> handler,
+                content::WebContents* web_contents = nullptr);
   WebDialogView(const WebDialogView&) = delete;
   WebDialogView& operator=(const WebDialogView&) = delete;
   ~WebDialogView() override;
@@ -115,7 +118,7 @@ class WEBVIEW_EXPORT WebDialogView : public ClientView,
   std::u16string GetDialogTitle() const override;
   GURL GetDialogContentURL() const override;
   void GetWebUIMessageHandlers(
-      std::vector<content::WebUIMessageHandler*>* handlers) const override;
+      std::vector<content::WebUIMessageHandler*>* handlers) override;
   void GetDialogSize(gfx::Size* size) const override;
   void GetMinimumDialogSize(gfx::Size* size) const override;
   std::string GetDialogArgs() const override;
@@ -143,7 +146,7 @@ class WEBVIEW_EXPORT WebDialogView : public ClientView,
                       std::unique_ptr<content::WebContents> new_contents,
                       const GURL& target_url,
                       WindowOpenDisposition disposition,
-                      const gfx::Rect& initial_rect,
+                      const blink::mojom::WindowFeatures& window_features,
                       bool user_gesture,
                       bool* was_blocked) override;
   void LoadingStateChanged(content::WebContents* source,
@@ -162,7 +165,7 @@ class WEBVIEW_EXPORT WebDialogView : public ClientView,
       const content::MediaStreamRequest& request,
       content::MediaResponseCallback callback) override;
   bool CheckMediaAccessPermission(content::RenderFrameHost* render_frame_host,
-                                  const GURL& security_origin,
+                                  const url::Origin& security_origin,
                                   blink::mojom::MediaStreamType type) override;
 
  private:
@@ -186,7 +189,7 @@ class WEBVIEW_EXPORT WebDialogView : public ClientView,
   // and plumb all the calls through to |delegate_|, is a lot of code overhead
   // to support having this view know about dialog closure. There is probably a
   // lighter-weight way to achieve that.
-  raw_ptr<ui::WebDialogDelegate> delegate_;
+  raw_ptr<ui::WebDialogDelegate, DanglingUntriaged> delegate_;
 
   raw_ptr<ObservableWebView> web_view_;
 

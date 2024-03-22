@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -16,12 +16,12 @@
 #include "base/test/metrics/histogram_tester.h"
 #include "base/test/scoped_feature_list.h"
 #include "chrome/browser/sync/sync_service_factory.h"
-#include "chrome/common/chrome_constants.h"
 #include "chrome/test/base/testing_browser_process.h"
 #include "chrome/test/base/testing_profile.h"
 #include "chrome/test/base/testing_profile_manager.h"
+#include "chromeos/ash/components/browser_context_helper/browser_context_types.h"
 #include "components/sync/base/user_selectable_type.h"
-#include "components/sync/driver/test_sync_service.h"
+#include "components/sync/test/test_sync_service.h"
 #include "content/public/test/browser_task_environment.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "third_party/metrics_proto/sampled_profile.pb.h"
@@ -315,12 +315,14 @@ class MetricProviderSyncSettingsTest : public testing::Test {
     // initialized on Chrome OS. So creating the Default profile here to reflect
     // this. The Default profile is skipped when getting the sync settings from
     // user profile(s).
-    testing_profile_manager_->CreateTestingProfile(chrome::kInitialProfile);
+    testing_profile_manager_->CreateTestingProfile(
+        ash::kSigninBrowserContextBaseName);
     // Also add two non-regular profiles that might appear on ChromeOS. They
     // always disable sync and are skipped when getting sync settings.
     testing_profile_manager_->CreateTestingProfile(
-        chrome::kLockScreenAppProfile);
-    testing_profile_manager_->CreateTestingProfile(chrome::kLockScreenProfile);
+        ash::kLockScreenAppBrowserContextBaseName);
+    testing_profile_manager_->CreateTestingProfile(
+        ash::kLockScreenBrowserContextBaseName);
     metric_provider_ = std::make_unique<TestMetricProvider>(
         std::make_unique<TestMetricCollector>(test_params),
         testing_profile_manager_->profile_manager());
@@ -345,7 +347,7 @@ class MetricProviderSyncSettingsTest : public testing::Test {
     TestSyncService* sync_service = static_cast<TestSyncService*>(
         SyncServiceFactory::GetInstance()->SetTestingFactoryAndUse(
             profile, base::BindRepeating(&TestingSyncFactoryFunction)));
-    sync_service->SetFirstSetupComplete(true);
+    sync_service->SetInitialSyncFeatureSetupComplete(true);
     return sync_service;
   }
 
@@ -417,7 +419,7 @@ TEST_F(MetricProviderSyncSettingsTest, SyncFeatureDisabled) {
   TestSyncService* sync_service2 =
       GetSyncService(testing_profile_manager_->CreateTestingProfile("user2"));
   EnableOSAppSync(sync_service2);
-  sync_service2->SetFirstSetupComplete(false);
+  sync_service2->SetInitialSyncFeatureSetupComplete(false);
 
   task_environment_.FastForwardBy(kPeriodicCollectionInterval);
 

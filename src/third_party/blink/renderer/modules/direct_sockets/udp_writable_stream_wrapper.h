@@ -1,10 +1,11 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef THIRD_PARTY_BLINK_RENDERER_MODULES_DIRECT_SOCKETS_UDP_WRITABLE_STREAM_WRAPPER_H_
 #define THIRD_PARTY_BLINK_RENDERER_MODULES_DIRECT_SOCKETS_UDP_WRITABLE_STREAM_WRAPPER_H_
 
+#include "services/network/public/mojom/restricted_udp_socket.mojom-blink.h"
 #include "third_party/blink/renderer/bindings/core/v8/active_script_wrappable.h"
 #include "third_party/blink/renderer/bindings/core/v8/script_promise.h"
 #include "third_party/blink/renderer/bindings/core/v8/script_promise_resolver.h"
@@ -14,7 +15,6 @@
 #include "third_party/blink/renderer/modules/direct_sockets/udp_socket_mojo_remote.h"
 #include "third_party/blink/renderer/modules/modules_export.h"
 #include "third_party/blink/renderer/platform/bindings/exception_code.h"
-#include "third_party/blink/renderer/platform/bindings/script_state.h"
 #include "third_party/blink/renderer/platform/heap/prefinalizer.h"
 #include "third_party/blink/renderer/platform/mojo/heap_mojo_remote.h"
 
@@ -28,27 +28,27 @@ class MODULES_EXPORT UDPWritableStreamWrapper final
  public:
   UDPWritableStreamWrapper(ScriptState*,
                            CloseOnceCallback,
-                           const Member<UDPSocketMojoRemote>);
+                           const Member<UDPSocketMojoRemote>,
+                           network::mojom::blink::RestrictedUDPSocketMode);
 
   // WritableStreamWrapper:
   void CloseStream() override;
   void ErrorStream(int32_t error_code) override;
   bool HasPendingWrite() const override;
   void Trace(Visitor*) const override;
-
- protected:
-  // WritableStreamWrapper:
   void OnAbortSignal() override;
   ScriptPromise Write(ScriptValue chunk, ExceptionState&) override;
 
  private:
-  // Callback for DirectUDPSocket::Send().
+  // Callback for RestrictedUDPSocket::Send().
   void OnSend(int32_t result);
 
   CloseOnceCallback on_close_;
 
   const Member<UDPSocketMojoRemote> udp_socket_;
-  Member<ScriptPromiseResolver> send_resolver_;
+  const network::mojom::blink::RestrictedUDPSocketMode mode_;
+
+  Member<ScriptPromiseResolver> write_promise_resolver_;
 };
 
 }  // namespace blink

@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -25,7 +25,7 @@ class MockLeScanManager : public LeScanManager {
   };
 
   MockLeScanManager();
-  ~MockLeScanManager();
+  ~MockLeScanManager() override;
 
   void AddObserver(Observer* o) override {
     DCHECK(o && !observer_);
@@ -48,9 +48,9 @@ class MockLeScanManager : public LeScanManager {
 
   MOCK_METHOD(std::vector<LeScanResult>,
               GetScanResults,
-              (absl::optional<ScanFilter> scan_filter));
+              (std::optional<ScanFilter> scan_filter));
   void GetScanResults(GetScanResultsCallback cb,
-                      absl::optional<ScanFilter> scan_filter) override {
+                      std::optional<ScanFilter> scan_filter) override {
     std::move(cb).Run(GetScanResults(std::move(scan_filter)));
   }
   MOCK_METHOD(void, ClearScanResults, (), (override));

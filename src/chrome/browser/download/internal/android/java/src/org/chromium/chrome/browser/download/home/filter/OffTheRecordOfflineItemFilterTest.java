@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -31,23 +31,17 @@ import java.util.Collection;
 @RunWith(BaseRobolectricTestRunner.class)
 @Config(manifest = Config.NONE)
 public class OffTheRecordOfflineItemFilterTest {
-    @Rule
-    public JniMocker mMocker = new JniMocker();
+    @Rule public JniMocker mMocker = new JniMocker();
 
-    @Mock
-    private OTRProfileID.Natives mOTRProfileIDNatives;
+    @Mock private OTRProfileID.Natives mOTRProfileIDNatives;
 
-    @Mock
-    private OfflineItemFilterSource mSource;
+    @Mock private OfflineItemFilterSource mSource;
 
-    @Mock
-    private OfflineItemFilterObserver mObserver;
+    @Mock private OfflineItemFilterObserver mObserver;
 
-    @Mock
-    private Profile mRegularProfile;
+    @Mock private Profile mRegularProfile;
 
-    @Rule
-    public MockitoRule mMockitoRule = MockitoJUnit.rule();
+    @Rule public MockitoRule mMockitoRule = MockitoJUnit.rule();
 
     @Before
     public void setup() {

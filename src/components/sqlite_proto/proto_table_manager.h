@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -57,6 +57,8 @@ class ProtoTableManager : public TableManager {
   void InitializeOnDbSequence(sql::Database* db,
                               base::span<const std::string> table_names,
                               int schema_version);
+
+  void WillShutdown();
 
  protected:
   ~ProtoTableManager() override;

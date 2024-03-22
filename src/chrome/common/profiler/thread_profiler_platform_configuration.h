@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,8 +7,9 @@
 
 #include <memory>
 
-#include "components/metrics/call_stack_profile_params.h"
-#include "components/version_info/version_info.h"
+#include "base/functional/callback.h"
+#include "components/metrics/call_stacks/call_stack_profile_params.h"
+#include "components/version_info/channel.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 
 // Encapsulates the platform-specific configuration for the ThreadProfiler.
@@ -30,19 +31,6 @@
 // development/CQ builds.
 class ThreadProfilerPlatformConfiguration {
  public:
-  // State of the runtime module used by the profiler on the platform (if any).
-  // Android in particular requires use of a dynamic feature modules to provide
-  // the native unwinder.
-  enum class RuntimeModuleState {
-    // States that allow profiling.
-    kModuleNotRequired,  // No module is required.
-    kModulePresent,      // The module is present for use.
-
-    // States that don't allow profiling in this run of Chrome.
-    kModuleAbsentButAvailable,  // A module is not present but is installable.
-    kModuleNotAvailable,        // A module is necessary but not available.
-  };
-
   // The relative populations to use for enabling/disabling the profiler.
   // |enabled| + |experiment| is expected to equal 100. Profiling is to be
   // enabled with probability |enabled|/100. The fraction |experiment|/100 is to
@@ -57,21 +45,13 @@ class ThreadProfilerPlatformConfiguration {
 
   // Create the platform configuration.
   static std::unique_ptr<ThreadProfilerPlatformConfiguration> Create(
-      bool browser_test_mode_enabled);
+      bool browser_test_mode_enabled,
+      base::RepeatingCallback<bool(double)> is_enabled_on_dev_callback =
+          base::BindRepeating(IsEnabled));
 
   // True if the platform supports the StackSamplingProfiler and the profiler is
   // to be run for the released Chrome channel or development/CQ build.
   bool IsSupported(absl::optional<version_info::Channel> release_channel) const;
-
-  // Returns the current state of the runtime support module for the released
-  // Chrome channel or development/CQ build on the platform. Runtime module
-  // state is valid only if IsSupported().
-  virtual RuntimeModuleState GetRuntimeModuleState(
-      absl::optional<version_info::Channel> release_channel) const = 0;
-
-  // Request install of the runtime support module. May be invoked only if
-  // GetRuntimeModuleState() returns kModuleAbsentButAvailable.
-  virtual void RequestRuntimeModuleInstall() const {}
 
   // Returns the relative population disposition for the released Chrome channel
   // or development/CQ build on the platform. See the documentation on
@@ -81,13 +61,21 @@ class ThreadProfilerPlatformConfiguration {
 
   // Returns the fraction of the time that profiling should be randomly enabled
   // for the child |process|. The return value is in the range [0.0, 1.0].
-  virtual double GetChildProcessEnableFraction(
+  virtual double GetChildProcessPerExecutionEnableFraction(
       metrics::CallStackProfileParams::Process process) const = 0;
+
+  // Choose a process to run profiling when profiling is enabled. Running
+  // the sampler on a single process instead of all processes at the same time
+  // will help reduce the impact on users. If absl::nullopt is returned, the
+  // setting can be ignored. All processes will be sampled.
+  virtual absl::optional<metrics::CallStackProfileParams::Process>
+  ChooseEnabledProcess() const = 0;
 
   // Returns whether the profiler is enabled for |thread| in |process|.
   virtual bool IsEnabledForThread(
       metrics::CallStackProfileParams::Process process,
-      metrics::CallStackProfileParams::Thread thread) const = 0;
+      metrics::CallStackProfileParams::Thread thread,
+      absl::optional<version_info::Channel> release_channel) const = 0;
 
  protected:
   // True if the profiler is to be run for the released Chrome channel or
@@ -96,6 +84,11 @@ class ThreadProfilerPlatformConfiguration {
   // IsSupported().
   virtual bool IsSupportedForChannel(
       absl::optional<version_info::Channel> release_channel) const = 0;
+
+ private:
+  // Returns `true` with given `enabled_probability`, where
+  // 0 <= `enabled_probability` <= 1.
+  static bool IsEnabled(double enabled_probability);
 };
 
 #endif  // CHROME_COMMON_PROFILER_THREAD_PROFILER_PLATFORM_CONFIGURATION_H_

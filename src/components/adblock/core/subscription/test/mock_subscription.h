@@ -23,9 +23,11 @@
 
 #include "components/adblock/core/subscription/subscription.h"
 
+using testing::NiceMock;
+
 namespace adblock {
 
-class MockSubscription : public Subscription {
+class MockSubscription : public NiceMock<Subscription> {
  public:
   MockSubscription();
   MOCK_METHOD(GURL, GetSourceUrl, (), (override, const));

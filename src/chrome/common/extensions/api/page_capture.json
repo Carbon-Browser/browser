@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -22,21 +22,20 @@
                 "description": "The id of the tab to save as MHTML."
               }
             }
-          },
-          {
-            "name": "callback",
-            "type": "function",
-            "description": "Called when the MHTML has been generated.",
-            "parameters": [
-              {
-                "name": "mhtmlData",
-                "type": "binary",
-                "optional": true,
-                "description": "The MHTML data as a Blob."
-              }
-            ]
           }
-        ]
+        ],
+        "returns_async": {
+          "name": "callback",
+          "description": "Called when the MHTML has been generated.",
+          "parameters": [
+            {
+              "name": "mhtmlData",
+              "type": "binary",
+              "optional": true,
+              "description": "The MHTML data as a Blob."
+            }
+          ]
+        }
       }
     ]
   }

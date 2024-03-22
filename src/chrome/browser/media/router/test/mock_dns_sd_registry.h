@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -27,7 +27,7 @@ class MockDnsSdRegistry : public DnsSdRegistry {
                          const DnsSdServiceList& services);
 
  private:
-  raw_ptr<DnsSdObserver> observer_;
+  raw_ptr<DnsSdObserver, DanglingUntriaged> observer_;
 };
 
 }  // namespace media_router

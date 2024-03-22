@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -51,7 +51,7 @@
 
 #if BUILDFLAG(IS_APPLE)
 #include <AvailabilityMacros.h>
-#include "base/mac/foundation_util.h"
+#include "base/apple/foundation_util.h"
 #endif
 
 #if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS) || BUILDFLAG(IS_ANDROID)
@@ -340,6 +340,45 @@ FilePath MakeAbsoluteFilePath(const FilePath& input) {
   return FilePath(full_path);
 }
 
+absl::optional<FilePath> MakeAbsoluteFilePathNoResolveSymbolicLinks(
+    const FilePath& input) {
+  if (input.empty()) {
+    return absl::nullopt;
+  }
+
+  FilePath collapsed_path;
+  std::vector<FilePath::StringType> components = input.GetComponents();
+  base::span<FilePath::StringType> components_span(components);
+  // Start with root for absolute |input| and the current working directory for
+  // a relative |input|.
+  if (input.IsAbsolute()) {
+    collapsed_path = FilePath(components_span[0]);
+    components_span = components_span.subspan(1);
+  } else {
+    if (!GetCurrentDirectory(&collapsed_path)) {
+      return absl::nullopt;
+    }
+  }
+
+  for (const auto& component : components_span) {
+    if (component == FilePath::kCurrentDirectory) {
+      continue;
+    }
+
+    if (component == FilePath::kParentDirectory) {
+      // Pop the most recent component off the FilePath. Works correctly when
+      // the FilePath is root.
+      collapsed_path = collapsed_path.DirName();
+      continue;
+    }
+
+    // This is just a regular component. Append it.
+    collapsed_path = collapsed_path.Append(component);
+  }
+
+  return collapsed_path;
+}
+
 bool DeleteFile(const FilePath& path) {
   return DoDeleteFile(path, /*recursive=*/false);
 }
@@ -411,8 +450,9 @@ bool SetNonBlocking(int fd) {
     return false;
   if (flags & O_NONBLOCK)
     return true;
-  if (HANDLE_EINTR(fcntl(fd, F_SETFL, flags | O_NONBLOCK)) == -1)
+  if (fcntl(fd, F_SETFL, flags | O_NONBLOCK) == -1) {
     return false;
+  }
   return true;
 }
 
@@ -422,8 +462,23 @@ bool SetCloseOnExec(int fd) {
     return false;
   if (flags & FD_CLOEXEC)
     return true;
-  if (HANDLE_EINTR(fcntl(fd, F_SETFD, flags | FD_CLOEXEC)) == -1)
+  if (fcntl(fd, F_SETFD, flags | FD_CLOEXEC) == -1) {
     return false;
+  }
+  return true;
+}
+
+bool RemoveCloseOnExec(int fd) {
+  const int flags = fcntl(fd, F_GETFD);
+  if (flags == -1) {
+    return false;
+  }
+  if ((flags & FD_CLOEXEC) == 0) {
+    return true;
+  }
+  if (fcntl(fd, F_SETFD, flags & ~FD_CLOEXEC) == -1) {
+    return false;
+  }
   return true;
 }
 
@@ -515,6 +570,23 @@ bool ReadSymbolicLink(const FilePath& symlink_path, FilePath* target_path) {
   return true;
 }
 
+absl::optional<FilePath> ReadSymbolicLinkAbsolute(
+    const FilePath& symlink_path) {
+  FilePath target_path;
+  if (!ReadSymbolicLink(symlink_path, &target_path)) {
+    return absl::nullopt;
+  }
+
+  // Relative symbolic links are relative to the symlink's directory.
+  if (!target_path.IsAbsolute()) {
+    target_path = symlink_path.DirName().Append(target_path);
+  }
+
+  // Remove "/./" and "/../" to make this more friendly to path-allowlist-based
+  // sandboxes.
+  return MakeAbsoluteFilePathNoResolveSymbolicLinks(target_path);
+}
+
 bool GetPosixFilePermissions(const FilePath& path, int* mode) {
   ScopedBlockingCall scoped_blocking_call(FROM_HERE, BlockingType::MAY_BLOCK);
   DCHECK(mode);
@@ -574,7 +646,7 @@ bool ExecutableExistsInPath(Environment* env,
 #endif  // !BUILDFLAG(IS_FUCHSIA)
 
 #if !BUILDFLAG(IS_APPLE)
-// This is implemented in file_util_mac.mm for Mac.
+// This is implemented in file_util_apple.mm for Mac.
 bool GetTempDir(FilePath* path) {
   const char* tmp = getenv("TMPDIR");
   if (tmp) {
@@ -591,7 +663,7 @@ bool GetTempDir(FilePath* path) {
 }
 #endif  // !BUILDFLAG(IS_APPLE)
 
-#if !BUILDFLAG(IS_APPLE)  // Mac implementation is in file_util_mac.mm.
+#if !BUILDFLAG(IS_APPLE)  // Mac implementation is in file_util_apple.mm.
 FilePath GetHomeDir() {
 #if BUILDFLAG(IS_CHROMEOS)
   if (SysInfo::IsRunningOnChromeOS()) {
@@ -634,7 +706,7 @@ bool CreateTemporaryFileInDir(const FilePath& dir, FilePath* temp_file) {
 
 FilePath FormatTemporaryFileName(FilePath::StringPieceType identifier) {
 #if BUILDFLAG(IS_APPLE)
-  StringPiece prefix = base::mac::BaseBundleID();
+  StringPiece prefix = base::apple::BaseBundleID();
 #elif BUILDFLAG(GOOGLE_CHROME_BRANDING)
   StringPiece prefix = "com.google.Chrome";
 #else
@@ -725,6 +797,7 @@ bool CreateDirectoryAndGetError(const FilePath& full_path,
     if (!DirectoryExists(subpath)) {
       if (error)
         *error = File::OSErrorToFileError(saved_errno);
+      errno = saved_errno;
       return false;
     }
   }
@@ -961,7 +1034,9 @@ bool AllocateFileRegion(File* file, int64_t offset, size_t size) {
   blksize_t block_size = 512;  // Start with something safe.
   stat_wrapper_t statbuf;
   if (File::Fstat(file->GetPlatformFile(), &statbuf) == 0 &&
-      statbuf.st_blksize > 0 && base::bits::IsPowerOfTwo(statbuf.st_blksize)) {
+      statbuf.st_blksize > 0 &&
+      base::bits::IsPowerOfTwo(
+          base::checked_cast<uint64_t>(statbuf.st_blksize))) {
     block_size = static_cast<blksize_t>(statbuf.st_blksize);
   }
 
@@ -1019,7 +1094,6 @@ bool GetCurrentDirectory(FilePath* dir) {
 
   char system_buffer[PATH_MAX] = "";
   if (!getcwd(system_buffer, sizeof(system_buffer))) {
-    NOTREACHED();
     return false;
   }
   *dir = FilePath(system_buffer);

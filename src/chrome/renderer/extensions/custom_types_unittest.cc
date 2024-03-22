@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,6 +6,7 @@
 #include "base/test/values_test_util.h"
 #include "components/crx_file/id_util.h"
 #include "extensions/common/extension_builder.h"
+#include "extensions/common/extension_id.h"
 #include "extensions/common/features/simple_feature.h"
 #include "extensions/common/mojom/frame.mojom.h"
 #include "extensions/common/switches.h"
@@ -73,7 +74,7 @@ class CustomTypesTest : public NativeExtensionBindingsSystemUnittest {
   }
 
  private:
-  std::string extension_id_;
+  extensions::ExtensionId extension_id_;
   SimpleFeature::ScopedThreadUnsafeAllowlistForTest allowlisted_extension_id_;
 };
 

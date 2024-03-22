@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,20 +6,20 @@
 
 #include <utility>
 
-#include "base/bind.h"
+#include "base/containers/contains.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/task/single_thread_task_runner.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "net/base/address_list.h"
 #include "net/base/io_buffer.h"
 #include "net/base/net_errors.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
-namespace remoting {
-namespace protocol {
+namespace remoting::protocol {
 
 FakeDatagramSocket::FakeDatagramSocket()
-    : input_pos_(0), task_runner_(base::ThreadTaskRunnerHandle::Get()) {}
+    : input_pos_(0),
+      task_runner_(base::SingleThreadTaskRunner::GetCurrentDefault()) {}
 
 FakeDatagramSocket::~FakeDatagramSocket() {
   EXPECT_TRUE(task_runner_->BelongsToCurrentThread());
@@ -117,15 +117,15 @@ int FakeDatagramSocket::DoSend(const scoped_refptr<net::IOBuffer>& buf,
 
 int FakeDatagramSocket::CopyReadData(const scoped_refptr<net::IOBuffer>& buf,
                                      int buf_len) {
-  int size = std::min(
-      buf_len, static_cast<int>(input_packets_[input_pos_].size()));
+  int size =
+      std::min(buf_len, static_cast<int>(input_packets_[input_pos_].size()));
   memcpy(buf->data(), &(*input_packets_[input_pos_].begin()), size);
   ++input_pos_;
   return size;
 }
 
 FakeDatagramChannelFactory::FakeDatagramChannelFactory()
-    : task_runner_(base::ThreadTaskRunnerHandle::Get()),
+    : task_runner_(base::SingleThreadTaskRunner::GetCurrentDefault()),
       asynchronous_create_(false),
       fail_create_(false) {}
 
@@ -156,12 +156,14 @@ void FakeDatagramChannelFactory::CreateChannel(
 
   if (peer_factory_) {
     FakeDatagramSocket* peer_socket = peer_factory_->GetFakeChannel(name);
-    if (peer_socket)
+    if (peer_socket) {
       channel->PairWith(peer_socket);
+    }
   }
 
-  if (fail_create_)
+  if (fail_create_) {
     channel.reset();
+  }
 
   if (asynchronous_create_) {
     task_runner_->PostTask(
@@ -178,8 +180,9 @@ void FakeDatagramChannelFactory::NotifyChannelCreated(
     std::unique_ptr<FakeDatagramSocket> owned_socket,
     const std::string& name,
     ChannelCreatedCallback callback) {
-  if (channels_.find(name) != channels_.end())
+  if (base::Contains(channels_, name)) {
     std::move(callback).Run(std::move(owned_socket));
+  }
 }
 
 void FakeDatagramChannelFactory::CancelChannelCreation(
@@ -187,5 +190,4 @@ void FakeDatagramChannelFactory::CancelChannelCreation(
   channels_.erase(name);
 }
 
-}  // namespace protocol
-}  // namespace remoting
+}  // namespace remoting::protocol

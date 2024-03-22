@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,12 +6,11 @@
 #define CHROME_BROWSER_SYNC_SYNC_UI_UTIL_H_
 
 #include "build/build_config.h"
-#include "components/sync/driver/sync_service_utils.h"
+#include "components/sync/service/sync_service_utils.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 
 class Browser;
 class Profile;
-class PrefService;
 
 namespace signin {
 class IdentityManager;
@@ -57,10 +56,8 @@ enum AvatarSyncErrorType {
   kManagedUserUnrecoverableError,
   // Unrecoverable error for regular users.
   kUnrecoverableError,
-  // Authentication error.
-  // TODO(crbug.com/1156584): Rename to SYNC_PAUSED. That's how it's treated by
-  // the UI, and it should eventually match SyncService::TransportState::PAUSED.
-  kAuthError,
+  // Sync paused (e.g. persistent authentication error).
+  kSyncPaused,
   // Out-of-date client error.
   kUpgradeClientError,
   // Sync passphrase error.
@@ -88,9 +85,10 @@ struct SyncStatusLabels {
 
 // Returns the high-level sync status by querying |sync_service| and
 // |identity_manager|.
-SyncStatusLabels GetSyncStatusLabels(syncer::SyncService* sync_service,
-                                     signin::IdentityManager* identity_manager,
-                                     bool is_user_signout_allowed);
+SyncStatusLabels GetSyncStatusLabels(
+    syncer::SyncService* sync_service,
+    signin::IdentityManager* identity_manager,
+    bool is_user_clear_primary_account_allowed);
 
 // Returns the high-level sync status by querying |profile|. This is a
 // convenience version of GetSyncStatusLabels that use the |sync_service| and
@@ -124,17 +122,6 @@ bool ShouldRequestSyncConfirmation(const syncer::SyncService* service);
 // whether a missing passphrase is preventing Sync from fully starting up.
 bool ShouldShowSyncPassphraseError(const syncer::SyncService* service);
 
-// Returns whether missing trusted vault keys is preventing sync from starting
-// up encrypted datatypes.
-bool ShouldShowSyncKeysMissingError(const syncer::SyncService* sync_service,
-                                    const PrefService* pref_service);
-
-// Returns whether user action is required to improve the recoverability of the
-// trusted vault.
-bool ShouldShowTrustedVaultDegradedRecoverabilityError(
-    const syncer::SyncService* sync_service,
-    const PrefService* pref_service);
-
 // Opens a tab for the purpose of retrieving the trusted vault keys, which
 // usually requires a reauth.
 void OpenTabForSyncKeyRetrieval(
@@ -146,5 +133,21 @@ void OpenTabForSyncKeyRetrieval(
 void OpenTabForSyncKeyRecoverabilityDegraded(
     Browser* browser,
     syncer::TrustedVaultUserActionTriggerForUMA trigger);
+
+#if BUILDFLAG(IS_CHROMEOS)
+// On ChromeOS only, WebUI dialog can be used instead of tab (depending on the
+// feature setup and eventually always).
+// Opens a WebUI dialog for the purpose of retrieving the trusted vault keys,
+// which usually requires a reauth.
+void OpenDialogForSyncKeyRetrieval(
+    Profile* profile,
+    syncer::TrustedVaultUserActionTriggerForUMA trigger);
+
+// Opens a WebUI dialog for the purpose of improving the recoverability of the
+// trusted vault keys, which usually requires a reauth.
+void OpenDialogForSyncKeyRecoverabilityDegraded(
+    Profile* profile,
+    syncer::TrustedVaultUserActionTriggerForUMA trigger);
+#endif
 
 #endif  // CHROME_BROWSER_SYNC_SYNC_UI_UTIL_H_

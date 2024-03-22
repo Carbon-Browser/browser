@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,14 +7,16 @@
 #include <memory>
 #include <utility>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/synchronization/waitable_event.h"
 #include "base/task/bind_post_task.h"
+#include "base/task/sequenced_task_runner.h"
 #include "components/viz/service/display_embedder/in_process_gpu_memory_buffer_manager.h"
 #include "components/viz/service/gl/gpu_service_impl.h"
+#include "gpu/command_buffer/client/client_shared_image.h"
+#include "gpu/command_buffer/service/scheduler_sequence.h"
 #include "gpu/command_buffer/service/shared_context_state.h"
-#include "gpu/ipc/scheduler_sequence.h"
-#include "gpu/ipc/shared_image_interface_in_process.h"
+#include "gpu/command_buffer/service/shared_image_interface_in_process.h"
 
 namespace viz {
 
@@ -29,10 +31,10 @@ class GmbVideoFramePoolContext
       : gpu_service_(gpu_service),
         gpu_memory_buffer_manager_(gpu_memory_buffer_manager),
         on_context_lost_(
-            base::BindPostTask(base::SequencedTaskRunnerHandle::Get(),
-                               std::move(on_context_lost))) {
+            base::BindPostTaskToCurrentDefault(std::move(on_context_lost))) {
     DETACH_FROM_SEQUENCE(gpu_sequence_checker_);
 
+    // TODO(vikassoni): Verify this is the right GPU thread/sequence for DrDC.
     sequence_ = std::make_unique<gpu::SchedulerSequence>(
         gpu_service_->GetGpuScheduler(), gpu_service_->main_runner(),
         /*target_thread_is_always_available=*/true);
@@ -73,6 +75,23 @@ class GmbVideoFramePoolContext
         size, format, usage, gpu::kNullSurfaceHandle, nullptr);
   }
 
+  void CreateSharedImage(gfx::GpuMemoryBuffer* gpu_memory_buffer,
+                         const SharedImageFormat& si_format,
+                         const gfx::ColorSpace& color_space,
+                         GrSurfaceOrigin surface_origin,
+                         SkAlphaType alpha_type,
+                         uint32_t usage,
+                         gpu::Mailbox& mailbox,
+                         gpu::SyncToken& sync_token) override {
+    auto client_shared_image = sii_in_process_->CreateSharedImage(
+        si_format, gpu_memory_buffer->GetSize(), color_space, surface_origin,
+        alpha_type, usage, "VizGmbVideoFramePool",
+        gpu_memory_buffer->CloneHandle());
+    CHECK(client_shared_image);
+    mailbox = client_shared_image->mailbox();
+    sync_token = sii_in_process_->GenVerifiedSyncToken();
+  }
+
   // Create a SharedImage representation of a plane of a GpuMemoryBuffer
   // allocated by this interface. Populate `mailbox` and `sync_token`.
   void CreateSharedImage(gfx::GpuMemoryBuffer* gpu_memory_buffer,
@@ -83,10 +102,11 @@ class GmbVideoFramePoolContext
                          uint32_t usage,
                          gpu::Mailbox& mailbox,
                          gpu::SyncToken& sync_token) override {
-    mailbox = sii_in_process_->CreateSharedImage(
+    auto client_shared_image = sii_in_process_->CreateSharedImage(
         gpu_memory_buffer, gpu_memory_buffer_manager_, plane, color_space,
-        surface_origin, alpha_type, usage);
-
+        surface_origin, alpha_type, usage, "VizGmbVideoFramePool");
+    CHECK(client_shared_image);
+    mailbox = client_shared_image->mailbox();
     sync_token = sii_in_process_->GenVerifiedSyncToken();
   }
 
@@ -115,9 +135,8 @@ class GmbVideoFramePoolContext
         gpu_service_->gpu_preferences(),
         gpu_service_->gpu_driver_bug_workarounds(),
         gpu_service_->gpu_feature_info(), shared_context_state_.get(),
-        gpu_service_->mailbox_manager(), gpu_service_->shared_image_manager(),
-        gpu_service_->gpu_image_factory(),
-        shared_context_state_->memory_tracker());
+        gpu_service_->shared_image_manager(),
+        /*is_for_display_compositor=*/false);
     DCHECK(sii_in_process_);
 
     initialized_ = true;

@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -84,6 +84,9 @@ class CONTENT_EXPORT SynchronousCompositor {
 #endif
   };
 
+  virtual void OnCompositorVisible() = 0;
+  virtual void OnCompositorHidden() = 0;
+
   // "On demand" hardware draw. Parameters are used by compositor for this draw.
   // |viewport_size| is the current size to improve results during resize.
   // |viewport_rect_for_tile_priority| and |transform_for_tile_priority| are
@@ -99,7 +102,7 @@ class CONTENT_EXPORT SynchronousCompositor {
       uint32_t layer_tree_frame_sink_id,
       std::vector<viz::ReturnedResource> resources) = 0;
 
-  // Notifies the client when a directive for DocumentTransition, submitted in
+  // Notifies the client when a directive for ViewTransition, submitted in
   // a previous CompositorFrame, has finished executing.
   virtual void OnCompositorFrameTransitionDirectiveProcessed(
       uint32_t layer_tree_frame_sink_id,

@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -21,11 +21,21 @@ enum {
   // Directory that contains ash's application assets.
   ASH_RESOURCES_DIR,
 
+  // Directory that contains Lacros files that are shared across users.
+  LACROS_SHARED_DIR,
+
   // Directory that contains user data in Lacros.
   USER_DATA_DIR,
 
   PATH_END
 };
+
+// Returns true if the user data directory has been initialized,
+// false otherwise.
+bool IsInitializedUserDataDir();
+
+// Signals that the user data directory has been initialized.
+void SetInitializedUserDataDir();
 
 // Call once to register the provide for the path keys defined above.
 void RegisterPathProvider();

@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -53,7 +53,7 @@ cart_db::ChromeCartContentProto BuildCartProto(const char* domain,
   cart_db::ChromeCartContentProto proto;
   proto.set_key(domain);
   proto.set_merchant_cart_url(merchant_url);
-  proto.set_timestamp(base::Time::Now().ToDoubleT());
+  proto.set_timestamp(base::Time::Now().InSecondsFSinceUnixEpoch());
   return proto;
 }
 
@@ -178,8 +178,8 @@ class FetchDiscountWorkerBrowserTest : public InProcessBrowserTest {
   void CheckLastFetchTime(base::OnceClosure closure,
                           bool success,
                           ShoppingCarts found) {
-    EXPECT_TRUE(success);
-    EXPECT_EQ(1U, found.size());
+    ASSERT_TRUE(success);
+    ASSERT_EQ(1U, found.size());
 
     if (found[0].second.has_discount_info()) {
       if (found[0].second.discount_info().last_fetched_timestamp() != 0) {
@@ -187,11 +187,9 @@ class FetchDiscountWorkerBrowserTest : public InProcessBrowserTest {
       } else {
         VLOG(2) << "last_fetched_timestamp not set";
       }
-
     } else {
       VLOG(2) << "Not contain discount_info";
     }
-
     std::move(closure).Run();
   }
 
@@ -199,7 +197,7 @@ class FetchDiscountWorkerBrowserTest : public InProcessBrowserTest {
   std::unique_ptr<IdentityTestEnvironmentProfileAdaptor>
       identity_test_environment_adaptor_;
   base::CallbackListSubscription create_services_subscription_;
-  raw_ptr<CartService> service_;
+  raw_ptr<CartService, DanglingUntriaged> service_;
   bool satisfied_;
 };
 
@@ -215,8 +213,7 @@ class FetchFLCodelessDiscountWorkerBrowserTest
   void SetUpCommandLine(base::CommandLine* command_line) override {
     ASSERT_TRUE(embedded_test_server()->InitializeAndListen());
 
-    std::vector<base::test::ScopedFeatureList::FeatureAndParams>
-        enabled_features;
+    std::vector<base::test::FeatureRefAndParams> enabled_features;
     base::FieldTrialParams cart_params, coupon_params;
     cart_params[ntp_features::kNtpChromeCartModuleAbandonedCartDiscountParam] =
         "true";
@@ -361,6 +358,7 @@ class FetchFLCodeDiscountWorkerBrowserTest
     parter_merchant_list_.push_back("merchant0.com");
     parter_merchant_list_.push_back("merchant1.com");
     parter_merchant_list_.push_back("merchant2.com");
+    parter_merchant_list_.push_back("merchant3.com");
   }
 
   void SetUpOnMainThread() override {
@@ -373,8 +371,7 @@ class FetchFLCodeDiscountWorkerBrowserTest
   void SetUpCommandLine(base::CommandLine* command_line) override {
     ASSERT_TRUE(embedded_test_server()->InitializeAndListen());
 
-    std::vector<base::test::ScopedFeatureList::FeatureAndParams>
-        enabled_features;
+    std::vector<base::test::FeatureRefAndParams> enabled_features;
     base::FieldTrialParams cart_params, coupon_params;
     cart_params[ntp_features::kNtpChromeCartModuleAbandonedCartDiscountParam] =
         "true";
@@ -396,7 +393,7 @@ class FetchFLCodeDiscountWorkerBrowserTest
 
  protected:
   std::vector<std::string> parter_merchant_list_;
-  raw_ptr<CouponService> coupon_service_;
+  raw_ptr<CouponService, DanglingUntriaged> coupon_service_;
 };
 
 IN_PROC_BROWSER_TEST_F(FetchFLCodeDiscountWorkerBrowserTest,
@@ -429,8 +426,9 @@ IN_PROC_BROWSER_TEST_F(FetchFLCodeDiscountWorkerBrowserTest,
           testing::Property("promo_code",
                             &autofill::AutofillOfferData::GetPromoCode,
                             testing::Eq("SAVE$10")),
-          testing::Property("expiry", &autofill::AutofillOfferData::GetExpiry,
-                            testing::Eq(base::Time::FromDoubleT(1635204292))),
+          testing::Property(
+              "expiry", &autofill::AutofillOfferData::GetExpiry,
+              testing::Eq(base::Time::FromSecondsSinceUnixEpoch(1635204292))),
           testing::Property("display_strings",
                             &autofill::AutofillOfferData::GetDisplayStrings,
                             EqualsDisplayStrings(expected_display_string)))));
@@ -459,9 +457,185 @@ IN_PROC_BROWSER_TEST_F(FetchFLCodeDiscountWorkerBrowserTest,
           testing::Property("promo_code",
                             &autofill::AutofillOfferData::GetPromoCode,
                             testing::Eq("SAVE10")),
-          testing::Property("expiry", &autofill::AutofillOfferData::GetExpiry,
-                            testing::Eq(base::Time::FromDoubleT(1635204292.2))),
+          testing::Property(
+              "expiry", &autofill::AutofillOfferData::GetExpiry,
+              testing::Eq(base::Time::FromSecondsSinceUnixEpoch(1635204292.2))),
           testing::Property("display_strings",
                             &autofill::AutofillOfferData::GetDisplayStrings,
                             EqualsDisplayStrings(expected_display_string)))));
+}
+
+IN_PROC_BROWSER_TEST_F(FetchFLCodeDiscountWorkerBrowserTest,
+                       IgnoreNotSupportedType_RBD_WITH_CODE) {
+  embedded_test_server()->StartAcceptingConnections();
+
+  CreateCart("merchant3.com",
+             BuildCartProto("merchant3.com", "https://www.merchant3.com/cart"));
+
+  StartGettingDiscount();
+  waitForDiscounts("merchant3.com");
+
+  // Verify discounts.
+  EXPECT_THAT(coupon_service_->GetFreeListingCouponsForUrl(
+                  GURL("https://www.merchant3.com/cart")),
+              testing::IsEmpty());
+}
+
+class FetchCodeBasedDiscountWorkerBrowserTest
+    : public FetchDiscountWorkerBrowserTest {
+ public:
+  FetchCodeBasedDiscountWorkerBrowserTest() {
+    parter_merchant_list_.push_back("merchant0.com");
+    parter_merchant_list_.push_back("merchant1.com");
+    parter_merchant_list_.push_back("merchant2.com");
+    parter_merchant_list_.push_back("merchant3.com");
+    parter_merchant_list_.push_back("merchant4.com");
+  }
+
+  void SetUpOnMainThread() override {
+    FetchDiscountWorkerBrowserTest::SetUpOnMainThread();
+    Profile* profile = browser()->profile();
+    coupon_service_ = CouponServiceFactory::GetForProfile(profile);
+    coupon_service_->MaybeFeatureStatusChanged(true);
+  }
+
+  void SetUpCommandLine(base::CommandLine* command_line) override {
+    ASSERT_TRUE(embedded_test_server()->InitializeAndListen());
+
+    std::vector<base::test::FeatureRefAndParams> enabled_features;
+    base::FieldTrialParams cart_params, coupon_params, code_based_rbd_param;
+    cart_params[ntp_features::kNtpChromeCartModuleAbandonedCartDiscountParam] =
+        "true";
+    cart_params["CartDiscountFetcherEndpointParam"] =
+        embedded_test_server()
+            ->GetURL("/coupons/codebased_discounts.json")
+            .spec();
+    enabled_features.emplace_back(ntp_features::kNtpChromeCartModule,
+                                  cart_params);
+
+    code_based_rbd_param[commerce::kCodeBasedRuleDiscountParam] = "true";
+    enabled_features.emplace_back(commerce::kCodeBasedRBD,
+                                  code_based_rbd_param);
+
+    coupon_params["coupon-partner-merchant-pattern"] =
+        BuildPartnerMerchantPattern(parter_merchant_list_);
+    coupon_params[commerce::kRetailCouponsWithCodeParam] = "true";
+    enabled_features.emplace_back(commerce::kRetailCoupons, coupon_params);
+    scoped_feature_list_.InitWithFeaturesAndParameters(
+        enabled_features,
+        /*disabled_features*/ {
+            optimization_guide::features::kOptimizationHints});
+  }
+
+ protected:
+  std::vector<std::string> parter_merchant_list_;
+  raw_ptr<CouponService, DanglingUntriaged> coupon_service_;
+};
+
+IN_PROC_BROWSER_TEST_F(FetchCodeBasedDiscountWorkerBrowserTest,
+                       TwoCartsOneWithDiscountOneWithoutDiscount) {
+  embedded_test_server()->StartAcceptingConnections();
+
+  CreateCart("merchant0.com",
+             BuildCartProto("merchant0.com", "https://www.merchant0.com/cart"));
+  CreateCart("merchant1.com",
+             BuildCartProto("merchant1.com", "https://www.merchant1.com/cart"));
+
+  StartGettingDiscount();
+  waitForDiscounts("merchant0.com");
+  waitForDiscounts("merchant1.com");
+
+  // Verify discounts.
+  EXPECT_THAT(coupon_service_->GetFreeListingCouponsForUrl(
+                  GURL("https://www.merchant0.com/cart")),
+              testing::IsEmpty());
+
+  autofill::DisplayStrings expected_display_string;
+  expected_display_string.value_prop_text = "Save $10 on Running shoes.";
+  EXPECT_THAT(
+      coupon_service_->GetFreeListingCouponsForUrl(
+          GURL("https://www.merchant1.com/cart")),
+      ElementsAre(testing::AllOf(
+          testing::Property("offer_id",
+                            &autofill::AutofillOfferData::GetOfferId,
+                            testing::Eq(1)),
+          testing::Property("promo_code",
+                            &autofill::AutofillOfferData::GetPromoCode,
+                            testing::Eq("SAVE$10")),
+          testing::Property(
+              "expiry", &autofill::AutofillOfferData::GetExpiry,
+              testing::Eq(base::Time::FromSecondsSinceUnixEpoch(1635204292))),
+          testing::Property("display_strings",
+                            &autofill::AutofillOfferData::GetDisplayStrings,
+                            EqualsDisplayStrings(expected_display_string)))));
+}
+
+IN_PROC_BROWSER_TEST_F(FetchCodeBasedDiscountWorkerBrowserTest,
+                       SimplePercentDiscountWithCodeTest) {
+  embedded_test_server()->StartAcceptingConnections();
+
+  CreateCart("merchant2.com",
+             BuildCartProto("merchant2.com", "https://www.merchant2.com/cart"));
+
+  StartGettingDiscount();
+  waitForDiscounts("merchant2.com");
+
+  // Verify discounts.
+  autofill::DisplayStrings expected_display_string;
+  expected_display_string.value_prop_text = "Save 10% on Running shoes.";
+  EXPECT_THAT(
+      coupon_service_->GetFreeListingCouponsForUrl(
+          GURL("https://www.merchant2.com/cart")),
+      ElementsAre(testing::AllOf(
+          testing::Property("offer_id",
+                            &autofill::AutofillOfferData::GetOfferId,
+                            testing::Eq(1)),
+          testing::Property("promo_code",
+                            &autofill::AutofillOfferData::GetPromoCode,
+                            testing::Eq("SAVE10")),
+          testing::Property(
+              "expiry", &autofill::AutofillOfferData::GetExpiry,
+              testing::Eq(base::Time::FromSecondsSinceUnixEpoch(1635204292.2))),
+          testing::Property("display_strings",
+                            &autofill::AutofillOfferData::GetDisplayStrings,
+                            EqualsDisplayStrings(expected_display_string)))));
+}
+
+IN_PROC_BROWSER_TEST_F(
+    FetchCodeBasedDiscountWorkerBrowserTest,
+    SimulateServerFlagIsOffByNotReturningTheRBDWithCodeType) {
+  embedded_test_server()->StartAcceptingConnections();
+
+  CreateCart("merchant3.com",
+             BuildCartProto("merchant3.com", "https://www.merchant3.com/cart"));
+  CreateCart("merchant4.com",
+             BuildCartProto("merchant4.com", "https://www.merchant4.com/cart"));
+
+  StartGettingDiscount();
+  waitForDiscounts("merchant3.com");
+  waitForDiscounts("merchant4.com");
+
+  // Verify discounts.
+  autofill::DisplayStrings expected_display_string;
+  expected_display_string.value_prop_text = "Save 10% on Running shoes.";
+  EXPECT_THAT(
+      coupon_service_->GetFreeListingCouponsForUrl(
+          GURL("https://www.merchant3.com/cart")),
+      ElementsAre(testing::AllOf(
+          testing::Property("offer_id",
+                            &autofill::AutofillOfferData::GetOfferId,
+                            testing::Eq(1)),
+          testing::Property("promo_code",
+                            &autofill::AutofillOfferData::GetPromoCode,
+                            testing::Eq("SAVE10")),
+          testing::Property(
+              "expiry", &autofill::AutofillOfferData::GetExpiry,
+              testing::Eq(base::Time::FromSecondsSinceUnixEpoch(1635204293))),
+          testing::Property("display_strings",
+                            &autofill::AutofillOfferData::GetDisplayStrings,
+                            EqualsDisplayStrings(expected_display_string)))));
+
+  EXPECT_THAT(coupon_service_->GetFreeListingCouponsForUrl(
+                  GURL("https://www.merchant4.com/cart")),
+              testing::IsEmpty());
 }

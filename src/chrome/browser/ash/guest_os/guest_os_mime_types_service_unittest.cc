@@ -1,13 +1,13 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/ash/guest_os/guest_os_mime_types_service.h"
 
 #include <stddef.h>
+#include <vector>
 
 #include "base/files/file_path.h"
-#include "base/json/json_reader.h"
 #include "chrome/browser/ash/crostini/crostini_test_helper.h"
 #include "chrome/browser/ash/crostini/crostini_util.h"
 #include "chrome/test/base/testing_profile.h"
@@ -41,11 +41,10 @@ class GuestOsMimeTypesServiceTest : public testing::Test {
 
   Profile* profile() { return &profile_; }
 
-  MimeTypes CreateMimeTypesProto(
-      const std::vector<std::string>& file_extensions,
-      const std::vector<std::string>& mime_types,
-      const std::string& vm_name,
-      const std::string& container_name) {
+  void UpdateMimeTypes(const std::vector<std::string>& file_extensions,
+                       const std::vector<std::string>& mime_types,
+                       const std::string& vm_name,
+                       const std::string& container_name) {
     CHECK_EQ(file_extensions.size(), mime_types.size());
     MimeTypes mime_types_list;
     mime_types_list.set_vm_name(vm_name);
@@ -54,12 +53,19 @@ class GuestOsMimeTypesServiceTest : public testing::Test {
       (*mime_types_list.mutable_mime_type_mappings())[file_extensions[i]] =
           mime_types[i];
     }
-    return mime_types_list;
+    service_->UpdateMimeTypes(mime_types_list);
+    task_environment_.RunUntilIdle();
   }
 
   std::string GetMimeType(const std::string& filename) {
     return service_->GetMimeType(base::FilePath(filename), kTestVmName,
                                  kTestContainerName);
+  }
+
+  std::vector<std::string> GetExtensionTypesFromMimeTypes(
+      std::set<std::string> supported_mime_types) {
+    return service_->GetExtensionTypesFromMimeTypes(
+        supported_mime_types, kTestVmName, kTestContainerName);
   }
 
  private:
@@ -71,17 +77,17 @@ class GuestOsMimeTypesServiceTest : public testing::Test {
 };
 
 TEST_F(GuestOsMimeTypesServiceTest, SetAndGetMimeTypes) {
+  // 'text/plain' is already mapped by system, so we will not store it.
   std::vector<std::string> file_extensions = {
-      "foo", "bar", "gz", "xz", "tar.gz", "c", "C", "z", "🦈x"};
-  std::vector<std::string> mime_types = {"x/foo", "x/bar",    "x/gz",
-                                         "x/xz",  "x/tar.gz", "x/c",
-                                         "x/C",   "x/z",      "x/shark"};
+      "foo", "bar", "gz", "xz", "tar.gz", "c", "C", "z", "🦈x", "txt"};
+  std::vector<std::string> mime_types = {
+      "x/foo", "x/bar", "x/gz", "x/xz",    "x/tar.gz",
+      "x/c",   "x/C",   "x/z",  "x/shark", "text/plain"};
 
   // Mime types not registered yet.
   EXPECT_EQ("", GetMimeType("test.foo"));
 
-  service()->UpdateMimeTypes(CreateMimeTypesProto(
-      file_extensions, mime_types, kTestVmName, kTestContainerName));
+  UpdateMimeTypes(file_extensions, mime_types, kTestVmName, kTestContainerName);
 
   EXPECT_EQ("x/foo", GetMimeType("test.foo"));
   EXPECT_EQ("x/bar", GetMimeType("test.bar"));
@@ -97,17 +103,16 @@ TEST_F(GuestOsMimeTypesServiceTest, SetAndGetMimeTypes) {
   EXPECT_EQ("x/tar.gz", GetMimeType("test.tar.GZ"));
   // Support unicode.
   EXPECT_EQ("x/shark", GetMimeType("test.🦈X"));
+  // We only store items different to platform.
+  EXPECT_EQ("", GetMimeType("test.txt"));
 }
 
 // Test that UpdateMimeTypes doesn't clobber MIME types from different VMs or
 // containers.
 TEST_F(GuestOsMimeTypesServiceTest, MultipleContainers) {
-  service()->UpdateMimeTypes(
-      CreateMimeTypesProto({"foo"}, {"foo/mime"}, "vm 1", "container 1"));
-  service()->UpdateMimeTypes(
-      CreateMimeTypesProto({"bar"}, {"bar/mime"}, "vm 1", "container 2"));
-  service()->UpdateMimeTypes(
-      CreateMimeTypesProto({"foobar"}, {"foobar/mime"}, "vm 2", "container 1"));
+  UpdateMimeTypes({"foo"}, {"foo/mime"}, "vm 1", "container 1");
+  UpdateMimeTypes({"bar"}, {"bar/mime"}, "vm 1", "container 2");
+  UpdateMimeTypes({"foobar"}, {"foobar/mime"}, "vm 2", "container 1");
 
   EXPECT_EQ("foo/mime", service()->GetMimeType(base::FilePath("test.foo"),
                                                "vm 1", "container 1"));
@@ -125,8 +130,7 @@ TEST_F(GuestOsMimeTypesServiceTest, MultipleContainers) {
 
   // Clobber bar with bar2 and ensure the old association is gone and new one is
   // there.
-  service()->UpdateMimeTypes(
-      CreateMimeTypesProto({"bar2"}, {"bar2/mime"}, "vm 1", "container 2"));
+  UpdateMimeTypes({"bar2"}, {"bar2/mime"}, "vm 1", "container 2");
   EXPECT_EQ("bar2/mime", service()->GetMimeType(base::FilePath("test.bar2"),
                                                 "vm 1", "container 2"));
   EXPECT_EQ("", service()->GetMimeType(base::FilePath("test.bar"), "vm 1",
@@ -136,12 +140,9 @@ TEST_F(GuestOsMimeTypesServiceTest, MultipleContainers) {
 // Test that ClearMimeTypes works, and only removes apps from the
 // specified VM.
 TEST_F(GuestOsMimeTypesServiceTest, ClearMimeTypes) {
-  service()->UpdateMimeTypes(
-      CreateMimeTypesProto({"foo"}, {"foo/mime"}, "vm 1", "container 1"));
-  service()->UpdateMimeTypes(
-      CreateMimeTypesProto({"bar"}, {"bar/mime"}, "vm 1", "container 2"));
-  service()->UpdateMimeTypes(
-      CreateMimeTypesProto({"foobar"}, {"foobar/mime"}, "vm 2", "container 1"));
+  UpdateMimeTypes({"foo"}, {"foo/mime"}, "vm 1", "container 1");
+  UpdateMimeTypes({"bar"}, {"bar/mime"}, "vm 1", "container 2");
+  UpdateMimeTypes({"foobar"}, {"foobar/mime"}, "vm 2", "container 1");
 
   EXPECT_EQ("foo/mime", service()->GetMimeType(base::FilePath("test.foo"),
                                                "vm 1", "container 1"));
@@ -160,41 +161,29 @@ TEST_F(GuestOsMimeTypesServiceTest, ClearMimeTypes) {
                                        "container 1"));
 }
 
-TEST_F(GuestOsMimeTypesServiceTest, Migrate) {
-  base::Value old = *base::JSONReader::Read(R"({
-    "termina/penguin/txt": { "mime_type": "text/plain" },
-    "termina/penguin/jpg": { "mime_type": "image/jpg" },
-    "termina/penguin/tar.gz": { "mime_type": "application/tar+gzip" },
-    "borealis/penguin/txt": { "mime_type": "text/plain" },
-    "termina": {
-      "penguin": {
-        "already": "x/already-migrated"
-      }
-    },
-    "delete/me": { "mime_type": "text/plain" },
-    "delete/me/as/well": { "mime_type": "text/plain" }
-  })");
+TEST_F(GuestOsMimeTypesServiceTest, SetMimeTypesAndGetExtensionTypes) {
+  std::vector<std::string> mime_types = {"x/foo", "x/bar", "x/abcdef",
+                                         "x/abcdef"};
+  std::vector<std::string> file_extensions = {"foo", "bar", "abc", "def"};
 
-  base::Value expected = *base::JSONReader::Read(R"({
-    "termina": {
-      "penguin": {
-        "already": "x/already-migrated",
-        "txt": "text/plain",
-        "jpg": "image/jpg",
-        "tar.gz": "application/tar+gzip"
-      }
-    },
-    "borealis": {
-      "penguin": {
-        "txt": "text/plain"
-      }
-    }
-  })");
+  // Mime/ extension types not registered yet.
+  std::vector<std::string> result = GetExtensionTypesFromMimeTypes({"x/foo"});
+  EXPECT_EQ(0u, result.size());
 
-  PrefService* prefs = profile()->GetPrefs();
-  prefs->Set("crostini.mime_types", std::move(old));
-  GuestOsMimeTypesService::MigrateVerboseMimeTypePrefs(prefs);
-  EXPECT_EQ(expected, prefs->Get("crostini.mime_types")->Clone());
+  UpdateMimeTypes(file_extensions, mime_types, kTestVmName, kTestContainerName);
+  result = GetExtensionTypesFromMimeTypes({"x/foo"});
+  EXPECT_EQ(1u, result.size());
+  EXPECT_EQ("foo", result[0]);
+
+  result = GetExtensionTypesFromMimeTypes({"x/bar"});
+  EXPECT_EQ(1u, result.size());
+  EXPECT_EQ("bar", result[0]);
+
+  // We should have 2 possible extensions for this mime type case.
+  result = GetExtensionTypesFromMimeTypes({"x/abcdef"});
+  EXPECT_EQ(2u, result.size());
+  EXPECT_TRUE(base::Contains(result, "abc"));
+  EXPECT_TRUE(base::Contains(result, "def"));
 }
 
 }  // namespace guest_os

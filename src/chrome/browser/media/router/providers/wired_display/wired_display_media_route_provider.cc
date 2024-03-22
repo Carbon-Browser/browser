@@ -1,18 +1,18 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/media/router/providers/wired_display/wired_display_media_route_provider.h"
 
-#include <algorithm>
 #include <string>
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
 #include "base/containers/contains.h"
 #include "base/containers/cxx20_erase.h"
+#include "base/functional/bind.h"
 #include "base/i18n/number_formatting.h"
+#include "base/ranges/algorithm.h"
 #include "base/strings/utf_string_conversions.h"
 #include "chrome/browser/media/router/media_router_feature.h"
 #include "chrome/browser/media/router/providers/wired_display/wired_display_presentation_receiver_factory.h"
@@ -51,10 +51,12 @@ MediaSinkInternal CreateSinkForDisplay(const Display& display,
 bool CompareDisplays(int64_t primary_id,
                      const Display& display1,
                      const Display& display2) {
-  if (display1.id() == primary_id)
-    return true;
-  if (display2.id() == primary_id)
+  if (display2.id() == primary_id) {
     return false;
+  }
+  if (display1.id() == primary_id) {
+    return true;
+  }
   return display1.bounds().y() < display2.bounds().y() ||
          (display1.bounds().y() == display2.bounds().y() &&
           display1.bounds().x() < display2.bounds().x());
@@ -95,9 +97,8 @@ void WiredDisplayMediaRouteProvider::CreateRoute(
     const std::string& sink_id,
     const std::string& presentation_id,
     const url::Origin& origin,
-    int32_t tab_id,
+    int32_t frame_tree_node_id,
     base::TimeDelta timeout,
-    bool off_the_record,
     CreateRouteCallback callback) {
   DCHECK(!base::Contains(presentations_, presentation_id));
   absl::optional<Display> display = GetDisplayBySinkId(sink_id);
@@ -115,7 +116,6 @@ void WiredDisplayMediaRouteProvider::CreateRoute(
   MediaRoute route(presentation_id, MediaSource(media_source), sink_id,
                    GetRouteDescription(media_source), true);
   route.set_local_presentation(true);
-  route.set_off_the_record(profile_->IsOffTheRecord());
   route.set_controller_type(RouteControllerType::kGeneric);
 
   Presentation& presentation =
@@ -132,9 +132,8 @@ void WiredDisplayMediaRouteProvider::JoinRoute(
     const std::string& media_source,
     const std::string& presentation_id,
     const url::Origin& origin,
-    int32_t tab_id,
+    int32_t frame_tree_node_id,
     base::TimeDelta timeout,
-    bool off_the_record,
     JoinRouteCallback callback) {
   std::move(callback).Run(
       absl::nullopt, nullptr,
@@ -181,7 +180,7 @@ void WiredDisplayMediaRouteProvider::StartObservingMediaSinks(
   if (!display_observer_)
     display_observer_.emplace(this);
   sink_queries_.insert(media_source);
-  UpdateMediaSinks(media_source);
+  DiscoverSinksNow();
 }
 
 void WiredDisplayMediaRouteProvider::StopObservingMediaSinks(
@@ -197,16 +196,6 @@ void WiredDisplayMediaRouteProvider::StartObservingMediaRoutes() {
   media_router_->OnRoutesUpdated(kProviderId, route_list);
 }
 
-void WiredDisplayMediaRouteProvider::StartListeningForRouteMessages(
-    const std::string& route_id) {
-  // Messages should be handled by LocalPresentationManager.
-}
-
-void WiredDisplayMediaRouteProvider::StopListeningForRouteMessages(
-    const std::string& route_id) {
-  // Messages should be handled by LocalPresentationManager.
-}
-
 void WiredDisplayMediaRouteProvider::DetachRoute(const std::string& route_id) {
   // Detaching should be handled by LocalPresentationManager.
   NOTREACHED();
@@ -214,10 +203,8 @@ void WiredDisplayMediaRouteProvider::DetachRoute(const std::string& route_id) {
 
 void WiredDisplayMediaRouteProvider::EnableMdnsDiscovery() {}
 
-void WiredDisplayMediaRouteProvider::UpdateMediaSinks(
-    const std::string& media_source) {
-  if (IsValidStandardPresentationSource(media_source))
-    media_router_->OnSinksReceived(kProviderId, media_source, GetSinks(), {});
+void WiredDisplayMediaRouteProvider::DiscoverSinksNow() {
+  NotifySinkObservers();
 }
 
 void WiredDisplayMediaRouteProvider::CreateMediaRouteController(
@@ -241,10 +228,6 @@ void WiredDisplayMediaRouteProvider::GetState(GetStateCallback callback) {
   std::move(callback).Run(mojom::ProviderStatePtr());
 }
 
-void WiredDisplayMediaRouteProvider::OnDidProcessDisplayChanges() {
-  NotifySinkObservers();
-}
-
 void WiredDisplayMediaRouteProvider::OnDisplayAdded(
     const Display& new_display) {
   NotifySinkObservers();
@@ -254,12 +237,11 @@ void WiredDisplayMediaRouteProvider::OnDisplayRemoved(
     const Display& old_display) {
   const std::string sink_id =
       WiredDisplayMediaRouteProvider::GetSinkIdForDisplay(old_display);
-  auto it = std::find_if(
-      presentations_.begin(), presentations_.end(),
-      [&sink_id](
-          const std::pair<const std::string, Presentation>& presentation) {
-        return presentation.second.route().media_sink_id() == sink_id;
-      });
+  auto it =
+      base::ranges::find(presentations_, sink_id,
+                         [](const Presentations::value_type& presentation) {
+                           return presentation.second.route().media_sink_id();
+                         });
   if (it != presentations_.end())
     it->second.receiver()->ExitFullscreen();
   NotifySinkObservers();
@@ -414,10 +396,7 @@ void WiredDisplayMediaRouteProvider::TerminatePresentationsOnDisplay(
 absl::optional<Display> WiredDisplayMediaRouteProvider::GetDisplayBySinkId(
     const std::string& sink_id) const {
   std::vector<Display> displays = GetAllDisplays();
-  auto it = std::find_if(displays.begin(), displays.end(),
-                         [&sink_id](const Display& display) {
-                           return GetSinkIdForDisplay(display) == sink_id;
-                         });
+  auto it = base::ranges::find(displays, sink_id, &GetSinkIdForDisplay);
   return it == displays.end() ? absl::nullopt
                               : absl::make_optional<Display>(std::move(*it));
 }

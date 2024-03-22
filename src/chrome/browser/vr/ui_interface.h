@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,8 +11,8 @@
 #include <vector>
 
 #include "base/memory/weak_ptr.h"
+#include "base/time/time.h"
 #include "chrome/browser/vr/fov_rectangle.h"
-#include "chrome/browser/vr/gl_texture_location.h"
 
 namespace gfx {
 class Point3F;
@@ -22,18 +22,11 @@ class Transform;
 
 namespace vr {
 
-class AudioDelegate;
 class BrowserUiInterface;
 class InputEvent;
-class KeyboardDelegate;
-class PlatformInputHandler;
-class PlatformUiInputDelegate;
 class SchedulerUiInterface;
-class TextInputDelegate;
 class UiBrowserInterface;
-struct ControllerModel;
 struct RenderInfo;
-struct ReticleModel;
 struct UiInitialState;
 enum class UserFriendlyElementName;
 
@@ -49,57 +42,23 @@ class UiInterface {
   virtual base::WeakPtr<BrowserUiInterface> GetBrowserUiWeakPtr() = 0;
   virtual SchedulerUiInterface* GetSchedulerUiPtr() = 0;
 
-  // Textures from 2D UI that are positioned in the 3D scene.
-  // Content refers to the web contents, as coming from the Chrome compositor.
-  // Content Overlay refers to UI drawn in the same view hierarchy as the
-  // contents.
-  // Platform UI refers to popups, which are rendered in a different window.
-  virtual void OnGlInitialized(GlTextureLocation textures_location,
-                               unsigned int content_texture_id,
-                               unsigned int content_overlay_texture_id,
-                               unsigned int platform_ui_texture_id) = 0;
+  virtual void OnGlInitialized() = 0;
 
-  virtual void SetAlertDialogEnabled(bool enabled,
-                                     PlatformUiInputDelegate* delegate,
-                                     float width,
-                                     float height) = 0;
-  virtual void SetContentOverlayAlertDialogEnabled(
-      bool enabled,
-      PlatformUiInputDelegate* delegate,
-      float width_percentage,
-      float height_percentage) = 0;
   virtual void OnPause() = 0;
-  virtual void OnControllersUpdated(
-      const std::vector<ControllerModel>& controller_models,
-      const ReticleModel& reticle_model) = 0;
-  virtual void OnProjMatrixChanged(const gfx::Transform& proj_matrix) = 0;
-  virtual void AcceptDoffPromptForTesting() = 0;
   virtual gfx::Point3F GetTargetPointForTesting(
       UserFriendlyElementName element_name,
       const gfx::PointF& position) = 0;
   virtual bool GetElementVisibilityForTesting(
       UserFriendlyElementName element_name) = 0;
-  virtual void SetUiInputManagerForTesting(bool enabled) = 0;
-  virtual bool IsContentVisibleAndOpaque() = 0;
-  virtual void SetContentUsesQuadLayer(bool uses_quad_buffers) = 0;
-  virtual gfx::Transform GetContentWorldSpaceTransform() = 0;
   virtual bool OnBeginFrame(base::TimeTicks current_time,
                             const gfx::Transform& head_pose) = 0;
   virtual bool SceneHasDirtyTextures() const = 0;
   virtual void UpdateSceneTextures() = 0;
   virtual void Draw(const RenderInfo& render_info) = 0;
-  virtual void DrawContent(const float (&uv_transform)[16],
-                           float xborder,
-                           float yborder) = 0;
   virtual void DrawWebXr(int texture_data_handle,
                          const float (&uv_transform)[16]) = 0;
   virtual void DrawWebVrOverlayForeground(const RenderInfo&) = 0;
   virtual bool HasWebXrOverlayElementsToDraw() = 0;
-  virtual void HandleInput(base::TimeTicks current_time,
-                           const RenderInfo& render_info,
-                           const ControllerModel& controller_model,
-                           ReticleModel* reticle_model,
-                           InputEventList* input_event_list) = 0;
   virtual void HandleMenuButtonEvents(InputEventList* input_event_list) = 0;
 
   // This function calculates the minimal FOV (in degrees) which covers all
@@ -124,13 +83,8 @@ class UiInterface {
 // After obtaining a void pointer to CreateUi() via dlsym, the resulting pointer
 // should be cast to this type.  Hence, the arguments in this type must exactly
 // match the actual CreateUi method.
-typedef UiInterface* CreateUiFunction(
-    UiBrowserInterface* browser,
-    PlatformInputHandler* content_input_forwarder,
-    std::unique_ptr<KeyboardDelegate> keyboard_delegate,
-    std::unique_ptr<TextInputDelegate> text_input_delegate,
-    std::unique_ptr<AudioDelegate> audio_delegate,
-    const UiInitialState& ui_initial_state);
+typedef UiInterface* CreateUiFunction(UiBrowserInterface* browser,
+                                      const UiInitialState& ui_initial_state);
 
 }  // namespace vr
 

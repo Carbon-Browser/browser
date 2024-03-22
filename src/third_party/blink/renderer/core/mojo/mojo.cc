@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -51,8 +51,12 @@ MojoCreateDataPipeResult* Mojo::createDataPipe(
     const MojoCreateDataPipeOptions* options_dict) {
   MojoCreateDataPipeResult* result_dict = MojoCreateDataPipeResult::Create();
 
+  // NOTE: CreateDataPipe below validates options, but its inputs are unsigned.
+  // The inputs here may be negative, hence this additional validation.
   if (!options_dict->hasElementNumBytes() ||
-      !options_dict->hasCapacityNumBytes()) {
+      !options_dict->hasCapacityNumBytes() ||
+      options_dict->capacityNumBytes() < 1 ||
+      options_dict->elementNumBytes() < 1) {
     result_dict->setResult(MOJO_RESULT_INVALID_ARGUMENT);
     return result_dict;
   }

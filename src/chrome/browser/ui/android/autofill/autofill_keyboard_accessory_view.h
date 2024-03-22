@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,10 +10,10 @@
 #include <vector>
 
 #include "base/android/scoped_java_ref.h"
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
-#include "chrome/browser/autofill/autofill_keyboard_accessory_adapter.h"
+#include "chrome/browser/ui/autofill/autofill_keyboard_accessory_adapter.h"
 #include "chrome/browser/ui/autofill/autofill_popup_view.h"
 
 namespace autofill {
@@ -39,6 +39,7 @@ class AutofillKeyboardAccessoryView
   bool Initialize() override;
   void Hide() override;
   void Show() override;
+  void AxAnnounce(const std::u16string& text) override;
   void ConfirmDeletion(const std::u16string& confirmation_title,
                        const std::u16string& confirmation_body,
                        base::OnceClosure confirm_deletion) override;

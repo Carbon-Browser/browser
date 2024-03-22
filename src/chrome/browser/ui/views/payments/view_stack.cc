@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -146,10 +146,9 @@ void ViewStack::OnBoundsAnimatorDone(views::BoundsAnimator* animator) {
     RemoveChildViewT(stack_.back());
     stack_.pop_back();
     DCHECK(!stack_.empty()) << "State stack should never be empty";
-  } else if (animator == slide_in_animator_.get()) {
-    HideCoveredViews();
   } else {
-    NOTREACHED();
+    CHECK_EQ(animator, slide_in_animator_.get());
+    HideCoveredViews();
   }
   RequestFocus();
 }

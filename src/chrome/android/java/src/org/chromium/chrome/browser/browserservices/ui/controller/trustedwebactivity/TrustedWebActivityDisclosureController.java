@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -23,9 +23,12 @@ public class TrustedWebActivityDisclosureController extends DisclosureController
     private final ClientPackageNameProvider mClientPackageNameProvider;
 
     @Inject
-    TrustedWebActivityDisclosureController(BrowserServicesStore browserServicesStore,
-            TrustedWebActivityModel model, ActivityLifecycleDispatcher lifecycleDispatcher,
-            CurrentPageVerifier currentPageVerifier, TrustedWebActivityUmaRecorder recorder,
+    TrustedWebActivityDisclosureController(
+            BrowserServicesStore browserServicesStore,
+            TrustedWebActivityModel model,
+            ActivityLifecycleDispatcher lifecycleDispatcher,
+            CurrentPageVerifier currentPageVerifier,
+            TrustedWebActivityUmaRecorder recorder,
             ClientPackageNameProvider clientPackageNameProvider) {
         super(model, lifecycleDispatcher, currentPageVerifier, clientPackageNameProvider.get());
         mBrowserServicesStore = browserServicesStore;

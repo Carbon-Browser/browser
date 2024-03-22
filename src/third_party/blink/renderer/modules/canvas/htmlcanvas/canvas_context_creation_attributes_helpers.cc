@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -42,7 +42,19 @@ bool ToCanvasContextCreationAttributes(
   result.preserve_drawing_buffer = attrs->preserveDrawingBuffer();
   result.power_preference = attrs->powerPreference();
   result.stencil = attrs->stencil();
-  result.will_read_frequently = attrs->willReadFrequently();
+  switch (attrs->willReadFrequently().AsEnum()) {
+    case V8CanvasWillReadFrequently::Enum::kTrue:
+      result.will_read_frequently =
+          CanvasContextCreationAttributesCore::WillReadFrequently::kTrue;
+      break;
+    case V8CanvasWillReadFrequently::Enum::kFalse:
+      result.will_read_frequently =
+          CanvasContextCreationAttributesCore::WillReadFrequently::kFalse;
+      break;
+    default:
+      result.will_read_frequently =
+          CanvasContextCreationAttributesCore::WillReadFrequently::kUndefined;
+  }
   result.xr_compatible = attrs->xrCompatible();
   return true;
 }

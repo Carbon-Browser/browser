@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,27 +9,27 @@
 
 #include "ash/public/cpp/login_accelerators.h"
 #include "ash/public/cpp/login_screen.h"
-#include "base/bind.h"
-#include "base/callback.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/i18n/rtl.h"
 #include "base/logging.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/trace_event/trace_event.h"
 #include "base/values.h"
-#include "chrome/browser/ash/app_mode/kiosk_app_manager.h"
+#include "chrome/browser/ash/app_mode/kiosk_chrome_app_manager.h"
 #include "chrome/browser/ash/login/ui/login_display_host_webui.h"
-#include "chrome/browser/ash/login/ui/login_display_webui.h"
 #include "chrome/browser/ash/login/ui/web_contents_forced_title.h"
 #include "chrome/browser/ash/profiles/profile_helper.h"
 #include "chrome/browser/lifetime/termination_notification.h"
 #include "chrome/browser/media/webrtc/media_capture_devices_dispatcher.h"
 #include "chrome/browser/password_manager/chrome_password_manager_client.h"
 #include "chrome/browser/renderer_preferences_util.h"
+#include "chrome/browser/safe_browsing/chrome_password_reuse_detection_manager_client.h"
 #include "chrome/browser/sessions/session_tab_helper_factory.h"
 #include "chrome/browser/ui/ash/login_screen_client_impl.h"
 #include "chrome/browser/ui/ash/system_tray_client_impl.h"
 #include "chrome/browser/ui/autofill/chrome_autofill_client.h"
-#include "chrome/browser/ui/webui/chromeos/login/oobe_ui.h"
+#include "chrome/browser/ui/webui/ash/login/oobe_ui.h"
 #include "chrome/grit/generated_resources.h"
 #include "chromeos/ash/components/dbus/session_manager/session_manager_client.h"
 #include "chromeos/ash/components/network/network_state.h"
@@ -106,7 +106,7 @@ WebUILoginView::WebUILoginView(const WebViewSettings& settings,
     // passed. Favor --ash-dev-shortcuts since that is explicitly added.
     if (kLoginAcceleratorData[i].action ==
             LoginAcceleratorAction::kEnableConsumerKiosk &&
-        !KioskAppManager::IsConsumerKioskEnabled()) {
+        !KioskChromeAppManager::IsConsumerKioskEnabled()) {
       continue;
     }
 
@@ -155,9 +155,11 @@ void WebUILoginView::InitializeWebView(views::WebView* web_view,
   CreateSessionServiceTabHelper(web_contents);
 
   // Create the password manager that is needed for the proxy.
-  ChromePasswordManagerClient::CreateForWebContentsWithAutofillClient(
-      web_contents,
-      autofill::ChromeAutofillClient::FromWebContents(web_contents));
+  autofill::ChromeAutofillClient::CreateForWebContents(web_contents);
+  ChromePasswordManagerClient::CreateForWebContents(web_contents);
+
+  // Create the password reuse detection manager.
+  ChromePasswordReuseDetectionManagerClient::CreateForWebContents(web_contents);
 
   // LoginHandlerViews uses a constrained window for the password manager view.
   WebContentsModalDialogManager::CreateForWebContents(web_contents);
@@ -262,7 +264,7 @@ void WebUILoginView::SetStatusAreaVisible(bool visible) {
   SystemTrayClientImpl::Get()->SetPrimaryTrayVisible(visible);
 }
 
-void WebUILoginView::SetUIEnabled(bool enabled) {
+void WebUILoginView::SetKeyboardEventsAndSystemTrayEnabled(bool enabled) {
   forward_keyboard_event_ = enabled;
 
   SystemTrayClientImpl::Get()->SetPrimaryTrayEnabled(enabled);
@@ -298,11 +300,6 @@ void WebUILoginView::OnAppTerminating() {
     LoginScreenClientImpl::Get()->RemoveSystemTrayObserver(this);
     observing_system_tray_focus_ = false;
   }
-}
-
-void WebUILoginView::OnNetworkErrorScreenShown() {
-  OnLoginPromptVisible();
-  session_observation_.Reset();
 }
 
 void WebUILoginView::OnLoginOrLockScreenVisible() {
@@ -363,7 +360,7 @@ void WebUILoginView::RequestMediaAccessPermission(
 
 bool WebUILoginView::CheckMediaAccessPermission(
     content::RenderFrameHost* render_frame_host,
-    const GURL& security_origin,
+    const url::Origin& security_origin,
     blink::mojom::MediaStreamType type) {
   return MediaCaptureDevicesDispatcher::GetInstance()
       ->CheckMediaAccessPermission(render_frame_host, security_origin, type);
@@ -380,12 +377,7 @@ void WebUILoginView::OnFocusLeavingSystemTray(bool reverse) {
   AboutToRequestFocusFromTabTraversal(reverse);
 }
 
-void WebUILoginView::OnSystemTrayBubbleShown() {
-  if (!GetOobeUI())
-    return;
-
-  GetOobeUI()->OnSystemTrayBubbleShown();
-}
+void WebUILoginView::OnSystemTrayBubbleShown() {}
 
 void WebUILoginView::OnLoginPromptVisible() {
   if (!observing_system_tray_focus_ && LoginScreenClientImpl::HasInstance()) {
@@ -407,9 +399,9 @@ void WebUILoginView::OnLoginPromptVisible() {
 }
 
 void WebUILoginView::GetAccessibleNodeData(ui::AXNodeData* node_data) {
+  node_data->role = ax::mojom::Role::kWindow;
   node_data->SetName(
       l10n_util::GetStringUTF16(IDS_OOBE_ACCESSIBLE_SCREEN_NAME));
-  node_data->role = ax::mojom::Role::kWindow;
 }
 
 BEGIN_METADATA(WebUILoginView, views::View)

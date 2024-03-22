@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,7 +8,7 @@
 
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/memory/ptr_util.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/observer_list.h"
@@ -17,6 +17,7 @@
 #include "base/strings/utf_string_conversions.h"
 #include "base/time/time.h"
 #include "build/build_config.h"
+#include "chrome/browser/extensions/chrome_content_browser_client_extensions_part.h"
 #include "chrome/browser/metrics/power/power_metrics_constants.h"
 #include "content/public/browser/browser_child_process_host.h"
 #include "content/public/browser/browser_child_process_host_iterator.h"
@@ -70,7 +71,6 @@ ProcessMonitor::Metrics SampleMetrics(base::ProcessMetrics& process_metrics) {
 #if BUILDFLAG(IS_MAC)
   metrics.package_idle_wakeups =
       process_metrics.GetPackageIdleWakeupsPerSecond();
-  metrics.energy_impact = process_metrics.GetEnergyImpact();
 #endif
 
   return metrics;
@@ -87,8 +87,24 @@ void ScaleMetrics(ProcessMonitor::Metrics* metrics, double factor) {
 
 #if BUILDFLAG(IS_MAC)
   metrics->package_idle_wakeups *= factor;
-  metrics->energy_impact *= factor;
 #endif
+}
+
+ProcessMonitor::Metrics GetLastIntervalMetrics(
+    base::ProcessMetrics& process_metrics,
+    base::TimeDelta cumulative_cpu_usage) {
+  ProcessMonitor::Metrics metrics;
+
+#if BUILDFLAG(IS_WIN)
+  metrics.cpu_usage = process_metrics.GetPreciseCPUUsage(cumulative_cpu_usage);
+#else
+  metrics.cpu_usage =
+      process_metrics.GetPlatformIndependentCPUUsage(cumulative_cpu_usage);
+#endif
+
+  // TODO: Add other values in ProcessMonitor::Metrics.
+
+  return metrics;
 }
 
 MonitoredProcessType GetMonitoredProcessTypeForRenderProcess(
@@ -96,9 +112,14 @@ MonitoredProcessType GetMonitoredProcessTypeForRenderProcess(
   DCHECK_CURRENTLY_ON(BrowserThread::UI);
 #if BUILDFLAG(ENABLE_EXTENSIONS)
   content::BrowserContext* browser_context = host->GetBrowserContext();
+  if (extensions::ChromeContentBrowserClientExtensionsPart::
+          AreExtensionsDisabledForProfile(browser_context)) {
+    return MonitoredProcessType::kRenderer;
+  }
+
   extensions::ProcessMap* extension_process_map =
       extensions::ProcessMap::Get(browser_context);
-
+  DCHECK(extension_process_map);
   std::set<std::string> extension_ids =
       extension_process_map->GetExtensionsInProcess(host->GetID());
 
@@ -124,6 +145,27 @@ MonitoredProcessType GetMonitoredProcessTypeForRenderProcess(
 #endif
 }
 
+MonitoredProcessType GetMonitoredProcessTypeForNonRendererChildProcess(
+    const content::ChildProcessData& data) {
+  switch (data.process_type) {
+    case content::PROCESS_TYPE_BROWSER:
+    case content::PROCESS_TYPE_RENDERER:
+      // Not a non-renderer child process.
+      NOTREACHED();
+      return kCount;
+    case content::PROCESS_TYPE_GPU:
+      return MonitoredProcessType::kGpu;
+    case content::PROCESS_TYPE_UTILITY: {
+      // Special case for the network process.
+      if (data.metrics_name == network::mojom::NetworkService::Name_)
+        return MonitoredProcessType::kNetwork;
+      return MonitoredProcessType::kUtility;
+    }
+    default:
+      return MonitoredProcessType::kOther;
+  }
+}
+
 // Adds the values from |rhs| to |lhs|.
 ProcessMonitor::Metrics& operator+=(ProcessMonitor::Metrics& lhs,
                                     const ProcessMonitor::Metrics& rhs) {
@@ -136,13 +178,18 @@ ProcessMonitor::Metrics& operator+=(ProcessMonitor::Metrics& lhs,
 
 #if BUILDFLAG(IS_MAC)
   lhs.package_idle_wakeups += rhs.package_idle_wakeups;
-  lhs.energy_impact += rhs.energy_impact;
 #endif
 
   return lhs;
 }
 
 }  // namespace
+
+MonitoredProcessType
+GetMonitoredProcessTypeForNonRendererChildProcessForTesting(
+    const content::ChildProcessData& data) {
+  return GetMonitoredProcessTypeForNonRendererChildProcess(data);
+}
 
 ProcessInfo::ProcessInfo(MonitoredProcessType type,
                          std::unique_ptr<base::ProcessMetrics> process_metrics)
@@ -224,6 +271,11 @@ void ProcessMonitor::SampleAllProcesses(Observer* observer) {
   }
 
   for (int i = 0; i < MonitoredProcessType::kCount; i++) {
+    // Add the metrics for the processes that exited during this interval and
+    // zero out.
+    per_type_metrics[i] += exited_processes_metrics_[i];
+    exited_processes_metrics_[i] = Metrics();
+
     observer->OnMetricsSampled(static_cast<MonitoredProcessType>(i),
                                per_type_metrics[i]);
   }
@@ -269,6 +321,12 @@ void ProcessMonitor::RenderProcessExited(
     // This process was never ready.
     return;
   }
+
+  // Remember the metrics from when the process exited.
+  const ProcessInfo& process_info = it->second;
+  exited_processes_metrics_[process_info.type] +=
+      GetLastIntervalMetrics(*process_info.process_metrics, info.cpu_usage);
+
   render_process_infos_.erase(it);
 }
 
@@ -291,9 +349,7 @@ void ProcessMonitor::BrowserChildProcessLaunchedAndConnected(
 #endif
 
   MonitoredProcessType type =
-      data.metrics_name == network::mojom::NetworkService::Name_
-          ? MonitoredProcessType::kNetwork
-          : MonitoredProcessType::kUtility;
+      GetMonitoredProcessTypeForNonRendererChildProcess(data);
   bool inserted =
       browser_child_process_infos_
           .emplace(std::piecewise_construct, std::forward_as_tuple(data.id),
@@ -315,12 +371,55 @@ void ProcessMonitor::BrowserChildProcessHostDisconnected(
   }
 #endif
 
+  DCHECK(browser_child_process_infos_.find(data.id) ==
+         browser_child_process_infos_.end());
+}
+
+void ProcessMonitor::BrowserChildProcessCrashed(
+    const content::ChildProcessData& data,
+    const content::ChildProcessTerminationInfo& info) {
+  DCHECK_CURRENTLY_ON(BrowserThread::UI);
+  OnBrowserChildProcessExited(data, info);
+}
+
+void ProcessMonitor::BrowserChildProcessKilled(
+    const content::ChildProcessData& data,
+    const content::ChildProcessTerminationInfo& info) {
+  DCHECK_CURRENTLY_ON(BrowserThread::UI);
+  OnBrowserChildProcessExited(data, info);
+}
+
+void ProcessMonitor::BrowserChildProcessExitedNormally(
+    const content::ChildProcessData& data,
+    const content::ChildProcessTerminationInfo& info) {
+  DCHECK_CURRENTLY_ON(BrowserThread::UI);
+  OnBrowserChildProcessExited(data, info);
+}
+
+void ProcessMonitor::OnBrowserChildProcessExited(
+    const content::ChildProcessData& data,
+    const content::ChildProcessTerminationInfo& info) {
+  DCHECK_CURRENTLY_ON(BrowserThread::UI);
+#if BUILDFLAG(IS_WIN)
+  // Cannot gather process metrics for elevated process as browser has no
+  // access to them.
+  if (data.sandbox_type ==
+      sandbox::mojom::Sandbox::kNoSandboxAndElevatedPrivileges) {
+    return;
+  }
+#endif
   auto it = browser_child_process_infos_.find(data.id);
   if (it == browser_child_process_infos_.end()) {
     // It is possible to receive this notification without a launch-and-connect
     // notification. See https://crbug.com/942500 for a similar issue.
     return;
   }
+
+  DCHECK(it != browser_child_process_infos_.end());
+  // Remember the metrics from when the process exited.
+  const ProcessInfo& process_info = it->second;
+  exited_processes_metrics_[process_info.type] +=
+      GetLastIntervalMetrics(*process_info.process_metrics, info.cpu_usage);
 
   browser_child_process_infos_.erase(it);
 }

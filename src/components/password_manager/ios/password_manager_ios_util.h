@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -15,6 +15,7 @@ class WebState;
 
 namespace autofill {
 struct FormData;
+class FieldDataManager;
 }
 
 namespace password_manager {
@@ -27,7 +28,17 @@ bool WebStateContentIsSecureHtml(const web::WebState* web_state);
 // whether the xtraction was successful.
 bool JsonStringToFormData(NSString* json_string,
                           autofill::FormData* form_data,
-                          GURL page_url);
+                          const GURL& page_url,
+                          const autofill::FieldDataManager& field_data_manager);
+
+// Whether the |origin| matches the last committed URl in the |web_state|.
+bool OriginMatchesLastCommittedURLOrigin(web::WebState* web_state,
+                                         const GURL& origin);
+
+// Returns whether an iframe is cross-origin.
+bool IsCrossOriginIframe(web::WebState* web_state,
+                         bool frame_is_main_frame,
+                         const GURL& frame_security_origin);
 
 }  // namespace password_manager
 

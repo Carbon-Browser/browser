@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,9 +6,11 @@
 #define THIRD_PARTY_BLINK_RENDERER_MODULES_PEERCONNECTION_RTC_ENCODED_VIDEO_UNDERLYING_SOURCE_H_
 
 #include "base/gtest_prod_util.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/threading/thread_checker.h"
 #include "third_party/blink/renderer/core/streams/underlying_source_base.h"
 #include "third_party/blink/renderer/modules/modules_export.h"
+#include "third_party/blink/renderer/platform/wtf/functional.h"
 
 namespace webrtc {
 class TransformableVideoFrameInterface;
@@ -21,27 +23,38 @@ class MODULES_EXPORT RTCEncodedVideoUnderlyingSource
  public:
   explicit RTCEncodedVideoUnderlyingSource(
       ScriptState*,
-      base::OnceClosure disconnect_callback);
+      WTF::CrossThreadOnceClosure disconnect_callback);
 
   // UnderlyingSourceBase
-  ScriptPromise pull(ScriptState*) override;
-  ScriptPromise Cancel(ScriptState*, ScriptValue reason) override;
+  ScriptPromise Pull(ScriptState*, ExceptionState&) override;
+  ScriptPromise Cancel(ScriptState*,
+                       ScriptValue reason,
+                       ExceptionState&) override;
 
   void OnFrameFromSource(
       std::unique_ptr<webrtc::TransformableVideoFrameInterface>);
   void Close();
 
+  // Called on any thread to indicate the source is being transferred to an
+  // UnderlyingSource on a different thread to this.
+  void OnSourceTransferStarted();
+
   void Trace(Visitor*) const override;
 
  private:
-  FRIEND_TEST_ALL_PREFIXES(RTCEncodedVideoUnderlyingSourceTest, QueuedFramesAreDroppedWhenOverflow);
+  // Implements the handling of this stream being transferred to another
+  // context, called on the thread upon which the instance was created.
+  void OnSourceTransferStartedOnTaskRunner();
+
+  FRIEND_TEST_ALL_PREFIXES(RTCEncodedVideoUnderlyingSourceTest,
+                           QueuedFramesAreDroppedWhenOverflow);
   static const int kMinQueueDesiredSize;
 
   const Member<ScriptState> script_state_;
-  base::OnceClosure disconnect_callback_;
+  WTF::CrossThreadOnceClosure disconnect_callback_;
   // Count of frames dropped due to the queue being full, for logging.
   int dropped_frames_ = 0;
-  THREAD_CHECKER(thread_checker_);
+  scoped_refptr<base::SingleThreadTaskRunner> task_runner_;
 };
 
 }  // namespace blink

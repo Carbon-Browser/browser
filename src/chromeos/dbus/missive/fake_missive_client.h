@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,8 +7,8 @@
 
 #include <vector>
 
-#include "base/callback.h"
 #include "base/containers/flat_map.h"
+#include "base/functional/callback.h"
 #include "base/memory/weak_ptr.h"
 #include "base/observer_list.h"
 #include "base/task/sequenced_task_runner.h"
@@ -41,6 +41,8 @@ class COMPONENT_EXPORT(MISSIVE) FakeMissiveClient
       base::OnceCallback<void(reporting::Status)> completion_callback) override;
   void UpdateEncryptionKey(
       const reporting::SignedEncryptionInfo& encryption_info) override;
+  void UpdateConfigInMissive(
+      const reporting::ListOfBlockedDestinations& destinations) override;
   void ReportSuccess(const reporting::SequenceInformation& sequence_information,
                      bool force_confirm) override;
   TestInterface* GetTestInterface() override;

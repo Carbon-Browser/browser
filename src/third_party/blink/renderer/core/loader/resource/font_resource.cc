@@ -27,6 +27,7 @@
 #include "third_party/blink/renderer/core/loader/resource/font_resource.h"
 
 #include "base/metrics/histogram_functions.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/trace_event/memory_dump_manager.h"
 #include "third_party/blink/public/mojom/fetch/fetch_api_request.mojom-blink.h"
 #include "third_party/blink/public/mojom/loader/request_context_frame_type.mojom-blink.h"
@@ -101,20 +102,24 @@ void FontResource::StartLoadLimitTimersIfNecessary(
 
   font_load_short_limit_ = PostDelayedCancellableTask(
       *task_runner, FROM_HERE,
-      WTF::Bind(&FontResource::FontLoadShortLimitCallback,
-                WrapWeakPersistent(this)),
+      WTF::BindOnce(&FontResource::FontLoadShortLimitCallback,
+                    WrapWeakPersistent(this)),
       kFontLoadWaitShort);
   font_load_long_limit_ = PostDelayedCancellableTask(
       *task_runner, FROM_HERE,
-      WTF::Bind(&FontResource::FontLoadLongLimitCallback,
-                WrapWeakPersistent(this)),
+      WTF::BindOnce(&FontResource::FontLoadLongLimitCallback,
+                    WrapWeakPersistent(this)),
       kFontLoadWaitLong);
 }
 
 scoped_refptr<FontCustomPlatformData> FontResource::GetCustomFontData() {
   if (!font_data_ && !ErrorOccurred() && !IsLoading()) {
-    if (Data())
+    if (Data()) {
+      auto decode_start_time = base::TimeTicks::Now();
       font_data_ = FontCustomPlatformData::Create(Data(), ots_parsing_message_);
+      base::UmaHistogramMicrosecondsTimes(
+          "Blink.Fonts.DecodeTime", base::TimeTicks::Now() - decode_start_time);
+    }
 
     if (!font_data_) {
       SetStatus(ResourceStatus::kDecodeError);

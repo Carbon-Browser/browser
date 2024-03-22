@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,8 +8,10 @@
 #include "base/memory/raw_ptr.h"
 #include "chrome/browser/performance_manager/mechanisms/page_discarder.h"
 #include "chrome/browser/performance_manager/policies/page_discarding_helper.h"
+#include "chrome/browser/performance_manager/test_support/test_user_performance_tuning_manager_environment.h"
 #include "components/performance_manager/graph/graph_impl.h"
 #include "components/performance_manager/test_support/graph_test_harness.h"
+#include "components/prefs/testing_pref_service.h"
 #include "content/public/test/browser_task_environment.h"
 #include "testing/gmock/include/gmock/gmock.h"
 
@@ -35,6 +37,7 @@ class LenientMockPageDiscarder
  private:
   void DiscardPageNodes(
       const std::vector<const PageNode*>& page_nodes,
+      ::mojom::LifecycleUnitDiscardReason discard_reason,
       base::OnceCallback<void(bool)> post_discard_cb) override;
 };
 using MockPageDiscarder = ::testing::StrictMock<LenientMockPageDiscarder>;
@@ -62,6 +65,9 @@ class GraphTestHarnessWithMockDiscarder : public GraphTestHarness {
   testing::MockPageDiscarder* discarder() { return mock_discarder_; }
 
  private:
+  TestingPrefServiceSimple local_state_;
+  performance_manager::user_tuning::TestUserPerformanceTuningManagerEnvironment
+      user_performance_tuning_manager_environment_;
   raw_ptr<testing::MockPageDiscarder> mock_discarder_;
   performance_manager::TestNodeWrapper<performance_manager::PageNodeImpl>
       page_node_;

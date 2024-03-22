@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -18,7 +18,8 @@ enum class SystemWebAppType;
 
 // Test harness for how ChromeOS System Web Apps integrate with the System Web
 // App platform.
-class SystemWebAppIntegrationTest : public SystemWebAppManagerBrowserTest {
+class SystemWebAppIntegrationTest
+    : public TestProfileTypeMixin<SystemWebAppBrowserTestBase> {
  public:
   SystemWebAppIntegrationTest();
   SystemWebAppIntegrationTest(const SystemWebAppIntegrationTest&) = delete;
@@ -42,8 +43,9 @@ class SystemWebAppIntegrationTest : public SystemWebAppManagerBrowserTest {
 
   // Launch the given System App |type| with the given |file_path| as a launch
   // file, without waiting for the application to finish loading.
-  void LaunchAppWithFileWithoutWaiting(SystemWebAppType type,
-                                       const base::FilePath& file_path);
+  content::WebContents* LaunchAppWithFileWithoutWaiting(
+      SystemWebAppType type,
+      const base::FilePath& file_path);
 };
 
 }  // namespace ash

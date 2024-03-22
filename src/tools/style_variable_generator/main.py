@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Copyright 2019 The Chromium Authors. All rights reserved.
+# Copyright 2019 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -12,6 +12,7 @@ sys.path += [os.path.dirname(os.path.dirname(__file__))]
 from style_variable_generator.css_generator import CSSStyleGenerator
 from style_variable_generator.ts_generator import TSStyleGenerator
 from style_variable_generator.proto_generator import ProtoStyleGenerator, ProtoJSONStyleGenerator
+from style_variable_generator.json_generator import JSONStyleGenerator
 from style_variable_generator.views_generator import ViewsCCStyleGenerator, ViewsHStyleGenerator
 from style_variable_generator.base_generator import Modes
 from style_variable_generator.color_mappings_generator import ColorMappingsCCStyleGenerator, ColorMappingsHStyleGenerator
@@ -35,7 +36,8 @@ def main():
     generators = [
         CSSStyleGenerator, ViewsCCStyleGenerator, ViewsHStyleGenerator,
         ProtoStyleGenerator, ProtoJSONStyleGenerator, TSStyleGenerator,
-        ColorMappingsCCStyleGenerator, ColorMappingsHStyleGenerator
+        JSONStyleGenerator, ColorMappingsCCStyleGenerator,
+        ColorMappingsHStyleGenerator
     ]
 
     parser.add_argument(

@@ -1,11 +1,11 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef MEDIA_RENDERERS_VIDEO_FRAME_RGBA_TO_YUVA_CONVERTER_H_
 #define MEDIA_RENDERERS_VIDEO_FRAME_RGBA_TO_YUVA_CONVERTER_H_
 
-#include "components/viz/common/resources/resource_format.h"
+#include "components/viz/common/resources/shared_image_format.h"
 #include "media/base/media_export.h"
 #include "third_party/skia/include/gpu/GrTypes.h"
 
@@ -33,7 +33,7 @@ class VideoFrame;
 // Updates `dst_video_frame`'s sync token.
 MEDIA_EXPORT bool CopyRGBATextureToVideoFrame(
     viz::RasterContextProvider* raster_context_provider,
-    viz::ResourceFormat src_format,
+    viz::SharedImageFormat src_format,
     const gfx::Size& src_size,
     const gfx::ColorSpace& src_color_space,
     GrSurfaceOrigin src_surface_origin,

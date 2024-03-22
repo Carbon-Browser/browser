@@ -1,9 +1,9 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 import {FeedbackEvent, FeedbackUiBrowserProxy, FeedbackUiBrowserProxyImpl, FeedbackUiElement} from 'chrome://cast-feedback/cast_feedback_ui.js';
-import {PromiseResolver} from 'chrome://resources/js/promise_resolver.m.js';
+import {PromiseResolver} from 'chrome://resources/js/promise_resolver.js';
 import {assertDeepEquals, assertEquals, assertFalse, assertTrue} from 'chrome://webui-test/chai_assert.js';
 import {TestBrowserProxy} from 'chrome://webui-test/test_browser_proxy.js';
 
@@ -25,10 +25,12 @@ class TestFeedbackUiBrowserProxy extends TestBrowserProxy implements
 
   sendFeedback(info: chrome.feedbackPrivate.FeedbackInfo) {
     this.methodCalled('sendFeedback', info);
-    return Promise.resolve(
-        this.getCallCount('sendFeedback') > this.timesToFail ?
-            chrome.feedbackPrivate.Status.SUCCESS :
-            chrome.feedbackPrivate.Status.DELAYED);
+    return Promise.resolve({
+      status: this.getCallCount('sendFeedback') > this.timesToFail ?
+          chrome.feedbackPrivate.Status.SUCCESS :
+          chrome.feedbackPrivate.Status.DELAYED,
+      landingPageType: chrome.feedbackPrivate.LandingPageType.NORMAL,
+    });
   }
 }
 
@@ -50,7 +52,7 @@ suite('Suite', function() {
   }
 
   setup(function() {
-    document.body.innerHTML = '';
+    document.body.innerHTML = window.trustedTypes!.emptyHTML;
     browserProxy = new TestFeedbackUiBrowserProxy();
     FeedbackUiBrowserProxyImpl.setInstance(browserProxy);
     ui = document.createElement('feedback-ui');

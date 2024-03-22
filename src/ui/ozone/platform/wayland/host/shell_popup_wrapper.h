@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,6 +8,7 @@
 #include <cstdint>
 
 #include "third_party/abseil-cpp/absl/types/optional.h"
+#include "ui/base/owned_window_anchor.h"
 #include "ui/base/ui_base_types.h"
 #include "ui/gfx/geometry/rect.h"
 #include "ui/ozone/platform/wayland/common/wayland_object.h"
@@ -17,6 +18,7 @@ namespace ui {
 
 class WaylandConnection;
 class WaylandWindow;
+class XDGPopupWrapperImpl;
 
 struct ShellPopupParams {
   ShellPopupParams();
@@ -29,10 +31,18 @@ struct ShellPopupParams {
 
   // This parameter is temporarily optional. Later, when all the clients
   // start to pass these parameters, absl::optional type will be removed.
-  absl::optional<ui::OwnedWindowAnchor> anchor;
+  absl::optional<OwnedWindowAnchor> anchor;
 };
 
-// A wrapper around different versions of xdg popups.
+// Wrapper interface for shell popups.
+//
+// This is one of three wrapper classes: Shell{Surface,Toplevel,Popup}Wrapper.
+// It has the only sub-class in Chromium, but should not be removed because it
+// eases downstream implementations.
+// See https://crbug.com/1402672
+//
+// Allows WaylandPopup to do stuff specific to popups, such as anchoring the
+// window and grabbing the pointer.
 class ShellPopupWrapper {
  public:
   virtual ~ShellPopupWrapper() = default;
@@ -66,7 +76,14 @@ class ShellPopupWrapper {
 
   // Must only be called if SupportsDecoration() returns true.
   // Decorates the surface with a drop shadow.
-  virtual void Decorate() = 0;
+  virtual void Decorate(ui::PlatformWindowShadowType shadow_type) = 0;
+
+  // Sets the scale factor for the next commit. Scale factor persists until a
+  // new one is set.
+  virtual void SetScaleFactor(float scale_factor) = 0;
+
+  // Casts `this` to XDGPopupWrapperImpl, if it is of that type.
+  virtual XDGPopupWrapperImpl* AsXDGPopupWrapper();
 
  protected:
   // Asks the compositor to take explicit-grab for this popup.

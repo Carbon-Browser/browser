@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -21,6 +21,7 @@ pub mod raw_ffi {
     #![allow(dead_code)]
     #![allow(non_upper_case_globals)]
     #![allow(non_camel_case_types)]
+    #![allow(non_snake_case)]
     include!(env!("BINDGEN_RS_FILE"));
 }
 
@@ -61,7 +62,8 @@ pub mod types {
     pub type MojoResultCode = raw_ffi::MojoResult;
 }
 
-use crate::system::ffi::types::*;
+pub use types::MojoResultCode;
+use types::*;
 
 #[allow(non_camel_case_types)]
 pub type c_void = std::ffi::c_void;
@@ -178,3 +180,8 @@ pub use raw_ffi::MojoRemoveTrigger;
 pub use raw_ffi::MojoUnmapBuffer;
 pub use raw_ffi::MojoWriteData;
 pub use raw_ffi::MojoWriteMessage;
+
+/// Exposed for tests only. Note that calling this function means the Mojo
+/// embedder target must be linked in.
+pub use raw_ffi::MojoEmbedderSetSystemThunks;
+pub use raw_ffi::MojoSystemThunks2;

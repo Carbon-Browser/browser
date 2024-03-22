@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -72,15 +72,6 @@ GetPasswordProtectionWarningTrigger(PrefService* profile_prefs) {
     return absl::nullopt;
   return static_cast<safe_browsing::PasswordProtectionTrigger>(
       profile_prefs->GetInteger(prefs::kPasswordProtectionWarningTrigger));
-}
-
-absl::optional<bool> GetChromeCleanupEnabled(PrefService* local_state) {
-  DCHECK(local_state);
-#if BUILDFLAG(IS_WIN)
-  return local_state->GetBoolean(prefs::kSwReporterEnabled);
-#else
-  return absl::nullopt;
-#endif
 }
 
 bool GetChromeRemoteDesktopAppBlocked(PolicyBlocklistService* service) {

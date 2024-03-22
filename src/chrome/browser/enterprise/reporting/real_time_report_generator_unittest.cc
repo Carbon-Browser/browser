@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -38,12 +38,9 @@ TEST_F(RealTimeReportGeneratorTest, ExtensionRequest) {
   TestingProfile* profile = profile_manager()->CreateTestingProfile("profile");
 
   profile->GetTestingPrefService()->SetManagedPref(
-      prefs::kCloudExtensionRequestEnabled,
-      std::make_unique<base::Value>(true));
+      prefs::kCloudExtensionRequestEnabled, base::Value(true));
 
-  std::unique_ptr<base::Value> requests =
-      std::make_unique<base::Value>(base::Value::Type::DICTIONARY);
-  requests->SetKey(extension_id, base::Value());
+  auto requests = base::Value::Dict().Set(extension_id, base::Value::Dict());
   profile->GetTestingPrefService()->SetUserPref(
       prefs::kCloudExtensionRequestIds, std::move(requests));
 
@@ -52,7 +49,7 @@ TEST_F(RealTimeReportGeneratorTest, ExtensionRequest) {
 
   std::vector<std::unique_ptr<google::protobuf::MessageLite>> reports =
       generator.Generate(
-          RealTimeReportGenerator::ReportType::kExtensionRequest,
+          RealTimeReportType::kExtensionRequest,
           ExtensionRequestReportGenerator::ExtensionRequestData(profile));
   EXPECT_EQ(1u, reports.size());
 

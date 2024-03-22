@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,6 +10,10 @@
 #include "sandbox/linux/bpf_dsl/bpf_dsl.h"
 #include "sandbox/linux/seccomp-bpf-helpers/baseline_policy.h"
 #include "sandbox/linux/system_headers/linux_syscalls.h"
+
+#if BUILDFLAG(IS_ANDROID)
+#include "sandbox/linux/seccomp-bpf-helpers/baseline_policy_android.h"
+#endif
 
 using sandbox::bpf_dsl::Allow;
 using sandbox::bpf_dsl::ResultExpr;
@@ -23,10 +27,15 @@ namespace {
 static const int kFSDeniedErrno = EPERM;
 
 }  // namespace.
-
+#if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)
 BPFBasePolicy::BPFBasePolicy()
-    : baseline_policy_(new BaselinePolicy(kFSDeniedErrno)) {}
-BPFBasePolicy::~BPFBasePolicy() {}
+    : baseline_policy_(std::make_unique<BaselinePolicy>(kFSDeniedErrno)) {}
+#elif BUILDFLAG(IS_ANDROID)
+BPFBasePolicy::BPFBasePolicy(
+    const BaselinePolicyAndroid::RuntimeOptions& options)
+    : baseline_policy_(std::make_unique<BaselinePolicyAndroid>(options)) {}
+#endif
+BPFBasePolicy::~BPFBasePolicy() = default;
 
 ResultExpr BPFBasePolicy::EvaluateSyscall(int system_call_number) const {
   DCHECK(baseline_policy_);

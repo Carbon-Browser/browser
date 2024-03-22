@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,7 +14,7 @@
 #include <string>
 #include <vector>
 
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "chrome/browser/media_galleries/gallery_watch_manager_observer.h"
@@ -184,9 +184,9 @@ class MediaGalleriesGetMetadataFunction : public ExtensionFunction {
       std::unique_ptr<std::vector<metadata::AttachedImage>> attached_images);
 
   void ConstructNextBlob(
-      std::unique_ptr<base::DictionaryValue> result_dictionary,
+      base::Value::Dict result_dictionary,
       std::unique_ptr<std::vector<metadata::AttachedImage>> attached_images,
-      std::unique_ptr<std::vector<std::string>> blob_uuids,
+      std::vector<blink::mojom::SerializedBlobPtr> blobs,
       std::unique_ptr<content::BlobHandle> current_blob);
 };
 

@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -47,9 +47,9 @@ class ExtensionInstalledBubbleViewsBrowserTest
     }
 
     if (type == "Omnibox") {
-      auto extra_keys = std::make_unique<base::DictionaryValue>();
-      extra_keys->SetStringPath(extensions::manifest_keys::kOmniboxKeyword,
-                                "foo");
+      base::Value::Dict extra_keys;
+      extra_keys.SetByDottedPath(extensions::manifest_keys::kOmniboxKeyword,
+                                 "foo");
       builder.MergeManifest(std::move(extra_keys));
     }
 
@@ -58,7 +58,7 @@ class ExtensionInstalledBubbleViewsBrowserTest
     return extension;
   }
 
-  raw_ptr<views::Widget> bubble_widget_;
+  raw_ptr<views::Widget, AcrossTasksDanglingUntriaged> bubble_widget_;
 };
 
 void ExtensionInstalledBubbleViewsBrowserTest::ShowUi(const std::string& name) {

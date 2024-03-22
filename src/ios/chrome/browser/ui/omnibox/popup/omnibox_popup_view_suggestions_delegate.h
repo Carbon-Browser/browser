@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,17 +6,13 @@
 #define IOS_CHROME_BROWSER_UI_OMNIBOX_POPUP_OMNIBOX_POPUP_VIEW_SUGGESTIONS_DELEGATE_H_
 
 #include "components/omnibox/browser/suggestion_answer.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 struct AutocompleteMatch;
-class AutocompleteResult;
 class GURL;
 enum class WindowOpenDisposition;
 
 class OmniboxPopupViewSuggestionsDelegate {
  public:
-  // Called when results are updated.
-  virtual void OnResultsChanged(const AutocompleteResult& result) = 0;
   // Called whenever the popup is scrolled.
   virtual void OnPopupDidScroll() = 0;
   // Called when the user chooses a suggestion from the popup via the "append"

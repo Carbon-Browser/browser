@@ -1,13 +1,13 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "ash/webui/camera_app_ui/document_scanner_installer.h"
 
 #include "ash/webui/camera_app_ui/document_scanner_service_client.h"
-#include "base/callback_helpers.h"
+#include "base/functional/callback_helpers.h"
 #include "base/logging.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/task/single_thread_task_runner.h"
 
 namespace ash {
 
@@ -54,7 +54,7 @@ void DocumentScannerInstaller::TriggerInstall() {
 
   dlcservice::InstallRequest install_request;
   install_request.set_id(kDocumentScannerDlcId);
-  chromeos::DlcserviceClient::Get()->Install(
+  DlcserviceClient::Get()->Install(
       install_request,
       base::BindOnce(&DocumentScannerInstaller::OnInstalled,
                      base::Unretained(this)),
@@ -62,10 +62,10 @@ void DocumentScannerInstaller::TriggerInstall() {
 }
 
 DocumentScannerInstaller::DocumentScannerInstaller()
-    : ui_task_runner_(base::ThreadTaskRunnerHandle::Get()) {}
+    : ui_task_runner_(base::SingleThreadTaskRunner::GetCurrentDefault()) {}
 
 void DocumentScannerInstaller::OnInstalled(
-    const chromeos::DlcserviceClient::InstallResult& install_result) {
+    const DlcserviceClient::InstallResult& install_result) {
   base::AutoLock auto_lock(library_path_lock_);
   if (install_result.error == dlcservice::kErrorNone) {
     library_path_ = install_result.root_path;

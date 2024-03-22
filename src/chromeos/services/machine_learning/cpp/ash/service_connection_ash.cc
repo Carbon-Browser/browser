@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,8 +6,8 @@
 
 #include <utility>
 
-#include "base/bind.h"
 #include "base/component_export.h"
+#include "base/functional/bind.h"
 #include "base/no_destructor.h"
 #include "base/sequence_checker.h"
 #include "base/task/sequenced_task_runner.h"
@@ -98,7 +98,7 @@ void ServiceConnectionAsh::Initialize() {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   DCHECK(!task_runner_) << "Initialize must be called only once.";
 
-  task_runner_ = base::SequencedTaskRunnerHandle::Get();
+  task_runner_ = base::SequencedTaskRunner::GetCurrentDefault();
 }
 
 void ServiceConnectionAsh::BindPrimordialMachineLearningServiceIfNeeded() {

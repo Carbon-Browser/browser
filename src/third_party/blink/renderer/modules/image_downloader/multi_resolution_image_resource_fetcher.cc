@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,7 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "third_party/blink/public/mojom/fetch/fetch_api_request.mojom-blink.h"
 #include "third_party/blink/public/platform/web_http_body.h"
 #include "third_party/blink/public/platform/web_security_origin.h"
@@ -133,8 +133,8 @@ MultiResolutionImageResourceFetcher::MultiResolutionImageResourceFetcher(
 
   Start(frame, is_favicon, network::mojom::RequestMode::kNoCors,
         network::mojom::CredentialsMode::kInclude,
-        WTF::Bind(&MultiResolutionImageResourceFetcher::OnURLFetchComplete,
-                  WTF::Unretained(this)));
+        WTF::BindOnce(&MultiResolutionImageResourceFetcher::OnURLFetchComplete,
+                      WTF::Unretained(this)));
 }
 
 MultiResolutionImageResourceFetcher::~MultiResolutionImageResourceFetcher() {

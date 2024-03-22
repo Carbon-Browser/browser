@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,6 +8,7 @@
 #include <tuple>
 #include <utility>
 
+#include "base/memory/raw_ptr.h"
 #include "base/test/null_task_runner.h"
 #include "mojo/public/cpp/bindings/pending_associated_remote.h"
 #include "mojo/public/cpp/bindings/remote_set.h"
@@ -46,7 +47,8 @@ class GCOwner final : public GarbageCollected<GCOwner<Mode>> {
 
  private:
   HeapMojoAssociatedRemoteSet<sample::blink::Service, Mode> remote_set_;
-  HeapMojoAssociatedRemoteSetGCBaseTest<Mode>* test_;
+  raw_ptr<HeapMojoAssociatedRemoteSetGCBaseTest<Mode>, ExperimentalRenderer>
+      test_;
 };
 
 template <HeapMojoWrapperMode Mode>

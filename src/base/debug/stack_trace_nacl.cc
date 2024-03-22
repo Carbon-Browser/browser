@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,10 +10,6 @@ namespace debug {
 StackTrace::StackTrace() = default;
 StackTrace::StackTrace(size_t count) : StackTrace() {}
 StackTrace::StackTrace(const void* const* trace, size_t count) : StackTrace() {}
-
-const void* const* StackTrace::Addresses(size_t* count) const {
-  return nullptr;
-}
 
 void StackTrace::Print() const {}
 

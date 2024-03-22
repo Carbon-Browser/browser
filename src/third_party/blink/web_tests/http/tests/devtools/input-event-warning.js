@@ -1,6 +1,10 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+import {TestRunner} from 'test_runner';
+
+import * as SDK from 'devtools/core/sdk/sdk.js';
 
 (async function() {
   TestRunner.addResult(
@@ -62,7 +66,8 @@
       }
   `);
 
-  SDK.consoleModel.addEventListener(
+  const consoleModel = SDK.TargetManager.TargetManager.instance().primaryPageTarget().model(SDK.ConsoleModel.ConsoleModel);
+  consoleModel.addEventListener(
       SDK.ConsoleModel.Events.MessageAdded, TestRunner.safeWrap(onConsoleMessage));
   step1();
 

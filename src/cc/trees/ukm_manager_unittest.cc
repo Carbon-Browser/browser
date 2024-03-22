@@ -1,14 +1,14 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "cc/trees/ukm_manager.h"
 
-#include <algorithm>
 #include <utility>
 #include <vector>
 
 #include "base/memory/raw_ptr.h"
+#include "base/ranges/algorithm.h"
 #include "base/test/simple_test_tick_clock.h"
 #include "base/time/time.h"
 #include "cc/metrics/begin_main_frame_metrics.h"
@@ -150,20 +150,24 @@ class UkmManagerTest : public testing::Test {
 
   std::unique_ptr<EventMetrics> CreateScrollBeginEventMetrics() {
     base::TimeTicks event_time = AdvanceNowByMs(10);
+    base::TimeTicks arrived_in_browser_main_timestamp = AdvanceNowByMs(5);
     AdvanceNowByMs(10);
     return SetupEventMetrics(ScrollEventMetrics::CreateForTesting(
         ui::ET_GESTURE_SCROLL_BEGIN, ui::ScrollInputType::kWheel,
-        /*is_inertial=*/false, event_time, &test_tick_clock_));
+        /*is_inertial=*/false, event_time, arrived_in_browser_main_timestamp,
+        &test_tick_clock_));
   }
 
   std::unique_ptr<EventMetrics> CreateScrollUpdateEventMetrics(
       bool is_inertial,
       ScrollUpdateEventMetrics::ScrollUpdateType scroll_update_type) {
     base::TimeTicks event_time = AdvanceNowByMs(10);
+    base::TimeTicks arrived_in_browser_main_timestamp = AdvanceNowByMs(5);
     AdvanceNowByMs(10);
     return SetupEventMetrics(ScrollUpdateEventMetrics::CreateForTesting(
         ui::ET_GESTURE_SCROLL_UPDATE, ui::ScrollInputType::kWheel, is_inertial,
-        scroll_update_type, /*delta=*/10.0f, event_time, &test_tick_clock_));
+        scroll_update_type, /*delta=*/10.0f, event_time,
+        arrived_in_browser_main_timestamp, &test_tick_clock_, std::nullopt));
   }
 
   struct DispatchTimestamps {
@@ -178,9 +182,9 @@ class UkmManagerTest : public testing::Test {
       const EventMetrics::List& events_metrics) {
     std::vector<DispatchTimestamps> event_times;
     event_times.reserve(events_metrics.size());
-    std::transform(
-        events_metrics.cbegin(), events_metrics.cend(),
-        std::back_inserter(event_times), [](const auto& event_metrics) {
+    base::ranges::transform(
+        events_metrics, std::back_inserter(event_times),
+        [](const auto& event_metrics) {
           return DispatchTimestamps{
               event_metrics->GetDispatchStageTimestamp(
                   EventMetrics::DispatchStage::kGenerated),
@@ -230,7 +234,7 @@ class UkmManagerTest : public testing::Test {
     return breakdown;
   }
 
-  raw_ptr<ukm::TestUkmRecorder> test_ukm_recorder_;
+  raw_ptr<ukm::TestUkmRecorder, DanglingUntriaged> test_ukm_recorder_;
   std::unique_ptr<UkmManager> manager_;
   base::SimpleTestTickClock test_tick_clock_;
 };

@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -16,6 +16,10 @@ TestURLLoaderNetworkObserver::Bind() {
   mojo::PendingRemote<mojom::URLLoaderNetworkServiceObserver> remote;
   receivers_.Add(this, remote.InitWithNewPipeAndPassReceiver());
   return remote;
+}
+
+void TestURLLoaderNetworkObserver::FlushReceivers() {
+  receivers_.FlushForTesting();
 }
 
 void TestURLLoaderNetworkObserver::OnSSLCertificateError(
@@ -43,11 +47,21 @@ void TestURLLoaderNetworkObserver::OnAuthRequired(
     mojo::PendingRemote<mojom::AuthChallengeResponder>
         auth_challenge_responder) {}
 
+void TestURLLoaderNetworkObserver::OnPrivateNetworkAccessPermissionRequired(
+    const GURL& url,
+    const net::IPAddress& ip_address,
+    const absl::optional<std::string>& private_network_device_id,
+    const absl::optional<std::string>& private_network_device_name,
+    OnPrivateNetworkAccessPermissionRequiredCallback callback) {
+  std::move(callback).Run(false);
+}
+
 void TestURLLoaderNetworkObserver::OnClearSiteData(
     const GURL& url,
     const std::string& header_value,
     int32_t load_flags,
     const absl::optional<net::CookiePartitionKey>& cookie_partition_key,
+    bool partitioned_state_allowed_only,
     OnClearSiteDataCallback callback) {
   std::move(callback).Run();
 }
@@ -62,6 +76,13 @@ void TestURLLoaderNetworkObserver::OnDataUseUpdate(
     int32_t network_traffic_annotation_id_hash,
     int64_t recv_bytes,
     int64_t sent_bytes) {}
+
+void TestURLLoaderNetworkObserver::OnSharedStorageHeaderReceived(
+    const url::Origin& request_origin,
+    std::vector<network::mojom::SharedStorageOperationPtr> operations,
+    OnSharedStorageHeaderReceivedCallback callback) {
+  std::move(callback).Run();
+}
 
 void TestURLLoaderNetworkObserver::Clone(
     mojo::PendingReceiver<URLLoaderNetworkServiceObserver> observer) {

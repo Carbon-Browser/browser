@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -21,9 +21,10 @@ UtilityBlinkPlatformWithSandboxSupportImpl::
   mojo::PendingRemote<font_service::mojom::FontService> font_service;
   UtilityThread::Get()->BindHostReceiver(
       font_service.InitWithNewPipeAndPassReceiver());
-  font_loader_ = sk_make_sp<font_service::FontLoader>(std::move(font_service));
-  SkFontConfigInterface::SetGlobal(font_loader_);
-  sandbox_support_ = std::make_unique<WebSandboxSupportLinux>(font_loader_);
+  sk_sp<font_service::FontLoader> font_loader =
+      sk_make_sp<font_service::FontLoader>(std::move(font_service));
+  SkFontConfigInterface::SetGlobal(font_loader);
+  sandbox_support_ = std::make_unique<WebSandboxSupportLinux>(font_loader);
 #elif BUILDFLAG(IS_MAC)
   sandbox_support_ = std::make_unique<WebSandboxSupportMac>();
 #endif

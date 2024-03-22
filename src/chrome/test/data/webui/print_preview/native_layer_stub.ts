@@ -1,11 +1,11 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 import {CapabilitiesResponse, ExtensionDestinationInfo, GooglePromotedDestinationId, LocalDestinationInfo, NativeInitialSettings, NativeLayer, PageLayoutInfo, PrinterType} from 'chrome://print/print_preview.js';
-import {assert} from 'chrome://resources/js/assert.m.js';
-import {webUIListenerCallback} from 'chrome://resources/js/cr.m.js';
-import {PromiseResolver} from 'chrome://resources/js/promise_resolver.m.js';
+import {assert} from 'chrome://resources/js/assert.js';
+import {webUIListenerCallback} from 'chrome://resources/js/cr.js';
+import {PromiseResolver} from 'chrome://resources/js/promise_resolver.js';
 import {TestBrowserProxy} from 'chrome://webui-test/test_browser_proxy.js';
 
 import {getCddTemplate, getPdfPrinter} from './print_preview_test_utils.js';
@@ -56,12 +56,14 @@ export class NativeLayerStub extends TestBrowserProxy implements NativeLayer {
   constructor() {
     super([
       'dialogClose',
+      'doPrint',
       'getInitialSettings',
       'getPrinters',
       'getPreview',
       'getPrinterCapabilities',
       'hidePreview',
-      'print',
+      'managePrinters',
+      'recordInHistogram',
       'saveAppState',
       'showSystemDialog',
     ]);
@@ -77,7 +79,8 @@ export class NativeLayerStub extends TestBrowserProxy implements NativeLayer {
 
   getInitialSettings() {
     this.methodCalled('getInitialSettings');
-    return Promise.resolve(assert(this.initialSettings_!));
+    assert(this.initialSettings_);
+    return Promise.resolve(this.initialSettings_);
   }
 
   getPrinters(type: PrinterType) {
@@ -113,7 +116,8 @@ export class NativeLayerStub extends TestBrowserProxy implements NativeLayer {
     const pageRanges = printTicketParsed.pageRange;
     const requestId = printTicketParsed.requestID;
     if (this.pageLayoutInfo_) {
-      webUIListenerCallback('page-layout-ready', this.pageLayoutInfo_, false);
+      webUIListenerCallback(
+          'page-layout-ready', this.pageLayoutInfo_, false, false);
     }
     if (pageRanges.length === 0) {  // assume full length document, 1 page.
       webUIListenerCallback(
@@ -153,7 +157,7 @@ export class NativeLayerStub extends TestBrowserProxy implements NativeLayer {
     if (printerId === GooglePromotedDestinationId.SAVE_AS_PDF) {
       return Promise.resolve(getPdfPrinter());
     }
-    // <if expr="chromeos_ash or chromeos_lacros">
+    // <if expr="is_chromeos">
     if (printerId === GooglePromotedDestinationId.SAVE_TO_DRIVE_CROS) {
       return Promise.resolve(getPdfPrinter());
     }
@@ -165,8 +169,8 @@ export class NativeLayerStub extends TestBrowserProxy implements NativeLayer {
         Promise.reject();
   }
 
-  print(printTicket: string) {
-    this.methodCalled('print', printTicket);
+  doPrint(printTicket: string) {
+    this.methodCalled('doPrint', printTicket);
     return Promise.resolve(undefined);
   }
 
@@ -178,7 +182,11 @@ export class NativeLayerStub extends TestBrowserProxy implements NativeLayer {
     this.methodCalled('showSystemDialog');
   }
 
-  recordInHistogram() {}
+  recordInHistogram(histogram: string, bucket: number) {
+    this.methodCalled('recordInHistogram', histogram, bucket);
+  }
+
+  recordBooleanHistogram() {}
 
   saveAppState(appState: string) {
     this.methodCalled('saveAppState', appState);
@@ -186,7 +194,9 @@ export class NativeLayerStub extends TestBrowserProxy implements NativeLayer {
 
   cancelPendingPrintRequest() {}
 
-  managePrinters() {}
+  managePrinters() {
+    this.methodCalled('managePrinters');
+  }
 
   /**
    * settings The settings to return as a response to |getInitialSettings|.

@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -55,7 +55,7 @@ class CommanderUITest : public InProcessBrowserTest,
 
  protected:
   void ExecuteJS(std::string js) {
-    ASSERT_TRUE(content::ExecuteScript(contents_.get(), js));
+    ASSERT_TRUE(content::ExecJs(contents_.get(), js));
   }
   // CommanderHandler::Delegate implementation.
   void OnTextChanged(const std::u16string& text) override {
@@ -152,24 +152,25 @@ TEST(CommanderHandlerTest, DisplayResultsViewModelPassed) {
   EXPECT_EQ("cr.webUIListenerCallback", call_data.function_name());
   EXPECT_EQ("view-model-updated", call_data.arg1()->GetString());
 
-  const base::Value* arg = call_data.arg2();
-  EXPECT_EQ("Test item", arg->FindPath("options")
-                             ->GetListDeprecated()[0]
-                             .FindPath("title")
-                             ->GetString());
-  EXPECT_EQ(0, arg->FindPath("options")
-                   ->GetListDeprecated()[0]
-                   .FindPath("matchedRanges")
-                   ->GetListDeprecated()[0]
-                   .GetListDeprecated()[0]
+  const base::Value::Dict& arg = call_data.arg2()->GetDict();
+  EXPECT_EQ(
+      "Test item",
+      arg.Find("options")->GetList()[0].GetDict().Find("title")->GetString());
+  EXPECT_EQ(0, arg.Find("options")
+                   ->GetList()[0]
+                   .GetDict()
+                   .Find("matchedRanges")
+                   ->GetList()[0]
+                   .GetList()[0]
                    .GetInt());
-  EXPECT_EQ(4, arg->FindPath("options")
-                   ->GetListDeprecated()[0]
-                   .FindPath("matchedRanges")
-                   ->GetListDeprecated()[0]
-                   .GetListDeprecated()[1]
+  EXPECT_EQ(4, arg.Find("options")
+                   ->GetList()[0]
+                   .GetDict()
+                   .Find("matchedRanges")
+                   ->GetList()[0]
+                   .GetList()[1]
                    .GetInt());
-  EXPECT_EQ(42, arg->FindPath("resultSetId")->GetInt());
+  EXPECT_EQ(42, arg.Find("resultSetId")->GetInt());
 }
 
 TEST(CommanderHandlerTest, PromptViewModelPassed) {
@@ -188,9 +189,9 @@ TEST(CommanderHandlerTest, PromptViewModelPassed) {
   EXPECT_EQ("cr.webUIListenerCallback", call_data.function_name());
   EXPECT_EQ("view-model-updated", call_data.arg1()->GetString());
 
-  const base::Value* arg = call_data.arg2();
-  EXPECT_EQ("Select fruit", arg->FindPath("promptText")->GetString());
-  EXPECT_EQ(42, arg->FindPath("resultSetId")->GetInt());
+  const base::Value::Dict& arg = call_data.arg2()->GetDict();
+  EXPECT_EQ("Select fruit", arg.Find("promptText")->GetString());
+  EXPECT_EQ(42, arg.Find("resultSetId")->GetInt());
 }
 
 TEST(CommanderHandlerTest, Initialize) {

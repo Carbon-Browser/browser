@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,10 +8,6 @@
 #import "ios/chrome/browser/ui/fullscreen/fullscreen_controller_observer.h"
 #import "ios/chrome/browser/ui/fullscreen/fullscreen_model.h"
 #import "ios/chrome/browser/ui/fullscreen/fullscreen_model_observer.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 TestFullscreenController::TestFullscreenController(FullscreenModel* model)
     : FullscreenController(),
@@ -26,18 +22,6 @@ TestFullscreenController::~TestFullscreenController() {
 
 ChromeBroadcaster* TestFullscreenController::broadcaster() {
   return broadcaster_;
-}
-
-void TestFullscreenController::SetWebStateList(WebStateList* web_state_list) {
-  web_state_list_ = web_state_list;
-}
-
-const WebStateList* TestFullscreenController::GetWebStateList() const {
-  return web_state_list_;
-}
-
-WebStateList* TestFullscreenController::GetWebStateList() {
-  return web_state_list_;
 }
 
 void TestFullscreenController::AddObserver(
@@ -96,6 +80,32 @@ void TestFullscreenController::EnterFullscreen() {
 void TestFullscreenController::ExitFullscreen() {
   if (model_)
     model_->ResetForNavigation();
+}
+
+void TestFullscreenController::ExitFullscreenWithoutAnimation() {
+  if (model_) {
+    model_->ResetForNavigation();
+  }
+}
+
+bool TestFullscreenController::IsForceFullscreenMode() const {
+  return model_ ? model_->IsForceFullscreenMode() : false;
+}
+
+void TestFullscreenController::EnterForceFullscreenMode() {
+  if (model_ && !model_->IsForceFullscreenMode()) {
+    model_->SetForceFullscreenMode(true);
+    model_->IncrementDisabledCounter();
+    model_->ForceEnterFullscreen();
+  }
+}
+
+void TestFullscreenController::ExitForceFullscreenMode() {
+  if (model_ && model_->IsForceFullscreenMode()) {
+    model_->DecrementDisabledCounter();
+    model_->SetForceFullscreenMode(false);
+    model_->ResetForNavigation();
+  }
 }
 
 void TestFullscreenController::OnFullscreenViewportInsetRangeChanged(

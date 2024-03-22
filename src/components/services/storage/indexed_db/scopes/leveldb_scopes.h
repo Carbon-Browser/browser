@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,15 +14,15 @@
 #include <utility>
 #include <vector>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/numerics/checked_math.h"
 #include "base/sequence_checker.h"
 #include "base/task/sequenced_task_runner.h"
-#include "components/services/storage/indexed_db/locks/leveled_lock.h"
-#include "components/services/storage/indexed_db/locks/leveled_lock_range.h"
+#include "components/services/storage/indexed_db/locks/partitioned_lock.h"
+#include "components/services/storage/indexed_db/locks/partitioned_lock_id.h"
 #include "components/services/storage/indexed_db/scopes/leveldb_scopes_coding.h"
 #include "third_party/leveldatabase/src/include/leveldb/options.h"
 #include "third_party/leveldatabase/src/include/leveldb/status.h"
@@ -30,29 +30,20 @@
 namespace content {
 class LevelDBScope;
 class LevelDBState;
-class LeveledLockManager;
+class PartitionedLockManager;
 
 class LevelDBScopes {
  public:
   using TearDownCallback = base::RepeatingCallback<void(leveldb::Status)>;
   using EmptyRange = std::pair<std::string, std::string>;
 
-  enum class TaskRunnerMode {
-    // No new sequence runners are created. Both the cleanup and the revert
-    // tasks are run using the sequence runner that is calling this class.
-    kUseCurrentSequence,
-    // A new sequence runner is created for both the cleanup tasks and the
-    // revert tasks.
-    kNewCleanupAndRevertSequences,
-  };
-
   // |lock_manager| is expected to be alive during the lifetime of this class.
   // |tear_down_callback| will not be called after the destruction of this
   // class.
   LevelDBScopes(std::vector<uint8_t> metadata_key_prefix,
-                size_t max_write_batch_size_bytes_bytes,
+                size_t max_write_batch_size_bytes,
                 scoped_refptr<LevelDBState> level_db,
-                LeveledLockManager* lock_manager,
+                PartitionedLockManager* lock_manager,
                 TearDownCallback tear_down_callback);
 
   LevelDBScopes(const LevelDBScopes&) = delete;
@@ -65,19 +56,10 @@ class LevelDBScopes {
   // the revert tasks if necessary.
   leveldb::Status Initialize();
 
-  // This starts (or adopts) the task runners associated with aborting and
-  // cleaning up previous logs based on the given |mode|, and schedules any
-  // pending cleanup or revert tasks.
-  // Returns any errors that might occur during revert if |mode| is
-  // kUseCurrentSequence.
-  leveldb::Status StartRecoveryAndCleanupTasks(TaskRunnerMode mode);
+  // Schedules any pending cleanup or revert tasks.
+  void StartRecoveryAndCleanupTasks();
 
-  // In |empty_ranges|, |pair.first| is the inclusive range begin, and
-  // |pair.end| is the exclusive range end. The ranges must be disjoint (they
-  // cannot overlap).
-  std::unique_ptr<LevelDBScope> CreateScope(
-      std::vector<LeveledLock> locks,
-      std::vector<EmptyRange> empty_ranges);
+  std::unique_ptr<LevelDBScope> CreateScope(std::vector<PartitionedLock> locks);
 
   leveldb::Status Commit(std::unique_ptr<LevelDBScope> scope,
                          bool sync_on_commit);
@@ -106,28 +88,19 @@ class LevelDBScopes {
 
  private:
   enum class StartupCleanupType { kExecuteCleanupTasks, kIgnoreCleanupTasks };
-  using StartupScopeToRevert = std::pair<int64_t, std::vector<LeveledLock>>;
+  using StartupScopeToRevert = std::pair<int64_t, std::vector<PartitionedLock>>;
   using StartupScopeToCleanup = std::pair<int64_t, StartupCleanupType>;
-  using RecoveryLocksList = std::list<std::vector<LeveledLock>>;
+  using RecoveryLocksList = std::list<std::vector<PartitionedLock>>;
 
-  leveldb::Status InitializeGlobalMetadata(
-      const leveldb::ReadOptions& read_options,
-      const leveldb::WriteOptions& write_options);
-  leveldb::Status InitializeScopesAndTasks(
-      const leveldb::ReadOptions& read_options,
-      const leveldb::WriteOptions& write_options);
-
-  // If the mode is TaskRunnerMode::kUseCurrentSequence, then the result of the
-  // revert task is returned.
-  leveldb::Status Rollback(int64_t scope_id, std::vector<LeveledLock> locks);
+  void Rollback(int64_t scope_id, std::vector<PartitionedLock> locks);
 
   void OnCleanupTaskResult(base::OnceClosure on_complete,
                            leveldb::Status result);
 
-  void StartRevertTask(int64_t scope_id, std::vector<LeveledLock> locks);
+  void StartRevertTask(int64_t scope_id, std::vector<PartitionedLock> locks);
 
   void OnRevertTaskResult(int64_t scope_id,
-                          std::vector<LeveledLock> locks,
+                          std::vector<PartitionedLock> locks,
                           leveldb::Status result);
 
   SEQUENCE_CHECKER(sequence_checker_);
@@ -143,7 +116,7 @@ class LevelDBScopes {
   int next_scope_id_ = 0;
   scoped_refptr<LevelDBState> level_db_;
   // The |lock_manager_| is expected to outlive this class.
-  raw_ptr<LeveledLockManager> lock_manager_;
+  raw_ptr<PartitionedLockManager> lock_manager_;
   TearDownCallback tear_down_callback_;
 
 #if DCHECK_IS_ON()

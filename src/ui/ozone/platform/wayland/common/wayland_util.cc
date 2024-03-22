@@ -1,15 +1,16 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "ui/ozone/platform/wayland/common/wayland_util.h"
 
 #include <xdg-shell-client-protocol.h>
-#include <xdg-shell-unstable-v6-client-protocol.h>
 
+#include "build/buildflag.h"
 #include "third_party/skia/include/core/SkPath.h"
 #include "third_party/skia/include/core/SkRegion.h"
 #include "ui/base/hit_test.h"
+#include "ui/events/base_event_utils.h"
 #include "ui/gfx/geometry/skia_conversions.h"
 #include "ui/gfx/geometry/transform.h"
 #include "ui/ozone/platform/wayland/host/wayland_connection.h"
@@ -23,7 +24,9 @@ namespace {
 
 const SkColorType kColorType = kBGRA_8888_SkColorType;
 
-uint32_t IdentifyDirectionStable(int hittest) {
+}  // namespace
+
+uint32_t IdentifyDirection(int hittest) {
   uint32_t direction = 0;
   switch (hittest) {
     case HTBOTTOM:
@@ -59,70 +62,18 @@ uint32_t IdentifyDirectionStable(int hittest) {
   return direction;
 }
 
-uint32_t IdentifyDirectionV6(int hittest) {
-  uint32_t direction = 0;
-  switch (hittest) {
-    case HTBOTTOM:
-      direction =
-          zxdg_toplevel_v6_resize_edge::ZXDG_TOPLEVEL_V6_RESIZE_EDGE_BOTTOM;
-      break;
-    case HTBOTTOMLEFT:
-      direction = zxdg_toplevel_v6_resize_edge::
-          ZXDG_TOPLEVEL_V6_RESIZE_EDGE_BOTTOM_LEFT;
-      break;
-    case HTBOTTOMRIGHT:
-      direction = zxdg_toplevel_v6_resize_edge::
-          ZXDG_TOPLEVEL_V6_RESIZE_EDGE_BOTTOM_RIGHT;
-      break;
-    case HTLEFT:
-      direction =
-          zxdg_toplevel_v6_resize_edge::ZXDG_TOPLEVEL_V6_RESIZE_EDGE_LEFT;
-      break;
-    case HTRIGHT:
-      direction =
-          zxdg_toplevel_v6_resize_edge::ZXDG_TOPLEVEL_V6_RESIZE_EDGE_RIGHT;
-      break;
-    case HTTOP:
-      direction =
-          zxdg_toplevel_v6_resize_edge::ZXDG_TOPLEVEL_V6_RESIZE_EDGE_TOP;
-      break;
-    case HTTOPLEFT:
-      direction =
-          zxdg_toplevel_v6_resize_edge::ZXDG_TOPLEVEL_V6_RESIZE_EDGE_TOP_LEFT;
-      break;
-    case HTTOPRIGHT:
-      direction =
-          zxdg_toplevel_v6_resize_edge::ZXDG_TOPLEVEL_V6_RESIZE_EDGE_TOP_RIGHT;
-      break;
-    default:
-      direction =
-          zxdg_toplevel_v6_resize_edge::ZXDG_TOPLEVEL_V6_RESIZE_EDGE_NONE;
-      break;
-  }
-  return direction;
-}
-
-}  // namespace
-
-uint32_t IdentifyDirection(const ui::WaylandConnection& connection,
-                           int hittest) {
-  if (connection.shell())
-    return IdentifyDirectionStable(hittest);
-  DCHECK(connection.shell_v6());
-  return IdentifyDirectionV6(hittest);
-}
-
 bool DrawBitmap(const SkBitmap& bitmap, ui::WaylandShmBuffer* out_buffer) {
   DCHECK(out_buffer);
   DCHECK(out_buffer->GetMemory());
-  DCHECK_EQ(out_buffer->size(), gfx::Size(bitmap.width(), bitmap.height()));
+  DCHECK(gfx::Rect(out_buffer->size())
+             .Contains(gfx::Rect(bitmap.width(), bitmap.height())));
 
   auto* mapped_memory = out_buffer->GetMemory();
   auto size = out_buffer->size();
-  sk_sp<SkSurface> sk_surface = SkSurface::MakeRasterDirect(
-      SkImageInfo::Make(size.width(), size.height(), kColorType,
-                        kOpaque_SkAlphaType),
-      mapped_memory, out_buffer->stride());
+  sk_sp<SkSurface> sk_surface =
+      SkSurfaces::WrapPixels(SkImageInfo::Make(size.width(), size.height(),
+                                               kColorType, kOpaque_SkAlphaType),
+                             mapped_memory, out_buffer->stride());
 
   if (!sk_surface)
     return false;
@@ -177,12 +128,16 @@ wl_output_transform ToWaylandTransform(gfx::OverlayTransform transform) {
       return WL_OUTPUT_TRANSFORM_FLIPPED;
     case gfx::OVERLAY_TRANSFORM_FLIP_VERTICAL:
       return WL_OUTPUT_TRANSFORM_FLIPPED_180;
+    // gfx::OverlayTransform and Wayland buffer transforms rotate in opposite
+    // directions relative to each other, so swap 90 and 270.
+    // TODO(rivr): Currently all wl_buffers are created without y inverted, so
+    // this may need to be revisited if that changes.
     case gfx::OVERLAY_TRANSFORM_ROTATE_90:
-      return WL_OUTPUT_TRANSFORM_90;
+      return WL_OUTPUT_TRANSFORM_270;
     case gfx::OVERLAY_TRANSFORM_ROTATE_180:
       return WL_OUTPUT_TRANSFORM_180;
     case gfx::OVERLAY_TRANSFORM_ROTATE_270:
-      return WL_OUTPUT_TRANSFORM_270;
+      return WL_OUTPUT_TRANSFORM_90;
     default:
       break;
   }
@@ -323,7 +278,8 @@ gfx::Rect TranslateWindowBoundsToParentDIP(ui::WaylandWindow* window,
                                            ui::WaylandWindow* parent_window) {
   DCHECK(window);
   DCHECK(parent_window);
-  DCHECK_EQ(window->window_scale(), parent_window->window_scale());
+  DCHECK_EQ(window->applied_state().window_scale,
+            parent_window->applied_state().window_scale);
   DCHECK_EQ(window->ui_scale(), parent_window->ui_scale());
   return wl::TranslateBoundsToParentCoordinates(
       window->GetBoundsInDIP(), parent_window->GetBoundsInDIP());
@@ -344,20 +300,49 @@ std::vector<gfx::Rect> CreateRectsFromSkPath(const SkPath& path) {
 
 SkPath ConvertPathToDIP(const SkPath& path_in_pixels, float scale) {
   SkScalar sk_scale = SkFloatToScalar(1.0f / scale);
-  gfx::Transform transform;
-  transform.Scale(sk_scale, sk_scale);
   SkPath path_in_dips;
-  path_in_pixels.transform(transform.matrix().asM33(), &path_in_dips);
+  path_in_pixels.transform(SkMatrix::Scale(sk_scale, sk_scale), &path_in_dips);
   return path_in_dips;
 }
 
 void SkColorToWlArray(const SkColor& color, wl_array& array) {
   SkColor4f precise_color = SkColor4f::FromColor(color);
-  for (float component : precise_color.array()) {
+  SkColorToWlArray(precise_color, array);
+}
+
+void SkColorToWlArray(const SkColor4f& color, wl_array& array) {
+  for (float component : color.array()) {
     float* ptr = static_cast<float*>(wl_array_add(&array, sizeof(float)));
     DCHECK(ptr);
     *ptr = component;
   }
+}
+
+void TransformToWlArray(
+    const absl::variant<gfx::OverlayTransform, gfx::Transform>& transform,
+    wl_array& array) {
+  if (absl::holds_alternative<gfx::OverlayTransform>(transform)) {
+    return;
+  }
+
+  gfx::Transform t = absl::get<gfx::Transform>(transform);
+  constexpr int rcs[][2] = {{0, 0}, {1, 0}, {0, 1}, {1, 1}, {0, 3}, {1, 3}};
+  for (auto* rc : rcs) {
+    float* ptr = static_cast<float*>(wl_array_add(&array, sizeof(float)));
+    DCHECK(ptr);
+    *ptr = static_cast<float>(t.rc(rc[0], rc[1]));
+  }
+}
+
+base::TimeTicks EventMillisecondsToTimeTicks(uint32_t milliseconds) {
+#if BUILDFLAG(IS_LINUX)
+  // TODO(crbug.com/1499638): `milliseconds` comes from Weston that
+  // uses timestamp from libinput, which is different from TimeTicks.
+  // Use EventTimeForNow(), for now.
+  return ui::EventTimeForNow();
+#else
+  return base::TimeTicks() + base::Milliseconds(milliseconds);
+#endif
 }
 
 }  // namespace wl

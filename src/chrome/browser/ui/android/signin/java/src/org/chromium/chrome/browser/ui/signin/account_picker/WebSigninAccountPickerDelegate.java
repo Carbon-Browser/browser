@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -20,6 +20,7 @@ import org.chromium.components.signin.base.GoogleServiceAuthError;
 import org.chromium.components.signin.identitymanager.AccountInfoServiceProvider;
 import org.chromium.components.signin.identitymanager.ConsentLevel;
 import org.chromium.components.signin.identitymanager.IdentityManager;
+import org.chromium.components.signin.metrics.SigninAccessPoint;
 import org.chromium.components.signin.metrics.SignoutReason;
 import org.chromium.content_public.browser.LoadUrlParams;
 
@@ -43,10 +44,12 @@ public class WebSigninAccountPickerDelegate implements AccountPickerDelegate {
         mCurrentTab = currentTab;
         mWebSigninBridgeFactory = webSigninBridgeFactory;
         mContinueUrl = continueUrl;
-        mSigninManager = IdentityServicesProvider.get().getSigninManager(
-                Profile.getLastUsedRegularProfile());
-        mIdentityManager = IdentityServicesProvider.get().getIdentityManager(
-                Profile.getLastUsedRegularProfile());
+        mSigninManager =
+                IdentityServicesProvider.get()
+                        .getSigninManager(Profile.getLastUsedRegularProfile());
+        mIdentityManager =
+                IdentityServicesProvider.get()
+                        .getIdentityManager(Profile.getLastUsedRegularProfile());
     }
 
     @Override
@@ -62,27 +65,38 @@ public class WebSigninAccountPickerDelegate implements AccountPickerDelegate {
             // if user retries the sign-in from the error screen, we need to sign out the user
             // first before signing in again.
             destroyWebSigninBridge();
-            mSigninManager.signOut(SignoutReason.SIGNIN_RETRIGGERD_FROM_WEB_SIGNIN);
+            mSigninManager.signOut(SignoutReason.SIGNIN_RETRIGGERED_FROM_WEB_SIGNIN);
         }
-        AccountInfoServiceProvider.get().getAccountInfoByEmail(accountEmail).then(accountInfo -> {
-            mWebSigninBridge =
-                    mWebSigninBridgeFactory.create(Profile.getLastUsedRegularProfile(), accountInfo,
-                            createWebSigninBridgeListener(
-                                    mCurrentTab, mContinueUrl, onSignInErrorCallback));
-            mSigninManager.signin(AccountUtils.createAccountFromName(accountEmail),
-                    new SigninManager.SignInCallback() {
-                        @Override
-                        public void onSignInComplete() {
-                            // After the sign-in is finished in Chrome, we still need to wait for
-                            // WebSigninBridge to be called to redirect to the continue url.
-                        }
+        AccountInfoServiceProvider.get()
+                .getAccountInfoByEmail(accountEmail)
+                .then(
+                        accountInfo -> {
+                            mWebSigninBridge =
+                                    mWebSigninBridgeFactory.create(
+                                            Profile.getLastUsedRegularProfile(),
+                                            accountInfo,
+                                            createWebSigninBridgeListener(
+                                                    mCurrentTab,
+                                                    mContinueUrl,
+                                                    onSignInErrorCallback));
+                            mSigninManager.signin(
+                                    AccountUtils.createAccountFromName(accountEmail),
+                                    SigninAccessPoint.WEB_SIGNIN,
+                                    new SigninManager.SignInCallback() {
+                                        @Override
+                                        public void onSignInComplete() {
+                                            // After the sign-in is finished in Chrome, we still
+                                            // need to wait for WebSigninBridge to be called to
+                                            // redirect to the continue url.
+                                        }
 
-                        @Override
-                        public void onSignInAborted() {
-                            WebSigninAccountPickerDelegate.this.destroyWebSigninBridge();
-                        }
-                    });
-        });
+                                        @Override
+                                        public void onSignInAborted() {
+                                            WebSigninAccountPickerDelegate.this
+                                                    .destroyWebSigninBridge();
+                                        }
+                                    });
+                        });
     }
 
     @Override

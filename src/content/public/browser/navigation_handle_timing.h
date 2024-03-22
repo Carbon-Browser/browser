@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -87,10 +87,6 @@ struct CONTENT_EXPORT NavigationHandleTiming {
 
   // The time the navigation commit message was sent to a renderer process.
   base::TimeTicks navigation_commit_sent_time;
-
-  // TODO(crbug.com/1253231): Remove the following timing.
-  base::TimeTicks early_hints_for_first_request_time;
-  base::TimeTicks early_hints_for_final_request_time;
 };
 
 }  // namespace content

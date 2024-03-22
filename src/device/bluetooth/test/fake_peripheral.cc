@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,11 +7,13 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/memory/ptr_util.h"
 #include "base/memory/weak_ptr.h"
+#include "base/ranges/algorithm.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/stringprintf.h"
+#include "base/task/single_thread_task_runner.h"
 #include "build/build_config.h"
 #include "device/bluetooth/public/cpp/bluetooth_uuid.h"
 #include "device/bluetooth/test/fake_remote_gatt_service.h"
@@ -72,12 +74,10 @@ void FakePeripheral::SetNextGATTDiscoveryResponse(uint16_t code) {
 
 bool FakePeripheral::AllResponsesConsumed() {
   return !next_connection_response_ && !next_discovery_response_ &&
-         std::all_of(gatt_services_.begin(), gatt_services_.end(),
-                     [](const auto& e) {
-                       FakeRemoteGattService* fake_remote_gatt_service =
-                           static_cast<FakeRemoteGattService*>(e.second.get());
-                       return fake_remote_gatt_service->AllResponsesConsumed();
-                     });
+         base::ranges::all_of(gatt_services_, [](const auto& e) {
+           return static_cast<FakeRemoteGattService*>(e.second.get())
+               ->AllResponsesConsumed();
+         });
 }
 
 void FakePeripheral::SimulateGATTDisconnection() {
@@ -127,7 +127,7 @@ device::BluetoothTransport FakePeripheral::GetType() const {
   NOTREACHED();
   return device::BLUETOOTH_TRANSPORT_INVALID;
 }
-#endif
+#endif  // BUILDFLAG(IS_CHROMEOS) || BUILDFLAG(IS_LINUX)
 
 std::string FakePeripheral::GetIdentifier() const {
   NOTREACHED();
@@ -322,7 +322,7 @@ bool FakePeripheral::IsGattServicesDiscoveryComplete() const {
   // DiscoverGattServices() is implemented.
   if (!pending_gatt_discovery_ && !discovery_complete) {
     pending_gatt_discovery_ = true;
-    base::ThreadTaskRunnerHandle::Get()->PostTask(
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE, base::BindOnce(&FakePeripheral::DispatchDiscoveryResponse,
                                   weak_ptr_factory_.GetWeakPtr()));
   }
@@ -332,7 +332,7 @@ bool FakePeripheral::IsGattServicesDiscoveryComplete() const {
 
 void FakePeripheral::CreateGattConnectionImpl(
     absl::optional<device::BluetoothUUID>) {
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE, base::BindOnce(&FakePeripheral::DispatchConnectionResponse,
                                 weak_ptr_factory_.GetWeakPtr()));
 }

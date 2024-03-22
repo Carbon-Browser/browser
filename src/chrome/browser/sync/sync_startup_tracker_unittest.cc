@@ -1,4 +1,4 @@
-// Copyright (c) 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,7 @@
 
 #include "base/test/mock_callback.h"
 #include "base/test/task_environment.h"
-#include "components/sync/driver/test_sync_service.h"
+#include "components/sync/test/test_sync_service.h"
 #include "google_apis/gaia/google_service_auth_error.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
@@ -45,7 +45,7 @@ TEST_F(SyncStartupTrackerTest, SyncNotSignedIn) {
   // Make sure that we get a SyncStartupFailed() callback if sync is not logged
   // in.
   sync_service_.SetDisableReasons(
-      syncer::SyncService::DISABLE_REASON_NOT_SIGNED_IN);
+      {syncer::SyncService::DISABLE_REASON_NOT_SIGNED_IN});
   sync_service_.SetTransportState(
       syncer::SyncService::TransportState::DISABLED);
   EXPECT_CALL(callback_, Run(SyncStartupTracker::ServiceStartupState::kError));
@@ -56,10 +56,7 @@ TEST_F(SyncStartupTrackerTest, SyncAuthError) {
   // Make sure that we get a SyncStartupFailed() callback if sync gets an auth
   // error.
   sync_service_.SetDisableReasons(syncer::SyncService::DisableReasonSet());
-  sync_service_.SetTransportState(
-      syncer::SyncService::TransportState::INITIALIZING);
-  sync_service_.SetAuthError(
-      GoogleServiceAuthError(GoogleServiceAuthError::INVALID_GAIA_CREDENTIALS));
+  sync_service_.SetPersistentAuthError();
   EXPECT_CALL(callback_, Run(SyncStartupTracker::ServiceStartupState::kError));
   SyncStartupTracker tracker(&sync_service_, callback_.Get());
 }
@@ -87,10 +84,7 @@ TEST_F(SyncStartupTrackerTest, SyncDelayedAuthError) {
 
   // Now, mark the Sync Service as having an auth error.
   sync_service_.SetDisableReasons(syncer::SyncService::DisableReasonSet());
-  sync_service_.SetTransportState(
-      syncer::SyncService::TransportState::INITIALIZING);
-  sync_service_.SetAuthError(
-      GoogleServiceAuthError(GoogleServiceAuthError::INVALID_GAIA_CREDENTIALS));
+  sync_service_.SetPersistentAuthError();
   EXPECT_CALL(callback_, Run(SyncStartupTracker::ServiceStartupState::kError));
   tracker.OnStateChanged(&sync_service_);
 }
@@ -105,7 +99,7 @@ TEST_F(SyncStartupTrackerTest, SyncDelayedUnrecoverableError) {
 
   // Now, mark the Sync Service as having an unrecoverable error.
   sync_service_.SetDisableReasons(
-      syncer::SyncService::DISABLE_REASON_UNRECOVERABLE_ERROR);
+      {syncer::SyncService::DISABLE_REASON_UNRECOVERABLE_ERROR});
   sync_service_.SetTransportState(
       syncer::SyncService::TransportState::DISABLED);
   EXPECT_CALL(callback_, Run(SyncStartupTracker::ServiceStartupState::kError));

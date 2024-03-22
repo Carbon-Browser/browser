@@ -1,12 +1,11 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef EXTENSIONS_BROWSER_API_AUDIO_AUDIO_SERVICE_LACROS_H_
 #define EXTENSIONS_BROWSER_API_AUDIO_AUDIO_SERVICE_LACROS_H_
 
-#include "base/callback.h"
-#include "base/callback_forward.h"
+#include "base/functional/callback.h"
 #include "base/observer_list.h"
 #include "chromeos/crosapi/mojom/audio_service.mojom.h"
 #include "extensions/browser/api/audio/audio_service.h"

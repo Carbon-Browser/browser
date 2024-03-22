@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -29,7 +29,7 @@ class WebEngineURLLoaderThrottleProvider
   // blink::URLLoaderThrottleProvider implementation.
   std::unique_ptr<blink::URLLoaderThrottleProvider> Clone() override;
   blink::WebVector<std::unique_ptr<blink::URLLoaderThrottle>> CreateThrottles(
-      int render_frame_id,
+      base::optional_ref<const blink::LocalFrameToken> local_frame_token,
       const blink::WebURLRequest& request) override;
   void SetOnline(bool is_online) override;
 

@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,14 +6,15 @@
 #define DEVICE_FIDO_MAC_CREDENTIAL_STORE_H_
 
 #include <list>
+#include <memory>
 #include <set>
 #include <string>
 #include <utility>
 #include <vector>
 
-#include "base/callback.h"
+#include "base/apple/foundation_util.h"
 #include "base/component_export.h"
-#include "base/mac/foundation_util.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "device/fido/mac/authenticator_config.h"
 #include "device/fido/mac/credential_metadata.h"
@@ -24,16 +25,16 @@
 
 #if defined(__OBJC__)
 @class LAContext;
-#else
-class LAContext;
 #endif
 
 namespace device::fido::mac {
 
 // Credential represents a WebAuthn credential from the keychain.
 struct COMPONENT_EXPORT(DEVICE_FIDO) Credential {
-  Credential(base::ScopedCFTypeRef<SecKeyRef> private_key,
-             std::vector<uint8_t> credential_id);
+  Credential(base::apple::ScopedCFTypeRef<SecKeyRef> private_key,
+             std::vector<uint8_t> credential_id,
+             CredentialMetadata metadata,
+             std::string rp_id);
   Credential(const Credential&);
   Credential(Credential&& other);
   Credential& operator=(const Credential&);
@@ -42,14 +43,22 @@ struct COMPONENT_EXPORT(DEVICE_FIDO) Credential {
 
   bool operator==(const Credential&) const;
 
+  // Returns whether the user must be verified via Touch ID or device unlock
+  // in order to sign with the secure enclave key pair for this credential.
+  bool RequiresUvForSignature() const;
+
   // An opaque reference to the private key that can be used for signing.
-  base::ScopedCFTypeRef<SecKeyRef> private_key;
+  base::apple::ScopedCFTypeRef<SecKeyRef> private_key;
 
   // The credential ID is a handle to the key that gets passed to the RP. This
   // ID is opaque to the RP, but is obtained by encrypting the credential
   // metadata with a profile-specific metadata secret. See |CredentialMetadata|
   // for more information.
   std::vector<uint8_t> credential_id;
+
+  CredentialMetadata metadata;
+
+  std::string rp_id;
 };
 
 // TouchIdCredentialStore allows operations on Touch ID platform authenticator
@@ -66,25 +75,31 @@ class COMPONENT_EXPORT(DEVICE_FIDO) TouchIdCredentialStore
   TouchIdCredentialStore& operator=(const TouchIdCredentialStore&) = delete;
   ~TouchIdCredentialStore() override;
 
-  // Returns the access control object used when creating platform authenticator
-  // credentials.
-  static base::ScopedCFTypeRef<SecAccessControlRef> DefaultAccessControl();
-
+#if defined(__OBJC__)
   // An LAContext that has been successfully evaluated using |TouchIdContext|
-  // may be passed in |authenticaton_context|, in order to authorize
+  // may be passed in |authentication_context|, in order to authorize
   // credentials returned by the `Find*` instance methods for signing without
   // triggering a Touch ID prompt.
-  void set_authentication_context(LAContext* authentication_context) {
-    authentication_context_ = authentication_context;
-  }
+  void SetAuthenticationContext(LAContext* authentication_context);
+#endif  // __OBJC__
 
   // CreateCredential inserts a new credential into the keychain. It returns
   // the new credential and its public key, or absl::nullopt if an error
   // occurred.
-  absl::optional<std::pair<Credential, base::ScopedCFTypeRef<SecKeyRef>>>
+  absl::optional<std::pair<Credential, base::apple::ScopedCFTypeRef<SecKeyRef>>>
   CreateCredential(const std::string& rp_id,
                    const PublicKeyCredentialUserEntity& user,
                    Discoverable discoverable) const;
+
+  // CreateCredentialLegacyCredentialForTesting inserts a credential for an old
+  // `CredentialMetadata::Version`. Such credentials can't be created anymore,
+  // but they still exist and we need to be able to exercise them.
+  absl::optional<std::pair<Credential, base::apple::ScopedCFTypeRef<SecKeyRef>>>
+  CreateCredentialLegacyCredentialForTesting(
+      CredentialMetadata::Version version,
+      const std::string& rp_id,
+      const PublicKeyCredentialUserEntity& user,
+      Discoverable discoverable) const;
 
   // FindCredentialsFromCredentialDescriptorList returns all credentials that
   // match one of the given |descriptors| and belong to |rp_id|. A descriptor
@@ -98,21 +113,16 @@ class COMPONENT_EXPORT(DEVICE_FIDO) TouchIdCredentialStore
       const std::vector<PublicKeyCredentialDescriptor>& descriptors) const;
 
   // FindResidentCredentials returns the client-side discoverable credentials
-  // for the given |rp_id|, or base::nulltopt if an error occurred.
+  // for the given |rp_id|. If |rp_id| is not specified, all resident
+  // credentials are returned. nullopt is returned if an error occurred.
   absl::optional<std::list<Credential>> FindResidentCredentials(
-      const std::string& rp_id) const;
-
-  // UnsealMetadata returns the CredentialMetadata for the given credential's
-  // ID if it was encoded for the given RP ID, or absl::nullopt otherwise.
-  absl::optional<CredentialMetadata> UnsealMetadata(
-      const std::string& rp_id,
-      const Credential& credential) const;
+      const absl::optional<std::string>& rp_id) const;
 
   // DeleteCredentialsForUserId deletes all credentials for the given RP and
   // user ID. Returns true if deleting succeeded or no matching credential
   // exists, and false if an error occurred.
   bool DeleteCredentialsForUserId(const std::string& rp_id,
-                                  base::span<const uint8_t> user_id) const;
+                                  const std::vector<uint8_t>& user_id) const;
 
   // PlatformCredentialStore:
   void DeleteCredentials(base::Time created_not_before,
@@ -126,23 +136,28 @@ class COMPONENT_EXPORT(DEVICE_FIDO) TouchIdCredentialStore
   bool DeleteCredentialsSync(base::Time created_not_before,
                              base::Time created_not_after);
 
+  bool DeleteCredentialById(base::span<const uint8_t> credential_id) const;
+
+  bool UpdateCredential(base::span<uint8_t> credential_id,
+                        const std::string& username);
+
   size_t CountCredentialsSync(base::Time created_not_before,
                               base::Time created_not_after);
 
   // Returns all credentials for the given `rp_id` (resident and non-resident).
-  static std::vector<std::pair<Credential, CredentialMetadata>>
-  FindCredentialsForTesting(AuthenticatorConfig config, std::string rp_id);
+  static std::vector<Credential> FindCredentialsForTesting(
+      AuthenticatorConfig config,
+      std::string rp_id);
 
  private:
   absl::optional<std::list<Credential>> FindCredentialsImpl(
-      const std::string& rp_id,
-      absl::optional<base::span<const uint8_t>> user_id,
+      const absl::optional<std::string>& rp_id,
       const std::set<std::vector<uint8_t>>& credential_ids) const;
 
-  bool DeleteCredentialById(base::span<const uint8_t> credential_id) const;
-
   AuthenticatorConfig config_;
-  LAContext* authentication_context_ = nullptr;
+
+  struct ObjCStorage;
+  std::unique_ptr<ObjCStorage> objc_storage_;
 };
 
 }  // namespace device::fido::mac

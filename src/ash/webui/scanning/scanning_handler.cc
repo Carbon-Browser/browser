@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,11 +8,11 @@
 
 #include "ash/constants/ash_features.h"
 #include "ash/webui/scanning/scanning_app_delegate.h"
-#include "base/bind.h"
 #include "base/check.h"
 #include "base/check_op.h"
 #include "base/feature_list.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
 #include "base/task/sequenced_task_runner.h"
 #include "base/task/task_traits.h"
 #include "base/task/thread_pool.h"
@@ -108,12 +108,12 @@ void ScanningHandler::FileSelectionCanceled(void* params) {
                             CreateSelectedPathValue(base::FilePath()));
 }
 
-base::Value ScanningHandler::CreateSelectedPathValue(
+base::Value::Dict ScanningHandler::CreateSelectedPathValue(
     const base::FilePath& path) {
-  base::Value selected_path(base::Value::Type::DICTIONARY);
-  selected_path.SetStringKey(kFilePath, path.value());
-  selected_path.SetStringKey(kBaseName,
-                             scanning_app_delegate_->GetBaseNameFromPath(path));
+  base::Value::Dict selected_path;
+  selected_path.Set(kFilePath, path.value());
+  selected_path.Set(kBaseName,
+                    scanning_app_delegate_->GetBaseNameFromPath(path));
   return selected_path;
 }
 
@@ -136,7 +136,6 @@ void ScanningHandler::HandleOpenFilesInMediaApp(const base::Value::List& args) {
     return;
 
   CHECK_EQ(1U, args.size());
-  DCHECK(args[0].is_list());
   const base::Value::List& value_list = args[0].GetList();
   DCHECK(!value_list.empty());
 
@@ -163,7 +162,7 @@ void ScanningHandler::HandleRequestScanToLocation(
   content::WebContents* web_contents = web_ui()->GetWebContents();
   gfx::NativeWindow owning_window =
       web_contents ? web_contents->GetTopLevelNativeWindow()
-                   : gfx::kNullNativeWindow;
+                   : gfx::NativeWindow();
   select_file_dialog_ = ui::SelectFileDialog::Create(
       this, scanning_app_delegate_->CreateChromeSelectFilePolicy());
   select_file_dialog_->SelectFile(

@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -25,10 +25,10 @@ import java.io.IOException;
 import java.util.Date;
 import java.util.concurrent.TimeUnit;
 
-/**
- * Utilities for manipulating variations seeds, used by both WebView and WebView's services.
- */
+/** Utilities for manipulating variations seeds, used by both WebView and WebView's services. */
 public class VariationsUtils {
+    // Changes to the tag below must be accompanied with changes to WebView
+    // finch smoke tests since they look for this tag in the logcat.
     private static final String TAG = "VariationsUtils";
 
     private static final String SEED_FILE_NAME = "variations_seed";
@@ -60,7 +60,8 @@ public class VariationsUtils {
         File oldSeedFile = getSeedFile();
         File newSeedFile = getNewSeedFile();
         if (!newSeedFile.renameTo(oldSeedFile)) {
-            Log.e(TAG,
+            Log.e(
+                    TAG,
                     "Failed to replace old seed " + oldSeedFile + " with new seed " + newSeedFile);
         }
     }
@@ -111,8 +112,11 @@ public class VariationsUtils {
                 return null;
             }
 
-            if (!proto.hasSignature() || !proto.hasCountry() || !proto.hasDate()
-                    || !proto.hasIsGzipCompressed() || !proto.hasSeedData()) {
+            if (!proto.hasSignature()
+                    || !proto.hasCountry()
+                    || !proto.hasDate()
+                    || !proto.hasIsGzipCompressed()
+                    || !proto.hasSeedData()) {
                 return null;
             }
 
@@ -135,13 +139,14 @@ public class VariationsUtils {
     // Returns true on success. "out" will always be closed, regardless of success.
     public static boolean writeSeed(FileOutputStream out, SeedInfo info) {
         try {
-            AwVariationsSeed proto = AwVariationsSeed.newBuilder()
-                                             .setSignature(info.signature)
-                                             .setCountry(info.country)
-                                             .setDate(info.date)
-                                             .setIsGzipCompressed(info.isGzipCompressed)
-                                             .setSeedData(ByteString.copyFrom(info.seedData))
-                                             .build();
+            AwVariationsSeed proto =
+                    AwVariationsSeed.newBuilder()
+                            .setSignature(info.signature)
+                            .setCountry(info.country)
+                            .setDate(info.date)
+                            .setIsGzipCompressed(info.isGzipCompressed)
+                            .setSeedData(ByteString.copyFrom(info.seedData))
+                            .build();
             proto.writeTo(out);
             return true;
         } catch (IOException e) {

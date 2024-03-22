@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -24,7 +24,6 @@ TEST(UrlUtilsTest, HasWebUIScheme) {
 
   // Other chromium schemes not considered WebUI schemes.
   EXPECT_FALSE(HasWebUIScheme(CreateValidURL("chrome-error://test")));
-  EXPECT_FALSE(HasWebUIScheme(CreateValidURL("chrome-guest://test")));
   EXPECT_FALSE(HasWebUIScheme(CreateValidURL("googlechrome://test")));
 
   EXPECT_FALSE(HasWebUIScheme(CreateValidURL("http://foo/bar.html")));

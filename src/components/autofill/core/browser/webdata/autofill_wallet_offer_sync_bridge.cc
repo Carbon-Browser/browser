@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,15 +6,18 @@
 
 #include <utility>
 
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/logging.h"
 #include "components/autofill/core/browser/data_model/autofill_offer_data.h"
 #include "components/autofill/core/browser/metrics/autofill_metrics.h"
+#include "components/autofill/core/browser/metrics/payments/offers_metrics.h"
 #include "components/autofill/core/browser/webdata/autofill_sync_bridge_util.h"
 #include "components/autofill/core/browser/webdata/autofill_table.h"
 #include "components/autofill/core/browser/webdata/autofill_webdata_backend.h"
 #include "components/autofill/core/browser/webdata/autofill_webdata_service.h"
 #include "components/sync/base/hash_util.h"
+#include "components/sync/base/model_type.h"
 #include "components/sync/model/client_tag_based_model_type_processor.h"
 #include "components/sync/model/mutable_data_batch.h"
 #include "components/sync/model/sync_metadata_store_change_list.h"
@@ -78,28 +81,22 @@ std::unique_ptr<syncer::MetadataChangeList>
 AutofillWalletOfferSyncBridge::CreateMetadataChangeList() {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   return std::make_unique<syncer::SyncMetadataStoreChangeList>(
-      GetAutofillTable(), syncer::AUTOFILL_WALLET_OFFER);
+      GetAutofillTable(), syncer::AUTOFILL_WALLET_OFFER,
+      base::BindRepeating(&syncer::ModelTypeChangeProcessor::ReportError,
+                          change_processor()->GetWeakPtr()));
 }
 
-absl::optional<syncer::ModelError> AutofillWalletOfferSyncBridge::MergeSyncData(
+absl::optional<syncer::ModelError>
+AutofillWalletOfferSyncBridge::MergeFullSyncData(
     std::unique_ptr<syncer::MetadataChangeList> metadata_change_list,
     syncer::EntityChangeList entity_data) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-  // All metadata changes have been already written, return early for an error.
-  absl::optional<syncer::ModelError> error =
-      static_cast<syncer::SyncMetadataStoreChangeList*>(
-          metadata_change_list.get())
-          ->TakeError();
-  if (error) {
-    return error;
-  }
-
   MergeRemoteData(std::move(entity_data));
   return absl::nullopt;
 }
 
 absl::optional<syncer::ModelError>
-AutofillWalletOfferSyncBridge::ApplySyncChanges(
+AutofillWalletOfferSyncBridge::ApplyIncrementalSyncChanges(
     std::unique_ptr<syncer::MetadataChangeList> metadata_change_list,
     syncer::EntityChangeList entity_data) {
   // This bridge does not support incremental updates, so whenever this is
@@ -134,13 +131,10 @@ bool AutofillWalletOfferSyncBridge::SupportsIncrementalUpdates() const {
   return false;
 }
 
-void AutofillWalletOfferSyncBridge::ApplyStopSyncChanges(
+void AutofillWalletOfferSyncBridge::ApplyDisableSyncChanges(
     std::unique_ptr<syncer::MetadataChangeList> delete_metadata_change_list) {
-  // If a metadata change list gets passed in, that means sync is actually
-  // disabled, so we want to delete the payments data.
-  if (delete_metadata_change_list) {
-    MergeRemoteData(syncer::EntityChangeList());
-  }
+  // Sync for this datatype is disabled so we want to delete the payments data.
+  MergeRemoteData(syncer::EntityChangeList());
 }
 
 void AutofillWalletOfferSyncBridge::GetAllDataImpl(DataCallback callback) {
@@ -181,7 +175,7 @@ void AutofillWalletOfferSyncBridge::MergeRemoteData(
     if (offer_valid) {
       offer_data.push_back(AutofillOfferDataFromOfferSpecifics(specifics));
     }
-    AutofillMetrics::LogSyncedOfferDataBeingValid(offer_valid);
+    autofill_metrics::LogSyncedOfferDataBeingValid(offer_valid);
   }
 
   AutofillTable* table = GetAutofillTable();
@@ -204,7 +198,8 @@ void AutofillWalletOfferSyncBridge::MergeRemoteData(
   web_data_backend_->CommitChanges();
 
   if (offer_data_changed) {
-    web_data_backend_->NotifyOfMultipleAutofillChanges();
+    web_data_backend_->NotifyOnAutofillChangedBySync(
+        syncer::AUTOFILL_WALLET_OFFER);
   }
 }
 

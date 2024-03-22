@@ -1,9 +1,10 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "third_party/blink/renderer/modules/idle/idle_manager.h"
 
+#include "base/task/single_thread_task_runner.h"
 #include "third_party/blink/public/common/browser_interface_broker_proxy.h"
 #include "third_party/blink/renderer/bindings/core/v8/script_promise.h"
 #include "third_party/blink/renderer/bindings/core/v8/script_promise_resolver.h"
@@ -68,14 +69,15 @@ ScriptPromise IdleManager::RequestPermission(ScriptState* script_state,
         permission_service_.BindNewPipeAndPassReceiver(std::move(task_runner)));
   }
 
-  auto* resolver = MakeGarbageCollected<ScriptPromiseResolver>(script_state);
+  auto* resolver = MakeGarbageCollected<ScriptPromiseResolver>(
+      script_state, exception_state.GetContext());
   ScriptPromise promise = resolver->Promise();
 
   permission_service_->RequestPermission(
       CreatePermissionDescriptor(mojom::blink::PermissionName::IDLE_DETECTION),
       LocalFrame::HasTransientUserActivation(window->GetFrame()),
-      WTF::Bind(&IdleManager::OnPermissionRequestComplete, WrapPersistent(this),
-                WrapPersistent(resolver)));
+      WTF::BindOnce(&IdleManager::OnPermissionRequestComplete,
+                    WrapPersistent(this), WrapPersistent(resolver)));
   return promise;
 }
 

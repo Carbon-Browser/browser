@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -15,9 +15,9 @@
 #include "chrome/browser/apps/app_service/launch_utils.h"
 #include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/web_applications/test/web_app_browsertest_util.h"
-#include "chrome/browser/ui/web_applications/web_app_launch_manager.h"
+#include "chrome/browser/ui/web_applications/web_app_controller_browsertest.h"
+#include "chrome/browser/ui/web_applications/web_app_launch_process.h"
 #include "chrome/browser/web_applications/web_app.h"
-#include "chrome/browser/web_applications/web_app_id.h"
 #include "chrome/browser/web_applications/web_app_provider.h"
 #include "chrome/browser/web_applications/web_app_registrar.h"
 #include "chrome/test/base/in_process_browser_test.h"
@@ -25,7 +25,7 @@
 #include "components/services/app_service/public/cpp/app_launch_util.h"
 #include "components/services/app_service/public/cpp/intent.h"
 #include "components/services/app_service/public/cpp/intent_util.h"
-#include "components/services/app_service/public/mojom/types.mojom.h"
+#include "components/webapps/common/web_app_id.h"
 #include "content/public/test/browser_test.h"
 #include "net/test/embedded_test_server/embedded_test_server.h"
 #include "ui/base/window_open_disposition.h"
@@ -34,21 +34,17 @@
 
 namespace web_app {
 
-class WebAppsBrowserTest : public InProcessBrowserTest {
- public:
-  WebAppsBrowserTest() = default;
-  ~WebAppsBrowserTest() override = default;
-};
+using WebAppsBrowserTest = WebAppControllerBrowserTest;
 
 IN_PROC_BROWSER_TEST_F(WebAppsBrowserTest, LaunchWithIntent) {
   ASSERT_TRUE(embedded_test_server()->Start());
   const GURL app_url(
       embedded_test_server()->GetURL("/web_share_target/charts.html"));
   Profile* const profile = browser()->profile();
-  const AppId app_id = InstallWebAppFromManifest(browser(), app_url);
+  const webapps::AppId app_id = InstallWebAppFromManifest(browser(), app_url);
 
   base::RunLoop run_loop;
-  WebAppLaunchManager::SetOpenApplicationCallbackForTesting(
+  WebAppLaunchProcess::SetOpenApplicationCallbackForTesting(
       base::BindLambdaForTesting(
           [&run_loop](apps::AppLaunchParams&& params) -> content::WebContents* {
             EXPECT_EQ(params.intent->action, apps_util::kIntentActionSend);
@@ -59,8 +55,7 @@ IN_PROC_BROWSER_TEST_F(WebAppsBrowserTest, LaunchWithIntent) {
           }));
 
   std::vector<base::FilePath> file_paths(
-      {chromeos::CrosDisksClient::GetArchiveMountPoint().Append(
-          "numbers.csv")});
+      {ash::CrosDisksClient::GetArchiveMountPoint().Append("numbers.csv")});
   std::vector<std::string> content_types({"text/csv"});
   apps::IntentPtr intent = apps_util::CreateShareIntentFromFiles(
       profile, std::move(file_paths), std::move(content_types));
@@ -68,9 +63,10 @@ IN_PROC_BROWSER_TEST_F(WebAppsBrowserTest, LaunchWithIntent) {
       apps::GetEventFlags(WindowOpenDisposition::NEW_WINDOW,
                           /*prefer_container=*/true);
   apps::AppServiceProxyFactory::GetForProfile(profile)->LaunchAppWithIntent(
-      app_id, event_flags, apps::ConvertIntentToMojomIntent(intent),
-      apps::mojom::LaunchSource::kFromSharesheet,
-      apps::MakeWindowInfo(display::kDefaultDisplayId));
+      app_id, event_flags, std::move(intent),
+      apps::LaunchSource::kFromSharesheet,
+      std::make_unique<apps::WindowInfo>(display::kDefaultDisplayId),
+      base::DoNothing());
   run_loop.Run();
 }
 
@@ -79,10 +75,10 @@ IN_PROC_BROWSER_TEST_F(WebAppsBrowserTest, IntentWithoutFiles) {
   const GURL app_url(
       embedded_test_server()->GetURL("/web_share_target/poster.html"));
   Profile* const profile = browser()->profile();
-  const AppId app_id = InstallWebAppFromManifest(browser(), app_url);
+  const webapps::AppId app_id = InstallWebAppFromManifest(browser(), app_url);
 
   base::RunLoop run_loop;
-  WebAppLaunchManager::SetOpenApplicationCallbackForTesting(
+  WebAppLaunchProcess::SetOpenApplicationCallbackForTesting(
       base::BindLambdaForTesting(
           [&run_loop](apps::AppLaunchParams&& params) -> content::WebContents* {
             EXPECT_EQ(params.intent->action,
@@ -103,9 +99,10 @@ IN_PROC_BROWSER_TEST_F(WebAppsBrowserTest, IntentWithoutFiles) {
       apps::GetEventFlags(WindowOpenDisposition::NEW_WINDOW,
                           /*prefer_container=*/true);
   apps::AppServiceProxyFactory::GetForProfile(profile)->LaunchAppWithIntent(
-      app_id, event_flags, apps::ConvertIntentToMojomIntent(intent),
-      apps::mojom::LaunchSource::kFromSharesheet,
-      apps::MakeWindowInfo(display::kDefaultDisplayId));
+      app_id, event_flags, std::move(intent),
+      apps::LaunchSource::kFromSharesheet,
+      std::make_unique<apps::WindowInfo>(display::kDefaultDisplayId),
+      base::DoNothing());
   run_loop.Run();
 }
 
@@ -114,9 +111,9 @@ IN_PROC_BROWSER_TEST_F(WebAppsBrowserTest, ExposeAppServicePublisherId) {
   const GURL app_url(embedded_test_server()->GetURL("/web_apps/basic.html"));
 
   // Install file handling web app.
-  const AppId app_id = InstallWebAppFromManifest(browser(), app_url);
+  const webapps::AppId app_id = InstallWebAppFromManifest(browser(), app_url);
   const WebAppRegistrar& registrar =
-      WebAppProvider::GetForTest(browser()->profile())->registrar();
+      WebAppProvider::GetForTest(browser()->profile())->registrar_unsafe();
   const WebApp* web_app = registrar.GetAppById(app_id);
   ASSERT_TRUE(web_app);
 
@@ -131,10 +128,9 @@ IN_PROC_BROWSER_TEST_F(WebAppsBrowserTest, ExposeAppServicePublisherId) {
 IN_PROC_BROWSER_TEST_F(WebAppsBrowserTest, LaunchAppIconKeyUnchanged) {
   ASSERT_TRUE(embedded_test_server()->Start());
   const GURL app_url(embedded_test_server()->GetURL("/web_apps/basic.html"));
-  const AppId app_id = InstallWebAppFromManifest(browser(), app_url);
+  const webapps::AppId app_id = InstallWebAppFromManifest(browser(), app_url);
   auto* proxy =
       apps::AppServiceProxyFactory::GetForProfile(browser()->profile());
-  proxy->FlushMojoCallsForTesting();
 
   absl::optional<apps::IconKey> original_key;
   proxy->AppRegistryCache().ForOneApp(

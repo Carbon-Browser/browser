@@ -1,11 +1,12 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chromeos/ash/components/network/stub_cellular_networks_provider.h"
 
+#include "ash/constants/ash_features.h"
 #include "base/containers/contains.h"
-#include "base/guid.h"
+#include "base/uuid.h"
 #include "chromeos/ash/components/network/cellular_esim_profile.h"
 #include "chromeos/ash/components/network/cellular_esim_profile_handler.h"
 #include "chromeos/ash/components/network/cellular_utils.h"
@@ -13,7 +14,7 @@
 #include "chromeos/ash/components/network/managed_cellular_pref_handler.h"
 #include "chromeos/ash/components/network/network_event_log.h"
 
-namespace chromeos {
+namespace ash {
 namespace {
 
 void GetIccids(const NetworkStateHandler::ManagedStateList& network_list,
@@ -101,7 +102,7 @@ bool StubCellularNetworksProvider::GetStubNetworkMetadata(
     if (iccid_eid_pair.first != iccid)
       continue;
 
-    *service_path_out = GenerateStubCellularServicePath(iccid);
+    *service_path_out = cellular_utils::GenerateStubCellularServicePath(iccid);
     *guid_out = GetGuidForStubIccid(iccid);
     return true;
   }
@@ -115,7 +116,7 @@ const std::string& StubCellularNetworksProvider::GetGuidForStubIccid(
 
   // If we have not yet generated a GUID for this ICCID, generate one.
   if (guid.empty())
-    guid = base::GenerateGUID();
+    guid = base::Uuid::GenerateRandomV4().AsLowercaseString();
 
   return guid;
 }
@@ -171,8 +172,13 @@ bool StubCellularNetworksProvider::AddStubNetworks(
 
     bool is_managed = false;
     if (managed_cellular_pref_handler_) {
-      is_managed = managed_cellular_pref_handler_->GetSmdpAddressFromIccid(
-          iccid_eid_pair.first);
+      if (ash::features::IsSmdsSupportEuiccUploadEnabled()) {
+        is_managed = managed_cellular_pref_handler_->GetESimMetadata(
+                         iccid_eid_pair.first) != nullptr;
+      } else {
+        is_managed = managed_cellular_pref_handler_->GetSmdpAddressFromIccid(
+            iccid_eid_pair.first);
+      }
     }
     NET_LOG(EVENT) << "Adding stub cellular network for ICCID="
                    << iccid_eid_pair.first << " EID=" << iccid_eid_pair.second
@@ -181,7 +187,7 @@ bool StubCellularNetworksProvider::AddStubNetworks(
     new_stub_networks.push_back(NetworkState::CreateNonShillCellularNetwork(
         iccid_eid_pair.first, iccid_eid_pair.second,
         GetGuidForStubIccid(iccid_eid_pair.first), is_managed,
-        cellular_device));
+        cellular_device->path()));
   }
 
   return network_added;
@@ -225,4 +231,4 @@ bool StubCellularNetworksProvider::RemoveStubCellularNetworks(
   return network_removed;
 }
 
-}  // namespace chromeos
+}  // namespace ash

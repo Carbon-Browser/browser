@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -24,7 +24,7 @@ class KURL;
 // then subscribe to receive callbacks if the status for |url| were to
 // change. The object will only listen to changes when required.
 class MODULES_EXPORT PresentationAvailability final
-    : public EventTargetWithInlineData,
+    : public EventTarget,
       public ActiveScriptWrappable<PresentationAvailability>,
       public ExecutionContextLifecycleStateObserver,
       public PageVisibilityObserver,

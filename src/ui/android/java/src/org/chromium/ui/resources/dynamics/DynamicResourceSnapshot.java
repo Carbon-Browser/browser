@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -17,8 +17,11 @@ public class DynamicResourceSnapshot implements Resource {
     private final Rect mBitmapSize;
     private final long mNativeResourceId;
 
-    public DynamicResourceSnapshot(Bitmap bitmap, boolean shouldRemoveResourceOnNullBitmap,
-            Rect bitmapSize, long nativeResourceId) {
+    public DynamicResourceSnapshot(
+            Bitmap bitmap,
+            boolean shouldRemoveResourceOnNullBitmap,
+            Rect bitmapSize,
+            long nativeResourceId) {
         mBitmap = bitmap;
         mShouldRemoveResourceOnNullBitmap = shouldRemoveResourceOnNullBitmap;
         mBitmapSize = bitmapSize;

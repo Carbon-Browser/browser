@@ -1,24 +1,20 @@
-# Copyright 2021 The Chromium Authors. All rights reserved.
+# Copyright 2021 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
 source_set("follow") {
-  configs += [ "//build/config/compiler:enable_arc" ]
   sources = [
-    "follow_block_types.h",
-    "follow_web_page_urls.h",
-    "follow_web_page_urls.mm",
     "followed_web_channel.h",
     "followed_web_channel.mm",
   ]
   deps = [
     "//base",
+    "//ios/chrome/browser/follow/model:enums",
     "//ios/chrome/browser/net:crurl",
   ]
 }
 
 source_set("follow_iph") {
-  configs += [ "//build/config/compiler:enable_arc" ]
   sources = [
     "follow_iph_coordinator.h",
     "follow_iph_coordinator.mm",
@@ -26,16 +22,15 @@ source_set("follow_iph") {
   deps = [
     "//ios/chrome/browser/discover_feed",
     "//ios/chrome/browser/discover_feed:discover_feed_factory",
-    "//ios/chrome/browser/follow:tab_helper",
-    "//ios/chrome/browser/main:public",
-    "//ios/chrome/browser/ui/commands",
-    "//ios/chrome/browser/ui/coordinators:chrome_coordinators",
-    "//ios/chrome/browser/ui/ntp:metrics",
+    "//ios/chrome/browser/follow/model:tab_helper",
+    "//ios/chrome/browser/shared/coordinator/chrome_coordinator",
+    "//ios/chrome/browser/shared/model/browser",
+    "//ios/chrome/browser/shared/public/commands",
+    "//ios/chrome/browser/ui/ntp/metrics",
   ]
 }
 
 source_set("first_follow") {
-  configs += [ "//build/config/compiler:enable_arc" ]
   sources = [
     "first_follow_coordinator.h",
     "first_follow_coordinator.mm",
@@ -46,11 +41,13 @@ source_set("first_follow") {
     "//ios/chrome/browser/discover_feed",
     "//ios/chrome/browser/discover_feed:discover_feed_factory",
     "//ios/chrome/browser/favicon",
-    "//ios/chrome/browser/main:public",
+    "//ios/chrome/browser/follow/model:enums",
+    "//ios/chrome/browser/follow/model:service",
     "//ios/chrome/browser/net:crurl",
-    "//ios/chrome/browser/ui/commands",
-    "//ios/chrome/browser/ui/coordinators:chrome_coordinators",
-    "//ios/chrome/browser/ui/ntp:metrics",
+    "//ios/chrome/browser/shared/coordinator/chrome_coordinator",
+    "//ios/chrome/browser/shared/model/browser",
+    "//ios/chrome/browser/shared/public/commands",
+    "//ios/chrome/browser/ui/ntp/metrics",
     "//ios/chrome/common/ui/confirmation_alert",
     "//ios/chrome/common/ui/favicon",
     "//ios/chrome/common/ui/favicon:favicon_constants",
@@ -59,16 +56,15 @@ source_set("first_follow") {
 
 source_set("first_follow_ui") {
   sources = [
-    "first_follow_favicon_data_source.h",
     "first_follow_view_controller.h",
     "first_follow_view_controller.mm",
   ]
-  configs += [ "//build/config/compiler:enable_arc" ]
   deps = [
     ":follow",
     "//base",
-    "//ios/chrome/app/strings:ios_strings_grit",
-    "//ios/chrome/browser/ui/icons:symbols",
+    "//ios/chrome/app/strings",
+    "//ios/chrome/browser/shared/public/features",
+    "//ios/chrome/browser/shared/ui/symbols",
     "//ios/chrome/common/ui/colors",
     "//ios/chrome/common/ui/confirmation_alert",
     "//ios/chrome/common/ui/favicon",

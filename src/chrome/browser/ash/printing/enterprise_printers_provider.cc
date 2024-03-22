@@ -1,14 +1,19 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/ash/printing/enterprise_printers_provider.h"
 
+#include <iterator>
+#include <unordered_map>
+#include <utility>
 #include <vector>
 
 #include "base/hash/md5.h"
 #include "base/json/json_reader.h"
 #include "base/logging.h"
+#include "base/memory/raw_ptr.h"
+#include "base/ranges/algorithm.h"
 #include "chrome/browser/ash/printing/bulk_printers_calculator.h"
 #include "chrome/browser/ash/printing/bulk_printers_calculator_factory.h"
 #include "chrome/browser/ash/printing/calculators_policies_binder.h"
@@ -18,6 +23,7 @@
 #include "chrome/common/pref_names.h"
 #include "chromeos/printing/printer_configuration.h"
 #include "chromeos/printing/printer_translator.h"
+#include "components/device_event_log/device_event_log.h"
 #include "components/policy/core/common/policy_service.h"
 #include "components/policy/policy_constants.h"
 #include "components/pref_registry/pref_registry_syncable.h"
@@ -29,24 +35,14 @@ namespace ash {
 
 namespace {
 
-std::vector<std::string> ConvertToVector(const base::Value* list) {
+std::vector<std::string> ConvertToVector(const base::Value::List& list) {
   std::vector<std::string> string_list;
-  if (list && list->is_list()) {
-    for (const base::Value& value : list->GetList()) {
-      if (value.is_string()) {
-        string_list.push_back(value.GetString());
-      }
+  for (const base::Value& value : list) {
+    if (value.is_string()) {
+      string_list.push_back(value.GetString());
     }
   }
   return string_list;
-}
-
-void AddPrintersFromMap(
-    const std::unordered_map<std::string, chromeos::Printer>& printer_map,
-    std::vector<chromeos::Printer>* printer_list) {
-  for (auto& printer_kv : printer_map) {
-    printer_list->push_back(printer_kv.second);
-  }
 }
 
 class EnterprisePrintersProviderImpl : public EnterprisePrintersProvider,
@@ -195,22 +191,39 @@ class EnterprisePrintersProviderImpl : public EnterprisePrintersProvider,
 
   void RecalculateCurrentPrintersList() {
     complete_ = true;
-    std::vector<chromeos::Printer> current_printers;
-    AddPrintersFromMap(recommended_printers_, &current_printers);
+
+    // Enterprise printers from user policy, device policy, as well as printers
+    // from the legacy `Printers` policy.
+    std::unordered_map<std::string, chromeos::Printer> all_printers =
+        recommended_printers_;
 
     if (device_printers_) {
       complete_ = complete_ && device_printers_is_complete_;
-      const auto& printers = device_printers_->GetPrinters();
-      AddPrintersFromMap(printers, &current_printers);
+      std::unordered_map<std::string, chromeos::Printer> printers =
+          device_printers_->GetPrinters();
+      PRINTER_LOG(DEBUG)
+          << "EnterprisePrintersProvider::RecalculateCurrentPrintersList()"
+          << "-device-printers: complete=" << device_printers_is_complete_
+          << " count=" << printers.size();
+
+      all_printers.merge(std::move(printers));
     }
     if (user_printers_) {
       complete_ = complete_ && user_printers_is_complete_;
-      const auto& printers = user_printers_->GetPrinters();
-      AddPrintersFromMap(printers, &current_printers);
+      std::unordered_map<std::string, chromeos::Printer> printers =
+          user_printers_->GetPrinters();
+      PRINTER_LOG(DEBUG)
+          << "EnterprisePrintersProvider::RecalculateCurrentPrintersList()"
+          << "-user-printers: complete=" << user_printers_is_complete_
+          << " count=" << printers.size();
+      all_printers.merge(std::move(printers));
     }
 
-    // Save current_printers.
-    printers_.swap(current_printers);
+    // Update `printers_` with the recalculated result.
+    printers_.clear();
+    printers_.reserve(all_printers.size());
+    base::ranges::transform(all_printers, std::back_inserter(printers_),
+                            [](const auto& p) { return p.second; });
 
     for (auto& observer : observers_) {
       observer.OnPrintersChanged(complete_, printers_);
@@ -267,7 +280,7 @@ class EnterprisePrintersProviderImpl : public EnterprisePrintersProvider,
   std::unique_ptr<CalculatorsPoliciesBinder> profile_binder_;
 
   // Profile (user) settings.
-  Profile* profile_;
+  raw_ptr<Profile, ExperimentalAsh> profile_;
   AccountId account_id_;
   PrefChangeRegistrar pref_change_registrar_;
 

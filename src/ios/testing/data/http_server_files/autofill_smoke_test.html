@@ -1,8 +1,10 @@
 <!DOCTYPE html>
 
-<!-- Copyright 2016 The Chromium Authors. All rights reserved.
+<!--
+Copyright 2016 The Chromium Authors
 Use of this source code is governed by a BSD-style license that can be
-found in the LICENSE file. -->
+found in the LICENSE file.
+-->
 
 <html>
   <head>
@@ -31,10 +33,10 @@ found in the LICENSE file. -->
   <h3>Profile Autofill</h3>
 
 <form name="addr1.1" id="profile_form" action="destination.html" method="post">
-  Name: <input type="text" name="name" /><br />
-  Address: <input type="text" name="address" /><br />
-  City: <input type="text" name="city" /><br />
-  State: <select name="state">
+  Name: <input type="text" name="name" id="form_name" /><br />
+  Address: <input type="text" name="address" id="form_address" /><br />
+  City: <input type="text" name="city" id="form_city" /><br />
+  State: <select name="state" id="form_state">
     <option value="CA">CA</option>
     <option value="MA">MA</option>
     <option value="NY">NY</option>

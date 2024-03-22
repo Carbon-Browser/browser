@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -17,6 +17,8 @@
 #include "chromeos/printing/printer_config_cache.h"
 
 namespace chromeos {
+
+enum class PpdIndexChannel { kProduction, kStaging, kDev, kLocalhost };
 
 // A PpdMetadataManager is the class responsible for fetching and
 // parsing PPD metadata to answer high-level queries about metadata.
@@ -62,6 +64,7 @@ class COMPONENT_EXPORT(CHROMEOS_PRINTING) PpdMetadataManager {
   // Assumes ownership of |config_cache|.
   static std::unique_ptr<PpdMetadataManager> Create(
       base::StringPiece browser_locale,
+      PpdIndexChannel channel,
       base::Clock* clock,
       std::unique_ptr<PrinterConfigCache> config_cache);
 

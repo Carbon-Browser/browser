@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,8 +6,10 @@
 #define UI_GFX_X_EVENT_H_
 
 #include <cstdint>
+#include <type_traits>
 #include <utility>
 
+#include "base/check_op.h"
 #include "base/component_export.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted_memory.h"
@@ -20,21 +22,23 @@ class Connection;
 class Event;
 struct ReadBuffer;
 
-COMPONENT_EXPORT(X11)
-void ReadEvent(Event* event, Connection* connection, ReadBuffer* buffer);
+template <typename T>
+void ReadEvent(T* event, ReadBuffer* buf);
 
 class COMPONENT_EXPORT(X11) Event {
  public:
   template <typename T>
   Event(bool send_event, T&& xproto_event) {
     using DecayT = std::decay_t<T>;
+    fabricated_ = true;
     send_event_ = send_event;
-    sequence_ = xproto_event.sequence;
     type_id_ = DecayT::type_id;
-    deleter_ = [](void* event) { delete reinterpret_cast<DecayT*>(event); };
     auto* event = new DecayT(std::forward<T>(xproto_event));
-    event_ = event;
-    window_ = event->GetWindow();
+    event_ = {event, [](void* e) {
+                if (e) {
+                  delete reinterpret_cast<DecayT*>(e);
+                }
+              }};
   }
 
   Event();
@@ -54,9 +58,20 @@ class COMPONENT_EXPORT(X11) Event {
 
   template <typename T>
   T* As() {
-    if (type_id_ == T::type_id)
-      return reinterpret_cast<T*>(event_.get());
-    return nullptr;
+    if (type_id_ != T::type_id) {
+      return nullptr;
+    }
+    if (!event_) {
+      T* event = new T;
+      Parse(
+          event,
+          [](void* e, ReadBuffer* r) { ReadEvent<T>(static_cast<T*>(e), r); },
+          [](void* e) { delete static_cast<T*>(e); });
+      if constexpr (std::is_member_pointer<decltype(&T::opcode)>()) {
+        event->opcode = static_cast<decltype(event->opcode)>(opcode_);
+      }
+    }
+    return static_cast<T*>(event_.get());
   }
 
   template <typename T>
@@ -66,36 +81,39 @@ class COMPONENT_EXPORT(X11) Event {
 
   bool send_event() const { return send_event_; }
 
-  uint32_t sequence() const { return sequence_; }
-
-  Window window() const { return window_ ? *window_ : Window::None; }
-  void set_window(Window window) {
-    if (window_)
-      *window_ = window;
+  uint32_t sequence() const {
+    DUMP_WILL_BE_CHECK(!fabricated_);
+    return sequence_;
   }
 
-  bool Initialized() const { return deleter_; }
+  bool Initialized() const { return type_id_; }
 
  private:
-  friend void ReadEvent(Event* event,
-                        Connection* connection,
-                        ReadBuffer* buffer);
+  using Parser = void (*)(void*, ReadBuffer*);
+  using Deleter = void (*)(void*);
 
-  void Dealloc();
+  void Parse(void* event, Parser parser, Deleter deleter);
 
-  // True if this event was sent from another X client.  False if this event
-  // was sent by the X server.
+  // Indicates this event was sent from another client instead of the server.
   bool send_event_ = false;
-  uint16_t sequence_ = 0;
 
-  // XProto event state.
-  int type_id_ = 0;
-  void (*deleter_)(void*) = nullptr;
-  raw_ptr<void, DanglingUntriaged> event_ = nullptr;
+  // Indicates this event was created, not sent by the server or a client.
+  bool fabricated_ = false;
 
-  // This member points to a field in |event_|, or may be nullptr if there's no
-  // associated window for the event.  It's owned by |event_|, not us.
-  raw_ptr<Window, DanglingUntriaged> window_ = nullptr;
+  // The value of the underlying event's `T::type_id`.
+  uint8_t type_id_ = 0;
+
+  // The value of the underlying event's `t->opcode`.
+  uint8_t opcode_ = 0;
+
+  // The (extended) event sequence provided by XCB.
+  uint32_t sequence_ = 0;
+
+  // The unparsed event, or nullptr if it's already parsed.
+  scoped_refptr<base::RefCountedMemory> raw_event_;
+
+  // The type-erased parsed event, or nullptr if it hasn't been parsed yet.
+  std::unique_ptr<void, Deleter> event_ = {nullptr, nullptr};
 };
 
 }  // namespace x11

@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,7 +8,7 @@ import androidx.annotation.VisibleForTesting;
 
 import org.json.JSONException;
 
-import org.chromium.android_webview.common.crash.CrashInfo;
+import org.chromium.android_webview.nonembedded.crash.CrashInfo;
 import org.chromium.base.Log;
 
 import java.io.File;
@@ -18,9 +18,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 
-/**
- * Parses WebView crash JSON log files which contain crash info keys extracted from crash minidump.
- */
+/** Parses WebView crash JSON log files which contain crash info keys extracted from crash minidump. */
 public class WebViewCrashLogParser extends CrashInfoLoader {
     private static final String TAG = "WebViewCrashUI";
 
@@ -30,9 +28,7 @@ public class WebViewCrashLogParser extends CrashInfoLoader {
 
     private File mLogDir;
 
-    /**
-     * @param logDir the directory where WebView store crash logs.
-     */
+    /** @param logDir the directory where WebView store crash logs. */
     public WebViewCrashLogParser(File logDir) {
         mLogDir = logDir;
     }

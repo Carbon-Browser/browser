@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,15 +13,11 @@ import org.chromium.ui.modelutil.PropertyModel;
 
 import java.util.List;
 
-/**
- * Toolbar for controlling the list of history clusters in the Journeys UI.
- */
+/** Toolbar for controlling the list of history clusters in the Journeys UI. */
 class HistoryClustersToolbar extends SelectableListToolbar<PropertyModel> {
     private EditText mSearchText;
 
-    /**
-     * Constructor for inflating from XML.
-     */
+    /** Constructor for inflating from XML. */
     public HistoryClustersToolbar(Context context, AttributeSet attrs) {
         super(context, attrs);
         inflateMenu(R.menu.history_clusters_menu);
@@ -44,10 +40,17 @@ class HistoryClustersToolbar extends SelectableListToolbar<PropertyModel> {
         }
     }
 
-    void setSearchText(String text) {
-        mSearchText.setText(text);
-        mSearchText.setSelection(text.length());
-        hideKeyboard();
+    boolean isSearchTextFocused() {
+        return mSearchText.isFocused();
+    }
+
+    void setSearchText(String text, boolean wantFocus) {
+        if (!text.equals(mSearchText.getText().toString())) {
+            mSearchText.setText(text);
+            mSearchText.setSelection(text.length());
+        }
+
+        if (wantFocus) return;
         mSearchText.clearFocus();
     }
 }

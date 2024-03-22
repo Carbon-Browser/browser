@@ -1,11 +1,11 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "third_party/blink/renderer/core/inspector/legacy_dom_snapshot_agent.h"
 
 #include "third_party/blink/renderer/bindings/core/v8/v8_binding_for_core.h"
-#include "third_party/blink/renderer/core/css/css_computed_style_declaration.h"
+#include "third_party/blink/renderer/core/css/properties/css_property_ref.h"
 #include "third_party/blink/renderer/core/dom/attribute.h"
 #include "third_party/blink/renderer/core/dom/attribute_collection.h"
 #include "third_party/blink/renderer/core/dom/character_data.h"
@@ -13,6 +13,7 @@
 #include "third_party/blink/renderer/core/dom/document_type.h"
 #include "third_party/blink/renderer/core/dom/dom_node_ids.h"
 #include "third_party/blink/renderer/core/dom/element.h"
+#include "third_party/blink/renderer/core/dom/flat_tree_traversal.h"
 #include "third_party/blink/renderer/core/dom/node.h"
 #include "third_party/blink/renderer/core/dom/pseudo_element.h"
 #include "third_party/blink/renderer/core/dom/qualified_name.h"
@@ -31,18 +32,20 @@
 #include "third_party/blink/renderer/core/inspector/inspector_dom_agent.h"
 #include "third_party/blink/renderer/core/inspector/inspector_dom_debugger_agent.h"
 #include "third_party/blink/renderer/core/inspector/inspector_dom_snapshot_agent.h"
-#include "third_party/blink/renderer/core/inspector/thread_debugger.h"
 #include "third_party/blink/renderer/core/layout/layout_embedded_content.h"
 #include "third_party/blink/renderer/core/layout/layout_object.h"
 #include "third_party/blink/renderer/core/layout/layout_text.h"
 #include "third_party/blink/renderer/core/layout/layout_view.h"
 #include "third_party/blink/renderer/core/paint/paint_layer.h"
 #include "third_party/blink/renderer/core/paint/paint_layer_scrollable_area.h"
+#include "third_party/blink/renderer/core/style/computed_style.h"
+#include "third_party/blink/renderer/platform/bindings/thread_debugger.h"
 #include "v8/include/v8-inspector.h"
 
 namespace blink {
+
+using mojom::blink::FormControlType;
 using protocol::Maybe;
-using protocol::Response;
 
 namespace {
 
@@ -61,9 +64,9 @@ std::unique_ptr<protocol::DOM::Rect> LegacyBuildRectForPhysicalRect(
 struct LegacyDOMSnapshotAgent::VectorStringHashTraits
     : public WTF::GenericHashTraits<Vector<String>> {
   static unsigned GetHash(const Vector<String>& vec) {
-    unsigned h = DefaultHash<size_t>::Hash::GetHash(vec.size());
-    for (wtf_size_t i = 0; i < vec.size(); i++) {
-      h = WTF::HashInts(h, DefaultHash<String>::Hash::GetHash(vec[i]));
+    unsigned h = WTF::GetHash(vec.size());
+    for (const String& s : vec) {
+      h = WTF::HashInts(h, WTF::GetHash(s));
     }
     return h;
   }
@@ -78,8 +81,8 @@ struct LegacyDOMSnapshotAgent::VectorStringHashTraits
     return true;
   }
 
-  static void ConstructDeletedValue(Vector<String>& vec, bool) {
-    new (NotNullTag::kNotNull, &vec)
+  static void ConstructDeletedValue(Vector<String>& vec) {
+    new (WTF::NotNullTag::kNotNull, &vec)
         Vector<String>(WTF::kHashTableDeletedValue);
   }
 
@@ -87,11 +90,10 @@ struct LegacyDOMSnapshotAgent::VectorStringHashTraits
     return vec.IsHashTableDeletedValue();
   }
 
-  static bool IsEmptyValue(const Vector<String>& vec) { return vec.IsEmpty(); }
+  static bool IsEmptyValue(const Vector<String>& vec) { return vec.empty(); }
 
-  static const bool kEmptyValueIsZero = false;
-  static const bool safe_to_compare_to_empty_or_deleted = false;
-  static const bool kHasIsEmptyValueFunction = true;
+  static constexpr bool kEmptyValueIsZero = false;
+  static constexpr bool kSafeToCompareToEmptyOrDeleted = false;
 };
 
 LegacyDOMSnapshotAgent::LegacyDOMSnapshotAgent(
@@ -102,7 +104,7 @@ LegacyDOMSnapshotAgent::LegacyDOMSnapshotAgent(
 
 LegacyDOMSnapshotAgent::~LegacyDOMSnapshotAgent() = default;
 
-Response LegacyDOMSnapshotAgent::GetSnapshot(
+protocol::Response LegacyDOMSnapshotAgent::GetSnapshot(
     Document* document,
     std::unique_ptr<protocol::Array<String>> style_filter,
     protocol::Maybe<bool> include_event_listeners,
@@ -134,12 +136,13 @@ Response LegacyDOMSnapshotAgent::GetSnapshot(
     css_property_filter_->emplace_back(entry, property_id);
   }
 
-  if (include_paint_order.fromMaybe(false))
+  if (include_paint_order.value_or(false)) {
     paint_order_map_ = InspectorDOMSnapshotAgent::BuildPaintLayerTree(document);
+  }
 
   // Actual traversal.
-  VisitNode(document, include_event_listeners.fromMaybe(false),
-            include_user_agent_shadow_tree.fromMaybe(false));
+  VisitNode(document, include_event_listeners.value_or(false),
+            include_user_agent_shadow_tree.value_or(false));
 
   // Extract results from state and reset.
   *dom_nodes = std::move(dom_nodes_);
@@ -148,7 +151,7 @@ Response LegacyDOMSnapshotAgent::GetSnapshot(
   computed_styles_map_.reset();
   css_property_filter_.reset();
   paint_order_map_ = nullptr;
-  return Response::Success();
+  return protocol::Response::Success();
 }
 
 int LegacyDOMSnapshotAgent::VisitNode(Node* node,
@@ -191,7 +194,7 @@ int LegacyDOMSnapshotAgent::VisitNode(Node* node,
     if (!node->parentNode()) {
       owned_value->setOriginURL(std::move(origin_url));
     } else {
-      DOMNodeId parent_id = DOMNodeIds::IdForNode(node->parentNode());
+      DOMNodeId parent_id = node->parentNode()->GetDomNodeId();
       auto it = origin_url_map_->find(parent_id);
       String parent_url = it != origin_url_map_->end() ? it->value : String();
       if (parent_url != origin_url)
@@ -220,7 +223,7 @@ int LegacyDOMSnapshotAgent::VisitNode(Node* node,
       InspectorDOMDebuggerAgent::CollectEventListeners(
           script_state->GetIsolate(), node, v8::Local<v8::Value>(), node, true,
           &event_information);
-      if (!event_information.IsEmpty()) {
+      if (!event_information.empty()) {
         value->setEventListeners(
             dom_debugger_agent_->BuildObjectsForEventListeners(
                 event_information, context, v8_inspector::StringView()));
@@ -254,8 +257,9 @@ int LegacyDOMSnapshotAgent::VisitNode(Node* node,
 
     if (auto* input_element = DynamicTo<HTMLInputElement>(*element)) {
       value->setInputValue(input_element->Value());
-      if ((input_element->type() == input_type_names::kRadio) ||
-          (input_element->type() == input_type_names::kCheckbox)) {
+      if ((input_element->FormControlType() == FormControlType::kInputRadio) ||
+          (input_element->FormControlType() ==
+           FormControlType::kInputCheckbox)) {
         value->setInputChecked(input_element->Checked());
       }
     }
@@ -408,7 +412,7 @@ int LegacyDOMSnapshotAgent::VisitLayoutTreeNode(LayoutObject* layout_object,
     auto* layout_text = To<LayoutText>(layout_object);
     layout_tree_node->setLayoutText(layout_text->GetText());
     Vector<LayoutText::TextBoxInfo> text_boxes = layout_text->GetTextBoxInfo();
-    if (!text_boxes.IsEmpty()) {
+    if (!text_boxes.empty()) {
       auto inline_text_nodes = std::make_unique<
           protocol::Array<protocol::DOMSnapshot::InlineTextBox>>();
       for (const auto& text_box : text_boxes) {
@@ -430,15 +434,39 @@ int LegacyDOMSnapshotAgent::VisitLayoutTreeNode(LayoutObject* layout_object,
   return index;
 }
 
-int LegacyDOMSnapshotAgent::GetStyleIndexForNode(Node* node) {
-  auto* computed_style_info =
-      MakeGarbageCollected<CSSComputedStyleDeclaration>(node, true);
+const ComputedStyle* ComputedStyleForNode(Node& node) {
+  if (Element* element = DynamicTo<Element>(node)) {
+    return element->EnsureComputedStyle();
+  }
+  if (!node.IsTextNode()) {
+    return nullptr;
+  }
+  if (LayoutObject* layout_object = node.GetLayoutObject()) {
+    return layout_object->Style();
+  }
+  if (Element* parent_element = FlatTreeTraversal::ParentElement(node)) {
+    return parent_element->EnsureComputedStyle();
+  }
+  return nullptr;
+}
 
+int LegacyDOMSnapshotAgent::GetStyleIndexForNode(Node* node) {
+  CHECK(node);
+  const ComputedStyle* computed_style = ComputedStyleForNode(*node);
+  if (!computed_style) {
+    return -1;
+  }
   Vector<String> style;
   bool all_properties_empty = true;
   for (const auto& pair : *css_property_filter_) {
-    String value = computed_style_info->GetPropertyValue(pair.second);
-    if (!value.IsEmpty())
+    String value;
+    if (const CSSValue* css_value =
+            CSSProperty::Get(pair.second)
+                .CSSValueFromComputedStyle(*computed_style,
+                                           node->GetLayoutObject(), true)) {
+      value = css_value->CssText();
+    }
+    if (!value.empty())
       all_properties_empty = false;
     style.push_back(value);
   }
@@ -456,7 +484,7 @@ int LegacyDOMSnapshotAgent::GetStyleIndexForNode(Node* node) {
       std::make_unique<protocol::Array<protocol::DOMSnapshot::NameValue>>();
 
   for (wtf_size_t i = 0; i < style.size(); i++) {
-    if (style[i].IsEmpty())
+    if (style[i].empty())
       continue;
     style_properties->emplace_back(
         protocol::DOMSnapshot::NameValue::create()

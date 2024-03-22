@@ -1,13 +1,16 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+#include <optional>
+
+#include "base/test/bind.h"
+#include "extensions/common/extensions_client.h"
 #include "extensions/common/features/complex_feature.h"
 #include "extensions/common/features/feature.h"
 #include "extensions/common/features/feature_provider.h"
 #include "extensions/common/features/simple_feature.h"
 #include "testing/gtest/include/gtest/gtest.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "tools/json_schema_compiler/test/features_compiler_test.h"
 
 namespace extensions {
@@ -24,8 +27,8 @@ void ExpectVectorsEqual(std::vector<T> expected,
 }
 
 template <typename T>
-void ExpectOptionalVectorsEqual(const absl::optional<std::vector<T>>& expected,
-                                const absl::optional<std::vector<T>>& actual,
+void ExpectOptionalVectorsEqual(const std::optional<std::vector<T>>& expected,
+                                const std::optional<std::vector<T>>& actual,
                                 const std::string& name) {
   if (expected.has_value() != actual.has_value()) {
     ADD_FAILURE() << "Mismatched optional vectors for " << name << ": "
@@ -38,6 +41,7 @@ void ExpectOptionalVectorsEqual(const absl::optional<std::vector<T>>& expected,
 
 const bool kDefaultAutoGrant = true;
 const bool kDefaultInternal = false;
+const bool kDefaultRequiresDelegatedAvailabilityCheck = false;
 
 }  // namespace
 
@@ -54,28 +58,31 @@ struct FeatureComparator {
   std::vector<std::string> allowlist;
   std::vector<std::string> dependencies;
   std::vector<Manifest::Type> extension_types;
-  absl::optional<std::vector<Feature::Context>> contexts;
+  std::optional<std::vector<Feature::Context>> contexts;
   std::vector<Feature::Platform> platforms;
 
   URLPatternSet matches;
 
-  absl::optional<SimpleFeature::Location> location;
-  absl::optional<int> min_manifest_version;
-  absl::optional<int> max_manifest_version;
-  absl::optional<std::string> command_line_switch;
-  absl::optional<version_info::Channel> channel;
+  std::optional<SimpleFeature::Location> location;
+  std::optional<int> min_manifest_version;
+  std::optional<int> max_manifest_version;
+  std::optional<std::string> command_line_switch;
+  std::optional<version_info::Channel> channel;
 
   std::string alias;
   std::string source;
 
   bool component_extensions_auto_granted;
   bool internal;
+  bool requires_delegated_availability_check;
 };
 
 FeatureComparator::FeatureComparator(const std::string& name)
     : name(name),
       component_extensions_auto_granted(kDefaultAutoGrant),
-      internal(kDefaultInternal) {}
+      internal(kDefaultInternal),
+      requires_delegated_availability_check(
+          kDefaultRequiresDelegatedAvailabilityCheck) {}
 
 FeatureComparator::~FeatureComparator() = default;
 
@@ -100,9 +107,22 @@ void FeatureComparator::CompareFeature(const SimpleFeature* feature) {
   EXPECT_EQ(internal, feature->IsInternal()) << name;
   EXPECT_EQ(alias, feature->alias()) << name;
   EXPECT_EQ(source, feature->source()) << name;
+  EXPECT_EQ(requires_delegated_availability_check,
+            feature->RequiresDelegatedAvailabilityCheck())
+      << name;
 }
 
 TEST(FeaturesGenerationTest, FeaturesTest) {
+  Feature::FeatureDelegatedAvailabilityCheckMap map;
+  map.emplace("requires_delegated_availability_check",
+              base::BindLambdaForTesting(
+                  [&](const std::string& api_full_name,
+                      const Extension* extension, Feature::Context context,
+                      const GURL& url, Feature::Platform platform,
+                      int context_id, bool check_developer_mode,
+                      const ContextData& context_data) { return false; }));
+  ExtensionsClient::Get()->SetFeatureDelegatedAvailabilityCheckMap(
+      std::move(map));
   FeatureProvider provider;
   CompilerTestAddFeaturesMethod(&provider);
 
@@ -219,8 +239,9 @@ TEST(FeaturesGenerationTest, FeaturesTest) {
         {Feature::BLESSED_EXTENSION_CONTEXT, Feature::BLESSED_WEB_PAGE_CONTEXT,
          Feature::CONTENT_SCRIPT_CONTEXT,
          Feature::LOCK_SCREEN_EXTENSION_CONTEXT,
-         Feature::OFFSCREEN_EXTENSION_CONTEXT, Feature::WEB_PAGE_CONTEXT,
-         Feature::WEBUI_CONTEXT, Feature::WEBUI_UNTRUSTED_CONTEXT,
+         Feature::OFFSCREEN_EXTENSION_CONTEXT, Feature::USER_SCRIPT_CONTEXT,
+         Feature::WEB_PAGE_CONTEXT, Feature::WEBUI_CONTEXT,
+         Feature::WEBUI_UNTRUSTED_CONTEXT,
          Feature::UNBLESSED_EXTENSION_CONTEXT});
     comparator.extension_types = {Manifest::TYPE_EXTENSION,
                                   Manifest::TYPE_HOSTED_APP,
@@ -359,6 +380,16 @@ TEST(FeaturesGenerationTest, FeaturesTest) {
     FeatureComparator comparator("empty_contexts");
     comparator.channel = version_info::Channel::BETA;
     comparator.contexts = std::vector<Feature::Context>();
+    comparator.CompareFeature(feature);
+  }
+  {
+    const SimpleFeature* feature =
+        GetAsSimpleFeature("requires_delegated_availability_check");
+    FeatureComparator comparator("requires_delegated_availability_check");
+    comparator.channel = version_info::Channel::BETA;
+    comparator.contexts =
+        std::vector<Feature::Context>{Feature::Context::WEB_PAGE_CONTEXT};
+    comparator.requires_delegated_availability_check = true;
     comparator.CompareFeature(feature);
   }
 }

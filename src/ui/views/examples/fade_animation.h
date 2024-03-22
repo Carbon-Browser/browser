@@ -1,10 +1,12 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef UI_VIEWS_EXAMPLES_FADE_ANIMATION_H_
 #define UI_VIEWS_EXAMPLES_FADE_ANIMATION_H_
 
+#include "base/memory/raw_ptr.h"
+#include "ui/base/metadata/metadata_header_macros.h"
 #include "ui/gfx/geometry/size.h"
 #include "ui/views/examples/example_base.h"
 #include "ui/views/metadata/view_factory.h"
@@ -18,6 +20,7 @@ namespace examples {
 
 class FadingView : public View {
  public:
+  METADATA_HEADER(FadingView);
   FadingView();
   FadingView(const FadingView&) = delete;
   FadingView& operator=(const FadingView&) = delete;
@@ -29,8 +32,8 @@ class FadingView : public View {
   static constexpr int kSpacing = 2;
   static constexpr gfx::Size kSize = {200, 50};
 
-  BoxLayoutView* primary_view_;
-  BoxLayoutView* secondary_view_;
+  raw_ptr<BoxLayoutView> primary_view_;
+  raw_ptr<BoxLayoutView> secondary_view_;
 };
 
 BEGIN_VIEW_BUILDER(, FadingView, View)

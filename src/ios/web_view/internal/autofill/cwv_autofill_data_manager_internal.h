@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -27,6 +27,10 @@ NS_ASSUME_NONNULL_BEGIN
                               passwordStore:
                                   (password_manager::PasswordStoreInterface*)
                                       passwordStore NS_DESIGNATED_INITIALIZER;
+
+// This is called by the associated CWVWebViewConfiguration in order to shut
+// down cleanly. See `-[CWVWebViewConfiguration shutDown]` method for more info.
+- (void)shutDown;
 
 @end
 

@@ -61,8 +61,6 @@ from each other and from other sites.
 **Known gaps in protection**:
 - No form of Site Isolation is active in Android WebView.
   See also https://crbug.com/769449.
-- No form of Site Isolation is active in content hosted within
-  `<webview>` HTML tags.  See also https://crbug.com/614463.
 - Frames with `<iframe sandbox>` attribute are not isolated
   from their non-opaque precursor origin.
   See also https://crbug.com/510122.
@@ -213,19 +211,21 @@ Compromised renderers shouldn’t be able to:
 - Spoof the `MessageEvent.origin` seen by a recipient of a `postMessage`.
 - Bypass enforcement of the `targetOrigin` argument of `postMessage`.
 - Send or receive `BroadcastChannel` messages for another origin.
-- Spoof the `MessageSender.origin` seen by a recipient of a
-  `chrome.runtime.sendMessage`
-  (see also [MessageSender documentation](https://developers.chrome.com/extensions/runtime#type-MessageSender) and [content script security guidance](https://groups.google.com/a/chromium.org/forum/#!topic/chromium-extensions/0ei-UCHNm34)).
+- Spoof the `MessageSender.url`, nor `MessageSender.origin`, nor
+  `MessageSender.id` (i.e. an extension id which can differ from the origin when
+  the message is sent from a content script), as seen by a recipient of a
+  `chrome.runtime.sendMessage`.
+  See also [MessageSender documentation](https://developers.chrome.com/extensions/runtime#type-MessageSender) and [content script security guidance](https://groups.google.com/a/chromium.org/forum/#!topic/chromium-extensions/0ei-UCHNm34).
+- Spoof the id of a Chrome extension initiating
+  [native messaging](https://developer.chrome.com/docs/apps/nativeMessaging/)
+  communication.
 
 Protection techniques:
 - Using `CanAccessDataForOrigin` to verify IPCs sent by a renderer process
   (e.g. in `RenderFrameProxyHost::OnRouteMessageEvent` or
   `BroadcastChannelProvider::ConnectToChannel`).
-
-**Known gaps in protection**:
-- Spoofing of `MessageSender.id` object
-  (see [the MessageSender documentation](https://developers.chrome.com/extensions/runtime#type-MessageSender)
-  and https://crbug.com/982361).
+- Using `ContentScriptTracker` to check if IPCs from a given renderer process
+  can legitimately claim to act on behalf content scripts of a given extension.
 
 
 ## JavaScript code cache
@@ -234,9 +234,6 @@ Compromised renderers shouldn't be able to poison the JavaScript code cache
 used by scripts executed in cross-site execution contexts.
 
 Protection techniques:
-- Validating origins sent in IPCs from a renderer process by using
-  `CanAccessDataForOrigin` in
-  `CodeCacheHostImpl::DidGenerateCacheableMetadataInCacheStorage`.
 - Using trustworthy, browser-side origin lock while writing to and fetching from
   the code cache by using `ChildProcessSecurityPolicyImpl::GetOriginLock` in
   `GetSecondaryKeyForCodeCache` in

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Copyright 2017 The Chromium Authors. All rights reserved.
+# Copyright 2017 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -13,7 +13,7 @@ import zlib
 from optparse import OptionParser
 from subprocess import call
 
-_LICENSE = """// Copyright (c) 2019 The Chromium Authors. All rights reserved.
+_LICENSE = """// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -685,7 +685,9 @@ def write_intel_gpu_series_list(entry_id, is_exception, exception_id,
       'rocketlake': 'kRocketlake',
       'dg1': 'kDG1',
       'alderlake': 'kAlderlake',
-      'alchemist': 'kAlchemist'
+      'alchemist': 'kAlchemist',
+      'raptorlake': 'kRaptorlake',
+      'meteorlake': 'kMeteorlake'
     }
     for series in intel_gpu_series_list:
       assert series in intel_gpu_series_map

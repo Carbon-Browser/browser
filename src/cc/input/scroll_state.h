@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -93,8 +93,8 @@ class CC_EXPORT ScrollState {
     return data_.current_native_scrolling_element();
   }
 
-  bool is_main_thread_hit_tested() const {
-    return data_.is_main_thread_hit_tested;
+  uint32_t main_thread_hit_tested_reasons() const {
+    return data_.main_thread_hit_tested_reasons;
   }
 
   ScrollStateData* data() { return &data_; }

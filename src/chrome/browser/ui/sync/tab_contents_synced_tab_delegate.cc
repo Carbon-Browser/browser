@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,12 +7,11 @@
 #include "base/memory/ref_counted.h"
 #include "chrome/browser/complex_tasks/task_tab_helper.h"
 #include "chrome/browser/profiles/profile.h"
-#include "chrome/common/buildflags.h"
 #include "components/sessions/content/content_serialized_navigation_builder.h"
+#include "components/supervised_user/core/common/buildflags.h"
 #include "components/sync_sessions/sync_sessions_client.h"
 #include "components/sync_sessions/synced_window_delegate.h"
 #include "components/sync_sessions/synced_window_delegates_getter.h"
-#include "components/translate/content/browser/content_record_page_language.h"
 #include "content/public/browser/favicon_status.h"
 #include "content/public/browser/navigation_controller.h"
 #include "content/public/browser/navigation_entry.h"
@@ -52,10 +51,14 @@ NavigationEntry* GetPossiblyPendingEntryAtIndex(
 
 }  // namespace
 
-TabContentsSyncedTabDelegate::TabContentsSyncedTabDelegate()
-    : web_contents_(nullptr) {}
-
-TabContentsSyncedTabDelegate::~TabContentsSyncedTabDelegate() = default;
+base::Time TabContentsSyncedTabDelegate::GetLastActiveTime() const {
+  // Use the TimeDelta common ground between the two units to make the
+  // conversion.
+  const base::TimeDelta delta_since_epoch =
+      web_contents_->GetLastActiveTime() - base::TimeTicks::UnixEpoch();
+  const base::Time converted_time = base::Time::UnixEpoch() + delta_since_epoch;
+  return converted_time;
+}
 
 bool TabContentsSyncedTabDelegate::IsBeingDestroyed() const {
   return web_contents_->IsBeingDestroyed();
@@ -87,14 +90,6 @@ GURL TabContentsSyncedTabDelegate::GetVirtualURLAtIndex(int i) const {
   return entry ? entry->GetVirtualURL() : GURL();
 }
 
-std::string TabContentsSyncedTabDelegate::GetPageLanguageAtIndex(int i) const {
-  DCHECK(web_contents_);
-  NavigationEntry* entry = GetPossiblyPendingEntryAtIndex(web_contents_, i);
-  // If we don't have an entry, return empty language.
-  return entry ? translate::GetPageLanguageFromNavigation(entry)
-               : std::string();
-}
-
 void TabContentsSyncedTabDelegate::GetSerializedNavigationAtIndex(
     int i,
     sessions::SerializedNavigationEntry* serialized_entry) const {
@@ -121,6 +116,15 @@ TabContentsSyncedTabDelegate::GetBlockedNavigations() const {
 #if BUILDFLAG(ENABLE_SUPERVISED_USERS)
   SupervisedUserNavigationObserver* navigation_observer =
       SupervisedUserNavigationObserver::FromWebContents(web_contents_);
+#if BUILDFLAG(IS_ANDROID)
+  // TabHelpers::AttachTabHelpers() will not be called for a placeholder tab's
+  // WebContents that is temporarily created from a serialized state in
+  // SyncedTabDelegateAndroid::CreatePlaceholderTabSyncedTabDelegate(). When
+  // this occurs, early-out and return a nullptr.
+  if (!navigation_observer) {
+    return nullptr;
+  }
+#endif  // BUILDFLAG(IS_ANDROID)
   DCHECK(navigation_observer);
 
   return &navigation_observer->blocked_navigations();
@@ -137,8 +141,17 @@ bool TabContentsSyncedTabDelegate::ShouldSync(
     return false;
   }
 
-  if (ProfileHasChildAccount() && !GetBlockedNavigations()->empty()) {
-    return true;
+  if (ProfileHasChildAccount()) {
+#if BUILDFLAG(IS_ANDROID)
+    auto* blocked_navigations = GetBlockedNavigations();
+    if (blocked_navigations && !blocked_navigations->empty()) {
+      return true;
+    }
+#else
+    if (!GetBlockedNavigations()->empty()) {
+      return true;
+    }
+#endif  // BUILDFLAG(IS_ANDROID)
   }
 
   if (IsInitialBlankNavigation()) {
@@ -149,7 +162,7 @@ bool TabContentsSyncedTabDelegate::ShouldSync(
   // associated with any navigation.
   content::NavigationEntry* last_committed_entry =
       web_contents_->GetController().GetLastCommittedEntry();
-  if (last_committed_entry && last_committed_entry->IsInitialEntry()) {
+  if (last_committed_entry->IsInitialEntry()) {
     return false;
   }
 

@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -22,6 +22,7 @@
 #include "third_party/blink/renderer/platform/bindings/v8_binding.h"
 #include "third_party/blink/renderer/platform/bindings/v8_per_context_data.h"
 #include "third_party/blink/renderer/platform/heap/collection_support/heap_deque.h"
+#include "third_party/blink/renderer/platform/testing/task_environment.h"
 #include "v8/include/v8.h"
 
 namespace blink {
@@ -83,7 +84,7 @@ class ModuleRecordTestModulator final : public DummyModulator {
  private:
   // Implements Modulator:
 
-  ScriptState* GetScriptState() override { return script_state_; }
+  ScriptState* GetScriptState() override { return script_state_.Get(); }
 
   ModuleRecordResolver* GetModuleRecordResolver() override {
     return resolver_.Get();
@@ -110,6 +111,8 @@ class ModuleRecordTest : public ::testing::Test, public ModuleTestBase {
  public:
   void SetUp() override { ModuleTestBase::SetUp(); }
   void TearDown() override { ModuleTestBase::TearDown(); }
+
+  test::TaskEnvironment task_environment_;
 };
 
 TEST_F(ModuleRecordTest, compileSuccess) {
@@ -251,8 +254,10 @@ TEST_F(ModuleRecordTest, EvaluationErrorIsRemembered) {
       JSModuleScript::CreateForTest(modulator, module, js_url_c)
           ->RunScriptOnScriptStateAndReturnValue(scope.GetScriptState());
 
-  v8::Local<v8::Value> exception1 = GetException(state, evaluation_result1);
-  v8::Local<v8::Value> exception2 = GetException(state, evaluation_result2);
+  v8::Local<v8::Value> exception1 =
+      GetException(state, std::move(evaluation_result1));
+  v8::Local<v8::Value> exception2 =
+      GetException(state, std::move(evaluation_result2));
   EXPECT_FALSE(exception1.IsEmpty());
   EXPECT_FALSE(exception2.IsEmpty());
   EXPECT_EQ(exception1, exception2);
@@ -285,7 +290,8 @@ TEST_F(ModuleRecordTest, Evaluate) {
           ->RunScriptAndReturnValue(&scope.GetWindow())
           .GetSuccessValueOrEmpty();
   ASSERT_TRUE(value->IsString());
-  EXPECT_EQ("bar", ToCoreString(v8::Local<v8::String>::Cast(value)));
+  EXPECT_EQ("bar", ToCoreString(scope.GetIsolate(),
+                                v8::Local<v8::String>::Cast(value)));
 
   v8::Local<v8::Object> module_namespace =
       v8::Local<v8::Object>::Cast(ModuleRecord::V8Namespace(module));
@@ -315,9 +321,11 @@ TEST_F(ModuleRecordTest, EvaluateCaptureError) {
       JSModuleScript::CreateForTest(modulator, module, js_url)
           ->RunScriptOnScriptStateAndReturnValue(scope.GetScriptState());
 
-  v8::Local<v8::Value> exception = GetException(scope.GetScriptState(), result);
+  v8::Local<v8::Value> exception =
+      GetException(scope.GetScriptState(), std::move(result));
   ASSERT_TRUE(exception->IsString());
-  EXPECT_EQ("bar", ToCoreString(exception.As<v8::String>()));
+  EXPECT_EQ("bar",
+            ToCoreString(scope.GetIsolate(), exception.As<v8::String>()));
 }
 
 }  // namespace

@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,7 @@
 #include <string>
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/strings/utf_string_conversions.h"
 #include "chrome/browser/ui/commander/commander_view_model.h"
 
@@ -107,34 +107,34 @@ void CommanderHandler::HandleHeightChanged(const base::Value::List& args) {
 
 void CommanderHandler::ViewModelUpdated(
     commander::CommanderViewModel view_model) {
-  base::DictionaryValue vm;
-  vm.GetDict().Set(kActionKey, view_model.action);
-  vm.GetDict().Set(kResultSetIdKey, view_model.result_set_id);
+  base::Value::Dict vm;
+  vm.Set(kActionKey, view_model.action);
+  vm.Set(kResultSetIdKey, view_model.result_set_id);
   if (view_model.action ==
       commander::CommanderViewModel::Action::kDisplayResults) {
-    base::ListValue option_list;
+    base::Value::List option_list;
     for (commander::CommandItemViewModel& item : view_model.items) {
-      base::DictionaryValue option;
-      option.GetDict().Set(kTitleKey, item.title);
-      option.GetDict().Set(kEntityKey, item.entity_type);
+      base::Value::Dict option;
+      option.Set(kTitleKey, item.title);
+      option.Set(kEntityKey, item.entity_type);
       if (!item.annotation.empty())
-        option.GetDict().Set(kAnnotationKey, item.annotation);
-      base::ListValue ranges;
+        option.Set(kAnnotationKey, item.annotation);
+      base::Value::List ranges;
       for (const gfx::Range& range : item.matched_ranges) {
-        base::ListValue range_value;
+        base::Value::List range_value;
         range_value.Append(static_cast<int>(range.start()));
         range_value.Append(static_cast<int>(range.end()));
         ranges.Append(std::move(range_value));
       }
-      option.GetDict().Set(kMatchedRangesKey, std::move(ranges));
+      option.Set(kMatchedRangesKey, std::move(ranges));
       option_list.Append(std::move(option));
     }
-    vm.GetDict().Set(kOptionsKey, std::move(option_list));
+    vm.Set(kOptionsKey, std::move(option_list));
   } else {
     // kDismiss is handled higher in the stack.
     DCHECK_EQ(view_model.action,
               commander::CommanderViewModel::Action::kPrompt);
-    vm.GetDict().Set(kPromptTextKey, view_model.prompt_text);
+    vm.Set(kPromptTextKey, view_model.prompt_text);
   }
   FireWebUIListener(kViewModelUpdatedEvent, vm);
 }

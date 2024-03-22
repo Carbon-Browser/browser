@@ -1,11 +1,11 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CONTENT_SERVICES_AUCTION_WORKLET_FOR_DEBUGGING_ONLY_BINDINGS_H_
 #define CONTENT_SERVICES_AUCTION_WORKLET_FOR_DEBUGGING_ONLY_BINDINGS_H_
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "content/services/auction_worklet/auction_v8_helper.h"
 #include "content/services/auction_worklet/context_recycler.h"
@@ -26,10 +26,9 @@ class ForDebuggingOnlyBindings : public Bindings {
   ForDebuggingOnlyBindings& operator=(const ForDebuggingOnlyBindings&) = delete;
   ~ForDebuggingOnlyBindings() override;
 
-  // Add forDebuggingOnly object to `global_template`. The
-  // ForDebuggingOnlyBindings must outlive the template.
-  void FillInGlobalTemplate(
-      v8::Local<v8::ObjectTemplate> global_template) override;
+  // Add forDebuggingOnly object to the global context. The
+  // ForDebuggingOnlyBindings must outlive the context.
+  void AttachToContext(v8::Local<v8::Context> context) override;
   void Reset() override;
 
   absl::optional<GURL> TakeLossReportUrl() {

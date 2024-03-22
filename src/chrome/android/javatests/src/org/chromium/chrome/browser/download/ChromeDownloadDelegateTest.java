@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -23,9 +23,7 @@ import org.chromium.url.GURL;
 
 import java.util.concurrent.Callable;
 
-/**
- * Tests for ChromeDownloadDelegate class.
- */
+/** Tests for ChromeDownloadDelegate class. */
 @RunWith(ChromeJUnit4ClassRunner.class)
 @CommandLineFlags.Add({ChromeSwitches.DISABLE_FIRST_RUN_EXPERIENCE})
 public class ChromeDownloadDelegateTest {
@@ -37,22 +35,19 @@ public class ChromeDownloadDelegateTest {
         mActivityTestRule.startMainActivityOnBlankPage();
     }
 
-    /**
-     * Mock class for test.
-     */
+    /** Mock class for test. */
     static class MockChromeDownloadDelegate extends ChromeDownloadDelegate {
         public MockChromeDownloadDelegate(Tab tab) {
             super(tab);
         }
 
         @Override
-        protected void onDownloadStartNoStream(DownloadInfo downloadInfo) {
-        }
+        protected void onDownloadStartNoStream(DownloadInfo downloadInfo) {}
     }
 
     /**
-     * Test to make sure {@link ChromeDownloadDelegate#shouldInterceptContextMenuDownload}
-     * returns true only for ".dd" or ".dm" extensions with http/https scheme.
+     * Test to make sure {@link ChromeDownloadDelegate#shouldInterceptContextMenuDownload} returns
+     * true only for ".dd" or ".dm" extensions with http/https scheme.
      */
     @Test
     @SmallTest
@@ -60,8 +55,10 @@ public class ChromeDownloadDelegateTest {
     public void testShouldInterceptContextMenuDownload() {
         final Tab tab = mActivityTestRule.getActivity().getActivityTab();
         mActivityTestRule.loadUrl("about:blank");
-        ChromeDownloadDelegate delegate = TestThreadUtils.runOnUiThreadBlockingNoException(
-                (Callable<ChromeDownloadDelegate>) () -> new MockChromeDownloadDelegate(tab));
+        ChromeDownloadDelegate delegate =
+                TestThreadUtils.runOnUiThreadBlockingNoException(
+                        (Callable<ChromeDownloadDelegate>)
+                                () -> new MockChromeDownloadDelegate(tab));
         Assert.assertFalse(
                 delegate.shouldInterceptContextMenuDownload(new GURL("file://test/test.html")));
         Assert.assertFalse(

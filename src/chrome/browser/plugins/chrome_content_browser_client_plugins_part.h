@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -46,10 +46,9 @@ class ChromeContentBrowserClientPluginsPart
   static void DidCreatePpapiPlugin(content::BrowserPpapiHost* browser_host);
 
  private:
-  void ExposeInterfacesToRenderer(
-      service_manager::BinderRegistry* registry,
-      blink::AssociatedInterfaceRegistry* associated_registry,
-      content::RenderProcessHost* render_process_host) override;
+  void ExposeInterfacesToRendererForRenderFrameHost(
+      content::RenderFrameHost& frame_host,
+      blink::AssociatedInterfaceRegistry& associated_registry) override;
 };
 
 }  // namespace plugins

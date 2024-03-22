@@ -1,14 +1,15 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "gpu/vulkan/tests/native_window.h"
 
 #include "base/containers/flat_map.h"
+#include "build/build_config.h"
 #include "ui/platform_window/platform_window_delegate.h"
 #include "ui/platform_window/platform_window_init_properties.h"
 
-#if defined(USE_OZONE)
+#if BUILDFLAG(IS_OZONE)
 #include "ui/ozone/public/ozone_platform.h"
 #endif
 
@@ -23,7 +24,7 @@ class Window : public ui::PlatformWindowDelegate {
   void Initialize(const gfx::Rect& bounds) {
     DCHECK(!platform_window_);
 
-#if defined(USE_OZONE)
+#if BUILDFLAG(IS_OZONE)
     ui::PlatformWindowInitProperties props(bounds);
     platform_window_ = ui::OzonePlatform::GetInstance()->CreatePlatformWindow(
         this, std::move(props));

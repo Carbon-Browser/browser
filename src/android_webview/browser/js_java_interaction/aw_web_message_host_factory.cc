@@ -1,8 +1,10 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "android_webview/browser/js_java_interaction/aw_web_message_host_factory.h"
+
+#include <string>
 
 #include "android_webview/browser/js_java_interaction/js_reply_proxy.h"
 #include "android_webview/browser_jni_headers/WebMessageListenerHolder_jni.h"
@@ -14,6 +16,7 @@
 #include "components/js_injection/browser/web_message.h"
 #include "components/js_injection/browser/web_message_host.h"
 #include "components/js_injection/common/origin_matcher.h"
+#include "content/public/browser/android/message_payload.h"
 #include "content/public/browser/android/message_port_helper.h"
 
 namespace android_webview {
@@ -24,10 +27,12 @@ class AwWebMessageHost : public js_injection::WebMessageHost {
  public:
   AwWebMessageHost(js_injection::WebMessageReplyProxy* reply_proxy,
                    const base::android::ScopedJavaGlobalRef<jobject>& listener,
+                   const std::string& top_level_origin_string,
                    const std::string& origin_string,
                    bool is_main_frame)
       : reply_proxy_(reply_proxy),
         listener_(listener),
+        top_level_origin_string_(top_level_origin_string),
         origin_string_(origin_string),
         is_main_frame_(is_main_frame) {}
 
@@ -41,7 +46,8 @@ class AwWebMessageHost : public js_injection::WebMessageHost {
         content::android::CreateJavaMessagePort(std::move(message->ports));
     Java_WebMessageListenerHolder_onPostMessage(
         env, listener_,
-        base::android::ConvertUTF16ToJavaString(env, message->message),
+        content::android::ConvertWebMessagePayloadToJava(message->message),
+        base::android::ConvertUTF8ToJavaString(env, top_level_origin_string_),
         base::android::ConvertUTF8ToJavaString(env, origin_string_),
         is_main_frame_, jports, reply_proxy_.GetJavaPeer());
   }
@@ -49,6 +55,7 @@ class AwWebMessageHost : public js_injection::WebMessageHost {
  private:
   JsReplyProxy reply_proxy_;
   base::android::ScopedJavaGlobalRef<jobject> listener_;
+  const std::string top_level_origin_string_;
   const std::string origin_string_;
   const bool is_main_frame_;
 };
@@ -87,11 +94,12 @@ AwWebMessageHostFactory::GetWebMessageListenerInfo(
 }
 
 std::unique_ptr<js_injection::WebMessageHost>
-AwWebMessageHostFactory::CreateHost(const std::string& origin_string,
+AwWebMessageHostFactory::CreateHost(const std::string& top_level_origin_string,
+                                    const std::string& origin_string,
                                     bool is_main_frame,
                                     js_injection::WebMessageReplyProxy* proxy) {
-  return std::make_unique<AwWebMessageHost>(proxy, listener_, origin_string,
-                                            is_main_frame);
+  return std::make_unique<AwWebMessageHost>(
+      proxy, listener_, top_level_origin_string, origin_string, is_main_frame);
 }
 
 }  // namespace android_webview

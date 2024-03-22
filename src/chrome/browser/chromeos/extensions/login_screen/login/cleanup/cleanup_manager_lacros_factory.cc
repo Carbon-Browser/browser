@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,7 +6,6 @@
 
 #include "chrome/browser/chromeos/extensions/login_screen/login/cleanup/cleanup_manager_lacros.h"
 #include "chrome/browser/profiles/profile.h"
-#include "components/keyed_service/content/browser_context_dependency_manager.h"
 
 namespace chromeos {
 
@@ -25,21 +24,22 @@ CleanupManagerLacrosFactory* CleanupManagerLacrosFactory::GetInstance() {
 }
 
 CleanupManagerLacrosFactory::CleanupManagerLacrosFactory()
-    : BrowserContextKeyedServiceFactory(
+    : ProfileKeyedServiceFactory(
           "CleanupManagerLacros",
-          BrowserContextDependencyManager::GetInstance()) {}
+          // Service is available for incognito profiles.
+          ProfileSelections::Builder()
+              .WithRegular(ProfileSelection::kOwnInstance)
+              // TODO(crbug.com/1418376): Check if this service is needed in
+              // Guest mode.
+              .WithGuest(ProfileSelection::kOwnInstance)
+              .Build()) {}
 
 CleanupManagerLacrosFactory::~CleanupManagerLacrosFactory() = default;
 
-KeyedService* CleanupManagerLacrosFactory::BuildServiceInstanceFor(
+std::unique_ptr<KeyedService>
+CleanupManagerLacrosFactory::BuildServiceInstanceForBrowserContext(
     content::BrowserContext* browser_context) const {
-  return new CleanupManagerLacros(browser_context);
-}
-
-content::BrowserContext* CleanupManagerLacrosFactory::GetBrowserContextToUse(
-    content::BrowserContext* browser_context) const {
-  // Service is available for incognito profiles.
-  return Profile::FromBrowserContext(browser_context);
+  return std::make_unique<CleanupManagerLacros>(browser_context);
 }
 
 bool CleanupManagerLacrosFactory::ServiceIsNULLWhileTesting() const {

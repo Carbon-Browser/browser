@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -112,6 +112,11 @@ class ScriptPromiseProperty final
 
   void ResolveWithUndefined() {
     CHECK(!ScriptForbiddenScope::IsScriptForbidden());
+    if (RuntimeEnabledFeatures::BlinkLifecycleScriptForbiddenEnabled()) {
+      CHECK(!ScriptForbiddenScope::WillBeScriptForbidden());
+    } else {
+      DCHECK(!ScriptForbiddenScope::WillBeScriptForbidden());
+    }
     DCHECK_EQ(GetState(), kPending);
     if (!GetExecutionContext()) {
       return;
@@ -128,6 +133,11 @@ class ScriptPromiseProperty final
   template <typename PassRejectedType>
   void Reject(PassRejectedType value) {
     CHECK(!ScriptForbiddenScope::IsScriptForbidden());
+    if (RuntimeEnabledFeatures::BlinkLifecycleScriptForbiddenEnabled()) {
+      CHECK(!ScriptForbiddenScope::WillBeScriptForbidden());
+    } else {
+      DCHECK(!ScriptForbiddenScope::WillBeScriptForbidden());
+    }
     DCHECK_EQ(GetState(), kPending);
     if (!GetExecutionContext()) {
       return;

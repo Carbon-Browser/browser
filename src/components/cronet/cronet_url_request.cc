@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,7 @@
 #include <limits>
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/logging.h"
 #include "build/build_config.h"
@@ -17,6 +17,7 @@
 #include "net/base/load_flags.h"
 #include "net/base/load_states.h"
 #include "net/base/net_errors.h"
+#include "net/base/proxy_chain.h"
 #include "net/base/proxy_server.h"
 #include "net/base/request_priority.h"
 #include "net/base/upload_data_stream.h"
@@ -39,9 +40,13 @@ namespace {
 // Returns the string representation of the HostPortPair of the proxy server
 // that was used to fetch the response.
 std::string GetProxy(const net::HttpResponseInfo& info) {
-  if (!info.proxy_server.is_valid() || info.proxy_server.is_direct())
+  if (!info.proxy_chain.IsValid() || info.proxy_chain.is_direct()) {
     return net::HostPortPair().ToString();
-  return info.proxy_server.host_port_pair().ToString();
+  }
+  CHECK(info.proxy_chain.is_single_proxy());
+  return info.proxy_chain.GetProxyServer(/*chain_index=*/0)
+      .host_port_pair()
+      .ToString();
 }
 
 int CalculateLoadFlags(int load_flags,
@@ -56,19 +61,18 @@ int CalculateLoadFlags(int load_flags,
 
 }  // namespace
 
-CronetURLRequest::CronetURLRequest(
-    CronetContext* context,
-    std::unique_ptr<Callback> callback,
-    const GURL& url,
-    net::RequestPriority priority,
-    bool disable_cache,
-    bool disable_connection_migration,
-    bool traffic_stats_tag_set,
-    int32_t traffic_stats_tag,
-    bool traffic_stats_uid_set,
-    int32_t traffic_stats_uid,
-    net::Idempotency idempotency,
-    net::NetworkChangeNotifier::NetworkHandle network)
+CronetURLRequest::CronetURLRequest(CronetContext* context,
+                                   std::unique_ptr<Callback> callback,
+                                   const GURL& url,
+                                   net::RequestPriority priority,
+                                   bool disable_cache,
+                                   bool disable_connection_migration,
+                                   bool traffic_stats_tag_set,
+                                   int32_t traffic_stats_tag,
+                                   bool traffic_stats_uid_set,
+                                   int32_t traffic_stats_uid,
+                                   net::Idempotency idempotency,
+                                   net::handles::NetworkHandle network)
     : context_(context),
       network_tasks_(std::move(callback),
                      url,
@@ -144,6 +148,10 @@ void CronetURLRequest::FollowDeferredRedirect() {
 }
 
 bool CronetURLRequest::ReadData(net::IOBuffer* raw_read_buffer, int max_size) {
+  // TODO(https://crbug.com/1335423): Change to DCHECK() or remove after bug
+  // is fixed.
+  CHECK(max_size == 0 || (raw_read_buffer && raw_read_buffer->data()));
+
   scoped_refptr<net::IOBuffer> read_buffer(raw_read_buffer);
   context_->PostTaskToNetworkThread(
       FROM_HERE,
@@ -183,7 +191,7 @@ CronetURLRequest::NetworkTasks::NetworkTasks(
     bool traffic_stats_uid_set,
     int32_t traffic_stats_uid,
     net::Idempotency idempotency,
-    net::NetworkChangeNotifier::NetworkHandle network)
+    net::handles::NetworkHandle network)
     : callback_(std::move(callback)),
       initial_url_(url),
       initial_priority_(priority),
@@ -405,7 +413,8 @@ void CronetURLRequest::NetworkTasks::MaybeReportMetrics() {
   url_request_->PopulateNetErrorDetails(&net_error_details);
   callback_->OnMetricsCollected(
       metrics.request_start_time, metrics.request_start,
-      metrics.connect_timing.dns_start, metrics.connect_timing.dns_end,
+      metrics.connect_timing.domain_lookup_start,
+      metrics.connect_timing.domain_lookup_end,
       metrics.connect_timing.connect_start, metrics.connect_timing.connect_end,
       metrics.connect_timing.ssl_start, metrics.connect_timing.ssl_end,
       metrics.send_start, metrics.send_end, metrics.push_start,

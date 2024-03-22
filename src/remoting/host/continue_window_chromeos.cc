@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,7 +6,7 @@
 
 #include "remoting/host/continue_window.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "remoting/base/string_resources.h"
 #include "remoting/host/chromeos/message_box.h"
 #include "ui/base/l10n/l10n_util.h"

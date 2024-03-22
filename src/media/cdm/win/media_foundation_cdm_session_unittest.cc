@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,7 +6,7 @@
 
 #include <wchar.h>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/test/mock_callback.h"
 #include "base/test/task_environment.h"
 #include "media/base/mock_filters.h"
@@ -31,7 +31,8 @@ namespace media {
 namespace {
 
 const double kExpirationMs = 123456789.0;
-const auto kExpirationTime = base::Time::FromJsTime(kExpirationMs);
+const auto kExpirationTime =
+    base::Time::FromMillisecondsSinceUnixEpoch(kExpirationMs);
 const char kTestUmaPrefix[] = "Media.EME.TestUmaPrefix.";
 
 std::vector<uint8_t> StringToVector(const std::string& str) {

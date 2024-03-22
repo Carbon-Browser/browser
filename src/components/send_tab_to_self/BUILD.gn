@@ -1,4 +1,4 @@
-# Copyright 2018 The Chromium Authors. All rights reserved.
+# Copyright 2018 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -10,6 +10,7 @@ static_library("send_tab_to_self") {
   sources = [
     "entry_point_display_reason.cc",
     "entry_point_display_reason.h",
+    "features.cc",
     "features.h",
     "metrics_util.cc",
     "metrics_util.h",
@@ -61,7 +62,10 @@ static_library("send_tab_to_self") {
 if (is_android) {
   java_cpp_enum("java_enum_srcjar") {
     visibility = [ ":*" ]
-    sources = [ "entry_point_display_reason.h" ]
+    sources = [
+      "entry_point_display_reason.h",
+      "metrics_util.h",
+    ]
   }
 
   android_library("send_tab_to_self_java") {

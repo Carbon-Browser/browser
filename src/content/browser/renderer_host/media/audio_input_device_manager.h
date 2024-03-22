@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 //
@@ -18,7 +18,6 @@
 #include <vector>
 
 #include "base/memory/raw_ptr.h"
-#include "base/memory/ref_counted.h"
 #include "base/observer_list.h"
 #include "base/threading/thread.h"
 #include "base/unguessable_token.h"
@@ -77,7 +76,7 @@ class CONTENT_EXPORT AudioInputDeviceManager : public MediaStreamProvider {
   base::ObserverList<MediaStreamProviderListener>::Unchecked listeners_;
   blink::MediaStreamDevices devices_;
 
-  const raw_ptr<media::AudioSystem> audio_system_;
+  const raw_ptr<media::AudioSystem, DanglingUntriaged> audio_system_;
 };
 
 }  // namespace content

@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,13 +8,13 @@
 #include <memory>
 #include <string>
 
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
 #include "base/memory/weak_ptr.h"
 #include "chromeos/crosapi/mojom/screen_manager.mojom.h"
 #include "chromeos/crosapi/mojom/video_capture.mojom.h"
 #include "content/browser/media/capture/receiver_media_to_crosapi_adapter.h"
 #include "content/common/content_export.h"
-#include "content/public/browser/browser_task_traits.h"
+#include "content/public/browser/browser_thread.h"
 #include "content/public/browser/desktop_media_id.h"
 #include "content/public/browser/device_service.h"
 #include "media/capture/mojom/video_capture_types.mojom.h"
@@ -45,12 +45,6 @@ namespace content {
 class CONTENT_EXPORT VideoCaptureDeviceProxyLacros
     : public media::VideoCaptureDevice {
  public:
-  // Helper method to check if the mojom version(s) required to use this class
-  // are available.
-  // May be called from any thread; should be checked before creating (or
-  // posting a task to create) an instance of this class.
-  static bool IsAvailable();
-
   explicit VideoCaptureDeviceProxyLacros(const DesktopMediaID& device_id);
 
   VideoCaptureDeviceProxyLacros(const VideoCaptureDeviceProxyLacros&) = delete;
@@ -72,10 +66,12 @@ class CONTENT_EXPORT VideoCaptureDeviceProxyLacros
   void RequestRefreshFrame() final;
   void MaybeSuspend() final;
   void Resume() final;
-  void Crop(const base::Token& crop_id,
-            uint32_t crop_version,
-            base::OnceCallback<void(media::mojom::CropRequestResult)> callback)
-      override;
+  void ApplySubCaptureTarget(
+      media::mojom::SubCaptureTargetType type,
+      const base::Token& target,
+      uint32_t sub_capture_target_version,
+      base::OnceCallback<void(media::mojom::ApplySubCaptureTargetResult)>
+          callback) override;
   void StopAndDeAllocate() final;
   void GetPhotoState(GetPhotoStateCallback callback) final;
   void SetPhotoOptions(media::mojom::PhotoSettingsPtr settings,
@@ -103,6 +99,11 @@ class CONTENT_EXPORT VideoCaptureDeviceProxyLacros
   // AllocateAndStartWithReceiver() calls from succeeding.
   absl::optional<std::string> fatal_error_message_;
 
+  // Note that because we do not run on the main thread and because we want to
+  // set a disconnect handler on the screen manager we must bind our own remote
+  // rather than using |LacrosService::GetRemote|, which returns a shared remote
+  // that is unsuitable for setting a disconnect handler on, and is also thread
+  // affine to a different thread.
   mojo::Remote<crosapi::mojom::ScreenManager> screen_manager_;
   mojo::Remote<crosapi::mojom::VideoCaptureDevice> device_;
 

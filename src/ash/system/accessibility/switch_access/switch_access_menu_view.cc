@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,10 +12,12 @@
 #include "ash/system/accessibility/switch_access/switch_access_menu_button.h"
 #include "ash/system/tray/tray_constants.h"
 #include "base/containers/flat_map.h"
+#include "base/memory/raw_ptr.h"
 #include "base/no_destructor.h"
 #include "ui/accessibility/accessibility_features.h"
 #include "ui/accessibility/ax_node_data.h"
 #include "ui/accessibility/mojom/ax_node_data.mojom-shared.h"
+#include "ui/base/metadata/metadata_impl_macros.h"
 #include "ui/events/event.h"
 #include "ui/views/layout/table_layout.h"
 
@@ -25,7 +27,7 @@ namespace {
 constexpr int kMaxColumns = 3;
 
 struct ButtonInfo {
-  const gfx::VectorIcon* icon;
+  raw_ptr<const gfx::VectorIcon, ExperimentalAsh> icon;
   int label_id;
 };
 
@@ -158,5 +160,8 @@ void SwitchAccessMenuView::GetAccessibleNodeData(ui::AXNodeData* node_data) {
 const char* SwitchAccessMenuView::GetClassName() const {
   return "SwitchAccessMenuView";
 }
+
+BEGIN_METADATA(SwitchAccessMenuView)
+END_METADATA
 
 }  // namespace ash

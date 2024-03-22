@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,6 +7,7 @@
 
 #include <memory>
 
+#include "base/memory/raw_ref.h"
 #include "chrome/browser/chromeos/app_mode/chrome_kiosk_app_installer.h"
 #include "chrome/browser/chromeos/app_mode/chrome_kiosk_app_launcher.h"
 #include "chromeos/crosapi/mojom/chrome_app_kiosk_service.mojom.h"
@@ -37,9 +38,9 @@ class ChromeKioskLaunchControllerLacros
                       LaunchKioskAppCallback callback) override;
 
  private:
-  Profile& profile_;
-  std::unique_ptr<ash::ChromeKioskAppInstaller> installer_;
-  std::unique_ptr<ash::ChromeKioskAppLauncher> launcher_;
+  const raw_ref<Profile> profile_;
+  std::unique_ptr<chromeos::ChromeKioskAppInstaller> installer_;
+  std::unique_ptr<chromeos::ChromeKioskAppLauncher> launcher_;
 
   mojo::Receiver<crosapi::mojom::ChromeKioskLaunchController>
       controller_receiver_{this};

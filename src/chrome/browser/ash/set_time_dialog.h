@@ -1,11 +1,11 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CHROME_BROWSER_ASH_SET_TIME_DIALOG_H_
 #define CHROME_BROWSER_ASH_SET_TIME_DIALOG_H_
 
-#include "chrome/browser/ui/webui/chromeos/system_web_dialog_delegate.h"
+#include "chrome/browser/ui/webui/ash/system_web_dialog_delegate.h"
 #include "ui/gfx/native_widget_types.h"
 
 namespace ash {
@@ -18,7 +18,7 @@ class SetTimeDialog : public SystemWebDialogDelegate {
 
   // Shows the set time/date dialog. If |parent| is not null, shows the dialog
   // as a child of |parent|, e.g. the Settings window.
-  static void ShowDialog(gfx::NativeWindow parent = nullptr);
+  static void ShowDialog(gfx::NativeWindow parent = gfx::NativeWindow());
 
   // Returns true if the dialog should show the timezone <select>.
   static bool ShouldShowTimezone();
@@ -32,10 +32,5 @@ class SetTimeDialog : public SystemWebDialogDelegate {
 };
 
 }  // namespace ash
-
-// TODO(https://crbug.com/1164001): remove after the migration is finished.
-namespace chromeos {
-using ::ash::SetTimeDialog;
-}
 
 #endif  // CHROME_BROWSER_ASH_SET_TIME_DIALOG_H_

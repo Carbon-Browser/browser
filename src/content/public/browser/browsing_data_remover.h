@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,10 +7,10 @@
 
 #include <memory>
 
-#include "base/callback_forward.h"
-#include "base/memory/weak_ptr.h"
+#include "base/functional/callback_forward.h"
 #include "base/time/time.h"
 #include "build/build_config.h"
+#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace storage {
 class SpecialStoragePolicy;
@@ -24,6 +24,7 @@ namespace content {
 
 class BrowsingDataFilterBuilder;
 class BrowsingDataRemoverDelegate;
+class StoragePartitionConfig;
 
 ////////////////////////////////////////////////////////////////////////////////
 // BrowsingDataRemover is responsible for removing data related to browsing:
@@ -96,6 +97,8 @@ class BrowsingDataRemover {
   // prohibited from deleting history or downloads.
   static constexpr DataType DATA_TYPE_NO_CHECKS = 1 << 13;
 
+  // 14 is already taken by DATA_TYPE_BACKGROUND_FETCH.
+
   // AVOID_CLOSING_CONNECTIONS is a pseudo-datatype indicating that when
   // deleting COOKIES, BrowsingDataRemover should skip
   // storage backends whose deletion would cause closing network connections.
@@ -131,9 +134,21 @@ class BrowsingDataRemover {
   // information.
   static constexpr DataType DATA_TYPE_ATTRIBUTION_REPORTING_INTERNAL = 1 << 21;
 
+  // Private Aggregation API
+  // (https://github.com/alexmturner/private-aggregation-api) persistent
+  // storage. This only refers to data stored internally by the API, such as
+  // privacy budgeting information. Note that currently the API does not persist
+  // any other data. Should only be cleared by user-initiated deletions.
+  static constexpr DataType DATA_TYPE_PRIVATE_AGGREGATION_INTERNAL = 1 << 22;
+
+  // Similar to DATA_TYPE_INTEREST_GROUPS, but only refers to data stored
+  // internally by the API, such as k-Anonymity cache and rate limiting
+  // information.
+  static constexpr DataType DATA_TYPE_INTEREST_GROUPS_INTERNAL = 1 << 23;
+
   // Embedders can add more datatypes beyond this point.
   static constexpr DataType DATA_TYPE_CONTENT_END =
-      DATA_TYPE_ATTRIBUTION_REPORTING_INTERNAL;
+      DATA_TYPE_INTEREST_GROUPS_INTERNAL;
 
   // All data stored by the Attribution Reporting API.
   static constexpr DataType DATA_TYPE_ATTRIBUTION_REPORTING =
@@ -144,7 +159,21 @@ class BrowsingDataRemover {
   static constexpr DataType DATA_TYPE_PRIVACY_SANDBOX =
       DATA_TYPE_TRUST_TOKENS | DATA_TYPE_ATTRIBUTION_REPORTING |
       DATA_TYPE_AGGREGATION_SERVICE | DATA_TYPE_INTEREST_GROUPS |
-      DATA_TYPE_SHARED_STORAGE;
+      DATA_TYPE_SHARED_STORAGE | DATA_TYPE_PRIVATE_AGGREGATION_INTERNAL |
+      DATA_TYPE_INTEREST_GROUPS_INTERNAL;
+
+  // Internal data stored by APIs in the Privacy Sandbox, e.g. privacy budgeting
+  // information.
+  static constexpr DataType DATA_TYPE_PRIVACY_SANDBOX_INTERNAL =
+      DATA_TYPE_ATTRIBUTION_REPORTING_INTERNAL |
+      DATA_TYPE_PRIVATE_AGGREGATION_INTERNAL |
+      DATA_TYPE_INTEREST_GROUPS_INTERNAL;
+
+  // Data types stored within a StoragePartition (i.e. not Profile-scoped).
+  static constexpr DataType DATA_TYPE_ON_STORAGE_PARTITION =
+      DATA_TYPE_DOM_STORAGE | DATA_TYPE_COOKIES |
+      DATA_TYPE_AVOID_CLOSING_CONNECTIONS | DATA_TYPE_CACHE |
+      DATA_TYPE_APP_CACHE_DEPRECATED | DATA_TYPE_PRIVACY_SANDBOX;
 
   using OriginType = uint64_t;
   // Web storage origins that StoragePartition recognizes as NOT protected
@@ -252,6 +281,9 @@ class BrowsingDataRemover {
   virtual const base::Time& GetLastUsedBeginTimeForTesting() = 0;
   virtual uint64_t GetLastUsedRemovalMaskForTesting() = 0;
   virtual uint64_t GetLastUsedOriginTypeMaskForTesting() = 0;
+  virtual absl::optional<StoragePartitionConfig>
+  GetLastUsedStoragePartitionConfigForTesting() = 0;
+  virtual uint64_t GetPendingTaskCountForTesting() = 0;
 };
 
 }  // namespace content

@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -27,7 +27,7 @@ class CORE_EXPORT PlaceHolderBytesConsumer final : public BytesConsumer {
   void Cancel() override;
   PublicState GetPublicState() const override;
   Error GetError() const override;
-  String DebugName() const override { return "PlaceHolderBytesConsumer"; }
+  String DebugName() const override;
 
   // This function can be called at most once.
   void Update(BytesConsumer* consumer);
@@ -38,6 +38,7 @@ class CORE_EXPORT PlaceHolderBytesConsumer final : public BytesConsumer {
   Member<BytesConsumer> underlying_;
   Member<Client> client_;
   bool is_cancelled_ = false;
+  SEQUENCE_CHECKER(sequence_checker_);
 };
 
 }  // namespace blink

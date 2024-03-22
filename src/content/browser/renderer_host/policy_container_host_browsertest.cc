@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -427,10 +427,13 @@ IN_PROC_BROWSER_TEST_F(PolicyContainerHostBrowserTest, HistoryForMainFrame) {
 
 namespace {
 
-bool EqualsExceptCOOP(const PolicyContainerPolicies& lhs,
-                      const PolicyContainerPolicies& rhs) {
+bool EqualsExceptCOOPAndTopNavigation(const PolicyContainerPolicies& lhs,
+                                      const PolicyContainerPolicies& rhs) {
   PolicyContainerPolicies rhs_modulo_coop = rhs.Clone();
   rhs_modulo_coop.cross_origin_opener_policy = lhs.cross_origin_opener_policy;
+  rhs_modulo_coop.can_navigate_top_without_user_gesture =
+      lhs.can_navigate_top_without_user_gesture;
+
   return lhs == rhs_modulo_coop;
 }
 
@@ -494,7 +497,7 @@ IN_PROC_BROWSER_TEST_F(PolicyContainerHostBrowserTest, HistoryForChildFrame) {
   EXPECT_TRUE(WaitForLoadStop(web_contents()));
 
   // The new document inherits from the navigation initiator, except for COOP.
-  EXPECT_TRUE(EqualsExceptCOOP(
+  EXPECT_TRUE(EqualsExceptCOOPAndTopNavigation(
       main_frame_new_policies,
       child->current_frame_host()->policy_container_host()->policies()));
 
@@ -516,7 +519,7 @@ IN_PROC_BROWSER_TEST_F(PolicyContainerHostBrowserTest, HistoryForChildFrame) {
   ASSERT_TRUE(WaitForLoadStop(web_contents()));
 
   // The policies have not changed.
-  EXPECT_TRUE(EqualsExceptCOOP(
+  EXPECT_TRUE(EqualsExceptCOOPAndTopNavigation(
       main_frame_new_policies,
       child->current_frame_host()->policy_container_host()->policies()));
   ASSERT_EQ(2, controller.GetEntryCount());
@@ -542,7 +545,7 @@ IN_PROC_BROWSER_TEST_F(PolicyContainerHostBrowserTest, HistoryForChildFrame) {
   EXPECT_TRUE(WaitForLoadStop(web_contents()));
 
   // The new document inherits from the navigation initiator.
-  EXPECT_TRUE(EqualsExceptCOOP(
+  EXPECT_TRUE(EqualsExceptCOOPAndTopNavigation(
       policies_a,
       child->current_frame_host()->policy_container_host()->policies()));
 
@@ -585,7 +588,7 @@ IN_PROC_BROWSER_TEST_F(PolicyContainerHostBrowserTest, HistoryForChildFrame) {
   ASSERT_NE(nullptr, child);
 
   // The correct referrer policy should be restored from history.
-  EXPECT_TRUE(EqualsExceptCOOP(
+  EXPECT_TRUE(EqualsExceptCOOPAndTopNavigation(
       policies_a,
       child->current_frame_host()->policy_container_host()->policies()));
 
@@ -602,7 +605,7 @@ IN_PROC_BROWSER_TEST_F(PolicyContainerHostBrowserTest, HistoryForChildFrame) {
   EXPECT_TRUE(WaitForLoadStop(web_contents()));
 
   // The correct referrer policy should be restored from history.
-  EXPECT_TRUE(EqualsExceptCOOP(
+  EXPECT_TRUE(EqualsExceptCOOPAndTopNavigation(
       main_frame_new_policies,
       child->current_frame_host()->policy_container_host()->policies()));
 
@@ -616,7 +619,7 @@ IN_PROC_BROWSER_TEST_F(PolicyContainerHostBrowserTest, HistoryForChildFrame) {
   EXPECT_TRUE(WaitForLoadStop(web_contents()));
 
   // The correct referrer policy should be restored from history.
-  EXPECT_TRUE(EqualsExceptCOOP(
+  EXPECT_TRUE(EqualsExceptCOOPAndTopNavigation(
       main_frame_new_policies,
       child->current_frame_host()->policy_container_host()->policies()));
 
@@ -839,13 +842,13 @@ IN_PROC_BROWSER_TEST_F(PolicyContainerHostBrowserTest,
   NavigationRequest* navigation_request =
       NavigationRequest::From(manager.GetNavigationHandle());
   if (ShouldSkipEarlyCommitPendingForCrashedFrame()) {
-    EXPECT_EQ(navigation_request->associated_rfh_type(),
+    EXPECT_EQ(navigation_request->GetAssociatedRFHType(),
               NavigationRequest::AssociatedRenderFrameHostType::SPECULATIVE);
   } else {
     // Policy container is properly initialized in the early committed
-    // render frame host.
+    // RenderFrameHost.
     EXPECT_TRUE(current_frame_host()->policy_container_host());
-    EXPECT_EQ(navigation_request->associated_rfh_type(),
+    EXPECT_EQ(navigation_request->GetAssociatedRFHType(),
               NavigationRequest::AssociatedRenderFrameHostType::CURRENT);
 
     // The policy is copied from the previous RFH following the crash.
@@ -866,7 +869,7 @@ IN_PROC_BROWSER_TEST_F(PolicyContainerHostBrowserTest,
   }
 
   // Let the navigation finish.
-  manager.WaitForNavigationFinished();
+  ASSERT_TRUE(manager.WaitForNavigationFinished());
 
   EXPECT_EQ(url_b,
             web_contents()->GetPrimaryMainFrame()->GetLastCommittedURL());

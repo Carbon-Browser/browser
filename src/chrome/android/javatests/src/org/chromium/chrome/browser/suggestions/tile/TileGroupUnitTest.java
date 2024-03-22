@@ -1,13 +1,14 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 package org.chromium.chrome.browser.suggestions.tile;
 
+import static androidx.test.espresso.matcher.ViewMatchers.assertThat;
+
 import static org.hamcrest.CoreMatchers.is;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertThat;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
@@ -22,9 +23,11 @@ import static org.mockito.Mockito.when;
 
 import static org.chromium.chrome.test.util.browser.suggestions.mostvisited.FakeMostVisitedSites.createSiteSuggestion;
 
+import android.content.Context;
 import android.graphics.Bitmap;
 import android.graphics.Bitmap.Config;
 import android.graphics.Color;
+import android.view.ContextThemeWrapper;
 import android.view.ViewGroup;
 import android.widget.FrameLayout;
 
@@ -51,6 +54,7 @@ import org.chromium.chrome.browser.suggestions.SiteSuggestion;
 import org.chromium.chrome.browser.suggestions.SuggestionsConfig.TileStyle;
 import org.chromium.chrome.browser.suggestions.SuggestionsUiDelegate;
 import org.chromium.chrome.browser.suggestions.mostvisited.MostVisitedSites;
+import org.chromium.chrome.test.R;
 import org.chromium.chrome.test.util.browser.Features;
 import org.chromium.chrome.test.util.browser.suggestions.mostvisited.FakeMostVisitedSites;
 import org.chromium.components.favicon.IconType;
@@ -60,37 +64,26 @@ import org.chromium.url.GURL;
 import java.util.ArrayList;
 import java.util.List;
 
-/**
- * Unit tests for {@link TileGroup}.
- */
+/** Unit tests for {@link TileGroup}. */
 @RunWith(BaseJUnit4ClassRunner.class)
 @Batch(Batch.UNIT_TESTS)
-@DisabledTest(message = "https://crbug.com/1330627")
 public class TileGroupUnitTest {
     private static final int MAX_TILES_TO_FETCH = 4;
     private static final int TILE_TITLE_LINES = 1;
     private static final String[] URLS = {"https://www.google.com/", "https://tellmedadjokes.com/"};
 
-    @Rule
-    public TestRule mFeaturesProcessor = new Features.JUnitProcessor();
+    @Rule public TestRule mFeaturesProcessor = new Features.JUnitProcessor();
 
-    @Mock
-    private TileGroup.Observer mTileGroupObserver;
-    @Mock
-    private TileGroup.Delegate mTileGroupDelegate;
-    @Mock
-    private SuggestionsUiDelegate mSuggestionsUiDelegate;
-    @Mock
-    private ContextMenuManager mContextMenuManager;
-    @Mock
-    private OfflinePageBridge mOfflinePageBridge;
-    @Mock
-    private ImageFetcher mMockImageFetcher;
-    @Mock
-    private SuggestionsTileView mSuggestionsTileView1;
-    @Mock
-    private SuggestionsTileView mSuggestionsTileView2;
+    @Mock private TileGroup.Observer mTileGroupObserver;
+    @Mock private TileGroup.Delegate mTileGroupDelegate;
+    @Mock private SuggestionsUiDelegate mSuggestionsUiDelegate;
+    @Mock private ContextMenuManager mContextMenuManager;
+    @Mock private OfflinePageBridge mOfflinePageBridge;
+    @Mock private ImageFetcher mMockImageFetcher;
+    @Mock private SuggestionsTileView mSuggestionsTileView1;
+    @Mock private SuggestionsTileView mSuggestionsTileView2;
 
+    private Context mContext;
     private FakeMostVisitedSites mMostVisitedSites;
     private FakeImageFetcher mImageFetcher;
     private TileRenderer mTileRenderer;
@@ -99,16 +92,20 @@ public class TileGroupUnitTest {
     public void setUp() {
         MockitoAnnotations.initMocks(this);
 
+        mContext =
+                new ContextThemeWrapper(
+                        ContextUtils.getApplicationContext(), R.style.Theme_BrowserUI_DayNight);
         mImageFetcher = new FakeImageFetcher();
-        mTileRenderer = new TileRenderer(ContextUtils.getApplicationContext(), TileStyle.MODERN,
-                TILE_TITLE_LINES, mImageFetcher);
+        mTileRenderer =
+                new TileRenderer(mContext, TileStyle.MODERN, TILE_TITLE_LINES, mImageFetcher);
         mMostVisitedSites = new FakeMostVisitedSites();
 
-        doAnswer(invocation -> {
-            mMostVisitedSites.setObserver(
-                    invocation.getArgument(0), invocation.<Integer>getArgument(1));
-            return null;
-        })
+        doAnswer(
+                        invocation -> {
+                            mMostVisitedSites.setObserver(
+                                    invocation.getArgument(0), invocation.<Integer>getArgument(1));
+                            return null;
+                        })
                 .when(mTileGroupDelegate)
                 .setMostVisitedSitesObserver(any(MostVisitedSites.Observer.class), anyInt());
     }
@@ -120,8 +117,14 @@ public class TileGroupUnitTest {
     public void testInitialiseWithTileList() {
         mMostVisitedSites.setTileSuggestions(URLS);
 
-        TileGroup tileGroup = new TileGroup(mTileRenderer, mSuggestionsUiDelegate,
-                mContextMenuManager, mTileGroupDelegate, mTileGroupObserver, mOfflinePageBridge);
+        TileGroup tileGroup =
+                new TileGroup(
+                        mTileRenderer,
+                        mSuggestionsUiDelegate,
+                        mContextMenuManager,
+                        mTileGroupDelegate,
+                        mTileGroupObserver,
+                        mOfflinePageBridge);
         tileGroup.startObserving(MAX_TILES_TO_FETCH);
 
         verify(mTileGroupObserver).onTileCountChanged();
@@ -140,8 +143,14 @@ public class TileGroupUnitTest {
     @UiThreadTest
     @SmallTest
     public void testInitialiseWithEmptyTileList() {
-        TileGroup tileGroup = new TileGroup(mTileRenderer, mSuggestionsUiDelegate,
-                mContextMenuManager, mTileGroupDelegate, mTileGroupObserver, mOfflinePageBridge);
+        TileGroup tileGroup =
+                new TileGroup(
+                        mTileRenderer,
+                        mSuggestionsUiDelegate,
+                        mContextMenuManager,
+                        mTileGroupDelegate,
+                        mTileGroupObserver,
+                        mOfflinePageBridge);
         tileGroup.startObserving(MAX_TILES_TO_FETCH);
 
         verify(mTileGroupObserver).onTileCountChanged();
@@ -155,7 +164,7 @@ public class TileGroupUnitTest {
     @Test
     @UiThreadTest
     @SmallTest
-    @DisabledTest(message = "https://crbug.com/1336867")
+    // If this flakes again, refer to https://crbug.com/1336867.
     public void testReceiveNewTilesWithoutChanges() {
         TileGroup tileGroup = initialiseTileGroup(URLS);
 
@@ -204,7 +213,7 @@ public class TileGroupUnitTest {
     @Test
     @UiThreadTest
     @SmallTest
-    @DisabledTest(message = "https://crbug.com/1330627, https://crbug.com/1293208")
+    // If this flakes again, refer to https://crbug.com/1330627, https://crbug.com/1293208.
     public void testReceiveNewTilesWithDataChanges_TrackLoad() {
         TileGroup tileGroup = initialiseTileGroup(/* deferLoad: */ true, URLS);
 
@@ -242,8 +251,14 @@ public class TileGroupUnitTest {
     public void testTileLoadingWhenVisibleNotBlockedForInit() {
         SuggestionsUiDelegate uiDelegate = mSuggestionsUiDelegate;
         when(uiDelegate.isVisible()).thenReturn(true);
-        TileGroup tileGroup = new TileGroup(mTileRenderer, uiDelegate, mContextMenuManager,
-                mTileGroupDelegate, mTileGroupObserver, mOfflinePageBridge);
+        TileGroup tileGroup =
+                new TileGroup(
+                        mTileRenderer,
+                        uiDelegate,
+                        mContextMenuManager,
+                        mTileGroupDelegate,
+                        mTileGroupObserver,
+                        mOfflinePageBridge);
         tileGroup.startObserving(MAX_TILES_TO_FETCH);
 
         mMostVisitedSites.setTileSuggestions(URLS);
@@ -258,8 +273,14 @@ public class TileGroupUnitTest {
     public void testTileLoadingWhenVisibleBlocked() {
         SuggestionsUiDelegate uiDelegate = mSuggestionsUiDelegate;
         when(uiDelegate.isVisible()).thenReturn(true);
-        TileGroup tileGroup = new TileGroup(mTileRenderer, uiDelegate, mContextMenuManager,
-                mTileGroupDelegate, mTileGroupObserver, mOfflinePageBridge);
+        TileGroup tileGroup =
+                new TileGroup(
+                        mTileRenderer,
+                        uiDelegate,
+                        mContextMenuManager,
+                        mTileGroupDelegate,
+                        mTileGroupObserver,
+                        mOfflinePageBridge);
         tileGroup.startObserving(MAX_TILES_TO_FETCH);
 
         mMostVisitedSites.setTileSuggestions(URLS);
@@ -298,12 +319,18 @@ public class TileGroupUnitTest {
     @Test
     @UiThreadTest
     @SmallTest
-    @DisabledTest(message = "https://crbug.com/1330627, https://crbug.com/1293208")
+    // If this flakes again, refer to https://crbug.com/1330627, https://crbug.com/1293208.
     public void testRenderTileView() {
         SuggestionsUiDelegate uiDelegate = mSuggestionsUiDelegate;
         when(uiDelegate.getImageFetcher()).thenReturn(mImageFetcher);
-        TileGroup tileGroup = new TileGroup(mTileRenderer, uiDelegate, mContextMenuManager,
-                mTileGroupDelegate, mTileGroupObserver, mOfflinePageBridge);
+        TileGroup tileGroup =
+                new TileGroup(
+                        mTileRenderer,
+                        uiDelegate,
+                        mContextMenuManager,
+                        mTileGroupDelegate,
+                        mTileGroupObserver,
+                        mOfflinePageBridge);
         tileGroup.startObserving(MAX_TILES_TO_FETCH);
 
         MostVisitedTilesGridLayout layout = setupView();
@@ -325,8 +352,14 @@ public class TileGroupUnitTest {
     public void testRenderTileViewWithDuplicatedUrl() {
         SuggestionsUiDelegate uiDelegate = mSuggestionsUiDelegate;
         when(uiDelegate.getImageFetcher()).thenReturn(mMockImageFetcher);
-        TileGroup tileGroup = new TileGroup(mTileRenderer, uiDelegate, mContextMenuManager,
-                mTileGroupDelegate, mTileGroupObserver, mOfflinePageBridge);
+        TileGroup tileGroup =
+                new TileGroup(
+                        mTileRenderer,
+                        uiDelegate,
+                        mContextMenuManager,
+                        mTileGroupDelegate,
+                        mTileGroupObserver,
+                        mOfflinePageBridge);
         tileGroup.startObserving(MAX_TILES_TO_FETCH);
         MostVisitedTilesGridLayout layout = setupView();
 
@@ -340,12 +373,18 @@ public class TileGroupUnitTest {
     @Test
     @UiThreadTest
     @SmallTest
-    @DisabledTest(message = "Test is flaky, see crbug.com/1286755")
+    // If this flakes again, refer to https://crbug.com/1286755.
     public void testRenderTileViewReplacing() {
         SuggestionsUiDelegate uiDelegate = mSuggestionsUiDelegate;
         when(uiDelegate.getImageFetcher()).thenReturn(mMockImageFetcher);
-        TileGroup tileGroup = new TileGroup(mTileRenderer, uiDelegate, mContextMenuManager,
-                mTileGroupDelegate, mTileGroupObserver, mOfflinePageBridge);
+        TileGroup tileGroup =
+                new TileGroup(
+                        mTileRenderer,
+                        uiDelegate,
+                        mContextMenuManager,
+                        mTileGroupDelegate,
+                        mTileGroupObserver,
+                        mOfflinePageBridge);
         tileGroup.startObserving(MAX_TILES_TO_FETCH);
         mMostVisitedSites.setTileSuggestions(URLS);
 
@@ -370,13 +409,18 @@ public class TileGroupUnitTest {
     public void testRenderTileViewRecycling() {
         mMostVisitedSites.setTileSuggestions(URLS);
         List<SiteSuggestion> sites = mMostVisitedSites.getCurrentSites();
-        TileGroup tileGroup = new TileGroup(mTileRenderer, mSuggestionsUiDelegate,
-                mContextMenuManager, mTileGroupDelegate, mTileGroupObserver, mOfflinePageBridge);
+        TileGroup tileGroup =
+                new TileGroup(
+                        mTileRenderer,
+                        mSuggestionsUiDelegate,
+                        mContextMenuManager,
+                        mTileGroupDelegate,
+                        mTileGroupObserver,
+                        mOfflinePageBridge);
         tileGroup.startObserving(MAX_TILES_TO_FETCH);
 
         // Initialise the layout with views whose URLs match the ones of the new tiles.
-        MostVisitedTilesGridLayout layout =
-                new MostVisitedTilesGridLayout(ContextUtils.getApplicationContext(), null);
+        MostVisitedTilesGridLayout layout = new MostVisitedTilesGridLayout(mContext, null);
         SuggestionsTileView view1 = mSuggestionsTileView1;
         when(view1.getData()).thenReturn(sites.get(0));
         layout.addView(view1);
@@ -419,7 +463,7 @@ public class TileGroupUnitTest {
         TileGroup tileGroup = initialiseTileGroup();
         Tile tile = new Tile(createSiteSuggestion("title", URLS[0]), 0);
 
-        ViewGroup layout = new FrameLayout(ContextUtils.getApplicationContext(), null);
+        ViewGroup layout = new FrameLayout(mContext, null);
         mTileRenderer.buildTileView(tile, layout, tileGroup.getTileSetupDelegate());
 
         // Ensure we run the callback for the new tile.
@@ -492,7 +536,7 @@ public class TileGroupUnitTest {
     }
 
     private MostVisitedTilesGridLayout setupView() {
-        return new MostVisitedTilesGridLayout(ContextUtils.getApplicationContext(), null);
+        return new MostVisitedTilesGridLayout(mContext, null);
     }
 
     private void refreshData(TileGroup tileGroup) {
@@ -514,9 +558,9 @@ public class TileGroupUnitTest {
     }
 
     /**
-     * @param deferLoad whether to defer the load until
-     *                  {@link TileGroup#onSwitchToForeground(boolean)} is called. Works by
-     *                  pretending that the UI is visible.
+     * @param deferLoad whether to defer the load until {@link
+     *     TileGroup#onSwitchToForeground(boolean)} is called. Works by pretending that the UI is
+     *     visible.
      * @param urls URLs used to initialise the tile group.
      */
     private TileGroup initialiseTileGroup(boolean deferLoad, String... urls) {
@@ -525,8 +569,14 @@ public class TileGroupUnitTest {
 
         mMostVisitedSites.setTileSuggestions(urls);
 
-        TileGroup tileGroup = new TileGroup(mTileRenderer, mSuggestionsUiDelegate,
-                mContextMenuManager, mTileGroupDelegate, mTileGroupObserver, mOfflinePageBridge);
+        TileGroup tileGroup =
+                new TileGroup(
+                        mTileRenderer,
+                        mSuggestionsUiDelegate,
+                        mContextMenuManager,
+                        mTileGroupDelegate,
+                        mTileGroupObserver,
+                        mOfflinePageBridge);
         tileGroup.startObserving(MAX_TILES_TO_FETCH);
         refreshData(tileGroup);
 

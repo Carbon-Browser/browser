@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,7 +9,7 @@
 #include <string>
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/numerics/safe_conversions.h"
 #include "base/strings/stringprintf.h"
 #include "base/trace_event/trace_event.h"
@@ -142,14 +142,18 @@ gfx::Rect Transform(const gfx::Rect& source,
 
 std::string VideoCaptureOverlay::CapturedFrameProperties::ToString() const {
   return base::StringPrintf(
-      "%s from %s into %s, format %s", sub_region.ToString().c_str(),
-      compositor_region.ToString().c_str(), content_region.ToString().c_str(),
+      "%s from %s into %s via transform %s, format %s",
+      region_properties.render_pass_subrect.ToString().c_str(),
+      region_properties.root_render_pass_size.ToString().c_str(),
+      content_rect.ToString().c_str(),
+      region_properties.transform_to_root.ToString().c_str(),
       media::VideoPixelFormatToString(format).c_str());
 }
 
 std::string VideoCaptureOverlay::BlendInformation::ToString() const {
   return base::StringPrintf(
-      "src_rect=%s, src_rect_in_content=%s, dst_rect_in_content=%s",
+      "source_region=%s, source_region_scaled=%s, "
+      "destination_region_content=%s",
       source_region.ToString().c_str(), source_region_scaled.ToString().c_str(),
       destination_region_content.ToString().c_str());
 }
@@ -157,8 +161,14 @@ std::string VideoCaptureOverlay::BlendInformation::ToString() const {
 absl::optional<VideoCaptureOverlay::BlendInformation>
 VideoCaptureOverlay::CalculateBlendInformation(
     const CapturedFrameProperties& properties) const {
+  const auto& compositor_frame_rect =
+      gfx::Rect(properties.region_properties.root_render_pass_size);
+  const gfx::Rect compositor_frame_subrect =
+      properties.region_properties.transform_to_root.MapRect(
+          properties.region_properties.render_pass_subrect);
+
   // The sub region should always be a subset of the frame region.
-  DCHECK(properties.compositor_region.Contains(properties.sub_region));
+  CHECK(compositor_frame_rect.Contains(compositor_frame_subrect));
 
   // If there's no image set yet, punt.
   if (image_.drawsNothing() || bounds_.IsEmpty()) {
@@ -177,11 +187,11 @@ VideoCaptureOverlay::CalculateBlendInformation(
   // for calculations such as mouse cursor position (which is retrieved in
   // relationship to the entire tab or window) to be scaled properly.
   const gfx::Rect bounds_in_compositor_space =
-      ToAbsoluteBoundsForI420(bounds_, properties.compositor_region);
+      ToAbsoluteBoundsForI420(bounds_, compositor_frame_rect);
 
   // If the sprite that we want to render does not fall within the subregion
   // that we are capturing, punt.
-  if (!bounds_in_compositor_space.Intersects(properties.sub_region)) {
+  if (!bounds_in_compositor_space.Intersects(compositor_frame_subrect)) {
     return absl::nullopt;
   }
 
@@ -189,8 +199,8 @@ VideoCaptureOverlay::CalculateBlendInformation(
   // frame, however blending may be done in the coordinate space of the
   // outputted video frame and must be scaled and translated.
   const gfx::Rect bounds_in_content_space =
-      Transform(bounds_in_compositor_space, properties.sub_region,
-                properties.content_region);
+      Transform(bounds_in_compositor_space, compositor_frame_subrect,
+                properties.content_rect);
 
   // If the sprite's size will be unreasonably large, punt.
   if (bounds_in_content_space.width() > media::limits::kMaxDimension ||
@@ -203,7 +213,7 @@ VideoCaptureOverlay::CalculateBlendInformation(
   // and if not, we will calculate which part of the sprite will be blended.
   // |blit_rect| is the region of the video frame that we will write into.
   const gfx::Rect blit_rect =
-      gfx::IntersectRects(bounds_in_content_space, properties.content_region);
+      gfx::IntersectRects(bounds_in_content_space, properties.content_rect);
 
   // If the scaled sprite's size is empty, punt.
   if (blit_rect.IsEmpty()) {
@@ -259,7 +269,7 @@ VideoCaptureOverlay::OnceRenderer VideoCaptureOverlay::MakeRenderer(
                                            properties.format);
   }
 
-  dst_rect.Intersect(properties.content_region);
+  dst_rect.Intersect(properties.content_rect);
   if (dst_rect.IsEmpty())
     return {};
 
@@ -399,8 +409,8 @@ void VideoCaptureOverlay::Sprite::Blend(const gfx::Rect& src_rect,
         for (int row = 0; row < blit_size.height(); ++row, src += src_stride,
                  under_weight += src_stride, dst += dst_stride) {
           for (int col = 0; col < blit_size.width(); ++col) {
-            dst[col] = ToClamped255(
-                std::fma(From255(dst[col]), under_weight[col], src[col]));
+            dst[col] = base::saturated_cast<uint8_t>(
+                dst[col] * under_weight[col] + 255.0f * src[col] + 0.5f);
           }
         }
       };
@@ -416,9 +426,9 @@ void VideoCaptureOverlay::Sprite::Blend(const gfx::Rect& src_rect,
       // Likewise, start |dst| at the upper-left-most pixel within the video
       // frame's Y plane that will be SrcOver'ed.
       int dst_stride = frame->stride(VideoFrame::kYPlane);
-      uint8_t* dst =
-          PositionPointerInPlane(frame->visible_data(VideoFrame::kYPlane),
-                                 dst_stride, dst_rect.origin());
+      uint8_t* dst = PositionPointerInPlane(
+          frame->GetWritableVisibleData(VideoFrame::kYPlane), dst_stride,
+          dst_rect.origin());
       BlitOntoPlane(dst_rect.size(), src_stride, src, under_weight, dst_stride,
                     dst);
 
@@ -434,14 +444,16 @@ void VideoCaptureOverlay::Sprite::Blend(const gfx::Rect& src_rect,
       const gfx::Rect chroma_blit_rect(dst_rect.x() / 2, dst_rect.y() / 2,
                                        dst_rect.width() / 2,
                                        dst_rect.height() / 2);
-      dst = PositionPointerInPlane(frame->visible_data(VideoFrame::kUPlane),
-                                   dst_stride, chroma_blit_rect.origin());
+      dst = PositionPointerInPlane(
+          frame->GetWritableVisibleData(VideoFrame::kUPlane), dst_stride,
+          chroma_blit_rect.origin());
       BlitOntoPlane(chroma_blit_rect.size(), src_stride, src, under_weight,
                     dst_stride, dst);
       src += num_chroma_pixels;
       dst_stride = frame->stride(VideoFrame::kVPlane);
-      dst = PositionPointerInPlane(frame->visible_data(VideoFrame::kVPlane),
-                                   dst_stride, chroma_blit_rect.origin());
+      dst = PositionPointerInPlane(
+          frame->GetWritableVisibleData(VideoFrame::kVPlane), dst_stride,
+          chroma_blit_rect.origin());
       BlitOntoPlane(chroma_blit_rect.size(), src_stride, src, under_weight,
                     dst_stride, dst);
 
@@ -459,9 +471,9 @@ void VideoCaptureOverlay::Sprite::Blend(const gfx::Rect& src_rect,
       // frame that will be SrcOver'ed.
       const int dst_stride = frame->stride(VideoFrame::kARGBPlane);
       DCHECK_EQ(dst_stride % sizeof(uint32_t), 0u);
-      uint8_t* dst =
-          PositionPointerARGB(frame->visible_data(VideoFrame::kARGBPlane),
-                              dst_stride, dst_rect.origin());
+      uint8_t* dst = PositionPointerARGB(
+          frame->GetWritableVisibleData(VideoFrame::kARGBPlane), dst_stride,
+          dst_rect.origin());
       DCHECK_EQ((dst - frame->visible_data(VideoFrame::kARGBPlane)) %
                     sizeof(uint32_t),
                 0u);

@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -29,8 +29,8 @@ bool operator==(const NonCopyable& a, const NonCopyable& b) {
   return a.c_ == b.c_;
 }
 
-static_assert(std::is_move_constructible<NonCopyable>::value, "");
-static_assert(!std::is_copy_constructible<NonCopyable>::value, "");
+static_assert(std::is_move_constructible_v<NonCopyable>, "");
+static_assert(!std::is_copy_constructible_v<NonCopyable>, "");
 
 struct CopyableMovable {
   bool copied_;

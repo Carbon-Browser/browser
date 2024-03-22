@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -35,9 +35,14 @@ class VIEWS_EXPORT ViewsTextServicesContextMenuBase
   bool SupportsCommand(int command_id) const override;
 
  protected:
-#if BUILDFLAG(IS_MAC) || BUILDFLAG(IS_CHROMEOS_ASH)
+#if BUILDFLAG(IS_MAC) || BUILDFLAG(IS_CHROMEOS)
   Textfield* client() { return client_; }
   const Textfield* client() const { return client_; }
+#endif
+
+#if BUILDFLAG(IS_CHROMEOS)
+  // Returns the string ID of the clipboard history menu option.
+  int GetClipboardHistoryStringId() const;
 #endif
 
  private:

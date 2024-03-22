@@ -1,11 +1,11 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/nearby_sharing/instantmessaging/stream_parser.h"
 
+#include "base/logging.h"
 #include "base/strings/string_piece.h"
-#include "chrome/browser/nearby_sharing/logging/logging.h"
 #include "net/base/io_buffer.h"
 #include "third_party/protobuf/src/google/protobuf/io/coded_stream.h"
 #include "third_party/protobuf/src/google/protobuf/wire_format_lite.h"

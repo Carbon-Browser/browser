@@ -1,18 +1,21 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef COMPONENTS_AUTOFILL_CORE_BROWSER_MERCHANT_PROMO_CODE_MANAGER_H_
 #define COMPONENTS_AUTOFILL_CORE_BROWSER_MERCHANT_PROMO_CODE_MANAGER_H_
 
-#include "components/autofill/core/browser/autofill_subject.h"
+#include "base/gtest_prod_util.h"
 #include "components/autofill/core/browser/personal_data_manager.h"
 #include "components/autofill/core/browser/single_field_form_filler.h"
+#include "components/autofill/core/browser/ui/popup_item_ids.h"
+#include "components/autofill/core/common/unique_ids.h"
 #include "components/keyed_service/core/keyed_service.h"
 #include "components/webdata/common/web_data_service_consumer.h"
 
 namespace autofill {
 
+class AutofillClient;
 class AutofillOfferData;
 class PersonalDataManager;
 struct SuggestionsContext;
@@ -22,8 +25,7 @@ struct SuggestionsContext;
 // promo code suggestions, filling promo code fields, and handling form
 // submission data when there is a merchant promo code field present.
 class MerchantPromoCodeManager : public SingleFieldFormFiller,
-                                 public KeyedService,
-                                 public AutofillSubject {
+                                 public KeyedService {
  public:
   MerchantPromoCodeManager();
 
@@ -33,22 +35,20 @@ class MerchantPromoCodeManager : public SingleFieldFormFiller,
   ~MerchantPromoCodeManager() override;
 
   // SingleFieldFormFiller overrides:
-  void OnGetSingleFieldSuggestions(int query_id,
-                                   bool is_autocomplete_enabled,
-                                   bool autoselect_first_suggestion,
-                                   const std::u16string& name,
-                                   const std::u16string& prefix,
-                                   const std::string& form_control_type,
-                                   base::WeakPtr<SuggestionsHandler> handler,
-                                   const SuggestionsContext& context) override;
+  [[nodiscard]] bool OnGetSingleFieldSuggestions(
+      AutofillSuggestionTriggerSource trigger_source,
+      const FormFieldData& field,
+      const AutofillClient& client,
+      OnSuggestionsReturnedCallback on_suggestions_returned,
+      const SuggestionsContext& context) override;
   void OnWillSubmitFormWithFields(const std::vector<FormFieldData>& fields,
                                   bool is_autocomplete_enabled) override;
-  void CancelPendingQueries(const SuggestionsHandler* handler) override;
+  void CancelPendingQueries() override {}
   void OnRemoveCurrentSingleFieldSuggestion(const std::u16string& field_name,
                                             const std::u16string& value,
-                                            int frontend_id) override;
+                                            PopupItemId popup_item_id) override;
   void OnSingleFieldSuggestionSelected(const std::u16string& value,
-                                       int frontend_id) override;
+                                       PopupItemId popup_item_id) override;
 
   // Initializes the instance with the given parameters. |personal_data_manager|
   // is a profile-scope data manager used to retrieve promo code offers from the
@@ -79,23 +79,29 @@ class MerchantPromoCodeManager : public SingleFieldFormFiller,
     ~UMARecorder() = default;
 
     void OnOffersSuggestionsShown(
-        const std::u16string& name,
-        std::vector<const AutofillOfferData*>& offers);
-    void OnOfferSuggestionSelected(int frontend_id);
+        const FieldGlobalId& field_global_id,
+        const std::vector<const AutofillOfferData*>& offers);
+    void OnOfferSuggestionSelected(PopupItemId popup_item_id);
 
    private:
-    // The name of the field that most recently had suggestions shown.
-    std::u16string most_recent_suggestions_shown_field_name_;
+    // The global id of the field that most recently had suggestions shown.
+    FieldGlobalId most_recent_suggestions_shown_field_global_id_;
 
-    // The name of the field that most recently had a suggestion selected.
-    std::u16string most_recent_suggestion_selected_field_name_;
+    // The global id of the field that most recently had a suggestion selected.
+    FieldGlobalId most_recent_suggestion_selected_field_global_id_;
   };
 
-  // Sends suggestions for |promo_code_offers| to the |query_handler|'s handler
-  // for display in the associated Autofill popup.
+  // Generates suggestions from the `promo_code_offers` and return them via
+  // `on_suggestions_returned`. If suggestions were sent, this function also
+  // logs metrics for promo code suggestions shown. Data is filtered based on
+  // the `field`'s value`. For metrics, this ensures we log the correct
+  // histogram, as we have separate histograms for unique shows and repetitive
+  // shows.
   void SendPromoCodeSuggestions(
-      const std::vector<const AutofillOfferData*>& promo_code_offers,
-      const QueryHandler& query_handler);
+      std::vector<const AutofillOfferData*> promo_code_offers,
+      const FormFieldData& field,
+      OnSuggestionsReturnedCallback on_suggestions_returned,
+      AutofillSuggestionTriggerSource trigger_source);
 
   raw_ptr<PersonalDataManager> personal_data_manager_ = nullptr;
 

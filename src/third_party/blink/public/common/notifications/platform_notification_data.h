@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -80,6 +80,8 @@ struct BLINK_COMMON_EXPORT PlatformNotificationData {
 
   // The time at which the notification should be shown.
   absl::optional<base::Time> show_trigger_timestamp;
+
+  mojom::NotificationScenario scenario;
 };
 
 }  // namespace blink

@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -32,12 +32,13 @@ public class BackgroundShadowAsyncTask<Result> extends ShadowAsyncTask<Result> {
     public final AsyncTask<Result> executeOnExecutor(Executor e) {
         try {
             return sExecutorService
-                    .submit(new Callable<AsyncTask<Result>>() {
-                        @Override
-                        public AsyncTask<Result> call() {
-                            return BackgroundShadowAsyncTask.super.executeInRobolectric();
-                        }
-                    })
+                    .submit(
+                            new Callable<AsyncTask<Result>>() {
+                                @Override
+                                public AsyncTask<Result> call() {
+                                    return BackgroundShadowAsyncTask.super.executeInRobolectric();
+                                }
+                            })
                     .get();
         } catch (Exception ex) {
             fail(ex.getMessage());
@@ -58,12 +59,13 @@ public class BackgroundShadowAsyncTask<Result> extends ShadowAsyncTask<Result> {
 
     public static void runBackgroundTasks() throws Exception {
         sExecutorService
-                .submit(new Runnable() {
-                    @Override
-                    public void run() {
-                        ShadowApplication.runBackgroundTasks();
-                    }
-                })
+                .submit(
+                        new Runnable() {
+                            @Override
+                            public void run() {
+                                ShadowApplication.runBackgroundTasks();
+                            }
+                        })
                 .get();
     }
 }

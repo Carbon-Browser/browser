@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,7 +8,7 @@
 
 #include <algorithm>
 
-#include "base/cxx17_backports.h"
+#include "chrome/browser/ui/layout_constants.h"
 #include "chrome/browser/ui/tabs/tab_style.h"
 #include "ui/gfx/animation/tween.h"
 #include "ui/gfx/geometry/rect.h"
@@ -65,7 +65,7 @@ TabSizer CalculateSpaceFractionAvailable(
                                          (preferred_width - crossover_width);
   }
 
-  space_fraction_available = base::clamp(space_fraction_available, 0.0f, 1.0f);
+  space_fraction_available = std::clamp(space_fraction_available, 0.0f, 1.0f);
   return TabSizer(domain, space_fraction_available);
 }
 

@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -25,6 +25,7 @@ class TestParser : public ScriptableDocumentParser {
   }
 
   void ExecuteScriptsWaitingForResources() override {}
+  void NotifyNoRemainingAsyncScripts() override {}
   bool IsWaitingForScripts() const override { return false; }
   void DidAddPendingParserBlockingStylesheet() override {}
   void DidLoadAllPendingParserBlockingStylesheets() override {}
@@ -44,11 +45,13 @@ class BackgroundHTMLScannerTest : public PageTestBase {
             {base::TaskPriority::USER_BLOCKING})) {}
 
  protected:
-  std::unique_ptr<BackgroundHTMLScanner> CreateScanner(TestParser* parser) {
+  std::unique_ptr<BackgroundHTMLScanner> CreateScanner(
+      TestParser* parser,
+      wtf_size_t min_script_size = 0u) {
     return std::make_unique<BackgroundHTMLScanner>(
         std::make_unique<HTMLTokenizer>(HTMLParserOptions()),
         std::make_unique<BackgroundHTMLScanner::ScriptTokenScanner>(
-            parser, task_runner_));
+            parser, task_runner_, min_script_size));
   }
 
   void FlushTaskRunner() {
@@ -73,16 +76,15 @@ TEST_F(BackgroundHTMLScannerTest, InsideHTMLPreloadScanner) {
   auto* parser = MakeGarbageCollected<TestParser>(GetDocument());
   auto background_scanner = CreateScanner(parser);
   HTMLPreloadScanner preload_scanner(
-      std::make_unique<HTMLTokenizer>(HTMLParserOptions()), false,
-      GetDocument().Url(),
+      std::make_unique<HTMLTokenizer>(HTMLParserOptions()), GetDocument().Url(),
       std::make_unique<CachedDocumentParameters>(&GetDocument()),
-      MediaValuesCached::MediaValuesCachedData(GetDocument()),
+      std::make_unique<MediaValuesCached::MediaValuesCachedData>(GetDocument()),
       TokenPreloadScanner::ScannerType::kMainDocument,
       std::make_unique<BackgroundHTMLScanner::ScriptTokenScanner>(
-          parser, task_runner_));
-  preload_scanner.ScanInBackground(
-      "<script>foo</script>", GetDocument().ValidBaseElementURL(),
+          parser, task_runner_, 0),
       CrossThreadBindRepeating([](std::unique_ptr<PendingPreloadData>) {}));
+  preload_scanner.ScanInBackground("<script>foo</script>",
+                                   GetDocument().ValidBaseElementURL());
   FlushTaskRunner();
   EXPECT_NE(parser->TakeInlineScriptStreamer("foo"), nullptr);
 }
@@ -95,6 +97,15 @@ TEST_F(BackgroundHTMLScannerTest, MultipleScripts) {
   EXPECT_NE(parser->TakeInlineScriptStreamer("foo"), nullptr);
   EXPECT_NE(parser->TakeInlineScriptStreamer("bar"), nullptr);
   EXPECT_NE(parser->TakeInlineScriptStreamer("baz"), nullptr);
+}
+
+TEST_F(BackgroundHTMLScannerTest, ScriptSizeLimit) {
+  auto* parser = MakeGarbageCollected<TestParser>(GetDocument());
+  auto scanner = CreateScanner(parser, /*min_script_size=*/3u);
+  scanner->Scan("<script>ba</script><script>long</script>");
+  FlushTaskRunner();
+  EXPECT_EQ(parser->TakeInlineScriptStreamer("ba"), nullptr);
+  EXPECT_NE(parser->TakeInlineScriptStreamer("long"), nullptr);
 }
 
 TEST_F(BackgroundHTMLScannerTest, ScriptWithScriptTag) {
@@ -142,6 +153,22 @@ TEST_F(BackgroundHTMLScannerTest, UTF16Characters) {
   scanner->Scan(source);
   FlushTaskRunner();
   EXPECT_NE(parser->TakeInlineScriptStreamer(u"hello \u3042"), nullptr);
+}
+
+TEST_F(BackgroundHTMLScannerTest, MismatchedScriptEndTags) {
+  auto* parser = MakeGarbageCollected<TestParser>(GetDocument());
+  auto scanner = CreateScanner(parser);
+  scanner->Scan("<script>foo</style></script></style>");
+  FlushTaskRunner();
+  EXPECT_NE(parser->TakeInlineScriptStreamer("foo</style>"), nullptr);
+}
+
+TEST_F(BackgroundHTMLScannerTest, ExtraStartTag) {
+  auto* parser = MakeGarbageCollected<TestParser>(GetDocument());
+  auto scanner = CreateScanner(parser);
+  scanner->Scan("<script>foo<script>bar</script>");
+  FlushTaskRunner();
+  EXPECT_NE(parser->TakeInlineScriptStreamer("foo<script>bar"), nullptr);
 }
 
 }  // namespace

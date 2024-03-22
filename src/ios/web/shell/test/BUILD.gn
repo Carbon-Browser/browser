@@ -1,4 +1,4 @@
-# Copyright 2016 The Chromium Authors. All rights reserved.
+# Copyright 2016 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -17,10 +17,7 @@ group("all_tests") {
 # EG2 targets.
 
 source_set("eg_app_support+eg2") {
-  configs += [
-    "//build/config/compiler:enable_arc",
-    "//build/config/ios:xctest_config",
-  ]
+  configs += [ "//build/config/ios:xctest_config" ]
   testonly = true
 
   sources = [
@@ -55,10 +52,7 @@ source_set("eg_app_support+eg2") {
 }
 
 source_set("eg_test_support+eg2") {
-  configs += [
-    "//build/config/compiler:enable_arc",
-    "//build/config/ios:xctest_config",
-  ]
+  configs += [ "//build/config/ios:xctest_config" ]
   testonly = true
 
   sources = [
@@ -84,22 +78,20 @@ source_set("eg_test_support+eg2") {
     "//ios/testing:http_server_bundle_data",
     "//ios/testing:nserror_support",
     "//ios/testing/earl_grey:eg_test_support+eg2",
-    "//ios/third_party/earl_grey2:test_lib",
     "//ios/web/public/test:element_selector",
     "//ios/web/shell:shell_interfaces",
+    "//net:test_support",
     "//url",
   ]
 }
 
 source_set("eg2_tests") {
-  configs += [
-    "//build/config/compiler:enable_arc",
-    "//build/config/ios:xctest_config",
-  ]
+  configs += [ "//build/config/ios:xctest_config" ]
   testonly = true
 
   sources = [
     "context_menu_egtest.mm",
+    "page_load_egtest.mm",
     "page_state_egtest.mm",
   ]
 
@@ -107,7 +99,6 @@ source_set("eg2_tests") {
     ":eg_test_support+eg2",
     "//base",
     "//ios/testing/earl_grey:eg_test_support+eg2",
-    "//ios/third_party/earl_grey2:test_lib",
     "//ios/web/public/test:element_selector",
     "//ios/web/public/test/http_server",
     "//net:test_support",
@@ -118,6 +109,7 @@ source_set("eg2_tests") {
 
 ios_eg2_test_app_host("ios_web_shell_eg2tests") {
   info_plist = "//ios/web/shell/Info.plist"
+  bundle_identifier = shared_bundle_id_for_test_apps
 
   deps = [
     "//ios/web/shell",

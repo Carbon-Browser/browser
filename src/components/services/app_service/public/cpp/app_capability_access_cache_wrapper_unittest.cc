@@ -1,13 +1,14 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+#include <utility>
 #include <vector>
 
 #include "components/account_id/account_id.h"
 #include "components/services/app_service/public/cpp/app_capability_access_cache.h"
 #include "components/services/app_service/public/cpp/app_capability_access_cache_wrapper.h"
-#include "components/services/app_service/public/cpp/publisher_base.h"
+#include "components/services/app_service/public/cpp/capability_access.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
@@ -17,22 +18,21 @@ class AppCapabilityAccessCacheWrapperTest
     : public testing::Test,
       public AppCapabilityAccessCache::Observer {
  protected:
-  // apps::AppCapabilityAccessCache::Observer:
+  // AppCapabilityAccessCache::Observer:
   void OnCapabilityAccessUpdate(const CapabilityAccessUpdate& update) override {
     last_account_id_ = update.AccountId();
   }
 
   void OnAppCapabilityAccessCacheWillBeDestroyed(
-      apps::AppCapabilityAccessCache* cache) override {
+      AppCapabilityAccessCache* cache) override {
     NOTREACHED();
   }
 
-  static mojom::CapabilityAccessPtr MakeCapabilityAccess(
+  static CapabilityAccessPtr MakeCapabilityAccess(
       const char* app_id,
-      mojom::OptionalBool camera,
-      mojom::OptionalBool microphone) {
-    mojom::CapabilityAccessPtr access = mojom::CapabilityAccess::New();
-    access->app_id = app_id;
+      absl::optional<bool> camera,
+      absl::optional<bool> microphone) {
+    auto access = std::make_unique<CapabilityAccess>(app_id);
     access->camera = camera;
     access->microphone = microphone;
     return access;
@@ -60,9 +60,8 @@ TEST_F(AppCapabilityAccessCacheWrapperTest, OneAccount) {
 
   cache1.AddObserver(this);
 
-  std::vector<apps::mojom::CapabilityAccessPtr> deltas;
-  deltas.push_back(MakeCapabilityAccess("a", mojom::OptionalBool::kTrue,
-                                        mojom::OptionalBool::kTrue));
+  std::vector<CapabilityAccessPtr> deltas;
+  deltas.push_back(MakeCapabilityAccess("a", true, true));
   cache1.OnCapabilityAccesses(std::move(deltas));
 
   VerifyAccountId(account_id_1());
@@ -82,9 +81,8 @@ TEST_F(AppCapabilityAccessCacheWrapperTest, MultipleAccounts) {
 
   cache1.AddObserver(this);
 
-  std::vector<apps::mojom::CapabilityAccessPtr> deltas;
-  deltas.push_back(MakeCapabilityAccess("a", mojom::OptionalBool::kTrue,
-                                        mojom::OptionalBool::kTrue));
+  std::vector<CapabilityAccessPtr> deltas;
+  deltas.push_back(MakeCapabilityAccess("a", true, true));
   cache1.OnCapabilityAccesses(std::move(deltas));
 
   VerifyAccountId(account_id_1());
@@ -92,8 +90,7 @@ TEST_F(AppCapabilityAccessCacheWrapperTest, MultipleAccounts) {
 
   cache2.AddObserver(this);
   deltas.clear();
-  deltas.push_back(MakeCapabilityAccess("a", mojom::OptionalBool::kTrue,
-                                        mojom::OptionalBool::kTrue));
+  deltas.push_back(MakeCapabilityAccess("a", true, true));
   cache2.OnCapabilityAccesses(std::move(deltas));
 
   VerifyAccountId(account_id_2());

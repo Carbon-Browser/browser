@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -54,13 +54,36 @@ DriverMemory DriverMemory::Clone() {
 }
 
 DriverMemoryMapping DriverMemory::Map() {
-  ABSL_ASSERT(is_valid());
-  void* address;
+  if (!is_valid()) {
+    return DriverMemoryMapping();
+  }
+
+  volatile void* address;
   IpczDriverHandle mapping_handle;
   IpczResult result = memory_.driver()->MapSharedMemory(
       memory_.handle(), 0, nullptr, &address, &mapping_handle);
-  ABSL_ASSERT(result == IPCZ_RESULT_OK);
-  return DriverMemoryMapping(*memory_.driver(), mapping_handle, address, size_);
+  if (result != IPCZ_RESULT_OK) {
+    return DriverMemoryMapping();
+  }
+
+  // TODO(https://crbug.com/1451717): Propagate the volatile qualifier on
+  // `address`.
+  return DriverMemoryMapping(*memory_.driver(), mapping_handle,
+                             const_cast<void*>(address), size_);
 }
+
+DriverMemoryWithMapping::DriverMemoryWithMapping() = default;
+
+DriverMemoryWithMapping::DriverMemoryWithMapping(DriverMemory memory,
+                                                 DriverMemoryMapping mapping)
+    : memory(std::move(memory)), mapping(std::move(mapping)) {}
+
+DriverMemoryWithMapping::DriverMemoryWithMapping(DriverMemoryWithMapping&&) =
+    default;
+
+DriverMemoryWithMapping& DriverMemoryWithMapping::operator=(
+    DriverMemoryWithMapping&&) = default;
+
+DriverMemoryWithMapping::~DriverMemoryWithMapping() = default;
 
 }  // namespace ipcz

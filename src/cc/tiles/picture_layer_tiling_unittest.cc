@@ -1,4 +1,4 @@
-// Copyright 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,7 +9,7 @@
 #include <limits>
 #include <set>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/memory/ptr_util.h"
 #include "cc/base/math_util.h"
 #include "cc/test/fake_output_surface_client.h"
@@ -61,6 +61,11 @@ class TestablePictureLayerTiling : public PictureLayerTiling {
   PriorityRectType visible_rect_type() const {
     return PriorityRectType::VISIBLE_RECT;
   }
+
+  using PictureLayerTiling::has_eventually_rect_tiles;
+  using PictureLayerTiling::has_skewport_rect_tiles;
+  using PictureLayerTiling::has_soon_border_rect_tiles;
+  using PictureLayerTiling::has_visible_rect_tiles;
 
   using PictureLayerTiling::RemoveTilesInRegion;
   using PictureLayerTiling::ComputePriorityRectTypeForTile;
@@ -1218,7 +1223,7 @@ TEST_F(PictureLayerTilingIteratorTest, FractionalTranslatedTiling) {
     gfx::RectF texture_rect = iter.texture_rect();
     if (geometry_rect == gfx::Rect(0, 0, 351, 2)) {
       gfx::RectF expectation(geometry_rect);
-      expectation.Scale(1.f / 1.375f);
+      expectation.InvScale(1.375f);
       expectation.Offset(0.125f, 0.125f);
       EXPECT_FLOAT_EQ(expectation.x(), texture_rect.x());
       EXPECT_FLOAT_EQ(expectation.y(), texture_rect.y());
@@ -1226,15 +1231,15 @@ TEST_F(PictureLayerTilingIteratorTest, FractionalTranslatedTiling) {
       EXPECT_FLOAT_EQ(expectation.height(), texture_rect.height());
     } else if (geometry_rect == gfx::Rect(351, 0, 349, 2)) {
       gfx::RectF expectation(geometry_rect);
-      expectation.Scale(1.f / 1.375f);
+      expectation.InvScale(1.375f);
       expectation.Offset(0.125f - 254.f, 0.125f);
-      EXPECT_FLOAT_EQ(expectation.x(), texture_rect.x());
+      EXPECT_NEAR(expectation.x(), texture_rect.x(), 1e-4);
       EXPECT_FLOAT_EQ(expectation.y(), texture_rect.y());
       EXPECT_FLOAT_EQ(expectation.width(), texture_rect.width());
       EXPECT_FLOAT_EQ(expectation.height(), texture_rect.height());
     } else if (geometry_rect == gfx::Rect(700, 0, 349, 2)) {
       gfx::RectF expectation(geometry_rect);
-      expectation.Scale(1.f / 1.375f);
+      expectation.InvScale(1.375f);
       expectation.Offset(0.125f - 254.f * 2.f, 0.125f);
       EXPECT_FLOAT_EQ(expectation.x(), texture_rect.x());
       EXPECT_FLOAT_EQ(expectation.y(), texture_rect.y());
@@ -1243,7 +1248,7 @@ TEST_F(PictureLayerTilingIteratorTest, FractionalTranslatedTiling) {
     } else {
       EXPECT_EQ(gfx::Rect(1049, 0, 326, 2), geometry_rect);
       gfx::RectF expectation(geometry_rect);
-      expectation.Scale(1.f / 1.375f);
+      expectation.InvScale(1.375f);
       expectation.Offset(0.125f - 254.f * 3.f, 0.125f);
       EXPECT_FLOAT_EQ(expectation.x(), texture_rect.x());
       EXPECT_FLOAT_EQ(expectation.y(), texture_rect.y());
@@ -1323,6 +1328,51 @@ TEST_F(PictureLayerTilingIteratorTest, SmallRasterTransforms) {
   scale = 1.f / layer_bounds.width();
   Initialize(tile_size, scale, layer_bounds);
   EXPECT_EQ(tiling_->tiling_size(), tile_size);
+}
+
+TEST_F(PictureLayerTilingIteratorTest, TilingSizeChange) {
+  gfx::Size tile_size(2940, 478);
+  gfx::Size original_layer_size(2940, 5518);
+
+  Initialize(tile_size, 1.f, original_layer_size);
+
+  gfx::Rect visible_rect(0, 5520, 2940, 1840);
+  gfx::Rect skewport_rect(0, 5520, 2940, 1840);
+  gfx::Rect soon_border_rect(-312, 5208, 3564, 2464);
+  gfx::Rect eventually_rect(0, 2391, 2940, 3127);
+  tiling_->ComputeTilePriorityRects(
+      gfx::Rect(visible_rect),      // visible rect
+      gfx::Rect(skewport_rect),     // skewport
+      gfx::Rect(soon_border_rect),  // soon border rect
+      gfx::Rect(eventually_rect),   // eventually rect
+      1.f,                          // current contents scale
+      Occlusion());
+
+  EXPECT_FALSE(tiling_->has_visible_rect_tiles());
+  EXPECT_FALSE(tiling_->has_skewport_rect_tiles());
+  EXPECT_TRUE(tiling_->has_soon_border_rect_tiles());
+  EXPECT_TRUE(tiling_->has_eventually_rect_tiles());
+
+  // |PictureLayerTilingSet::UpdateTilePriorities| may exit prematurely,
+  // resulting in |current_xxx_rect| not being updated and |has_xxx_rect_|
+  // not being recalculated.
+  // |tiling_->ComputeTilePriorityRects| not run, because
+  // |PictureLayerTilingSet::UpdateTilePriorities| early out.
+
+  // |PictureLayer::PushPropertiesTo| will not exit early and will
+  // update tiling_size.
+  gfx::Size new_layer_size(2940, 12880);
+  scoped_refptr<FakeRasterSource> raster_source =
+      FakeRasterSource::CreateFilled(new_layer_size);
+  tiling_->SetRasterSourceAndResize(raster_source);
+
+  // |has_xxx_rect_tiles_| refers to whether current_rect and
+  // tiling_size overlap. Once tiling_size changes, it also needs to be
+  // recalculated.
+  EXPECT_TRUE(tiling_->has_visible_rect_tiles());
+  EXPECT_TRUE(tiling_->has_skewport_rect_tiles());
+  EXPECT_TRUE(tiling_->has_soon_border_rect_tiles());
+  EXPECT_TRUE(tiling_->has_eventually_rect_tiles());
 }
 
 }  // namespace

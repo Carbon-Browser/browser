@@ -1,16 +1,17 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include <bitset>
 
+#include "base/gtest_prod_util.h"
 #include "base/task/single_thread_task_runner.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "third_party/blink/public/mojom/v8_cache_options.mojom-blink.h"
 #include "third_party/blink/public/platform/task_type.h"
 #include "third_party/blink/renderer/core/frame/local_dom_window.h"
 #include "third_party/blink/renderer/core/frame/local_frame.h"
-#include "third_party/blink/renderer/core/inspector/thread_debugger.h"
+#include "third_party/blink/renderer/core/inspector/thread_debugger_common_impl.h"
 #include "third_party/blink/renderer/core/origin_trials/origin_trial_context.h"
 #include "third_party/blink/renderer/core/script/script.h"
 #include "third_party/blink/renderer/core/testing/dummy_page_holder.h"
@@ -37,7 +38,9 @@ class ThreadedWorkletObjectProxyForTest final
       ThreadedWorkletMessagingProxy* messaging_proxy,
       ParentExecutionContextTaskRunners* parent_execution_context_task_runners)
       : ThreadedWorkletObjectProxy(messaging_proxy,
-                                   parent_execution_context_task_runners) {}
+                                   parent_execution_context_task_runners,
+                                   /*parent_agent_group_task_runner=*/nullptr) {
+  }
 
  protected:
   void CountFeature(WebFeature feature) override {
@@ -198,14 +201,12 @@ class ThreadedWorkletMessagingProxyForTest
     std::unique_ptr<Vector<char>> cached_meta_data;
     WorkerClients* worker_clients = nullptr;
     std::unique_ptr<WorkerSettings> worker_settings;
+    LocalFrame* frame = To<LocalDOMWindow>(GetExecutionContext())->GetFrame();
     InitializeWorkerThread(
         std::make_unique<GlobalScopeCreationParams>(
             GetExecutionContext()->Url(), mojom::blink::ScriptType::kModule,
             "threaded_worklet", GetExecutionContext()->UserAgent(),
-            To<LocalDOMWindow>(GetExecutionContext())
-                ->GetFrame()
-                ->Loader()
-                .UserAgentMetadata(),
+            frame->Loader().UserAgentMetadata(),
             nullptr /* web_worker_fetch_context */,
             mojo::Clone(GetExecutionContext()
                             ->GetContentSecurityPolicy()
@@ -222,11 +223,9 @@ class ThreadedWorkletMessagingProxyForTest
             mojom::blink::V8CacheOptions::kDefault,
             MakeGarbageCollected<WorkletModuleResponsesMap>(),
             mojo::NullRemote() /* browser_interface_broker */,
-            To<LocalDOMWindow>(GetExecutionContext())
-                ->GetFrame()
-                ->Loader()
-                .CreateWorkerCodeCacheHost(),
-            BeginFrameProviderParams(), nullptr /* parent_permissions_policy */,
+            frame->Loader().CreateWorkerCodeCacheHost(),
+            frame->GetBlobUrlStorePendingRemote(), BeginFrameProviderParams(),
+            nullptr /* parent_permissions_policy */,
             GetExecutionContext()->GetAgentClusterID(), ukm::kInvalidSourceId,
             GetExecutionContext()->GetExecutionContextToken()),
         absl::nullopt, absl::nullopt);
@@ -234,6 +233,7 @@ class ThreadedWorkletMessagingProxyForTest
 
  private:
   friend class ThreadedWorkletTest;
+  FRIEND_TEST_ALL_PREFIXES(ThreadedWorkletTest, NestedRunLoopTermination);
 
   std::unique_ptr<WorkerThread> CreateWorkerThread() final {
     return std::make_unique<ThreadedWorkletThreadForTest>(WorkletObjectProxy());
@@ -279,6 +279,16 @@ class ThreadedWorkletTest : public testing::Test {
     return page_->GetFrame().DomWindow();
   }
   Document& GetDocument() { return page_->GetDocument(); }
+
+  void WaitForReady(WorkerThread* worker_thread) {
+    base::WaitableEvent child_waitable;
+    PostCrossThreadTask(
+        *worker_thread->GetTaskRunner(TaskType::kInternalTest), FROM_HERE,
+        CrossThreadBindOnce(&base::WaitableEvent::Signal,
+                            CrossThreadUnretained(&child_waitable)));
+
+    child_waitable.Wait();
+  }
 
  private:
   std::unique_ptr<DummyPageHolder> page_;
@@ -372,7 +382,7 @@ TEST_F(ThreadedWorkletTest, UseCounter) {
   test::EnterRunLoop();
 
   // This feature is randomly selected from Deprecation::deprecationMessage().
-  const WebFeature kFeature2 = WebFeature::kPrefixedStorageInfo;
+  const WebFeature kFeature2 = WebFeature::kPaymentInstruments;
 
   // Deprecated API use on the threaded WorkletGlobalScope should be recorded in
   // UseCounter on the Document.
@@ -396,6 +406,42 @@ TEST_F(ThreadedWorkletTest, UseCounter) {
 TEST_F(ThreadedWorkletTest, TaskRunner) {
   MessagingProxy()->Start();
 
+  PostCrossThreadTask(
+      *GetWorkerThread()->GetTaskRunner(TaskType::kInternalTest), FROM_HERE,
+      CrossThreadBindOnce(&ThreadedWorkletThreadForTest::TestTaskRunner,
+                          CrossThreadUnretained(GetWorkerThread())));
+  test::EnterRunLoop();
+}
+
+TEST_F(ThreadedWorkletTest, NestedRunLoopTermination) {
+  MessagingProxy()->Start();
+
+  ThreadedWorkletMessagingProxyForTest* second_messaging_proxy =
+      MakeGarbageCollected<ThreadedWorkletMessagingProxyForTest>(
+          GetExecutionContext());
+
+  // Get a nested event loop where the first one is on the stack
+  // and the second is still alive.
+  second_messaging_proxy->Start();
+
+  // Wait until the workers are setup and ready to accept work before we
+  // pause them.
+  WaitForReady(GetWorkerThread());
+  WaitForReady(second_messaging_proxy->GetWorkerThread());
+
+  // Pause the second worker, then the first.
+  second_messaging_proxy->GetWorkerThread()->Pause();
+  GetWorkerThread()->Pause();
+
+  // Resume then terminate the second worker.
+  second_messaging_proxy->GetWorkerThread()->Resume();
+  second_messaging_proxy->GetWorkerThread()->Terminate();
+  second_messaging_proxy = nullptr;
+
+  // Now resume the first worker.
+  GetWorkerThread()->Resume();
+
+  // Make sure execution still works without crashing.
   PostCrossThreadTask(
       *GetWorkerThread()->GetTaskRunner(TaskType::kInternalTest), FROM_HERE,
       CrossThreadBindOnce(&ThreadedWorkletThreadForTest::TestTaskRunner,

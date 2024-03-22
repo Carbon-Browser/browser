@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,9 +7,7 @@ package org.chromium.content_public.browser;
 import org.chromium.content.browser.framehost.RenderFrameHostDelegate;
 import org.chromium.content.browser.framehost.RenderFrameHostImpl;
 
-/**
- * Static public methods for WebContents.
- */
+/** Static public methods for WebContents. */
 public class WebContentsStatics {
     /**
      * @return The WebContens associated witht the RenderFrameHost. This can be null.

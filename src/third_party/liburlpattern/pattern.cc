@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Copyright 2014 Blake Embrey (hello@blakeembrey.com)
 // Use of this source code is governed by an MIT-style license that can be
 // found in the LICENSE file or at https://opensource.org/licenses/MIT.
@@ -448,6 +448,15 @@ std::string Pattern::GenerateRegexString(
 
   ABSL_ASSERT(result.size() == expected_length);
   return result;
+}
+
+bool Pattern::HasRegexGroups() const {
+  for (const Part& part : part_list_) {
+    if (part.type == PartType::kRegex) {
+      return true;
+    }
+  }
+  return false;
 }
 
 bool Pattern::CanDirectMatch() const {

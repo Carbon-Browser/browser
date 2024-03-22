@@ -1,10 +1,11 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef IOS_WEB_DOWNLOAD_DATA_URL_DOWNLOAD_TASK_H_
 #define IOS_WEB_DOWNLOAD_DATA_URL_DOWNLOAD_TASK_H_
 
+#include "base/task/sequenced_task_runner.h"
 #include "ios/web/download/download_task_impl.h"
 
 namespace web {
@@ -18,8 +19,8 @@ struct ParseDataUrlResult;
 // download.
 class DataUrlDownloadTask final : public DownloadTaskImpl {
  public:
-  // Constructs a new DataUrlDownloadTask objects. |web_state|, |identifier|
-  // and |delegate| must be valid.
+  // Constructs a new DataUrlDownloadTask objects. `web_state` and `identifier`
+  // must be valid.
   DataUrlDownloadTask(
       WebState* web_state,
       const GURL& original_url,

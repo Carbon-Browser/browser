@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -73,6 +73,7 @@ void NavigationHandleObserver::DidFinishNavigation(
   navigation_handle_timing_ = navigation_handle->GetNavigationHandleTiming();
 
   handle_ = nullptr;
+  content_settings_ = navigation_handle->GetContentSettingsForTesting();
 }
 
 std::string NavigationHandleObserver::GetNormalizedResponseHeader(

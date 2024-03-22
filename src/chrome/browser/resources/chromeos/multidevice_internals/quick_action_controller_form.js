@@ -1,22 +1,23 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import 'chrome://resources/cr_elements/shared_style_css.m.js';
-import 'chrome://resources/cr_elements/cr_toggle/cr_toggle.m.js';
-import 'chrome://resources/cr_elements/md_select_css.m.js';
-import './shared_style.js';
+import 'chrome://resources/cr_elements/cr_shared_style.css.js';
+import 'chrome://resources/cr_elements/cr_toggle/cr_toggle.js';
+import 'chrome://resources/cr_elements/md_select.css.js';
+import './shared_style.css.js';
 
-import {WebUIListenerBehavior} from 'chrome://resources/js/web_ui_listener_behavior.m.js';
-import {html, Polymer} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
+import {WebUIListenerBehavior} from 'chrome://resources/ash/common/web_ui_listener_behavior.js';
+import {Polymer} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 
 import {MultidevicePhoneHubBrowserProxy} from './multidevice_phonehub_browser_proxy.js';
+import {getTemplate} from './quick_action_controller_form.html.js';
 import {FindMyDeviceStatus, findMyDeviceStatusToString, TetherStatus, tetherStatusToString} from './types.js';
 
 Polymer({
   is: 'quick-action-controller-form',
 
-  _template: html`{__html_template__}`,
+  _template: getTemplate(),
 
   behaviors: [
     WebUIListenerBehavior,

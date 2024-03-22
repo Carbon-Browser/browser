@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -27,6 +27,18 @@ struct StructTraits<display::mojom::DisplayModeDataView,
   static float refresh_rate(
       const std::unique_ptr<display::DisplayMode>& display_mode) {
     return display_mode->refresh_rate();
+  }
+
+  static int htotal(const std::unique_ptr<display::DisplayMode>& display_mode) {
+    return display_mode->htotal_;
+  }
+
+  static int vtotal(const std::unique_ptr<display::DisplayMode>& display_mode) {
+    return display_mode->vtotal_;
+  }
+
+  static int clock(const std::unique_ptr<display::DisplayMode>& display_mode) {
+    return display_mode->clock_;
   }
 
   static bool Read(display::mojom::DisplayModeDataView data,

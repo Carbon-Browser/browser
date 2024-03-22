@@ -1,24 +1,24 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import '//resources/cr_elements/cr_button/cr_button.m.js';
-import '//resources/cr_elements/cr_input/cr_input.m.js';
-import '//resources/cr_elements/cr_radio_button/cr_radio_button.m.js';
-import '//resources/cr_elements/cr_radio_group/cr_radio_group.m.js';
-import '//resources/cr_elements/shared_style_css.m.js';
+import '//resources/cr_elements/cr_button/cr_button.js';
+import '//resources/cr_elements/cr_input/cr_input.js';
+import '//resources/cr_elements/cr_radio_button/cr_radio_button.js';
+import '//resources/cr_elements/cr_radio_group/cr_radio_group.js';
+import '//resources/cr_elements/cr_shared_style.css.js';
 import '../settings_shared.css.js';
 import '../settings_vars.css.js';
 
-import {CrInputElement} from '//resources/cr_elements/cr_input/cr_input.m.js';
+import {CrInputElement} from '//resources/cr_elements/cr_input/cr_input.js';
 // <if expr="chromeos_ash">
-import {CrRadioGroupElement} from '//resources/cr_elements/cr_radio_group/cr_radio_group.m.js';
+import {CrRadioGroupElement} from '//resources/cr_elements/cr_radio_group/cr_radio_group.js';
 // </if>
 
-import {assert} from '//resources/js/assert_ts.js';
+import {assert} from '//resources/js/assert.js';
 import {PolymerElement} from '//resources/polymer/v3_0/polymer/polymer_bundled.min.js';
+import {SyncBrowserProxyImpl, SyncPrefs, SyncStatus} from '/shared/settings/people_page/sync_browser_proxy.js';
 
-import {SyncBrowserProxyImpl, SyncPrefs, SyncStatus} from './sync_browser_proxy.js';
 import {getTemplate} from './sync_encryption_options.html.js';
 
 /**

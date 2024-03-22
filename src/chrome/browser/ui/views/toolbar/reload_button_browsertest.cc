@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -22,7 +22,8 @@ class ReloadButtonBrowserTest : public InProcessBrowserTest {
   }
 };
 
-#if BUILDFLAG(IS_WIN)
+// TODO(crbug.com/1344763): Fix flakiness on Win and Mac.
+#if BUILDFLAG(IS_WIN) || BUILDFLAG(IS_MAC)
 #define MAYBE_AllowExternalProtocols DISABLED_AllowExternalProtocols
 #else
 #define MAYBE_AllowExternalProtocols AllowExternalProtocols

@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -16,8 +16,12 @@ class MockSecurityDelegate : public SecurityDelegate {
   MockSecurityDelegate();
   ~MockSecurityDelegate() override;
 
-  MOCK_METHOD(std::string, GetSecurityContext, (), (const, override));
   MOCK_METHOD(bool, CanSelfActivate, (aura::Window*), (const, override));
+  MOCK_METHOD(bool, CanLockPointer, (aura::Window*), (const, override));
+  MOCK_METHOD(SetBoundsPolicy,
+              CanSetBounds,
+              (aura::Window * window),
+              (const, override));
 };
 
 }  // namespace exo::test

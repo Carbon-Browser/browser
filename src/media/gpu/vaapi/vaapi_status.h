@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -30,7 +30,6 @@ enum class VaapiStatusCode : StatusCodeType {
 struct VaapiStatusTraits {
   using Codes = VaapiStatusCode;
   static constexpr StatusGroupType Group() { return "VaapiStatusCode"; }
-  static constexpr VaapiStatusCode DefaultEnumValue() { return Codes::kOk; }
 };
 using VaapiStatus = TypedStatus<VaapiStatusTraits>;
 

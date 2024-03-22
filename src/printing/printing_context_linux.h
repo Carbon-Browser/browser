@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -20,7 +20,7 @@ class PrintDialogLinuxInterface;
 // PrintingContext with optional native UI for print dialog and pdf_paper_size.
 class COMPONENT_EXPORT(PRINTING) PrintingContextLinux : public PrintingContext {
  public:
-  explicit PrintingContextLinux(Delegate* delegate);
+  PrintingContextLinux(Delegate* delegate, ProcessBehavior process_behavior);
   PrintingContextLinux(const PrintingContextLinux&) = delete;
   PrintingContextLinux& operator=(const PrintingContextLinux&) = delete;
   ~PrintingContextLinux() override;

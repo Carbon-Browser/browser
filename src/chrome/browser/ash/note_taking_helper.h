@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,17 +6,18 @@
 #define CHROME_BROWSER_ASH_NOTE_TAKING_HELPER_H_
 
 #include <memory>
-// #include <set>
 #include <string>
 #include <vector>
 
 #include "ash/components/arc/mojom/intent_helper.mojom-forward.h"
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/weak_ptr.h"
 #include "base/observer_list.h"
 #include "base/scoped_multi_source_observation.h"
+#include "base/scoped_observation.h"
 #include "chrome/browser/ash/arc/session/arc_session_manager_observer.h"
 #include "chrome/browser/ash/lock_screen_apps/lock_screen_apps.h"
+#include "chrome/browser/profiles/profile_manager.h"
 #include "chrome/browser/profiles/profile_manager_observer.h"
 #include "components/arc/intent_helper/arc_intent_helper_bridge.h"
 #include "components/arc/intent_helper/arc_intent_helper_observer.h"
@@ -107,16 +108,18 @@ class NoteTakingHelper : public arc::ArcIntentHelperObserver,
     WEB_APP_SUCCESS = 8,
     // The requested web app was unavailable.
     WEB_APP_MISSING = 9,
+    // Unable to find an internal display.
+    NO_INTERNAL_DISPLAY_FOUND = 10,
     // This value must remain last and should be incremented when a new reason
     // is inserted.
-    MAX = 10,
+    MAX = 11,
   };
 
   // Callback used to launch a Chrome app.
-  using LaunchChromeAppCallback = base::RepeatingCallback<void(
-      content::BrowserContext* context,
-      const extensions::Extension*,
-      std::unique_ptr<extensions::api::app_runtime::ActionData>)>;
+  using LaunchChromeAppCallback =
+      base::RepeatingCallback<void(content::BrowserContext* context,
+                                   const extensions::Extension*,
+                                   extensions::api::app_runtime::ActionData)>;
 
   // Intent action used to launch Android apps.
   static const char kIntentAction[];
@@ -190,6 +193,7 @@ class NoteTakingHelper : public arc::ArcIntentHelperObserver,
 
   // ProfileManagerObserver:
   void OnProfileAdded(Profile* profile) override;
+  void OnProfileManagerDestroying() override;
 
   NoteTakingControllerClient* GetNoteTakingControllerClientForTesting() {
     return note_taking_controller_client_.get();
@@ -251,6 +255,9 @@ class NoteTakingHelper : public arc::ArcIntentHelperObserver,
                                      apps::AppRegistryCache::Observer>
       app_registry_observations_{this};
 
+  base::ScopedObservation<ProfileManager, ProfileManagerObserver>
+      profile_manager_observation_{this};
+
   base::ObserverList<Observer>::Unchecked observers_;
 
   std::unique_ptr<NoteTakingControllerClient> note_taking_controller_client_;
@@ -259,11 +266,5 @@ class NoteTakingHelper : public arc::ArcIntentHelperObserver,
 };
 
 }  // namespace ash
-
-// TODO(https://crbug.com/1164001): remove after the migration is finished.
-namespace chromeos {
-using ::ash::NoteTakingAppInfo;
-using ::ash::NoteTakingHelper;
-}  // namespace chromeos
 
 #endif  // CHROME_BROWSER_ASH_NOTE_TAKING_HELPER_H_

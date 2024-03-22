@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,10 +7,6 @@
 #import "components/safe_browsing/ios/browser/safe_browsing_url_allow_list.h"
 #import "ios/web/public/web_state.h"
 #import "services/network/public/mojom/fetch_api.mojom.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 using safe_browsing::ThreatPatternType;
 using security_interstitials::BaseSafeBrowsingErrorUI;
@@ -55,20 +51,7 @@ std::string GetUnsafeResourceMetricPrefix(
       prefix = "billing";
       break;
     case BaseSafeBrowsingErrorUI::SB_REASON_PHISHING:
-      switch (resource.threat_metadata.threat_pattern_type) {
-        case ThreatPatternType::PHISHING:
-        case ThreatPatternType::NONE:
-          prefix = "phishing";
-          break;
-        case ThreatPatternType::SOCIAL_ENGINEERING_ADS:
-          prefix = "social_engineering_ads";
-          break;
-        case ThreatPatternType::SOCIAL_ENGINEERING_LANDING:
-          prefix = "social_engineering_landing";
-          break;
-        default:
-          break;
-      }
+      prefix = "phishing";
       break;
   }
   DCHECK(prefix.length());

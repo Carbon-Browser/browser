@@ -1,12 +1,12 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chromeos/ash/components/network/fake_network_activation_handler.h"
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 
-namespace chromeos {
+namespace ash {
 
 FakeNetworkActivationHandler::ActivationParams::ActivationParams(
     const std::string& service_path,
@@ -42,4 +42,4 @@ void FakeNetworkActivationHandler::CompleteActivation(
       service_path, std::move(success_callback), std::move(error_callback));
 }
 
-}  // namespace chromeos
+}  // namespace ash

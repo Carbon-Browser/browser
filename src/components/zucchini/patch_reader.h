@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -45,8 +45,7 @@ bool ParseVarUInt(BufferSource* source, T* value) {
     return false;
   }
   // Advance |source| beyond the VarUInt value.
-  source->Skip(bytes_read);
-  return true;
+  return source->Skip(bytes_read);
 }
 
 // Parses |source| for the next VarInt.
@@ -59,8 +58,7 @@ bool ParseVarInt(BufferSource* source, T* value) {
     return false;
   }
   // Advance |source| beyond the VarInt value.
-  source->Skip(bytes_read);
-  return true;
+  return source->Skip(bytes_read);
 }
 
 }  // namespace patch

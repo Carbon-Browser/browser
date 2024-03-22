@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -19,6 +19,7 @@ export const Message = {
   IS_FILE_BROWSER_WRITABLE: 'is-file-browser-writable',
   LOAD_EXTRA_FILES: 'load-extra-files',
   LOAD_FILES: 'load-files',
+  MAYBE_TRIGGER_PDF_HATS: 'maybe-trigger-pdf-hats',
   NAVIGATE: 'navigate',
   NOTIFY_CURRENT_FILE: 'notify-current-file',
   OPEN_ALLOWED_FILE: 'open-allowed-file',

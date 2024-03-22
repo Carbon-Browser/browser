@@ -1,4 +1,4 @@
-// Copyright (c) 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,7 +9,7 @@
 
 #include "base/component_export.h"
 
-namespace chromeos {
+namespace ash {
 
 // Observer class for network connection events.
 class COMPONENT_EXPORT(CHROMEOS_NETWORK) NetworkConnectionObserver {
@@ -42,12 +42,6 @@ class COMPONENT_EXPORT(CHROMEOS_NETWORK) NetworkConnectionObserver {
   virtual ~NetworkConnectionObserver();
 };
 
-}  // namespace chromeos
-
-// TODO(https://crbug.com/1164001): remove after the //chrome/browser/chromeos
-// source migration is finished.
-namespace ash {
-using ::chromeos::NetworkConnectionObserver;
-}
+}  // namespace ash
 
 #endif  // CHROMEOS_ASH_COMPONENTS_NETWORK_NETWORK_CONNECTION_OBSERVER_H_

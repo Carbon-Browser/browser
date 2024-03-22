@@ -1,10 +1,11 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CHROME_BROWSER_ASH_INPUT_METHOD_UI_GRAMMAR_SUGGESTION_WINDOW_H_
 #define CHROME_BROWSER_ASH_INPUT_METHOD_UI_GRAMMAR_SUGGESTION_WINDOW_H_
 
+#include "base/memory/raw_ptr.h"
 #include "chrome/browser/ash/input_method/ui/assistive_delegate.h"
 #include "chrome/browser/ash/input_method/ui/completion_suggestion_view.h"
 #include "ui/base/metadata/metadata_header_macros.h"
@@ -46,9 +47,9 @@ class UI_CHROMEOS_EXPORT GrammarSuggestionWindow
   void OnThemeChanged() override;
 
  private:
-  AssistiveDelegate* delegate_;
-  CompletionSuggestionView* suggestion_button_;
-  views::ImageButton* ignore_button_;
+  raw_ptr<AssistiveDelegate, ExperimentalAsh> delegate_;
+  raw_ptr<CompletionSuggestionView, ExperimentalAsh> suggestion_button_;
+  raw_ptr<views::ImageButton, ExperimentalAsh> ignore_button_;
 
   ButtonId current_highlighted_button_id_ = ButtonId::kNone;
 

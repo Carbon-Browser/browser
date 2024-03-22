@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -17,7 +17,6 @@
 #include "ash/assistant/ui/main_stage/assistant_onboarding_suggestion_view.h"
 #include "ash/assistant/ui/test_support/mock_assistant_view_delegate.h"
 #include "ash/assistant/util/test_support/macros.h"
-#include "ash/constants/ash_features.h"
 #include "ash/constants/ash_pref_names.h"
 #include "ash/public/cpp/assistant/controller/assistant_suggestions_controller.h"
 #include "ash/public/cpp/assistant/controller/assistant_ui_controller.h"
@@ -27,15 +26,15 @@
 #include "ash/shell.h"
 #include "ash/style/ash_color_provider.h"
 #include "ash/style/dark_light_mode_controller_impl.h"
+#include "base/memory/raw_ref.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/test/icu_test_util.h"
-#include "base/test/scoped_feature_list.h"
 #include "base/unguessable_token.h"
 #include "chromeos/ash/services/assistant/public/cpp/assistant_service.h"
-#include "chromeos/constants/chromeos_features.h"
 #include "chromeos/ui/vector_icons/vector_icons.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
+#include "ui/color/color_provider_manager.h"
 #include "ui/gfx/image/image_unittest_util.h"
 #include "ui/gfx/paint_vector_icon.h"
 #include "ui/views/controls/image_view.h"
@@ -47,12 +46,11 @@ namespace ash {
 
 namespace {
 
-using chromeos::assistant::Assistant;
-using chromeos::assistant::AssistantInteractionMetadata;
-using chromeos::assistant::AssistantInteractionType;
-using chromeos::assistant::AssistantQuerySource;
-using chromeos::assistant::AssistantSuggestion;
-using chromeos::assistant::AssistantSuggestionType;
+using assistant::AssistantInteractionMetadata;
+using assistant::AssistantInteractionType;
+using assistant::AssistantQuerySource;
+using assistant::AssistantSuggestion;
+using assistant::AssistantSuggestionType;
 
 // Helpers ---------------------------------------------------------------------
 
@@ -83,10 +81,9 @@ void FindDescendentByClassName(views::View* parent, T** result) {
 // Mocks -----------------------------------------------------------------------
 
 class MockAssistantInteractionSubscriber
-    : public testing::NiceMock<
-          chromeos::assistant::AssistantInteractionSubscriber> {
+    : public testing::NiceMock<assistant::AssistantInteractionSubscriber> {
  public:
-  explicit MockAssistantInteractionSubscriber(Assistant* service) {
+  explicit MockAssistantInteractionSubscriber(assistant::Assistant* service) {
     scoped_subscriber_.Observe(service);
   }
 
@@ -98,8 +95,7 @@ class MockAssistantInteractionSubscriber
               (override));
 
  private:
-  chromeos::assistant::ScopedAssistantInteractionSubscriber scoped_subscriber_{
-      this};
+  assistant::ScopedAssistantInteractionSubscriber scoped_subscriber_{this};
 };
 
 // ScopedShowUi ----------------------------------------------------------------
@@ -110,7 +106,7 @@ class ScopedShowUi {
       : original_visibility_(
             AssistantUiController::Get()->GetModel()->visibility()) {
     AssistantUiController::Get()->ShowUi(
-        chromeos::assistant::AssistantEntryPoint::kUnspecified);
+        assistant::AssistantEntryPoint::kUnspecified);
   }
 
   ScopedShowUi(const ScopedShowUi&) = delete;
@@ -120,7 +116,7 @@ class ScopedShowUi {
     switch (original_visibility_) {
       case AssistantVisibility::kClosed:
         AssistantUiController::Get()->CloseUi(
-            chromeos::assistant::AssistantExitPoint::kUnspecified);
+            assistant::AssistantExitPoint::kUnspecified);
         return;
       case AssistantVisibility::kVisible:
         // No action necessary.
@@ -135,15 +131,16 @@ class ScopedShowUi {
   const AssistantVisibility original_visibility_;
 };
 
-// AssistantOnboardingViewTest -------------------------------------------------
+// DISABLED_AssistantOnboardingViewTest
+// -------------------------------------------------
 
-class AssistantOnboardingViewTest : public AssistantAshTestBase {
+class DISABLED_AssistantOnboardingViewTest : public AssistantAshTestBase {
  public:
-  AssistantOnboardingViewTest()
+  DISABLED_AssistantOnboardingViewTest()
       : AssistantAshTestBase(
             base::test::TaskEnvironment::TimeSource::MOCK_TIME) {}
 
-  ~AssistantOnboardingViewTest() override = default;
+  ~DISABLED_AssistantOnboardingViewTest() override = default;
 
   void AdvanceClock(base::TimeDelta time_delta) {
     task_environment()->AdvanceClock(time_delta);
@@ -170,7 +167,7 @@ class AssistantOnboardingViewTest : public AssistantAshTestBase {
 
 // Tests -----------------------------------------------------------------------
 
-TEST_F(AssistantOnboardingViewTest, ShouldHaveExpectedGreeting) {
+TEST_F(DISABLED_AssistantOnboardingViewTest, ShouldHaveExpectedGreeting) {
   struct ExpectedGreeting {
     std::u16string for_morning;
     std::u16string for_afternoon;
@@ -275,19 +272,19 @@ TEST_F(AssistantOnboardingViewTest, ShouldHaveExpectedGreeting) {
   }
 }
 
-TEST_F(AssistantOnboardingViewTest, ShouldHaveExpectedIntro) {
+TEST_F(DISABLED_AssistantOnboardingViewTest, ShouldHaveExpectedIntro) {
   ShowAssistantUi();
   EXPECT_EQ(intro_label()->GetText(),
             u"I'm your Google Assistant, here to help you throughout your day!"
             u"\nHere are some things you can try to get started.");
 }
 
-TEST_F(AssistantOnboardingViewTest, ShouldHaveExpectedSuggestions) {
+TEST_F(DISABLED_AssistantOnboardingViewTest, ShouldHaveExpectedSuggestions) {
   struct VectorIconWithColor {
     VectorIconWithColor(const gfx::VectorIcon& icon, SkColor color)
         : icon(icon), color(color) {}
 
-    const gfx::VectorIcon& icon;
+    const raw_ref<const gfx::VectorIcon, ExperimentalAsh> icon;
     SkColor color;
   };
 
@@ -307,11 +304,8 @@ TEST_F(AssistantOnboardingViewTest, ShouldHaveExpectedSuggestions) {
         {SkColorSetRGB(0x8A, 0x0E, 0x9E), SkColorSetRGB(0xf8, 0x82, 0xff),
          SkColorSetRGB(0xaa, 0x00, 0xb8)},
         {gfx::kGoogleBlue800, gfx::kGoogleBlue200, gfx::kGoogleBlue800}};
-    const bool is_dark_light_enabled = features::IsDarkLightModeEnabled();
-    const bool is_dark_mode_status =
-        DarkLightModeControllerImpl::Get()->IsDarkModeEnabled();
     const int color_index =
-        is_dark_light_enabled ? (is_dark_mode_status ? 1 : 2) : 0;
+        DarkLightModeControllerImpl::Get()->IsDarkModeEnabled() ? 1 : 2;
     return kForegroundColors[index][color_index];
   };
 
@@ -393,14 +387,14 @@ TEST_F(AssistantOnboardingViewTest, ShouldHaveExpectedSuggestions) {
 
       ASSERT_PIXELS_EQ(
           suggestion_view->GetIcon(),
-          gfx::CreateVectorIcon(expected_suggestion.icon_with_color->icon,
+          gfx::CreateVectorIcon(*expected_suggestion.icon_with_color->icon,
                                 /*size=*/24,
                                 expected_suggestion.icon_with_color->color));
     }
   }
 }
 
-TEST_F(AssistantOnboardingViewTest, ShouldHandleSuggestionPresses) {
+TEST_F(DISABLED_AssistantOnboardingViewTest, ShouldHandleSuggestionPresses) {
   ShowAssistantUi();
 
   // Verify onboarding suggestions exist.
@@ -420,7 +414,7 @@ TEST_F(AssistantOnboardingViewTest, ShouldHandleSuggestionPresses) {
   TapOnAndWait(suggestion_views.at(0));
 }
 
-TEST_F(AssistantOnboardingViewTest, ShouldHandleSuggestionUpdates) {
+TEST_F(DISABLED_AssistantOnboardingViewTest, ShouldHandleSuggestionUpdates) {
   // Show Assistant UI and verify suggestions exist.
   ShowAssistantUi();
   ASSERT_FALSE(GetOnboardingSuggestionViews().empty());
@@ -442,7 +436,7 @@ TEST_F(AssistantOnboardingViewTest, ShouldHandleSuggestionUpdates) {
   EXPECT_EQ(suggestion_views.at(0)->GetText(), u"Forced suggestion");
 }
 
-TEST_F(AssistantOnboardingViewTest, ShouldHandleLocalIcons) {
+TEST_F(DISABLED_AssistantOnboardingViewTest, ShouldHandleLocalIcons) {
   SetOnboardingSuggestions({CreateSuggestionWithIconUrl(
       "googleassistant://resource?type=icon&name=assistant")});
 
@@ -457,7 +451,7 @@ TEST_F(AssistantOnboardingViewTest, ShouldHandleLocalIcons) {
   ASSERT_PIXELS_EQ(actual, expected);
 }
 
-TEST_F(AssistantOnboardingViewTest, ShouldHandleRemoteIcons) {
+TEST_F(DISABLED_AssistantOnboardingViewTest, ShouldHandleRemoteIcons) {
   const gfx::ImageSkia expected =
       gfx::test::CreateImageSkia(/*width=*/10, /*height=*/10);
 
@@ -485,14 +479,11 @@ TEST_F(AssistantOnboardingViewTest, ShouldHandleRemoteIcons) {
   EXPECT_TRUE(actual.BackedBySameObjectAs(expected));
 }
 
-TEST_F(AssistantOnboardingViewTest, DarkAndLightTheme) {
-  base::test::ScopedFeatureList scoped_feature_list(
-      chromeos::features::kDarkLightMode);
+TEST_F(DISABLED_AssistantOnboardingViewTest, DarkAndLightTheme) {
   AshColorProvider* color_provider = AshColorProvider::Get();
   auto* dark_light_mode_controller = DarkLightModeControllerImpl::Get();
   dark_light_mode_controller->OnActiveUserPrefServiceChanged(
       Shell::Get()->session_controller()->GetActivePrefService());
-  ASSERT_TRUE(chromeos::features::IsDarkLightModeEnabled());
 
   ShowAssistantUi();
 
@@ -521,23 +512,6 @@ TEST_F(AssistantOnboardingViewTest, DarkAndLightTheme) {
   const SkColor intro_label_color = intro_label()->GetEnabledColor();
   EXPECT_EQ(greeting_label_color, text_primary_color);
   EXPECT_EQ(intro_label_color, text_primary_color);
-}
-
-TEST_F(AssistantOnboardingViewTest, DarkAndLightModeFlagOff) {
-  // ProductivityLauncher uses DarkLightMode colors.
-  base::test::ScopedFeatureList scoped_feature_list;
-  scoped_feature_list.InitWithFeatures(
-      /*enabled_features=*/{}, /*disabled_features=*/{
-          chromeos::features::kDarkLightMode, features::kNotificationsRefresh,
-          features::kProductivityLauncher});
-
-  ShowAssistantUi();
-
-  EXPECT_EQ(greeting_label()->GetEnabledColor(), kTextColorPrimary);
-  EXPECT_EQ(intro_label()->GetEnabledColor(), kTextColorPrimary);
-
-  // Avoid test teardown issues by explicitly closing the launcher.
-  CloseAssistantUi();
 }
 
 }  // namespace

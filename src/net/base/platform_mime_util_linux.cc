@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -22,12 +22,6 @@ bool PlatformMimeUtil::GetPlatformMimeTypeFromExtension(
     const base::FilePath::StringType& ext,
     std::string* result) const {
   return android::GetMimeTypeFromExtension(ext, result);
-}
-#elif BUILDFLAG(IS_CHROMEOS_ASH)
-bool PlatformMimeUtil::GetPlatformMimeTypeFromExtension(
-    const base::FilePath::StringType& ext,
-    std::string* result) const {
-  return false;
 }
 #else
 bool PlatformMimeUtil::GetPlatformMimeTypeFromExtension(

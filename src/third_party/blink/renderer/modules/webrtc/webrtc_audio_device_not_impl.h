@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -79,8 +79,8 @@ class MODULES_EXPORT WebRtcAudioDeviceNotImpl
   int32_t EnableBuiltInAGC(bool enable) override;
   int32_t EnableBuiltInNS(bool enable) override;
 #if BUILDFLAG(IS_IOS)
-  int GetPlayoutAudioParameters(AudioParameters* params) const override;
-  int GetRecordAudioParameters(AudioParameters* params) const override;
+  int GetPlayoutAudioParameters(webrtc::AudioParameters* params) const override;
+  int GetRecordAudioParameters(webrtc::AudioParameters* params) const override;
 #endif  // BUILDFLAG(IS_IOS)
 
  protected:

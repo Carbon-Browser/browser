@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,7 +9,6 @@
 #include "base/location.h"
 #include "base/run_loop.h"
 #include "base/task/single_thread_task_runner.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "build/build_config.h"
 #include "chrome/browser/media/webrtc/desktop_media_list_observer.h"
 #include "chrome/test/base/chrome_ash_test_base.h"
@@ -30,6 +29,8 @@ class MockDesktopMediaListObserver : public DesktopMediaListObserver {
   MOCK_METHOD1(OnSourceNameChanged, void(int index));
   MOCK_METHOD1(OnSourceThumbnailChanged, void(int index));
   MOCK_METHOD1(OnSourcePreviewChanged, void(size_t index));
+  MOCK_METHOD0(OnDelegatedSourceListSelection, void());
+  MOCK_METHOD0(OnDelegatedSourceListDismissed, void());
 };
 
 class DesktopMediaListAshTest : public ChromeAshTestBase {
@@ -61,7 +62,7 @@ class DesktopMediaListAshTest : public ChromeAshTestBase {
 };
 
 ACTION(QuitMessageLoop) {
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE, base::RunLoop::QuitCurrentWhenIdleClosureDeprecated());
 }
 
@@ -93,5 +94,22 @@ TEST_F(DesktopMediaListAshTest, WindowOnly) {
   list_->StartUpdating(&observer_);
   base::RunLoop().Run();
   window.reset();
+  base::RunLoop().Run();
+
+  // Tests that a floated window shows up on the list. Regression test for
+  // crbug.com/1462516.
+  std::unique_ptr<aura::Window> float_window = CreateAppWindow();
+  ui::test::EventGenerator event_generator(float_window->GetRootWindow());
+  event_generator.PressAndReleaseKey(ui::VKEY_F,
+                                     ui::EF_ALT_DOWN | ui::EF_COMMAND_DOWN);
+
+  EXPECT_CALL(observer_, OnSourceAdded(0));
+  EXPECT_CALL(observer_, OnSourceThumbnailChanged(0))
+      .WillOnce(QuitMessageLoop())
+      .WillRepeatedly(DoDefault());
+  EXPECT_CALL(observer_, OnSourceRemoved(0)).WillOnce(QuitMessageLoop());
+
+  base::RunLoop().Run();
+  float_window.reset();
   base::RunLoop().Run();
 }

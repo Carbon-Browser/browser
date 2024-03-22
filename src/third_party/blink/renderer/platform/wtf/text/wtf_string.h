@@ -39,13 +39,9 @@
 #include "third_party/blink/renderer/platform/wtf/wtf_size_t.h"
 #include "third_party/perfetto/include/perfetto/tracing/traced_value_forward.h"
 
-#ifdef __OBJC__
-#include <objc/objc.h>
-#endif
-
 namespace WTF {
 
-struct StringHash;
+class CodePointIterator;
 
 #define DISPATCH_CASE_OP(caseSensitivity, op, args)     \
   ((caseSensitivity == kTextCaseSensitive)              \
@@ -90,8 +86,12 @@ class WTF_EXPORT String {
   String(const char* characters, size_t length);
 #endif  // defined(ARCH_CPU_64_BITS)
 
-  // Construct a string with latin1 data, from a null-terminated source.
-  String(const LChar* characters)
+  // Construct a string with latin1 data, from a null-terminated source. The
+  // `LChar` constructor is explicit to avoid misinterpreting byte arrays.
+  // If the conversion is implicit, functions with both `String` and
+  // `base::span<const uint8_t>` overloads become ambiguous when called on
+  // `uint8_t[N]`.
+  explicit String(const LChar* characters)
       : String(reinterpret_cast<const char*>(characters)) {}
   String(const char* characters)
       : String(characters, characters ? strlen(characters) : 0) {}
@@ -119,7 +119,7 @@ class WTF_EXPORT String {
 
   explicit operator bool() const { return !IsNull(); }
   bool IsNull() const { return !impl_; }
-  bool IsEmpty() const { return !impl_ || !impl_->length(); }
+  bool empty() const { return !impl_ || !impl_->length(); }
 
   StringImpl* Impl() const { return impl_.get(); }
   scoped_refptr<StringImpl> ReleaseImpl() { return std::move(impl_); }
@@ -183,6 +183,11 @@ class WTF_EXPORT String {
       return 0;
     return (*impl_)[index];
   }
+
+  // `begin()` and `end()` return iterators for `UChar32`, neither `UChar` nor
+  // `LChar`. If you'd like to iterate code units, use `[]` and `length()`.
+  CodePointIterator begin() const;
+  CodePointIterator end() const;
 
   template <typename IntegerType>
   static String Number(IntegerType number) {
@@ -256,6 +261,9 @@ class WTF_EXPORT String {
     return impl_ ? impl_->ReverseFind(value, start) : kNotFound;
   }
 
+  // Returns the Unicode code point starting at the specified offset of this
+  // string. If the offset points an unpaired surrogate, this function returns
+  // 0.
   UChar32 CharacterStartingAt(unsigned) const;
 
   bool StartsWith(
@@ -263,14 +271,13 @@ class WTF_EXPORT String {
       TextCaseSensitivity case_sensitivity = kTextCaseSensitive) const {
     return impl_
                ? DISPATCH_CASE_OP(case_sensitivity, impl_->StartsWith, (prefix))
-               : prefix.IsEmpty();
+               : prefix.empty();
   }
   bool StartsWithIgnoringCase(const StringView& prefix) const {
-    return impl_ ? impl_->StartsWithIgnoringCase(prefix) : prefix.IsEmpty();
+    return impl_ ? impl_->StartsWithIgnoringCase(prefix) : prefix.empty();
   }
   bool StartsWithIgnoringASCIICase(const StringView& prefix) const {
-    return impl_ ? impl_->StartsWithIgnoringASCIICase(prefix)
-                 : prefix.IsEmpty();
+    return impl_ ? impl_->StartsWithIgnoringASCIICase(prefix) : prefix.empty();
   }
   bool StartsWith(UChar character) const {
     return impl_ ? impl_->StartsWith(character) : false;
@@ -280,13 +287,13 @@ class WTF_EXPORT String {
       const StringView& suffix,
       TextCaseSensitivity case_sensitivity = kTextCaseSensitive) const {
     return impl_ ? DISPATCH_CASE_OP(case_sensitivity, impl_->EndsWith, (suffix))
-                 : suffix.IsEmpty();
+                 : suffix.empty();
   }
   bool EndsWithIgnoringCase(const StringView& prefix) const {
-    return impl_ ? impl_->EndsWithIgnoringCase(prefix) : prefix.IsEmpty();
+    return impl_ ? impl_->EndsWithIgnoringCase(prefix) : prefix.empty();
   }
   bool EndsWithIgnoringASCIICase(const StringView& prefix) const {
-    return impl_ ? impl_->EndsWithIgnoringASCIICase(prefix) : prefix.IsEmpty();
+    return impl_ ? impl_->EndsWithIgnoringASCIICase(prefix) : prefix.empty();
   }
   bool EndsWith(UChar character) const {
     return impl_ ? impl_->EndsWith(character) : false;
@@ -348,6 +355,10 @@ class WTF_EXPORT String {
   // This function converts ASCII characters only.
   [[nodiscard]] String UpperASCII() const;
 
+  // Returns the length of the string after stripping white spaces.
+  // This is equivalent (minus the allocation overhead) of doing:
+  // `string.StripWhiteSpace().length()`
+  [[nodiscard]] unsigned LengthWithStrippedWhiteSpace() const;
   [[nodiscard]] String StripWhiteSpace() const;
   [[nodiscard]] String StripWhiteSpace(IsWhiteSpaceFunctionPtr) const;
   [[nodiscard]] String SimplifyWhiteSpace(
@@ -478,8 +489,6 @@ class WTF_EXPORT String {
   double ToDouble(bool* ok = nullptr) const;
   float ToFloat(bool* ok = nullptr) const;
 
-  [[nodiscard]] String IsolatedCopy() const;
-
 #ifdef __OBJC__
   String(NSString*);
 
@@ -609,7 +618,7 @@ inline const UChar* String::GetCharacters<UChar>() const {
 }
 
 inline bool String::ContainsOnlyLatin1OrEmpty() const {
-  if (IsEmpty())
+  if (empty())
     return true;
 
   if (Is8Bit())
@@ -627,7 +636,7 @@ inline bool String::ContainsOnlyLatin1OrEmpty() const {
 // "nil if empty", so we try to maintain longstanding behavior for the sake of
 // entrenched clients
 inline NSString* NsStringNilIfEmpty(const String& str) {
-  return str.IsEmpty() ? nil : (NSString*)str;
+  return str.empty() ? nil : (NSString*)str;
 }
 #endif
 
@@ -669,18 +678,37 @@ void String::PrependTo(BufferType& result,
   impl_->PrependTo(result, position, length);
 }
 
-// StringHash is the default hash for String
 template <typename T>
-struct DefaultHash;
+struct HashTraits;
+// Defined in string_hash.h.
 template <>
-struct DefaultHash<String> {
-  typedef StringHash Hash;
-};
+struct HashTraits<String>;
 
 // Shared global empty string.
 WTF_EXPORT extern const String& g_empty_string;
 WTF_EXPORT extern const String& g_empty_string16_bit;
 WTF_EXPORT extern const String& g_xmlns_with_colon;
+
+// Table representing common HTML strings of type '\n<space>*'.
+class WTF_EXPORT NewlineThenWhitespaceStringsTable {
+ public:
+  // The constant is kept small to minimize the overhead of the table (496
+  // bytes).
+  static constexpr size_t kTableSize = 32;
+
+  static void Init();
+
+  static inline String GetStringForLength(size_t string_length) {
+    DCHECK_NE(string_length, 0u);
+    DCHECK_LT(string_length, kTableSize);
+    return g_table_[string_length];
+  }
+
+  static bool IsNewlineThenWhitespaces(const StringView& view);
+
+ private:
+  static const String (&g_table_)[kTableSize];
+};
 
 // Pretty printer for gtest and base/logging.*.  It prepends and appends
 // double-quotes, and escapes characters other than ASCII printables.

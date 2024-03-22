@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -19,7 +19,7 @@ extern "C" int LLVMFuzzerInitialize(int* argc, char*** argv) {
   base::CommandLine::Init(*argc, *argv);
   logging::LoggingSettings settings;
   settings.logging_dest = logging::LOG_NONE;
-  logging::SetMinLogLevel(logging::LOG_FATAL);
+  logging::SetMinLogLevel(logging::LOGGING_FATAL);
   return InitLogging(settings);
 }
 

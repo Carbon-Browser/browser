@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -18,11 +18,11 @@ namespace autofill {
 // with name and address fields and without email or phone fields.
 class AddressFormLabelFormatter : public LabelFormatter {
  public:
-  AddressFormLabelFormatter(const std::vector<AutofillProfile*>& profiles,
+  AddressFormLabelFormatter(const std::vector<const AutofillProfile*>& profiles,
                             const std::string& app_locale,
                             ServerFieldType focused_field_type,
                             uint32_t groups,
-                            const std::vector<ServerFieldType>& field_types);
+                            const ServerFieldTypeSet& field_types);
 
   ~AddressFormLabelFormatter() override;
 

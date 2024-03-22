@@ -1,11 +1,11 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "components/zoom/test/zoom_test_utils.h"
 
-#include "base/bind.h"
-#include "base/callback.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "content/public/test/test_utils.h"
 #include "third_party/blink/public/common/page/page_zoom.h"
 
@@ -41,7 +41,7 @@ ZoomChangedWatcher::ZoomChangedWatcher(ZoomController* zoom_controller,
       predicate_(predicate),
       message_loop_runner_(new content::MessageLoopRunner) {
   DCHECK(zoom_controller_);
-  zoom_controller_->AddObserver(this);
+  zoom_observation_.Observe(zoom_controller_);
 }
 
 ZoomChangedWatcher::ZoomChangedWatcher(content::WebContents* web_contents,
@@ -68,6 +68,11 @@ ZoomChangedWatcher::~ZoomChangedWatcher() {
 void ZoomChangedWatcher::Wait() {
   if (!change_received_)
     message_loop_runner_->Run();
+}
+
+void ZoomChangedWatcher::OnZoomControllerDestroyed(
+    zoom::ZoomController* zoom_controller) {
+  zoom_observation_.Reset();
 }
 
 void ZoomChangedWatcher::OnZoomChanged(

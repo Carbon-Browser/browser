@@ -24,39 +24,25 @@
 #include "base/memory/weak_ptr.h"
 #include "base/sequence_checker.h"
 #include "base/timer/timer.h"
-#include "components/adblock/core/subscription/installed_subscription.h"
-#include "components/adblock/core/subscription/subscription_persistent_metadata.h"
-#include "components/adblock/core/subscription/subscription_service.h"
 #include "components/adblock/core/subscription/subscription_updater.h"
-#include "components/prefs/pref_member.h"
-#include "components/prefs/pref_service.h"
-#include "url/gurl.h"
 
 namespace adblock {
 
 class SubscriptionUpdaterImpl final : public SubscriptionUpdater {
  public:
-  SubscriptionUpdaterImpl(PrefService* prefs,
-                          SubscriptionService* subscription_service,
-                          SubscriptionPersistentMetadata* persistent_metadata,
-                          base::TimeDelta initial_delay,
+  SubscriptionUpdaterImpl(base::TimeDelta initial_delay,
                           base::TimeDelta check_interval);
   ~SubscriptionUpdaterImpl() final;
-  void StartSchedule() final;
+  void StartSchedule(base::RepeatingClosure run_update_check) final;
+  void StopSchedule() final;
 
  private:
-  void StopSchedule();
-  void SynchronizeWithPrefState();
   void RunUpdateCheck();
-  void SendPingIfNecessary(
-      const std::vector<scoped_refptr<Subscription>>& available_subscriptions);
 
   SEQUENCE_CHECKER(sequence_checker_);
-  SubscriptionService* subscription_service_;
-  const SubscriptionPersistentMetadata* persistent_metadata_;
+  base::RepeatingClosure run_update_check_;
   const base::TimeDelta initial_delay_;
   const base::TimeDelta check_interval_;
-  BooleanPrefMember enable_adblock_;
   base::OneShotTimer timer_;
   base::WeakPtrFactory<SubscriptionUpdaterImpl> weak_ptr_factory_{this};
 };

@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,18 +9,20 @@
 #include <unordered_set>
 #include <vector>
 
-#include "base/callback.h"
 #include "base/compiler_specific.h"
 #include "base/component_export.h"
+#include "base/functional/callback.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/scoped_observation.h"
+#include "chromeos/ash/components/network/cellular_metrics_logger.h"
 #include "chromeos/ash/components/network/network_device_handler.h"
 #include "chromeos/ash/components/network/network_handler.h"
 #include "chromeos/ash/components/network/network_handler_callbacks.h"
 #include "chromeos/ash/components/network/network_state_handler.h"
 #include "chromeos/ash/components/network/network_state_handler_observer.h"
 
-namespace chromeos {
+namespace ash {
 
 class NetworkStateHandler;
 
@@ -116,6 +118,9 @@ class COMPONENT_EXPORT(CHROMEOS_NETWORK) NetworkDeviceHandlerImpl
   // Applies the wake-on-wifi-allowed feature flag to WiFi devices.
   void ApplyWakeOnWifiAllowedToShill();
 
+  // Applies the passpoint-arc-support feature flag to WiFi devices.
+  void ApplyPasspointInterworkingSelectEnabledToShill();
+
   // Applies the current value of |usb_ethernet_mac_address_source_| to primary
   // enabled USB Ethernet device. Does nothing if MAC address source is not
   // specified yet.
@@ -147,7 +152,7 @@ class COMPONENT_EXPORT(CHROMEOS_NETWORK) NetworkDeviceHandlerImpl
       std::string support_property_name,
       WifiFeatureSupport* feature_support_to_set,
       const std::string& device_path,
-      absl::optional<base::Value> properties);
+      absl::optional<base::Value::Dict> properties);
 
   // Callback to be called on MAC address source change request failure.
   // The request was called on device with |device_path| path and
@@ -170,17 +175,19 @@ class COMPONENT_EXPORT(CHROMEOS_NETWORK) NetworkDeviceHandlerImpl
   // Resets MAC address source property for secondary USB Ethernet devices.
   void ResetMacAddressSourceForSecondaryUsbEthernetDevices() const;
 
-  // On a successful SIM PUK unblock.
-  void OnUnblockPinSuccess(const std::string& device_path,
-                           const std::string& pin,
-                           base::OnceClosure callback);
+  // On a successful SIM PIN unlock, or a successful SIM PUK unblock.
+  void OnPinValidationSuccess(
+      const std::string& device_path,
+      const std::string& pin,
+      const CellularMetricsLogger::SimPinOperation& pin_operation,
+      base::OnceClosure callback);
 
   // Get the DeviceState for the wifi device, if any.
   const DeviceState* GetWifiDeviceState();
 
-  NetworkStateHandler* network_state_handler_ = nullptr;
-  base::ScopedObservation<chromeos::NetworkStateHandler,
-                          chromeos::NetworkStateHandlerObserver>
+  raw_ptr<NetworkStateHandler, ExperimentalAsh> network_state_handler_ =
+      nullptr;
+  base::ScopedObservation<NetworkStateHandler, NetworkStateHandlerObserver>
       network_state_handler_observer_{this};
   bool allow_cellular_sim_lock_ = true;
   bool cellular_policy_allow_roaming_ = true;
@@ -190,6 +197,8 @@ class COMPONENT_EXPORT(CHROMEOS_NETWORK) NetworkDeviceHandlerImpl
   WifiFeatureSupport wake_on_wifi_supported_ =
       WifiFeatureSupport::NOT_REQUESTED;
   bool wake_on_wifi_allowed_ = false;
+  WifiFeatureSupport passpoint_supported_ = WifiFeatureSupport::SUPPORTED;
+  bool passpoint_allowed_ = false;
 
   std::string usb_ethernet_mac_address_source_;
   std::string primary_enabled_usb_ethernet_device_path_;
@@ -201,6 +210,6 @@ class COMPONENT_EXPORT(CHROMEOS_NETWORK) NetworkDeviceHandlerImpl
   base::WeakPtrFactory<NetworkDeviceHandlerImpl> weak_ptr_factory_{this};
 };
 
-}  // namespace chromeos
+}  // namespace ash
 
 #endif  // CHROMEOS_ASH_COMPONENTS_NETWORK_NETWORK_DEVICE_HANDLER_IMPL_H_

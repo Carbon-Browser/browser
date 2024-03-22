@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -22,7 +22,6 @@ struct MEDIA_GPU_EXPORT DeviceInfo {
   virtual bool IsDecoderKnownUnaccelerated(VideoCodec codec);
   virtual bool IsSetOutputSurfaceSupported();
   virtual bool SupportsOverlaySurfaces();
-  virtual bool IsAsyncApiSupported();
   virtual void AddSupportedCodecProfileLevels(
       std::vector<CodecProfileLevel>* result);
 };

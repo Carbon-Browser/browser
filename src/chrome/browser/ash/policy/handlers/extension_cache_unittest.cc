@@ -1,4 +1,4 @@
-// Copyright (c) 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,10 +6,9 @@
 
 #include <memory>
 
-#include "ash/components/settings/cros_settings_names.h"
-#include "base/bind.h"
 #include "base/files/file_util.h"
 #include "base/files/scoped_temp_dir.h"
+#include "base/functional/bind.h"
 #include "base/run_loop.h"
 #include "base/time/time.h"
 #include "chrome/browser/ash/settings/scoped_testing_cros_settings.h"
@@ -17,6 +16,7 @@
 #include "chrome/browser/extensions/updater/chromeos_extension_cache_delegate.h"
 #include "chrome/browser/extensions/updater/extension_cache_impl.h"
 #include "chrome/browser/extensions/updater/local_extension_cache.h"
+#include "chromeos/ash/components/settings/cros_settings_names.h"
 #include "content/public/test/browser_task_environment.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
@@ -38,8 +38,7 @@ static void CreateFile(const base::FilePath& file,
                        size_t size,
                        const base::Time& timestamp) {
   const std::string data(size, 0);
-  EXPECT_EQ(base::WriteFile(file, data.data(), data.size()),
-            static_cast<int>(size));
+  EXPECT_TRUE(base::WriteFile(file, data));
   EXPECT_TRUE(base::TouchFile(file, timestamp, timestamp));
 }
 

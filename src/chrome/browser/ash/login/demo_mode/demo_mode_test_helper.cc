@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,21 +13,19 @@
 #include "base/files/file_util.h"
 #include "base/run_loop.h"
 #include "base/test/scoped_path_override.h"
-#include "chrome/browser/ash/login/demo_mode/demo_resources.h"
+#include "chrome/browser/ash/login/demo_mode/demo_components.h"
 #include "chrome/browser/browser_process_platform_part.h"
 #include "chrome/browser/component_updater/fake_cros_component_manager.h"
 #include "chrome/test/base/testing_browser_process.h"
 #include "chromeos/ash/components/dbus/concierge/concierge_client.h"
-#include "chromeos/dbus/dbus_thread_manager.h"
 
 namespace ash {
 
 DemoModeTestHelper::DemoModeTestHelper()
     : browser_process_platform_part_test_api_(
           TestingBrowserProcess::GetGlobal()->platform_part()) {
-  if (!DBusThreadManager::IsInitialized()) {
-    DBusThreadManager::Initialize();
-    dbus_thread_manager_initialized_ = true;
+  if (!ConciergeClient::Get()) {
+    concierge_client_initialized_ = true;
     ConciergeClient::InitializeFake(/*fake_cicerone_client=*/nullptr);
   }
 
@@ -42,9 +40,8 @@ DemoModeTestHelper::DemoModeTestHelper()
 }
 
 DemoModeTestHelper::~DemoModeTestHelper() {
-  if (dbus_thread_manager_initialized_) {
+  if (concierge_client_initialized_) {
     ConciergeClient::Shutdown();
-    DBusThreadManager::Shutdown();
   }
   DemoSession::ShutDownIfInitialized();
   DemoSession::ResetDemoConfigForTesting();
@@ -77,13 +74,13 @@ void DemoModeTestHelper::InitializeSessionWithPendingComponent(
 base::FilePath DemoModeTestHelper::GetDemoResourcesPath() {
   return components_temp_dir_.GetPath()
       .AppendASCII("cros-components")
-      .AppendASCII(DemoResources::kDemoModeResourcesComponentName);
+      .AppendASCII(DemoComponents::kDemoModeResourcesComponentName);
 }
 
 base::FilePath DemoModeTestHelper::GetPreinstalledDemoResourcesPath() {
   return components_temp_dir_.GetPath()
       .AppendASCII("cros-components")
-      .AppendASCII(DemoResources::kOfflineDemoModeResourcesComponentName);
+      .AppendASCII(DemoComponents::kOfflineDemoModeResourcesComponentName);
 }
 
 void DemoModeTestHelper::InitializeCrosComponentManager() {
@@ -95,7 +92,7 @@ void DemoModeTestHelper::InitializeCrosComponentManager() {
   // so components don't load instantly.
   cros_component_manager->set_queue_load_requests(true);
   cros_component_manager->set_supported_components(
-      {DemoResources::kDemoModeResourcesComponentName});
+      {DemoComponents::kDemoModeResourcesComponentName});
 
   browser_process_platform_part_test_api_.InitializeCrosComponentManager(
       std::move(cros_component_manager));
@@ -108,13 +105,13 @@ void DemoModeTestHelper::FinishLoadingComponent() {
   // TODO(michaelpg): Update once offline Demo Mode also uses a CrOS component.
   if (DemoSession::GetDemoConfig() == DemoSession::DemoModeConfig::kOnline) {
     CHECK(fake_cros_component_manager_->FinishLoadRequest(
-        DemoResources::kDemoModeResourcesComponentName,
+        DemoComponents::kDemoModeResourcesComponentName,
         component_updater::FakeCrOSComponentManager::ComponentInfo(
             component_updater::CrOSComponentManager::Error::NONE,
             base::FilePath("/dev/null"), GetDemoResourcesPath())));
   } else {
     CHECK(!fake_cros_component_manager_->HasPendingInstall(
-        DemoResources::kDemoModeResourcesComponentName));
+        DemoComponents::kDemoModeResourcesComponentName));
   }
 
   run_loop.Run();
@@ -127,7 +124,7 @@ void DemoModeTestHelper::FailLoadingComponent() {
   // TODO(michaelpg): Update once offline Demo Mode also uses a CrOS component.
   if (DemoSession::GetDemoConfig() == DemoSession::DemoModeConfig::kOnline) {
     CHECK(fake_cros_component_manager_->FinishLoadRequest(
-        DemoResources::kDemoModeResourcesComponentName,
+        DemoComponents::kDemoModeResourcesComponentName,
         component_updater::FakeCrOSComponentManager::ComponentInfo(
             component_updater::CrOSComponentManager::Error::INSTALL_FAILURE,
             base::FilePath(), base::FilePath())));

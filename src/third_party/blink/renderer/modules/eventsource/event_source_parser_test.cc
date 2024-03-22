@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -130,7 +130,8 @@ TEST_F(EventSourceParserTest, DispatchSimpleMessageEvent) {
 }
 
 TEST_F(EventSourceParserTest, ConstructWithLastEventId) {
-  parser_ = MakeGarbageCollected<EventSourceParser>("hoge", client_);
+  parser_ =
+      MakeGarbageCollected<EventSourceParser>(AtomicString("hoge"), client_);
   EXPECT_EQ("hoge", Parser()->LastEventId());
 
   Enqueue("data:hello\n\n");

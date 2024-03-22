@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -70,6 +70,12 @@ class NotificationUIManager {
   // Returns the set of all delegate IDs for notifications from |profile_id|.
   virtual std::set<std::string> GetAllIdsByProfile(
       ProfileNotification::ProfileID profile_id) = 0;
+
+  // Returns the set of all delegate IDs for notifications from `profile_id` and
+  // `origin`.
+  virtual std::set<std::string> GetAllIdsByProfileAndOrigin(
+      ProfileNotification::ProfileID profile_id,
+      const GURL& origin) = 0;
 
   // Removes notifications matching the |source_origin| (which could be an
   // extension ID). Returns true if anything was removed.

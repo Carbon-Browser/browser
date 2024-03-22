@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -26,6 +26,7 @@ class CORE_EXPORT CSSURLImageValue final : public CSSStyleImageValue {
   // CanvasImageSource
   ResourceStatus Status() const final;
   scoped_refptr<Image> GetSourceImageForCanvas(
+      FlushReason,
       SourceImageStatus*,
       const gfx::SizeF&,
       const AlphaDisposition alpha_disposition = kPremultiplyAlpha) final;

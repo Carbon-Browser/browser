@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -25,7 +25,6 @@
 #include "components/variations/variations_request_scheduler.h"
 #include "components/variations/variations_seed_simulator.h"
 #include "components/variations/variations_seed_store.h"
-#include "components/version_info/version_info.h"
 #include "components/web_resource/resource_request_allowed_notifier.h"
 #include "url/gurl.h"
 
@@ -35,7 +34,7 @@ class PrefRegistrySimple;
 namespace base {
 class FeatureList;
 class Version;
-}
+}  // namespace base
 
 namespace metrics {
 class MetricsStateManager;
@@ -115,6 +114,11 @@ class VariationsService
   // to |StartRepeatedVariationsSeedFetch|.
   void SetRestrictMode(const std::string& restrict_mode);
 
+  // Returns true if the restrict mode is likely that of a dogfood client, false
+  // otherwise. Note that that this might be a bit over-broad, returning true
+  // for clients that are not actually dogfooders.
+  bool IsLikelyDogfoodClient() const;
+
   // Returns the variations server URL. |http_options| determines whether to
   // use the http or https URL. This function will return an empty GURL when
   // the restrict param exists for USE_HTTP, to indicate that no HTTP fallback
@@ -123,11 +127,14 @@ class VariationsService
 
   // Returns the permanent overridden country code stored for this client. This
   // value will not be updated on Chrome updates.
-  std::string GetOverriddenPermanentCountry();
+  // Country code is in the format of lowercase ISO 3166-1 alpha-2. Example: us,
+  // br, in.
+  std::string GetOverriddenPermanentCountry() const;
 
-  // Returns the permanent country code stored for this client. Country code is
-  // in the format of lowercase ISO 3166-1 alpha-2. Example: us, br, in
-  std::string GetStoredPermanentCountry();
+  // Returns the permanent country code stored for this client.
+  // Country code is in the format of lowercase ISO 3166-1 alpha-2. Example: us,
+  // br, in.
+  std::string GetStoredPermanentCountry() const;
 
   // Forces an override of the stored permanent country. Returns true
   // if the variable has been updated. Return false if the override country is
@@ -137,6 +144,8 @@ class VariationsService
 
   // Returns what variations will consider to be the latest country. Returns
   // empty if it is not available.
+  // Country code is in the format of lowercase ISO 3166-1 alpha-2. Example: us,
+  // br, in.
   std::string GetLatestCountry() const;
 
   // Ensures the locale that was used for evaluating variations matches the
@@ -178,8 +187,9 @@ class VariationsService
     policy_pref_service_ = service;
   }
 
-  // Exposed for testing.
-  void GetClientFilterableStateForVersionCalledForTesting();
+  // Returns the ClientFilterableState, i.e., the state used to do trial
+  // filtering. Should only be used for testing and debugging purposes.
+  std::unique_ptr<ClientFilterableState> GetClientFilterableStateForVersion();
 
   web_resource::ResourceRequestAllowedNotifier*
   GetResourceRequestAllowedNotifierForTesting() {
@@ -193,7 +203,10 @@ class VariationsService
       const std::vector<base::FeatureList::FeatureOverrideInfo>&
           extra_overrides,
       std::unique_ptr<base::FeatureList> feature_list,
-      variations::PlatformFieldTrials* platform_field_trials);
+      PlatformFieldTrials* platform_field_trials);
+
+  // The seed type used.
+  SeedType GetSeedType() const;
 
   // Overrides cached UI strings on the resource bundle once it is initialized.
   void OverrideCachedUIStrings();
@@ -227,18 +240,18 @@ class VariationsService
 
   // Stores the seed to prefs. Set as virtual and protected so that it can be
   // overridden by tests.
-  virtual bool StoreSeed(const std::string& seed_data,
-                         const std::string& seed_signature,
-                         const std::string& country_code,
+  // Note: Strings are passed by value to support std::move() semantics.
+  virtual void StoreSeed(std::string seed_data,
+                         std::string seed_signature,
+                         std::string country_code,
                          base::Time date_fetched,
                          bool is_delta_compressed,
                          bool is_gzip_compressed);
 
-  // Create an entropy provider based on low entropy. This is used to create
-  // trials for studies that should only depend on low entropy, such as studies
-  // that send experiment IDs to Google web properties. Virtual for testing.
-  virtual std::unique_ptr<const base::FieldTrial::EntropyProvider>
-  CreateLowEntropyProvider();
+  // Processes the result of StoreSeed().
+  void OnSeedStoreResult(bool is_delta_compressed,
+                         bool store_success,
+                         VariationsSeed seed);
 
   // Creates the VariationsService with the given |local_state| prefs service
   // and |state_manager|. Does not take ownership of |state_manager|. Caller
@@ -314,8 +327,7 @@ class VariationsService
   void FetchVariationsSeed();
 
   // Notify any observers of this service based on the simulation |result|.
-  void NotifyObservers(
-      const variations::VariationsSeedSimulator::Result& result);
+  void NotifyObservers(const SeedSimulationResult& result);
 
   // Called by SimpleURLLoader when |pending_seed_request_| load completes.
   void OnSimpleLoaderComplete(std::unique_ptr<std::string> response_body);
@@ -330,9 +342,8 @@ class VariationsService
 
   // Performs a variations seed simulation with the given |seed| and |version|
   // and logs the simulation results as histograms.
-  void PerformSimulationWithVersion(
-      std::unique_ptr<variations::VariationsSeed> seed,
-      const base::Version& version);
+  void PerformSimulationWithVersion(const VariationsSeed& seed,
+                                    const base::Version& version);
 
   // Encrypts a string using the encrypted_messages component, input is passed
   // in as |plaintext|, outputs a serialized EncryptedMessage protobuf as

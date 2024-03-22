@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -100,7 +100,7 @@ class CachedImageFetcher : public ImageFetcher {
                  std::string image_data);
 
   // Owned by ImageFetcherService.
-  raw_ptr<ImageFetcher> image_fetcher_;
+  raw_ptr<ImageFetcher, DanglingUntriaged> image_fetcher_;
   scoped_refptr<ImageCache> image_cache_;
 
   // Whether the ImageCache is allowed to be modified in any way from requests

@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -94,9 +94,10 @@ void RenderViewContextMenuMac::AppendPlatformEditableItems() {
 }
 
 void RenderViewContextMenuMac::InitToolkitMenu() {
-  if (params_.input_field_type ==
-      blink::mojom::ContextMenuDataInputFieldType::kPassword)
+  if (params_.form_control_type ==
+      blink::mojom::FormControlType::kInputPassword) {
     return;
+  }
 
   if (!params_.selection_text.empty() && params_.link_url.is_empty()) {
     // In case the user has selected a word that triggers spelling suggestions,

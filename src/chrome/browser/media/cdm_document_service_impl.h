@@ -1,13 +1,14 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CHROME_BROWSER_MEDIA_CDM_DOCUMENT_SERVICE_IMPL_H_
 #define CHROME_BROWSER_MEDIA_CDM_DOCUMENT_SERVICE_IMPL_H_
 
+#include <set>
 #include <string>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
 #include "build/build_config.h"
@@ -52,7 +53,7 @@ class CdmDocumentServiceImpl final
   void GetMediaFoundationCdmData(
       GetMediaFoundationCdmDataCallback callback) final;
   void SetCdmClientToken(const std::vector<uint8_t>& client_token) final;
-  void OnCdmEvent(media::CdmEvent event) final;
+  void OnCdmEvent(media::CdmEvent event, uint32_t hresult) final;
 
   static void ClearCdmData(
       Profile* profile,
@@ -96,8 +97,7 @@ class CdmDocumentServiceImpl final
 
 #if BUILDFLAG(IS_WIN)
   // See comments in OnCdmEvent() implementation.
-  bool has_reported_cdm_error_ = false;
-  bool has_reported_significant_playback_ = false;
+  std::set<media::CdmEvent> reported_cdm_event_;
 #endif
 
   base::WeakPtrFactory<CdmDocumentServiceImpl> weak_factory_{this};

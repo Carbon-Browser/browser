@@ -1,58 +1,29 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 import {Destination, DestinationErrorType, DestinationOrigin, DestinationState, DestinationStoreEventType, Error, GooglePromotedDestinationId, LocalDestinationInfo, makeRecentDestination, NativeLayerImpl, NUM_PERSISTED_DESTINATIONS, PrintPreviewDestinationSettingsElement, RecentDestination, State} from 'chrome://print/print_preview.js';
-import {assert} from 'chrome://resources/js/assert.m.js';
+import {assert} from 'chrome://resources/js/assert.js';
 import {flush} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 import {assertEquals, assertFalse, assertTrue} from 'chrome://webui-test/chai_assert.js';
-import {eventToPromise, fakeDataBind, waitBeforeNextRender} from 'chrome://webui-test/test_util.js';
+import {fakeDataBind, waitBeforeNextRender} from 'chrome://webui-test/polymer_test_util.js';
+import {eventToPromise} from 'chrome://webui-test/test_util.js';
 
-// <if expr="chromeos_ash or chromeos_lacros">
+// clang-format off
+// <if expr="is_chromeos">
 import {NativeLayerCrosStub, setNativeLayerCrosInstance} from './native_layer_cros_stub.js';
+import {getGoogleDriveDestination} from './print_preview_test_utils.js';
 // </if>
 import {NativeLayerStub} from './native_layer_stub.js';
 import {getDestinations, getSaveAsPdfDestination, setupTestListenerElement} from './print_preview_test_utils.js';
-// <if expr="chromeos_ash or chromeos_lacros">
-import {getGoogleDriveDestination} from './print_preview_test_utils.js';
-// </if>
+// clang-format on
 
-const destination_settings_test = {
-  suiteName: 'DestinationSettingsTest',
-  TestNames: {
-    ChangeDropdownState: 'change dropdown state',
-    NoRecentDestinations: 'no recent destinations',
-    RecentDestinations: 'recent destinations',
-    RecentDestinationsMissing: 'recent destinations missing',
-    SaveAsPdfRecent: 'save as pdf recent',
-    // <if expr="chromeos_ash or chromeos_lacros">
-    GoogleDriveRecent: 'google drive recent',
-    GoogleDriveAutoselect: 'google drive autoselect',
-    // </if>
-    SelectSaveAsPdf: 'select save as pdf',
-    // <if expr="chromeos_ash or chromeos_lacros">
-    SelectGoogleDrive: 'select google drive',
-    // </if>
-    SelectRecentDestination: 'select recent destination',
-    OpenDialog: 'open dialog',
-    UpdateRecentDestinations: 'update recent destinations',
-    DisabledSaveAsPdf: 'disabled save as pdf',
-    NoDestinations: 'no destinations',
-    // <if expr="chromeos_ash or chromeos_lacros">
-    EulaIsRetrieved: 'eula is retrieved',
-    DriveIsNotMounted: 'drive is not mounted',
-    // </if>
-  },
-};
-
-Object.assign(window, {destination_settings_test: destination_settings_test});
-
-suite(destination_settings_test.suiteName, function() {
+suite('DestinationSettingsTest', function() {
   let destinationSettings: PrintPreviewDestinationSettingsElement;
 
   let nativeLayer: NativeLayerStub;
 
-  // <if expr="chromeos_ash or chromeos_lacros">
+  // <if expr="is_chromeos">
   let nativeLayerCros: NativeLayerCrosStub;
   // </if>
 
@@ -66,9 +37,9 @@ suite(destination_settings_test.suiteName, function() {
 
   let pdfPrinterDisabled: boolean = false;
 
-  let isDriveMounted: boolean = true;
+  let saveToDriveDisabled: boolean = false;
 
-  // <if expr="chromeos_ash or chromeos_lacros">
+  // <if expr="is_chromeos">
   const driveDestinationKey: string = 'Save to Drive CrOS/local/';
   // </if>
 
@@ -77,12 +48,12 @@ suite(destination_settings_test.suiteName, function() {
   });
 
   setup(function() {
-    document.body.innerHTML = '';
+    document.body.innerHTML = window.trustedTypes!.emptyHTML;
 
     // Stub out native layer.
     nativeLayer = new NativeLayerStub();
     NativeLayerImpl.setInstance(nativeLayer);
-    // <if expr="chromeos_ash or chromeos_lacros">
+    // <if expr="is_chromeos">
     nativeLayerCros = setNativeLayerCrosInstance();
     // </if>
     localDestinations = [];
@@ -111,8 +82,7 @@ suite(destination_settings_test.suiteName, function() {
   // Tests that the dropdown is enabled or disabled correctly based on
   // the state.
   test(
-      assert(destination_settings_test.TestNames.ChangeDropdownState),
-      function() {
+      'ChangeDropdownState', function() {
         const dropdown = destinationSettings.$.destinationSelect;
         // Initial state: No destination store means that there is no
         // destination yet.
@@ -122,7 +92,7 @@ suite(destination_settings_test.suiteName, function() {
         // still not loaded.
         destinationSettings.init(
             'FooDevice' /* printerName */, false /* pdfPrinterDisabled */,
-            isDriveMounted,
+            saveToDriveDisabled,
             '' /* serializedDefaultDestinationSelectionRulesStr */);
         assertFalse(dropdown.loaded);
 
@@ -181,15 +151,15 @@ suite(destination_settings_test.suiteName, function() {
       });
 
   function getLocalOrigin(): DestinationOrigin {
-    // <if expr="chromeos_ash or chromeos_lacros">
+    // <if expr="is_chromeos">
     return DestinationOrigin.CROS;
     // </if>
-    // <if expr="not chromeos_ash and not chromeos_lacros">
+    // <if expr="not is_chromeos">
     return DestinationOrigin.LOCAL;
     // </if>
   }
 
-  // <if expr="chromeos_ash or chromeos_lacros">
+  // <if expr="is_chromeos">
   function assertGoogleDrive() {
     assertEquals(
         GooglePromotedDestinationId.SAVE_TO_DRIVE_CROS,
@@ -205,7 +175,7 @@ suite(destination_settings_test.suiteName, function() {
     // Initialize destination settings.
     destinationSettings.setSetting('recentDestinations', recentDestinations);
     destinationSettings.init(
-        '' /* printerName */, pdfPrinterDisabled, isDriveMounted,
+        '' /* printerName */, pdfPrinterDisabled, saveToDriveDisabled,
         '' /* serializedDefaultDestinationSelectionRulesStr */);
     destinationSettings.state = State.READY;
     destinationSettings.disabled = false;
@@ -237,8 +207,7 @@ suite(destination_settings_test.suiteName, function() {
   // Tests that the dropdown contains the appropriate destinations when there
   // are no recent destinations.
   test(
-      assert(destination_settings_test.TestNames.NoRecentDestinations),
-      function() {
+      'NoRecentDestinations', function() {
         initialize();
         return nativeLayer.whenCalled('getPrinterCapabilities').then(() => {
           // This will result in the destination store setting the Save as
@@ -249,7 +218,7 @@ suite(destination_settings_test.suiteName, function() {
           assertFalse(destinationSettings.$.destinationSelect.disabled);
           const dropdownItems = [
             'Save as PDF/local/',
-            // <if expr="chromeos_ash or chromeos_lacros">
+            // <if expr="is_chromeos">
             driveDestinationKey,
             // </if>
           ];
@@ -260,8 +229,7 @@ suite(destination_settings_test.suiteName, function() {
   // Tests that the dropdown contains the appropriate destinations when there
   // are 5 recent destinations.
   test(
-      assert(destination_settings_test.TestNames.RecentDestinations),
-      function() {
+      'RecentDestinations', function() {
         recentDestinations = destinations.slice(0, 5).map(
             destination => makeRecentDestination(destination));
 
@@ -282,7 +250,7 @@ suite(destination_settings_test.suiteName, function() {
               const dropdownItems = [
                 makeLocalDestinationKey('ID1'), makeLocalDestinationKey('ID2'),
                 makeLocalDestinationKey('ID3'), 'Save as PDF/local/',
-                // <if expr="chromeos_ash or chromeos_lacros">
+                // <if expr="is_chromeos">
                 driveDestinationKey,
                 // </if>
               ];
@@ -293,8 +261,7 @@ suite(destination_settings_test.suiteName, function() {
   // Tests that the dropdown contains the appropriate destinations when one of
   // the destinations can no longer be found.
   test(
-      assert(destination_settings_test.TestNames.RecentDestinationsMissing),
-      function() {
+      'RecentDestinationsMissing', function() {
         recentDestinations = destinations.slice(0, 5).map(
             destination => makeRecentDestination(destination));
         localDestinations.splice(1, 1);
@@ -317,7 +284,7 @@ suite(destination_settings_test.suiteName, function() {
               const dropdownItems = [
                 makeLocalDestinationKey('ID1'), makeLocalDestinationKey('ID3'),
                 'Save as PDF/local/',
-                // <if expr="chromeos_ash or chromeos_lacros">
+                // <if expr="is_chromeos">
                 driveDestinationKey,
                 // </if>
               ];
@@ -327,7 +294,7 @@ suite(destination_settings_test.suiteName, function() {
 
   // Tests that the dropdown contains the appropriate destinations when Save
   // as PDF is one of the recent destinations.
-  test(assert(destination_settings_test.TestNames.SaveAsPdfRecent), function() {
+  test('SaveAsPdfRecent', function() {
     recentDestinations = destinations.slice(0, 5).map(
         destination => makeRecentDestination(destination));
     recentDestinations.splice(
@@ -348,7 +315,7 @@ suite(destination_settings_test.suiteName, function() {
           const dropdownItems = [
             makeLocalDestinationKey('ID1'), makeLocalDestinationKey('ID3'),
             makeLocalDestinationKey('ID4'), 'Save as PDF/local/',
-            // <if expr="chromeos_ash or chromeos_lacros">
+            // <if expr="is_chromeos">
             driveDestinationKey,
             // </if>
           ];
@@ -356,12 +323,11 @@ suite(destination_settings_test.suiteName, function() {
         });
   });
 
-  // <if expr="chromeos_ash or chromeos_lacros">
+  // <if expr="is_chromeos">
   // Tests that the dropdown contains the appropriate destinations when
   // Google Drive is in the recent destinations.
   test(
-      assert(destination_settings_test.TestNames.GoogleDriveRecent),
-      function() {
+      'GoogleDriveRecent', function() {
         recentDestinations = destinations.slice(0, 5).map(
             destination => makeRecentDestination(destination));
         const driveDestination = getGoogleDriveDestination();
@@ -396,8 +362,7 @@ suite(destination_settings_test.suiteName, function() {
   // correctly when Google Drive is the most recent destination. Regression test
   // for https://crbug.com/1038645.
   test(
-      assert(destination_settings_test.TestNames.GoogleDriveAutoselect),
-      function() {
+      'GoogleDriveAutoselect', function() {
         recentDestinations = destinations.slice(0, 5).map(
             destination => makeRecentDestination(destination));
         recentDestinations.splice(
@@ -432,7 +397,7 @@ suite(destination_settings_test.suiteName, function() {
   // Tests that selecting the Save as PDF destination results in the
   // DESTINATION_SELECT event firing, with Save as PDF set as the current
   // destination.
-  test(assert(destination_settings_test.TestNames.SelectSaveAsPdf), function() {
+  test('SelectSaveAsPdf', function() {
     recentDestinations = destinations.slice(0, 5).map(
         destination => makeRecentDestination(destination));
     recentDestinations.splice(
@@ -455,7 +420,7 @@ suite(destination_settings_test.suiteName, function() {
           const dropdownItems = [
             makeLocalDestinationKey('ID1'), makeLocalDestinationKey('ID3'),
             makeLocalDestinationKey('ID4'), 'Save as PDF/local/',
-            // <if expr="chromeos_ash or chromeos_lacros">
+            // <if expr="is_chromeos">
             driveDestinationKey,
             // </if>
           ];
@@ -481,13 +446,12 @@ suite(destination_settings_test.suiteName, function() {
         });
   });
 
-  // <if expr="chromeos_ash or chromeos_lacros">
+  // <if expr="is_chromeos">
   // Tests that selecting the Google Drive destination results in the
   // DESTINATION_SELECT event firing, with Google Drive set as the current
   // destination.
   test(
-      assert(destination_settings_test.TestNames.SelectGoogleDrive),
-      function() {
+      'SelectGoogleDrive', function() {
         recentDestinations = destinations.slice(0, 5).map(
             destination => makeRecentDestination(destination));
         recentDestinations.splice(
@@ -536,8 +500,7 @@ suite(destination_settings_test.suiteName, function() {
   // DESTINATION_SELECT event firing, with the recent destination set as the
   // current destination.
   test(
-      assert(destination_settings_test.TestNames.SelectRecentDestination),
-      function() {
+      'SelectRecentDestination', function() {
         recentDestinations = destinations.slice(0, 5).map(
             destination => makeRecentDestination(destination));
         const whenCapabilitiesDone =
@@ -557,7 +520,7 @@ suite(destination_settings_test.suiteName, function() {
               const dropdownItems = [
                 makeLocalDestinationKey('ID1'), makeLocalDestinationKey('ID2'),
                 makeLocalDestinationKey('ID3'), 'Save as PDF/local/',
-                // <if expr="chromeos_ash or chromeos_lacros">
+                // <if expr="is_chromeos">
                 driveDestinationKey,
                 // </if>
               ];
@@ -580,7 +543,7 @@ suite(destination_settings_test.suiteName, function() {
       });
 
   // Tests that selecting the 'see more' option opens the dialog.
-  test(assert(destination_settings_test.TestNames.OpenDialog), function() {
+  test('OpenDialog', function() {
     recentDestinations = destinations.slice(0, 5).map(
         destination => makeRecentDestination(destination));
     const whenCapabilitiesDone =
@@ -600,7 +563,7 @@ suite(destination_settings_test.suiteName, function() {
           const dropdownItems = [
             makeLocalDestinationKey('ID1'), makeLocalDestinationKey('ID2'),
             makeLocalDestinationKey('ID3'), 'Save as PDF/local/',
-            // <if expr="chromeos_ash or chromeos_lacros">
+            // <if expr="is_chromeos">
             driveDestinationKey,
             // </if>
           ];
@@ -633,8 +596,9 @@ suite(destination_settings_test.suiteName, function() {
     const storeDestination =
         destinationSettings.getDestinationStoreForTest().destinations().find(
             d => d.key === destination.key);
+    assert(storeDestination);
     destinationSettings.getDestinationStoreForTest().selectDestination(
-        assert(storeDestination!));
+        storeDestination);
     flush();
   }
 
@@ -643,8 +607,7 @@ suite(destination_settings_test.suiteName, function() {
    * destinations array.
    */
   test(
-      assert(destination_settings_test.TestNames.UpdateRecentDestinations),
-      function() {
+      'UpdateRecentDestinations', function() {
         // Recent destinations start out empty.
         assertRecentDestinations([]);
         assertEquals(0, nativeLayer.getCallCount('getPrinterCapabilities'));
@@ -721,8 +684,7 @@ suite(destination_settings_test.suiteName, function() {
   // Tests that disabling the Save as PDF destination hides the corresponding
   // dropdown item.
   test(
-      assert(destination_settings_test.TestNames.DisabledSaveAsPdf),
-      function() {
+      'DisabledSaveAsPdf', function() {
         // Initialize destination settings with the PDF printer disabled.
         pdfPrinterDisabled = true;
         initialize();
@@ -735,10 +697,10 @@ suite(destination_settings_test.suiteName, function() {
               // Because the 'Save as PDF' fallback is unavailable, the first
               // destination is selected.
               const expectedDestination =
-                  // <if expr="chromeos_ash or chromeos_lacros">
+                  // <if expr="is_chromeos">
                   'Save to Drive CrOS/local/';
               // </if>
-              // <if expr="not chromeos_ash and not chromeos_lacros">
+              // <if expr="not is_chromeos">
               makeLocalDestinationKey('ID1');
               // </if>
               assertDropdownItems([expectedDestination]);
@@ -748,12 +710,12 @@ suite(destination_settings_test.suiteName, function() {
   // Tests that disabling the 'Save as PDF' destination and exposing no
   // printers to the native layer results in a 'No destinations' option in the
   // dropdown.
-  test(assert(destination_settings_test.TestNames.NoDestinations), function() {
+  test('NoDestinations', function() {
     nativeLayer.setLocalDestinations([]);
 
     // Initialize destination settings with the PDF printer disabled.
     pdfPrinterDisabled = true;
-    isDriveMounted = false;
+    saveToDriveDisabled = true;
     initialize();
 
     // 'getPrinters' will be called because there are no printers known to
@@ -769,12 +731,12 @@ suite(destination_settings_test.suiteName, function() {
         .then(() => assertDropdownItems(['noDestinations']));
   });
 
-  // <if expr="chromeos_ash or chromeos_lacros">
+  // <if expr="is_chromeos">
   /**
    * Tests that destinations with a EULA will fetch the EULA URL when
    * selected.
    */
-  test(assert(destination_settings_test.TestNames.EulaIsRetrieved), function() {
+  test('EulaIsRetrieved', function() {
     // Recent destinations start out empty.
     assertRecentDestinations([]);
 
@@ -839,9 +801,8 @@ suite(destination_settings_test.suiteName, function() {
   // Tests that disabling Google Drive on Chrome OS hides the Save to Drive
   // destination.
   test(
-      assert(destination_settings_test.TestNames.DriveIsNotMounted),
-      function() {
-        isDriveMounted = false;
+      'SaveToDriveDisabled', function() {
+        saveToDriveDisabled = true;
         initialize();
 
         return nativeLayer.whenCalled('getPrinterCapabilities')

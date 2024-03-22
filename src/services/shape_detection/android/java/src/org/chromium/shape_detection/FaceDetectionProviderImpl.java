@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,9 +12,7 @@ import org.chromium.shape_detection.mojom.FaceDetection;
 import org.chromium.shape_detection.mojom.FaceDetectionProvider;
 import org.chromium.shape_detection.mojom.FaceDetectorOptions;
 
-/**
- * Service provider to create FaceDetection services
- */
+/** Service provider to create FaceDetection services */
 public class FaceDetectionProviderImpl implements FaceDetectionProvider {
     public FaceDetectionProviderImpl() {}
 

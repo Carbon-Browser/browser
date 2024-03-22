@@ -1,96 +1,48 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/ui/ash/shelf/chrome_shelf_controller_util.h"
 
+#include "ash/constants/ash_features.h"
 #include "ash/public/cpp/shelf_item_delegate.h"
 #include "ash/public/cpp/shelf_model.h"
 #include "base/containers/contains.h"
+#include "base/ranges/algorithm.h"
 #include "chrome/browser/apps/app_service/app_service_proxy.h"
 #include "chrome/browser/apps/app_service/app_service_proxy_factory.h"
+#include "chrome/browser/apps/app_service/policy_util.h"
+#include "chrome/browser/apps/app_service/promise_apps/promise_app.h"
+#include "chrome/browser/apps/app_service/promise_apps/promise_app_registry_cache.h"
+#include "chrome/browser/ash/app_list/app_list_controller_delegate.h"
+#include "chrome/browser/ash/app_list/arc/arc_app_list_prefs.h"
+#include "chrome/browser/ash/app_list/arc/arc_app_utils.h"
+#include "chrome/browser/ash/app_list/extension_app_utils.h"
 #include "chrome/browser/ash/eche_app/app_id.h"
 #include "chrome/browser/ash/file_manager/app_id.h"
 #include "chrome/browser/ash/login/demo_mode/demo_session.h"
 #include "chrome/browser/profiles/profile.h"
-#include "chrome/browser/ui/app_list/arc/arc_app_list_prefs.h"
-#include "chrome/browser/ui/app_list/arc/arc_app_utils.h"
-#include "chrome/browser/ui/app_list/extension_app_utils.h"
+#include "chrome/browser/scalable_iph/scalable_iph_factory.h"
 #include "chrome/browser/ui/ash/multi_user/multi_user_util.h"
 #include "chrome/browser/ui/ash/multi_user/multi_user_window_manager_helper.h"
+#include "chrome/browser/ui/ash/shelf/arc_app_shelf_id.h"
 #include "chrome/browser/ui/ash/shelf/chrome_shelf_controller.h"
 #include "chrome/browser/ui/ash/shelf/chrome_shelf_item_factory.h"
 #include "chrome/browser/ui/ash/shelf/chrome_shelf_prefs.h"
+#include "chrome/browser/ui/ash/shelf/shelf_controller_helper.h"
 #include "chrome/browser/ui/browser.h"
 #include "chrome/browser/web_applications/policy/web_app_policy_manager.h"
 #include "chrome/browser/web_applications/web_app_constants.h"
 #include "chrome/browser/web_applications/web_app_helpers.h"
-#include "chrome/browser/web_applications/web_app_id.h"
 #include "chrome/browser/web_applications/web_app_provider.h"
 #include "chrome/browser/web_applications/web_app_utils.h"
 #include "chrome/common/pref_names.h"
+#include "chromeos/ash/components/scalable_iph/scalable_iph.h"
 #include "components/prefs/pref_service.h"
-#include "components/services/app_service/public/cpp/app_types.h"
+#include "components/webapps/common/web_app_id.h"
 #include "extensions/browser/extension_registry.h"
 #include "extensions/common/constants.h"
 #include "extensions/common/extension.h"
-
-namespace {
-
-// The PinnedLauncherApps policy allows specifying three types of identifiers:
-// Chrome App Ids, Android App package names, and Web App install URLs. This
-// method returns the value that would have been used in the policy to pin an
-// app with |app_id|.
-//
-// Web App Example:
-// Admin installs a Web App using "https://foo.example" as the install URL.
-// Chrome generates an app id based on the URL e.g. "abc123". Calling
-// GetPolicyValueFromAppId() with "abc123" will return "https://foo.example",
-// which is the value that would be specified in the PinnedLauncherApps policy
-// to pin this Web App.
-//
-// Arc++ Example:
-// Admin installs an Android App with package name "com.example.foo". Chrome
-// generates an app id based on the package e.g. "123abc". Calling
-// GetPolicyValueFromAppId() with "123abc" will return "com.example.foo", which
-// is the value that would be specified in the PinnedLauncherApps policy to
-// pin this Android App.
-//
-// Chrome App Example:
-// Admin installs a Chrome App with "aaa111" as its app id. Calling
-// GetPolicyValueFromAppId() with "aaa111" will return "aaa111", which is the
-// value that would be specified in the PinnedLauncherApps policy to pin this
-// Chrome App.
-std::string GetPolicyValueFromAppId(const std::string& app_id,
-                                    Profile* profile) {
-  // Handle App Service apps (eg. web apps).
-  //
-  // App Service is absent in some cases e.g. Arc++ Kiosk Mode.
-  if (apps::AppServiceProxyFactory::IsAppServiceAvailableForProfile(profile)) {
-    std::string policy_id;
-    apps::AppServiceProxyFactory::GetForProfile(profile)
-        ->AppRegistryCache()
-        .ForOneApp(app_id, [&policy_id](const apps::AppUpdate& update) {
-          policy_id = update.PolicyId();
-        });
-    if (!policy_id.empty())
-      return policy_id;
-  }
-
-  // Handle Arc++ ids
-  const ArcAppListPrefs* const arc_prefs = ArcAppListPrefs::Get(profile);
-  if (arc_prefs) {
-    std::unique_ptr<ArcAppListPrefs::AppInfo> app_info =
-        arc_prefs->GetApp(app_id);
-    if (app_info)
-      return app_info->package_name;
-  }
-
-  // Handle Chrome App ids
-  return app_id;
-}
-
-}  // namespace
 
 const extensions::Extension* GetExtensionForAppID(const std::string& app_id,
                                                   Profile* profile) {
@@ -106,24 +58,28 @@ AppListControllerDelegate::Pinnable GetPinnableForAppID(
   // Eche application need context when launching. Pinning these creates an
   // item that does nothing.
   const char* kNoPinAppIds[] = {
-      file_manager::kAudioPlayerAppId,
       ash::eche_app::kEcheAppId,
   };
   if (base::Contains(kNoPinAppIds, app_id))
     return AppListControllerDelegate::NO_PIN;
 
-  const std::string policy_value_for_id =
-      GetPolicyValueFromAppId(app_id, profile);
-  const GURL policy_value_gurl(policy_value_for_id);
+  const absl::optional<std::vector<std::string>> policy_ids =
+      apps_util::GetPolicyIdsFromAppId(profile, app_id);
+
+  if (!policy_ids || policy_ids->empty()) {
+    return AppListControllerDelegate::PIN_EDITABLE;
+  }
 
   if (ash::DemoSession::Get() &&
-      !ash::DemoSession::Get()->ShouldShowAndroidOrChromeAppInShelf(
-          policy_value_for_id)) {
+      base::ranges::none_of(*policy_ids, [](const auto& policy_id) {
+        return ash::DemoSession::Get()->ShouldShowAndroidOrChromeAppInShelf(
+            policy_id);
+      })) {
     return AppListControllerDelegate::PIN_EDITABLE;
   }
 
   const base::Value::List& policy_apps =
-      profile->GetPrefs()->GetValueList(prefs::kPolicyPinnedLauncherApps);
+      profile->GetPrefs()->GetList(prefs::kPolicyPinnedLauncherApps);
 
   for (const base::Value& policy_dict_entry : policy_apps) {
     if (!policy_dict_entry.is_dict())
@@ -134,19 +90,111 @@ AppListControllerDelegate::Pinnable GetPinnableForAppID(
     if (!policy_entry)
       return AppListControllerDelegate::PIN_EDITABLE;
 
-    if (policy_value_for_id == *policy_entry)
-      return AppListControllerDelegate::PIN_FIXED;
-
-    // For web apps, the string equality might not be perfect since
-    // policy_value_for_id was stored as GURL and converted back.
-    // For example, example.org vs. example.org/
-    if (policy_value_gurl.is_valid() &&
-        policy_value_gurl.EqualsIgnoringRef(GURL(*policy_entry))) {
+    if (base::Contains(*policy_ids,
+                       apps_util::TransformRawPolicyId(*policy_entry))) {
       return AppListControllerDelegate::PIN_FIXED;
     }
   }
 
   return AppListControllerDelegate::PIN_EDITABLE;
+}
+
+bool IsAppHiddenFromShelf(Profile* profile, const std::string& app_id) {
+  if (!apps::AppServiceProxyFactory::IsAppServiceAvailableForProfile(profile)) {
+    return false;
+  }
+
+  bool hidden = false;
+  apps::AppServiceProxyFactory::GetForProfile(profile)
+      ->AppRegistryCache()
+      .ForOneApp(app_id, [&hidden](const apps::AppUpdate& update) {
+        hidden = !update.ShowInShelf().value_or(true);
+      });
+
+  return hidden;
+}
+
+bool IsPromiseAppReadyToShowInShelf(Profile* profile,
+                                    const std::string& promise_package_id) {
+  if (!ash::features::ArePromiseIconsEnabled()) {
+    return false;
+  }
+  CHECK(apps::AppServiceProxyFactory::IsAppServiceAvailableForProfile(profile));
+  const apps::PromiseApp* promise_app =
+      apps::AppServiceProxyFactory::GetForProfile(profile)
+          ->PromiseAppRegistryCache()
+          ->GetPromiseAppForStringPackageId(promise_package_id);
+  return promise_app && promise_app->should_show.value_or(false);
+}
+
+bool IsAppPinEditable(apps::AppType app_type,
+                      const std::string& app_id,
+                      Profile* profile) {
+  if (ash::features::ArePromiseIconsEnabled() &&
+      apps::AppServiceProxyFactory::GetForProfile(profile)
+          ->PromiseAppRegistryCache()
+          ->GetPromiseAppForStringPackageId(app_id)) {
+    return true;
+  }
+
+  if (ShelfControllerHelper::IsAppServiceShortcut(profile, app_id)) {
+    return true;
+  }
+
+  if (IsAppHiddenFromShelf(profile, app_id)) {
+    return false;
+  }
+
+  switch (app_type) {
+    case apps::AppType::kArc: {
+      const arc::ArcAppShelfId& arc_shelf_id =
+          arc::ArcAppShelfId::FromString(app_id);
+      DCHECK(arc_shelf_id.valid());
+      const ArcAppListPrefs* arc_list_prefs = ArcAppListPrefs::Get(profile);
+      DCHECK(arc_list_prefs);
+      std::unique_ptr<ArcAppListPrefs::AppInfo> app_info =
+          arc_list_prefs->GetApp(arc_shelf_id.app_id());
+      if (!arc_shelf_id.has_shelf_group_id() && app_info &&
+          app_info->launchable) {
+        return true;
+      }
+      return false;
+    }
+    case apps::AppType::kPluginVm:
+    case apps::AppType::kBuiltIn: {
+      bool show_in_launcher = false;
+      apps::AppServiceProxyFactory::GetForProfile(profile)
+          ->AppRegistryCache()
+          .ForOneApp(
+              app_id, [&show_in_launcher](const apps::AppUpdate& update) {
+                show_in_launcher = update.ShowInLauncher().value_or(false);
+              });
+      return show_in_launcher;
+    }
+    case apps::AppType::kCrostini:
+    case apps::AppType::kBorealis:
+    case apps::AppType::kChromeApp:
+    case apps::AppType::kWeb:
+    case apps::AppType::kSystemWeb:
+    case apps::AppType::kStandaloneBrowserChromeApp:
+      return true;
+    case apps::AppType::kStandaloneBrowser:
+      // Lacros behaves like the Chrome browser icon and cannot be unpinned.
+      return false;
+    case apps::AppType::kUnknown:
+      // Type kUnknown is used for "unregistered" Crostini apps, which do not
+      // have a .desktop file and can only be closed, not pinned.
+      return false;
+    case apps::AppType::kMacOs:
+    case apps::AppType::kRemote:
+    case apps::AppType::kExtension:
+    case apps::AppType::kStandaloneBrowserExtension:
+      NOTREACHED() << "Type " << (int)app_type
+                   << " should not appear in shelf.";
+      return false;
+    case apps::AppType::kBruschetta:
+      return true;
+  }
 }
 
 bool IsBrowserRepresentedInBrowserList(Browser* browser,
@@ -178,10 +226,6 @@ void PinAppWithIDToShelf(const std::string& app_id) {
 void UnpinAppWithIDFromShelf(const std::string& app_id) {
   auto* shelf_controller = ChromeShelfController::instance();
   shelf_controller->shelf_model()->UnpinAppWithID(app_id);
-}
-
-bool IsAppWithIDPinnedToShelf(const std::string& app_id) {
-  return ChromeShelfController::instance()->shelf_model()->IsAppPinned(app_id);
 }
 
 apps::LaunchSource ShelfLaunchSourceToAppsLaunchSource(
@@ -227,4 +271,21 @@ bool BrowserAppShelfControllerShouldHandleApp(const std::string& app_id,
     default:
       return false;
   }
+}
+
+void MaybeRecordAppLaunchForScalableIph(const std::string& app_id,
+                                        Profile* profile,
+                                        ash::ShelfLaunchSource source) {
+  // Launches from app list is covered in `AppListClientImpl::ActivateItem`.
+  if (source != ash::ShelfLaunchSource::LAUNCH_FROM_SHELF) {
+    return;
+  }
+
+  scalable_iph::ScalableIph* scalable_iph =
+      ScalableIphFactory::GetForBrowserContext(profile);
+  if (!scalable_iph) {
+    return;
+  }
+
+  scalable_iph->MaybeRecordShelfItemActivationById(app_id);
 }

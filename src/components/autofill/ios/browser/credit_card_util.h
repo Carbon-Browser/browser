@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -18,7 +18,7 @@ NSString* GetCreditCardName(const CreditCard& credit_card,
                             const std::string& locale);
 
 // Returns |credit_card| card identifier string as an autoreleased NSString.
-NSString* GetCreditCardIdentifierString(const CreditCard& credit_card);
+NSString* GetCreditCardNameAndLastFourDigits(const CreditCard& credit_card);
 
 // Returns |credit_card| nickname string as an autoreleased NSString.
 NSString* GetCreditCardNicknameString(const CreditCard& credit_card);

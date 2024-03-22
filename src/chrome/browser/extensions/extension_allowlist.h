@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -70,7 +70,7 @@ class ExtensionAllowlist : private ExtensionPrefsObserver {
 
   // Performs action based on Omaha attributes for the extension.
   void PerformActionBasedOnOmahaAttributes(const std::string& extension_id,
-                                           const base::Value& attributes);
+                                           const base::Value::Dict& attributes);
 
   // Whether a warning should be displayed for an extension, `true` if the
   // extension is not allowlisted and the allowlist is enforced.

@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,11 +6,10 @@
 
 #include <stddef.h>
 
-#include <algorithm>
-
 #include "base/check_op.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
+#include "base/i18n/char_iterator.h"
 #include "base/ranges/algorithm.h"
 #include "base/strings/escape.h"
 #include "base/strings/string_number_conversions.h"
@@ -40,6 +39,7 @@ const char kChromeUIScheme[] = "chrome";
 const char kDevToolsScheme[] = "devtools";
 const char kChromeUIDefaultHost[] = "version";
 const char kViewSourceScheme[] = "view-source";
+const size_t kMaxFixupURLDepth = 16;
 
 // TODO(estade): Remove these ugly, ugly functions. They are only used in
 // SegmentURL. A url::Parsed object keeps track of a bunch of indices into
@@ -290,7 +290,7 @@ void FixupHost(const std::string& text,
 void FixupPort(const std::string& text,
                const url::Component& part,
                std::string* url) {
-  if (!part.is_nonempty())
+  if (part.is_empty())
     return;
 
   // We don't fix up the port at the moment.
@@ -301,7 +301,7 @@ void FixupPort(const std::string& text,
 inline void FixupPath(const std::string& text,
                       const url::Component& part,
                       std::string* url) {
-  if (!part.is_nonempty()) {
+  if (part.is_empty()) {
     // We should always have a path.
     url->append("/");
     return;
@@ -336,11 +336,16 @@ inline void FixupRef(const std::string& text,
 bool HasPort(const std::string& original_text,
              const url::Component& scheme_component) {
   // Find the range between the ":" and the "/" and remember it in |port_piece|.
+  //
+  // TODO(crbug.com/1416006): Stop parsing URLs manually once non-special URLs
+  // are correctly supported.
   size_t port_start = scheme_component.end() + 1;
   size_t port_end = port_start;
   while ((port_end < original_text.length()) &&
-         !url::IsAuthorityTerminator(original_text[port_end]))
+         !url::IsAuthorityTerminator(original_text[port_end],
+                                     url::ParserMode::kSpecialURL)) {
     ++port_end;
+  }
   base::StringPiece port_piece(original_text.data() + port_start,
                                port_end - port_start);
   if (port_piece.empty())
@@ -352,8 +357,7 @@ bool HasPort(const std::string& original_text,
   //
   // https://url.spec.whatwg.org/#url-port-string says that "A URL-port string
   // must be zero or more ASCII digits".
-  if (!std::all_of(port_piece.begin(), port_piece.end(),
-                   base::IsAsciiDigit<char>)) {
+  if (!base::ranges::all_of(port_piece, base::IsAsciiDigit<char>)) {
     return false;
   }
 
@@ -491,10 +495,13 @@ std::string SegmentURLInternal(std::string* text, url::Parsed* parts) {
 
   // We need to add a scheme in order for ParseStandardURL to be happy.
   // Find the first non-whitespace character.
-  std::string::iterator first_nonwhite = text->begin();
-  while ((first_nonwhite != text->end()) &&
-         base::IsUnicodeWhitespace(*first_nonwhite))
-    ++first_nonwhite;
+  std::string::iterator first_nonwhite = text->end();
+  for (base::i18n::UTF8CharIterator iter(*text); !iter.end(); iter.Advance()) {
+    if (!base::IsUnicodeWhitespace(iter.get())) {
+      first_nonwhite = text->begin() + iter.array_pos();
+      break;
+    }
+  }
 
   // Construct the text to parse by inserting the scheme.
   std::string inserted_text(scheme);
@@ -539,7 +546,13 @@ std::u16string SegmentURL(const std::u16string& text, url::Parsed* parts) {
   return base::UTF8ToUTF16(scheme_utf8);
 }
 
-GURL FixupURL(const std::string& text, const std::string& desired_tld) {
+GURL FixupURLInternal(const std::string& text,
+                      const std::string& desired_tld,
+                      size_t depth) {
+  if (depth > kMaxFixupURLDepth) {
+    return GURL();  // Give up and fail.
+  }
+
   std::string trimmed;
   TrimWhitespaceUTF8(text, base::TRIM_ALL, &trimmed);
   if (trimmed.empty())
@@ -557,7 +570,8 @@ GURL FixupURL(const std::string& text, const std::string& desired_tld) {
     if (!base::StartsWith(text, view_source + view_source,
                           base::CompareCase::INSENSITIVE_ASCII)) {
       return GURL(kViewSourceScheme + std::string(":") +
-                  FixupURL(trimmed.substr(scheme.length() + 1), desired_tld)
+                  FixupURLInternal(trimmed.substr(scheme.length() + 1),
+                                   desired_tld, depth + 1)
                       .possibly_invalid_spec());
     }
   }
@@ -622,11 +636,16 @@ GURL FixupURL(const std::string& text, const std::string& desired_tld) {
   return GURL(trimmed);
 }
 
-// The rules are different here than for regular fixup, since we need to handle
-// input like "hello.html" and know to look in the current directory.  Regular
-// fixup will look for cues that it is actually a file path before trying to
-// figure out what file it is.  If our logic doesn't work, we will fall back on
-// regular fixup.
+GURL FixupURL(const std::string& text, const std::string& desired_tld) {
+  size_t depth = 0;
+  return FixupURLInternal(text, desired_tld, depth);
+}
+
+// The rules are different here than for regular fixup, since we need to
+// handle input like "hello.html" and know to look in the current directory.
+// Regular fixup will look for cues that it is actually a file path before
+// trying to figure out what file it is.  If our logic doesn't work, we will
+// fall back on regular fixup.
 GURL FixupRelativeFile(const base::FilePath& base_dir,
                        const base::FilePath& text) {
   base::FilePath old_cur_directory;
@@ -647,15 +666,17 @@ GURL FixupRelativeFile(const base::FilePath& base_dir,
     is_file = false;
   base::FilePath full_path;
   if (is_file && !ValidPathForFile(trimmed, &full_path)) {
-// Not a path as entered, try unescaping it in case the user has
-// escaped things. We need to go through 8-bit since the escaped values
-// only represent 8-bit values.
-std::string unescaped = base::UnescapeURLComponent(
-    trimmed, base::UnescapeRule::SPACES | base::UnescapeRule::PATH_SEPARATORS |
-                 base::UnescapeRule::URL_SPECIAL_CHARS_EXCEPT_PATH_SEPARATORS);
+    // Not a path as entered, try unescaping it in case the user has
+    // escaped things. We need to go through 8-bit since the escaped values
+    // only represent 8-bit values.
+    std::string unescaped = base::UnescapeURLComponent(
+        trimmed,
+        base::UnescapeRule::SPACES | base::UnescapeRule::PATH_SEPARATORS |
+            base::UnescapeRule::URL_SPECIAL_CHARS_EXCEPT_PATH_SEPARATORS);
 
-if (!ValidPathForFile(unescaped, &full_path))
-  is_file = false;
+    if (!ValidPathForFile(unescaped, &full_path)) {
+      is_file = false;
+    }
   }
 
   // Put back the current directory if we saved it.

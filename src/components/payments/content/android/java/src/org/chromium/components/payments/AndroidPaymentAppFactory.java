@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -21,10 +21,14 @@ public class AndroidPaymentAppFactory implements PaymentAppFactoryInterface {
     // PaymentAppFactoryInterface implementation.
     @Override
     public void create(PaymentAppFactoryDelegate delegate) {
-        AndroidPaymentAppFinder finder = new AndroidPaymentAppFinder(
-                new PaymentManifestWebDataService(delegate.getParams().getWebContents()),
-                new PaymentManifestDownloader(), new PaymentManifestParser(),
-                new PackageManagerDelegate(), delegate, /*factory=*/this);
+        AndroidPaymentAppFinder finder =
+                new AndroidPaymentAppFinder(
+                        new PaymentManifestWebDataService(delegate.getParams().getWebContents()),
+                        new PaymentManifestDownloader(),
+                        new PaymentManifestParser(),
+                        new PackageManagerDelegate(),
+                        delegate,
+                        /* factory= */ this);
         finder.findAndroidPaymentApps();
     }
 

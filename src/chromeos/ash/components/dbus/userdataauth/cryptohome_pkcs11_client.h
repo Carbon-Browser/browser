@@ -1,16 +1,16 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CHROMEOS_ASH_COMPONENTS_DBUS_USERDATAAUTH_CRYPTOHOME_PKCS11_CLIENT_H_
 #define CHROMEOS_ASH_COMPONENTS_DBUS_USERDATAAUTH_CRYPTOHOME_PKCS11_CLIENT_H_
 
-#include "base/callback.h"
 #include "base/component_export.h"
+#include "base/functional/callback.h"
 #include "base/observer_list_types.h"
+#include "chromeos/ash/components/dbus/cryptohome/UserDataAuth.pb.h"
+#include "chromeos/ash/components/dbus/cryptohome/rpc.pb.h"
 #include "chromeos/dbus/common/dbus_method_call_status.h"
-#include "chromeos/dbus/cryptohome/UserDataAuth.pb.h"
-#include "chromeos/dbus/cryptohome/rpc.pb.h"
 
 namespace dbus {
 class Bus;
@@ -24,10 +24,10 @@ namespace ash {
 // thread (UI thread) which initializes the DBusThreadManager instance.
 class COMPONENT_EXPORT(USERDATAAUTH_CLIENT) CryptohomePkcs11Client {
  public:
-  using Pkcs11IsTpmTokenReadyCallback =
-      DBusMethodCallback<::user_data_auth::Pkcs11IsTpmTokenReadyReply>;
-  using Pkcs11GetTpmTokenInfoCallback =
-      DBusMethodCallback<::user_data_auth::Pkcs11GetTpmTokenInfoReply>;
+  using Pkcs11IsTpmTokenReadyCallback = chromeos::DBusMethodCallback<
+      ::user_data_auth::Pkcs11IsTpmTokenReadyReply>;
+  using Pkcs11GetTpmTokenInfoCallback = chromeos::DBusMethodCallback<
+      ::user_data_auth::Pkcs11GetTpmTokenInfoReply>;
 
   // Not copyable or movable.
   CryptohomePkcs11Client(const CryptohomePkcs11Client&) = delete;
@@ -49,7 +49,7 @@ class COMPONENT_EXPORT(USERDATAAUTH_CLIENT) CryptohomePkcs11Client {
 
   // Runs the callback as soon as the service becomes available.
   virtual void WaitForServiceToBeAvailable(
-      WaitForServiceToBeAvailableCallback callback) = 0;
+      chromeos::WaitForServiceToBeAvailableCallback callback) = 0;
 
   // Checks if user's PKCS#11 token (chaps) is ready.
   virtual void Pkcs11IsTpmTokenReady(
@@ -68,10 +68,5 @@ class COMPONENT_EXPORT(USERDATAAUTH_CLIENT) CryptohomePkcs11Client {
 };
 
 }  // namespace ash
-
-// TODO(https://crbug.com/1164001): remove when the migration is finished.
-namespace chromeos {
-using ::ash::CryptohomePkcs11Client;
-}
 
 #endif  // CHROMEOS_ASH_COMPONENTS_DBUS_USERDATAAUTH_CRYPTOHOME_PKCS11_CLIENT_H_

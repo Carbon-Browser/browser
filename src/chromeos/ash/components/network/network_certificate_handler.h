@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,7 +11,7 @@
 #include "base/component_export.h"
 #include "chromeos/ash/components/network/network_cert_loader.h"
 
-namespace chromeos {
+namespace ash {
 
 // This class maintains user and server CA certificate lists for network
 // configuration UI.
@@ -105,6 +105,6 @@ class COMPONENT_EXPORT(CHROMEOS_NETWORK) NetworkCertificateHandler
   std::vector<Certificate> client_certificates_;
 };
 
-}  // namespace chromeos
+}  // namespace ash
 
 #endif  // CHROMEOS_ASH_COMPONENTS_NETWORK_NETWORK_CERTIFICATE_HANDLER_H_

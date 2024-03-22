@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,6 +10,7 @@
 #include "components/payments/content/content_payment_request_delegate.h"
 #include "components/payments/content/payment_request_display_manager.h"
 #include "components/payments/core/test_payment_request_delegate.h"
+#include "content/public/browser/global_routing_id.h"
 
 namespace autofill {
 class PersonalDataManager;
@@ -37,6 +38,7 @@ class TestContentPaymentRequestDelegate : public ContentPaymentRequestDelegate {
   ~TestContentPaymentRequestDelegate() override;
 
   // ContentPaymentRequestDelegate:
+  content::RenderFrameHost* GetRenderFrameHost() const override;
   std::unique_ptr<webauthn::InternalAuthenticator> CreateInternalAuthenticator()
       const override;
   scoped_refptr<PaymentManifestWebDataService>
@@ -48,8 +50,7 @@ class TestContentPaymentRequestDelegate : public ContentPaymentRequestDelegate {
   void ShowErrorMessage() override;
   void ShowProcessingSpinner() override;
   bool IsBrowserWindowActive() const override;
-  bool SkipUiForBasicCard() const override;
-  std::string GetTwaPackageName() const override;
+  void GetTwaPackageName(GetTwaPackageNameCallback callback) const override;
   PaymentRequestDialog* GetDialogForTesting() override;
   SecurePaymentConfirmationNoCreds* GetNoMatchingCredentialsDialogForTesting()
       override;
@@ -57,10 +58,6 @@ class TestContentPaymentRequestDelegate : public ContentPaymentRequestDelegate {
   const std::string& GetApplicationLocale() const override;
   bool IsOffTheRecord() const override;
   const GURL& GetLastCommittedURL() const override;
-  void DoFullCardRequest(
-      const autofill::CreditCard& credit_card,
-      base::WeakPtr<autofill::payments::FullCardRequest::ResultDelegate>
-          result_delegate) override;
   autofill::AddressNormalizer* GetAddressNormalizer() override;
   autofill::RegionDataLoader* GetRegionDataLoader() override;
   ukm::UkmRecorder* GetUkmRecorder() override;
@@ -81,10 +78,18 @@ class TestContentPaymentRequestDelegate : public ContentPaymentRequestDelegate {
       const std::string& rp_id,
       base::OnceClosure response_callback,
       base::OnceClosure opt_out_callback) override;
+  absl::optional<base::UnguessableToken> GetChromeOSTWAInstanceId()
+      const override;
+
+  // Must be called if GetRenderFrameHost() needs to return non-null.
+  void set_frame_routing_id(content::GlobalRenderFrameHostId frame_routing_id) {
+    frame_routing_id_ = frame_routing_id;
+  }
 
  private:
   TestPaymentRequestDelegate core_delegate_;
   PaymentRequestDisplayManager payment_request_display_manager_;
+  content::GlobalRenderFrameHostId frame_routing_id_;
 };
 
 }  // namespace payments

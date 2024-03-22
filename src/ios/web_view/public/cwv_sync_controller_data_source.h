@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,7 +14,7 @@ NS_ASSUME_NONNULL_BEGIN
 
 @class CWVIdentity;
 
-// Data source of CWVSyncController.
+// Data source of CWVSyncController for fetching access tokens.
 @protocol CWVSyncControllerDataSource<NSObject>
 
 // Called when access tokens are requested.

@@ -24,7 +24,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -125,7 +125,7 @@ PositionTemplate<Strategy> StartOfParagraphAlgorithm(
 
     if (layout_object->IsText() &&
         To<LayoutText>(layout_object)->ResolvedTextLength()) {
-      if (style.PreserveNewline()) {
+      if (style.ShouldPreserveBreaks()) {
         auto* text = To<LayoutText>(layout_object);
         int index = text->TextLength();
         if (previous_node_iterator == start_node && candidate_offset < index)
@@ -240,7 +240,7 @@ PositionTemplate<Strategy> EndOfParagraphAlgorithm(
     if (layout_object->IsText() &&
         To<LayoutText>(layout_object)->ResolvedTextLength()) {
       auto* const text = To<LayoutText>(layout_object);
-      if (style.PreserveNewline()) {
+      if (style.ShouldPreserveBreaks()) {
         const int length = text->TextLength();
         for (int i = (next_node_iterator == start_node ? candidate_offset : 0);
              i < length; ++i) {

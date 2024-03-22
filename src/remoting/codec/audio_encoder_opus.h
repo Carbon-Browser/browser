@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -47,7 +47,7 @@ class AudioEncoderOpus : public AudioEncoder {
 
   int sampling_rate_;
   AudioPacket::Channels channels_;
-  raw_ptr<OpusEncoder> encoder_;
+  raw_ptr<OpusEncoder, DanglingUntriaged> encoder_;
 
   int frame_size_;
   std::unique_ptr<media::MultiChannelResampler> resampler_;

@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,6 +11,7 @@
 
 #include "chrome/browser/android/historical_tab_saver.h"
 #include "chrome/browser/android/tab_android.h"
+#include "chrome/browser/tab/web_contents_state.h"
 #include "chrome/browser/ui/android/tab_model/android_live_tab_context.h"
 #include "components/sessions/core/live_tab.h"
 #include "components/tab_groups/tab_group_id.h"
@@ -34,10 +35,11 @@ class AndroidLiveTabContextCloseWrapper : public AndroidLiveTabContext {
   //   `id_to_tab_group`. If the title is null in Java use "".
   AndroidLiveTabContextCloseWrapper(
       TabModel* tab_model,
-      std::vector<TabAndroid*> closed_tabs,
-      std::map<int, tab_groups::TabGroupId> tab_id_to_tab_group,
-      std::map<tab_groups::TabGroupId, tab_groups::TabGroupVisualData>
-          tab_group_visual_data);
+      std::vector<TabAndroid*>&& closed_tabs,
+      std::map<int, tab_groups::TabGroupId>&& tab_id_to_tab_group,
+      std::map<tab_groups::TabGroupId, tab_groups::TabGroupVisualData>&&
+          tab_group_visual_data,
+      std::vector<WebContentsStateByteBuffer>&& web_contents_state);
   ~AndroidLiveTabContextCloseWrapper() override;
 
   AndroidLiveTabContextCloseWrapper(const AndroidLiveTabContextCloseWrapper&) =
@@ -81,6 +83,9 @@ class AndroidLiveTabContextCloseWrapper : public AndroidLiveTabContext {
   // Maps a group ID to its visual data (only a title on Android).
   std::map<tab_groups::TabGroupId, tab_groups::TabGroupVisualData>
       tab_group_visual_data_;
+
+  // List of webContentStates to close linked by tab index for bulk closure.
+  std::vector<WebContentsStateByteBuffer> web_contents_state_;
 
   // The most recently unfrozen web contents. Mutable as const signature methods
   // modify this field (constness inherited from LiveTabContext).

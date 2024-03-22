@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -83,17 +83,23 @@ absl::optional<HistogramEnumEntryMap> ParseEnumFromHistogramsXml(
 }  // namespace
 
 absl::optional<HistogramEnumEntryMap> ReadEnumFromEnumsXml(
-    const std::string& enum_name) {
+    const std::string& enum_name,
+    const absl::optional<std::string>& subdirectory) {
   FilePath src_root;
-  if (!PathService::Get(DIR_SOURCE_ROOT, &src_root)) {
+  if (!PathService::Get(DIR_SRC_TEST_DATA_ROOT, &src_root)) {
     ADD_FAILURE() << "Failed to get src root.";
     return absl::nullopt;
   }
 
-  base::FilePath enums_xml = src_root.AppendASCII("tools")
-                                 .AppendASCII("metrics")
-                                 .AppendASCII("histograms")
-                                 .AppendASCII("enums.xml");
+  base::FilePath enums_xml =
+      src_root.AppendASCII("tools").AppendASCII("metrics").AppendASCII(
+          "histograms");
+  if (subdirectory) {
+    enums_xml =
+        enums_xml.AppendASCII("metadata").AppendASCII(subdirectory.value());
+  }
+  enums_xml = enums_xml.AppendASCII("enums.xml");
+
   if (!PathExists(enums_xml)) {
     ADD_FAILURE() << "enums.xml file does not exist.";
     return absl::nullopt;

@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -26,19 +26,13 @@ class DisplayCapturePermissionContext
       const GURL& embedding_origin) const override;
 
   void DecidePermission(
-      const permissions::PermissionRequestID& id,
-      const GURL& requesting_origin,
-      const GURL& embedding_origin,
-      bool user_gesture,
+      permissions::PermissionRequestData request_data,
       permissions::BrowserPermissionCallback callback) override;
 
   void UpdateContentSetting(const GURL& requesting_origin,
                             const GURL& embedding_origin,
                             ContentSetting content_setting,
                             bool is_one_time) override;
-
- private:
-  bool IsRestrictedToSecureOrigins() const override;
 };
 
 #endif  // CHROME_BROWSER_DISPLAY_CAPTURE_DISPLAY_CAPTURE_PERMISSION_CONTEXT_H_

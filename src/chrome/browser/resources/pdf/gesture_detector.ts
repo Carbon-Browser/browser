@@ -1,20 +1,20 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 import {Point} from './constants.js';
 
-export type Gesture = {
-  type: string,
-  detail: PinchEventDetail,
-};
+export interface Gesture {
+  type: string;
+  detail: PinchEventDetail;
+}
 
-export type PinchEventDetail = {
-  center: Point,
-  direction?: string,
-  scaleRatio?: number|null,
-  startScaleRatio?: number|null,
-};
+export interface PinchEventDetail {
+  center: Point;
+  direction?: string;
+  scaleRatio?: number|null;
+  startScaleRatio?: number|null;
+}
 
 // A class that listens for touch events and produces events when these
 // touches form gestures (e.g. pinching).

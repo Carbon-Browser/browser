@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,12 +10,13 @@
 
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
+#include "base/json/json_reader.h"
 #include "base/json/json_writer.h"
 #include "base/memory/ptr_util.h"
 #include "base/memory/ref_counted.h"
 #include "base/path_service.h"
 #include "base/run_loop.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/values.h"
 #include "chrome/browser/ash/policy/core/device_local_account.h"
 #include "chrome/browser/ash/policy/core/device_local_account_policy_provider.h"
@@ -25,7 +26,6 @@
 #include "chrome/browser/ash/policy/invalidation/fake_affiliated_invalidation_service_provider.h"
 #include "chrome/browser/ash/profiles/profile_helper.h"
 #include "chrome/browser/ash/settings/device_settings_test_helper.h"
-#include "chrome/browser/chrome_notification_types.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/common/chrome_paths.h"
 #include "chrome/test/base/testing_browser_process.h"
@@ -45,9 +45,6 @@
 #include "components/policy/proto/chrome_device_policy.pb.h"
 #include "components/policy/proto/cloud_policy.pb.h"
 #include "components/session_manager/core/session_manager.h"
-#include "content/public/browser/notification_details.h"
-#include "content/public/browser/notification_service.h"
-#include "content/public/browser/notification_source.h"
 #include "content/public/test/test_utils.h"
 #include "services/network/public/cpp/weak_wrapper_shared_url_loader_factory.h"
 #include "services/network/test/test_url_loader_factory.h"
@@ -71,6 +68,7 @@ const char kRegularUserID[] = "user@example.com";
 
 const char kAvatar1URL[] = "http://localhost/avatar1.jpg";
 const char kAvatar2URL[] = "http://localhost/avatar2.jpg";
+const char kInvalidAvatarURL[] = "http//localhost/avatar1.jpg";
 
 void ConstructAvatarPolicy(const std::string& file_name,
                            const std::string& url,
@@ -79,9 +77,10 @@ void ConstructAvatarPolicy(const std::string& file_name,
   base::FilePath test_data_dir;
   ASSERT_TRUE(base::PathService::Get(chrome::DIR_TEST_DATA, &test_data_dir));
   ASSERT_TRUE(base::ReadFileToString(
-      test_data_dir.Append("chromeos").Append(file_name), policy_data));
+      test_data_dir.Append("chromeos").Append("avatars").Append(file_name),
+      policy_data));
   base::JSONWriter::Write(
-      *test::ConstructExternalDataReference(url, *policy_data), policy);
+      test::ConstructExternalDataReference(url, *policy_data), policy);
 }
 
 }  // namespace
@@ -140,8 +139,10 @@ class CloudExternalDataPolicyObserverTest
 
   std::string avatar_policy_1_data_;
   std::string avatar_policy_2_data_;
+  std::string invalid_avatar_policy_data_;
   std::string avatar_policy_1_;
   std::string avatar_policy_2_;
+  std::string invalid_avatar_policy_;
 
   std::unique_ptr<ash::CrosSettings> cros_settings_;
   std::unique_ptr<DeviceLocalAccountPolicyService>
@@ -193,9 +194,10 @@ void CloudExternalDataPolicyObserverTest::SetUp() {
       std::make_unique<DeviceLocalAccountPolicyService>(
           &session_manager_client_, device_settings_service_.get(),
           cros_settings_.get(), &affiliated_invalidation_service_provider_,
-          base::ThreadTaskRunnerHandle::Get(),
-          base::ThreadTaskRunnerHandle::Get(),
-          base::ThreadTaskRunnerHandle::Get(), shared_url_loader_factory_);
+          base::SingleThreadTaskRunner::GetCurrentDefault(),
+          base::SingleThreadTaskRunner::GetCurrentDefault(),
+          base::SingleThreadTaskRunner::GetCurrentDefault(),
+          shared_url_loader_factory_);
 
   user_policy_provider_.SetDefaultReturns(
       /*is_initialization_complete_return=*/true,
@@ -206,6 +208,8 @@ void CloudExternalDataPolicyObserverTest::SetUp() {
                         &avatar_policy_1_);
   ConstructAvatarPolicy("avatar2.jpg", kAvatar2URL, &avatar_policy_2_data_,
                         &avatar_policy_2_);
+  ConstructAvatarPolicy("avatar1.jpg", kInvalidAvatarURL,
+                        &invalid_avatar_policy_data_, &invalid_avatar_policy_);
 }
 
 void CloudExternalDataPolicyObserverTest::TearDown() {
@@ -340,8 +344,7 @@ void CloudExternalDataPolicyObserverTest::LogInAsDeviceLocalAccount(
       std::make_unique<PolicyServiceImpl>(std::move(providers));
   builder.SetPolicyService(std::move(policy_service));
   builder.SetPath(ash::ProfileHelper::Get()->GetProfilePathByUserIdHash(
-      ash::ProfileHelper::GetUserIdHashByUserIdForTesting(
-          account_id.GetUserEmail())));
+      user_manager::FakeUserManager::GetFakeUsernameHash(account_id)));
 
   profile_ = builder.Build();
   profile_->set_profile_name(account_id.GetUserEmail());
@@ -355,8 +358,14 @@ void CloudExternalDataPolicyObserverTest::SetRegularUserAvatarPolicy(
     const std::string& value) {
   PolicyMap policy_map;
   if (!value.empty()) {
+    auto parsed_json = base::JSONReader::ReadAndReturnValueWithError(
+        value, base::JSON_ALLOW_TRAILING_COMMAS);
+    ASSERT_TRUE(parsed_json.has_value()) << parsed_json.error().message;
+    ASSERT_TRUE(parsed_json->is_dict());
+
     policy_map.Set(key::kUserAvatarImage, POLICY_LEVEL_MANDATORY,
-                   POLICY_SCOPE_USER, POLICY_SOURCE_CLOUD, base::Value(value),
+                   POLICY_SCOPE_USER, POLICY_SOURCE_CLOUD,
+                   (*parsed_json).Clone(),
                    external_data_manager_.CreateExternalDataFetcher(
                        key::kUserAvatarImage));
   }
@@ -374,7 +383,7 @@ void CloudExternalDataPolicyObserverTest::LogInAsRegularUser() {
       std::make_unique<PolicyServiceImpl>(std::move(providers));
   builder.SetPolicyService(std::move(policy_service));
   builder.SetPath(ash::ProfileHelper::Get()->GetProfilePathByUserIdHash(
-      ash::ProfileHelper::GetUserIdHashByUserIdForTesting(kRegularUserID)));
+      user_manager::FakeUserManager::GetFakeUsernameHash(account_id)));
 
   profile_ = builder.Build();
   profile_->set_profile_name(kRegularUserID);
@@ -986,6 +995,27 @@ TEST_F(CloudExternalDataPolicyObserverTest, RegularUserLogoutTest) {
       AccountId::FromUserEmail(kRegularUserID));
 
   // Test that clear notification is emitted.
+  EXPECT_TRUE(set_calls_.empty());
+  EXPECT_TRUE(fetched_calls_.empty());
+  EXPECT_EQ(1u, cleared_calls_.size());
+  EXPECT_EQ(kRegularUserID, cleared_calls_.front());
+  ClearObservations();
+}
+
+// Tests that if an invalid policy (a policy for which
+// ExternalDataPolicyHandler::CheckPolicySettings() returns false) is passed
+// through to the policy map, only a 'cleared' notifications is emitted.
+TEST_F(CloudExternalDataPolicyObserverTest, RegularUserInvalidPolicyTest) {
+  SetRegularUserAvatarPolicy(invalid_avatar_policy_);
+
+  CreateObserver();
+
+  EXPECT_CALL(external_data_manager_,
+              Fetch(key::kUserAvatarImage, std::string(), _))
+      .Times(0);
+
+  LogInAsRegularUser();
+
   EXPECT_TRUE(set_calls_.empty());
   EXPECT_TRUE(fetched_calls_.empty());
   EXPECT_EQ(1u, cleared_calls_.size());

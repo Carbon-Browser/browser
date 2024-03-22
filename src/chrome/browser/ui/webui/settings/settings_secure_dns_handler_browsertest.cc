@@ -1,11 +1,12 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include "base/feature_list.h"
 #include "chrome/browser/ui/webui/settings/settings_secure_dns_handler.h"
 
 #include "base/containers/adapters.h"
+#include "base/containers/contains.h"
+#include "base/feature_list.h"
 #include "base/test/metrics/histogram_tester.h"
 #include "build/build_config.h"
 #include "chrome/browser/browser_process.h"
@@ -21,11 +22,19 @@
 #include "content/public/test/browser_test.h"
 #include "content/public/test/test_web_ui.h"
 #include "net/dns/public/resolve_error_info.h"
+#include "services/network/public/mojom/clear_data_filter.mojom.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
 #if BUILDFLAG(IS_WIN)
 #include "base/win/win_util.h"
+#endif
+
+#if BUILDFLAG(IS_CHROMEOS_ASH)
+#include "chrome/browser/ash/login/users/fake_chrome_user_manager.h"
+#include "components/account_id/account_id.h"
+#include "components/user_manager/scoped_user_manager.h"
+#include "components/user_manager/user_type.h"
 #endif
 
 using testing::_;
@@ -39,71 +48,70 @@ namespace {
 constexpr char kGetSecureDnsResolverList[] = "getSecureDnsResolverList";
 constexpr char kIsValidConfig[] = "isValidConfig";
 constexpr char kProbeConfig[] = "probeConfig";
-constexpr char kRecordUserDropdownInteraction[] =
-    "recordUserDropdownInteraction";
 constexpr char kWebUiFunctionName[] = "webUiCallbackName";
 
 net::DohProviderEntry::List GetDohProviderListForTesting() {
+  static BASE_FEATURE(kDohProviderFeatureForProvider_Global1,
+                      "DohProviderFeatureForProvider_Global1",
+                      base::FEATURE_ENABLED_BY_DEFAULT);
   static const auto global1 = net::DohProviderEntry::ConstructForTesting(
-      "Provider_Global1",
-      base::Feature("DohProviderFeatureForProvider_Global1",
-                    base::FEATURE_ENABLED_BY_DEFAULT),
-      net::DohProviderIdForHistogram{-1}, {} /*ip_strs */,
-      {} /* dot_hostnames */, "https://global1.provider/dns-query{?dns}",
+      "Provider_Global1", &kDohProviderFeatureForProvider_Global1,
+      {} /*ip_strs */, {} /* dot_hostnames */,
+      "https://global1.provider/dns-query{?dns}",
       "Global Provider 1" /* ui_name */,
       "https://global1.provider/privacy_policy/" /* privacy_policy */,
       true /* display_globally */, {} /* display_countries */);
+  static BASE_FEATURE(kDohProviderFeatureForProvider_NoDisplay,
+                      "DohProviderFeatureForProvider_NoDisplay",
+                      base::FEATURE_ENABLED_BY_DEFAULT);
   static const auto no_display = net::DohProviderEntry::ConstructForTesting(
-      "Provider_NoDisplay",
-      base::Feature("DohProviderFeatureForProvider_NoDisplay",
-                    base::FEATURE_ENABLED_BY_DEFAULT),
-      net::DohProviderIdForHistogram{-2}, {} /*ip_strs */,
-      {} /* dot_hostnames */, "https://nodisplay.provider/dns-query{?dns}",
+      "Provider_NoDisplay", &kDohProviderFeatureForProvider_NoDisplay,
+      {} /*ip_strs */, {} /* dot_hostnames */,
+      "https://nodisplay.provider/dns-query{?dns}",
       "No Display Provider" /* ui_name */,
       "https://nodisplay.provider/privacy_policy/" /* privacy_policy */,
       false /* display_globally */, {} /* display_countries */);
+  static BASE_FEATURE(kDohProviderFeatureForProvider_EE_FR,
+                      "DohProviderFeatureForProvider_EE_FR",
+                      base::FEATURE_ENABLED_BY_DEFAULT);
   static const auto ee_fr = net::DohProviderEntry::ConstructForTesting(
-      "Provider_EE_FR",
-      base::Feature("DohProviderFeatureForProvider_EE_FR",
-                    base::FEATURE_ENABLED_BY_DEFAULT),
-      net::DohProviderIdForHistogram{-3}, {} /*ip_strs */,
+      "Provider_EE_FR", &kDohProviderFeatureForProvider_EE_FR, {} /*ip_strs */,
       {} /* dot_hostnames */, "https://ee.fr.provider/dns-query{?dns}",
       "EE/FR Provider" /* ui_name */,
       "https://ee.fr.provider/privacy_policy/" /* privacy_policy */,
       false /* display_globally */, {"EE", "FR"} /* display_countries */);
+  static BASE_FEATURE(kDohProviderFeatureForProvider_FR,
+                      "DohProviderFeatureForProvider_FR",
+                      base::FEATURE_ENABLED_BY_DEFAULT);
   static const auto fr = net::DohProviderEntry::ConstructForTesting(
-      "Provider_FR",
-      base::Feature("DohProviderFeatureForProvider_FR",
-                    base::FEATURE_ENABLED_BY_DEFAULT),
-      net::DohProviderIdForHistogram{-4}, {} /*ip_strs */,
+      "Provider_FR", &kDohProviderFeatureForProvider_FR, {} /*ip_strs */,
       {} /* dot_hostnames */, "https://fr.provider/dns-query{?dns}",
       "FR Provider" /* ui_name */,
       "https://fr.provider/privacy_policy/" /* privacy_policy */,
       false /* display_globally */, {"FR"} /* display_countries */);
+  static BASE_FEATURE(kDohProviderFeatureForProvider_Global2,
+                      "DohProviderFeatureForProvider_Global2",
+                      base::FEATURE_ENABLED_BY_DEFAULT);
   static const auto global2 = net::DohProviderEntry::ConstructForTesting(
-      "Provider_Global2",
-      base::Feature("DohProviderFeatureForProvider_Global2",
-                    base::FEATURE_ENABLED_BY_DEFAULT),
-      net::DohProviderIdForHistogram{-5}, {} /*ip_strs */,
-      {} /* dot_hostnames */, "https://global2.provider/dns-query{?dns}",
+      "Provider_Global2", &kDohProviderFeatureForProvider_Global2,
+      {} /*ip_strs */, {} /* dot_hostnames */,
+      "https://global2.provider/dns-query{?dns}",
       "Global Provider 2" /* ui_name */,
       "https://global2.provider/privacy_policy/" /* privacy_policy */,
       true /* display_globally */, {} /* display_countries */);
   return {&global1, &no_display, &ee_fr, &fr, &global2};
 }
 
-bool FindDropdownItem(const base::Value& resolvers,
+bool FindDropdownItem(const base::Value::List& resolvers,
                       const std::string& name,
                       const std::string& value,
                       const std::string& policy) {
-  base::Value dict(base::Value::Type::DICTIONARY);
-  dict.SetKey("name", base::Value(name));
-  dict.SetKey("value", base::Value(value));
-  dict.SetKey("policy", base::Value(policy));
+  base::Value::Dict dict;
+  dict.Set("name", name);
+  dict.Set("value", value);
+  dict.Set("policy", policy);
 
-  return std::find(resolvers.GetListDeprecated().begin(),
-                   resolvers.GetListDeprecated().end(),
-                   dict) != resolvers.GetListDeprecated().end();
+  return base::Contains(resolvers, dict);
 }
 
 }  // namespace
@@ -187,6 +195,41 @@ class SecureDnsHandlerTest : public InProcessBrowserTest {
     }
     return false;
   }
+
+#if BUILDFLAG(IS_CHROMEOS_ASH)
+  // Similar to `GetLastSettingsChangedMessage`, but only reads data related to
+  // template URIs with identifiers.  Returns false if the message was invalid
+  // or not found; in this case the out params may be not set.
+  bool GetIdentifierConfigsFromLastSettingsChangedMessage(
+      bool* out_doh_with_identifiers_active,
+      std::string* out_doh_config_for_display) {
+    for (const std::unique_ptr<content::TestWebUI::CallData>& data :
+         base::Reversed(web_ui_.call_data())) {
+      if (data->function_name() != "cr.webUIListenerCallback" ||
+          !data->arg1()->is_string() ||
+          data->arg1()->GetString() != "secure-dns-setting-changed") {
+        continue;
+      }
+      const base::Value::Dict* dict = data->arg2()->GetIfDict();
+      if (!dict)
+        return false;
+      absl::optional<bool> doh_with_identifiers_active =
+          dict->FindBool("dohWithIdentifiersActive");
+      if (!doh_with_identifiers_active)
+        return false;
+      *out_doh_with_identifiers_active = *doh_with_identifiers_active;
+
+      const std::string* doh_config_for_display =
+          dict->FindString("configForDisplay");
+      if (!doh_config_for_display)
+        return false;
+      *out_doh_config_for_display = *doh_config_for_display;
+
+      return true;
+    }
+    return false;
+  }
+#endif  // BUILDFLAG(IS_CHROMEOS_ASH)
 
   // Sets a policy update which will cause power pref managed change.
   void SetPolicyForPolicyKey(policy::PolicyMap* policy_map,
@@ -305,54 +348,31 @@ IN_PROC_BROWSER_TEST_F(SecureDnsHandlerTest, OtherPoliciesSet) {
 
 // This test makes no assumptions about the country or underlying resolver list.
 IN_PROC_BROWSER_TEST_F(SecureDnsHandlerTest, DropdownList) {
-  base::Value args(base::Value::Type::LIST);
+  base::Value::List args;
   args.Append(kWebUiFunctionName);
 
-  web_ui_.HandleReceivedMessage(kGetSecureDnsResolverList,
-                                &base::Value::AsListValue(args));
+  web_ui_.HandleReceivedMessage(kGetSecureDnsResolverList, args);
   const content::TestWebUI::CallData& call_data = *web_ui_.call_data().back();
   EXPECT_EQ("cr.webUIResponse", call_data.function_name());
   EXPECT_EQ(kWebUiFunctionName, call_data.arg1()->GetString());
   ASSERT_TRUE(call_data.arg2()->GetBool());
 
-  // Check results.
-  base::Value::ConstListView resolver_list =
-      call_data.arg3()->GetListDeprecated();
-  ASSERT_GE(resolver_list.size(), 1U);
-  EXPECT_TRUE(resolver_list[0].FindKey("value")->GetString().empty());
+  // Check results (no providers set for testing).
+  const base::Value::List& resolver_list = call_data.arg3()->GetList();
+  ASSERT_GE(resolver_list.size(), 0U);
 }
 
 IN_PROC_BROWSER_TEST_F(SecureDnsHandlerTest, DropdownListContents) {
   const auto entries = GetDohProviderListForTesting();
   handler_->SetProvidersForTesting(entries);
-  const base::Value resolver_list = handler_->GetSecureDnsResolverList();
+  const base::Value::List resolver_list = handler_->GetSecureDnsResolverList();
 
-  EXPECT_EQ(entries.size() + 1, resolver_list.GetListDeprecated().size());
-  EXPECT_TRUE(resolver_list.GetListDeprecated()[0]
-                  .FindKey("value")
-                  ->GetString()
-                  .empty());
+  EXPECT_EQ(entries.size(), resolver_list.size());
   for (const auto* entry : entries) {
     EXPECT_TRUE(FindDropdownItem(resolver_list, entry->ui_name,
                                  entry->doh_server_config.server_template(),
                                  entry->privacy_policy));
   }
-}
-
-IN_PROC_BROWSER_TEST_F(SecureDnsHandlerTest, DropdownListChange) {
-  handler_->SetProvidersForTesting(GetDohProviderListForTesting());
-
-  base::HistogramTester histograms;
-  base::Value args(base::Value::Type::LIST);
-  args.Append(std::string() /* old_provider */);
-  args.Append("https://global1.provider/dns-query{?dns}" /* new_provider */);
-  web_ui_.HandleReceivedMessage(kRecordUserDropdownInteraction,
-                                &base::Value::AsListValue(args));
-
-  const std::string kUmaBase = "Net.DNS.UI.DropdownSelectionEvent";
-  histograms.ExpectTotalCount(kUmaBase + ".Ignored", 4u);
-  histograms.ExpectTotalCount(kUmaBase + ".Selected", 1u);
-  histograms.ExpectTotalCount(kUmaBase + ".Unselected", 1u);
 }
 
 IN_PROC_BROWSER_TEST_F(SecureDnsHandlerTest, SecureDnsTemplates) {
@@ -389,14 +409,66 @@ IN_PROC_BROWSER_TEST_F(SecureDnsHandlerTest, SecureDnsTemplates) {
   EXPECT_EQ(good_post_template, doh_config);
 }
 
+#if BUILDFLAG(IS_CHROMEOS_ASH)
+IN_PROC_BROWSER_TEST_F(SecureDnsHandlerTest,
+                       SecureDnsTemplatesWithIdentifiers) {
+  std::string templatesWithIdentifier =
+      "https://foo.test-${USER_EMAIL}/dns-query{?dns}";
+  std::string templatesWithIdentifierDisplay =
+      "https://foo.test-${testuser@managed.com}/dns-query{?dns}";
+  std::string templatesWithIdentifierEffective =
+      "https://"
+      "foo.test-"
+      "FD5DFBED0D7B875A6416AFC61A37DBB63B6BA05B627AE9F5BE463A1F858F2D4E/"
+      "dns-query{?dns}";
+  std::string templates = "https://bar.test/dns-query{?dns}";
+
+  // Create an affiliated user.
+  auto user_manager = std::make_unique<ash::FakeChromeUserManager>();
+  const AccountId account_id0(AccountId::FromUserEmail("testuser@managed.com"));
+  user_manager->AddUserWithAffiliationAndTypeAndProfile(
+      account_id0, /* is_affiliated=*/true, user_manager::USER_TYPE_REGULAR,
+      nullptr);
+  user_manager::ScopedUserManager user_manager_enabler(std::move(user_manager));
+
+  std::string secure_dns_mode;
+  std::string doh_config, doh_config_for_display;
+  bool doh_with_identifiers_active;
+  int management_mode;
+  PrefService* local_state = g_browser_process->local_state();
+
+  local_state->SetString(prefs::kDnsOverHttpsMode,
+                         SecureDnsConfig::kModeSecure);
+  local_state->SetString(prefs::kDnsOverHttpsTemplatesWithIdentifiers,
+                         templatesWithIdentifier);
+  local_state->SetString(prefs::kDnsOverHttpsSalt, "salt-for-test");
+  local_state->SetString(prefs::kDnsOverHttpsTemplates, templates);
+
+  EXPECT_TRUE(GetLastSettingsChangedMessage(&secure_dns_mode, &doh_config,
+                                            &management_mode));
+  EXPECT_TRUE(GetIdentifierConfigsFromLastSettingsChangedMessage(
+      &doh_with_identifiers_active, &doh_config_for_display));
+  EXPECT_EQ(templatesWithIdentifierEffective, doh_config);
+  EXPECT_EQ(templatesWithIdentifierDisplay, doh_config_for_display);
+  EXPECT_TRUE(doh_with_identifiers_active);
+
+  local_state->ClearPref(prefs::kDnsOverHttpsTemplatesWithIdentifiers);
+  EXPECT_TRUE(GetLastSettingsChangedMessage(&secure_dns_mode, &doh_config,
+                                            &management_mode));
+  EXPECT_TRUE(GetIdentifierConfigsFromLastSettingsChangedMessage(
+      &doh_with_identifiers_active, &doh_config_for_display));
+  EXPECT_EQ(templates, doh_config);
+  EXPECT_FALSE(doh_with_identifiers_active);
+}
+#endif  // BUILDFLAG(IS_CHROMEOS_ASH)
+
 IN_PROC_BROWSER_TEST_F(SecureDnsHandlerTest, TemplateValid) {
-  base::Value args(base::Value::Type::LIST);
+  base::Value::List args;
   args.Append(kWebUiFunctionName);
   args.Append("https://example.template/dns-query");
 
   base::HistogramTester histograms;
-  web_ui_.HandleReceivedMessage(kIsValidConfig,
-                                &base::Value::AsListValue(args));
+  web_ui_.HandleReceivedMessage(kIsValidConfig, args);
   const content::TestWebUI::CallData& call_data = *web_ui_.call_data().back();
   EXPECT_EQ("cr.webUIResponse", call_data.function_name());
   EXPECT_EQ(kWebUiFunctionName, call_data.arg1()->GetString());
@@ -409,13 +481,12 @@ IN_PROC_BROWSER_TEST_F(SecureDnsHandlerTest, TemplateValid) {
 }
 
 IN_PROC_BROWSER_TEST_F(SecureDnsHandlerTest, TemplateInvalid) {
-  base::Value args(base::Value::Type::LIST);
+  base::Value::List args;
   args.Append(kWebUiFunctionName);
   args.Append("invalid_template");
 
   base::HistogramTester histograms;
-  web_ui_.HandleReceivedMessage(kIsValidConfig,
-                                &base::Value::AsListValue(args));
+  web_ui_.HandleReceivedMessage(kIsValidConfig, args);
   const content::TestWebUI::CallData& call_data = *web_ui_.call_data().back();
   EXPECT_EQ("cr.webUIResponse", call_data.function_name());
   EXPECT_EQ(kWebUiFunctionName, call_data.arg1()->GetString());
@@ -429,12 +500,11 @@ IN_PROC_BROWSER_TEST_F(SecureDnsHandlerTest, TemplateInvalid) {
 
 IN_PROC_BROWSER_TEST_F(SecureDnsHandlerTest, MultipleTemplates) {
   base::HistogramTester histograms;
-  base::Value args_valid(base::Value::Type::LIST);
+  base::Value::List args_valid;
   args_valid.Append(kWebUiFunctionName);
   args_valid.Append(
       "https://example1.template/dns    https://example2.template/dns-query");
-  web_ui_.HandleReceivedMessage(kIsValidConfig,
-                                &base::Value::AsListValue(args_valid));
+  web_ui_.HandleReceivedMessage(kIsValidConfig, args_valid);
   const content::TestWebUI::CallData& call_data_valid =
       *web_ui_.call_data().back();
   EXPECT_EQ("cr.webUIResponse", call_data_valid.function_name());
@@ -446,11 +516,10 @@ IN_PROC_BROWSER_TEST_F(SecureDnsHandlerTest, MultipleTemplates) {
   histograms.ExpectBucketCount("Net.DNS.UI.ValidationAttemptSuccess", false, 0);
   histograms.ExpectBucketCount("Net.DNS.UI.ValidationAttemptSuccess", true, 1);
 
-  base::Value args_invalid(base::Value::Type::LIST);
+  base::Value::List args_invalid;
   args_invalid.Append(kWebUiFunctionName);
   args_invalid.Append("invalid_template https://example.template/dns");
-  web_ui_.HandleReceivedMessage(kIsValidConfig,
-                                &base::Value::AsListValue(args_invalid));
+  web_ui_.HandleReceivedMessage(kIsValidConfig, args_invalid);
   const content::TestWebUI::CallData& call_data_invalid =
       *web_ui_.call_data().back();
   EXPECT_EQ("cr.webUIResponse", call_data_invalid.function_name());
@@ -475,11 +544,10 @@ IN_PROC_BROWSER_TEST_F(SecureDnsHandlerTest, TemplateProbeSuccess) {
                           SingleResult>() /* google_config_result_list */);
   handler_->SetNetworkContextForTesting(network_context_.get());
   base::HistogramTester histograms;
-  base::Value args_valid(base::Value::Type::LIST);
+  base::Value::List args_valid;
   args_valid.Append(kWebUiFunctionName);
   args_valid.Append("https://example.template/dns-query https://example2/");
-  web_ui_.HandleReceivedMessage(kProbeConfig,
-                                &base::Value::AsListValue(args_valid));
+  web_ui_.HandleReceivedMessage(kProbeConfig, args_valid);
   base::RunLoop().RunUntilIdle();
 
   const content::TestWebUI::CallData& call_data_valid =
@@ -507,11 +575,10 @@ IN_PROC_BROWSER_TEST_F(SecureDnsHandlerTest, TemplateProbeFailure) {
                           SingleResult>() /* google_config_result_list */);
   handler_->SetNetworkContextForTesting(network_context_.get());
   base::HistogramTester histograms;
-  base::Value args_valid(base::Value::Type::LIST);
+  base::Value::List args_valid;
   args_valid.Append(kWebUiFunctionName);
   args_valid.Append("https://example.template/dns-query");
-  web_ui_.HandleReceivedMessage(kProbeConfig,
-                                &base::Value::AsListValue(args_valid));
+  web_ui_.HandleReceivedMessage(kProbeConfig, args_valid);
   base::RunLoop().RunUntilIdle();
 
   const content::TestWebUI::CallData& call_data_valid =
@@ -540,13 +607,12 @@ IN_PROC_BROWSER_TEST_F(SecureDnsHandlerTest, TemplateProbeDebounce) {
           std::vector<chrome_browser_net::FakeHostResolver::
                           SingleResult>() /* google_config_result_list */);
   base::HistogramTester histograms;
-  base::Value args_valid(base::Value::Type::LIST);
+  base::Value::List args_valid;
   args_valid.Append(kWebUiFunctionName);
   args_valid.Append("https://example.template/dns-query");
   // Request a probe that will hang.
   handler_->SetNetworkContextForTesting(network_context_hang.get());
-  web_ui_.HandleReceivedMessage(kProbeConfig,
-                                &base::Value::AsListValue(args_valid));
+  web_ui_.HandleReceivedMessage(kProbeConfig, args_valid);
   size_t responses = web_ui_.call_data().size();
   base::RunLoop().RunUntilIdle();
   // No response yet from the hanging probe.
@@ -554,8 +620,7 @@ IN_PROC_BROWSER_TEST_F(SecureDnsHandlerTest, TemplateProbeDebounce) {
 
   // Request a probe that will fail.
   handler_->SetNetworkContextForTesting(network_context_fail.get());
-  web_ui_.HandleReceivedMessage(kProbeConfig,
-                                &base::Value::AsListValue(args_valid));
+  web_ui_.HandleReceivedMessage(kProbeConfig, args_valid);
   // The hanging response should now have arrived.
   EXPECT_EQ(responses + 1, web_ui_.call_data().size());
   const content::TestWebUI::CallData& first_response =

@@ -1,18 +1,17 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "third_party/nearby/src/internal/platform/implementation/platform.h"
 
-#include "ash/services/nearby/public/mojom/firewall_hole.mojom.h"
-#include "ash/services/nearby/public/mojom/tcp_socket_factory.mojom.h"
-#include "base/guid.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/task/thread_pool.h"
 #include "chrome/services/sharing/nearby/nearby_connections.h"
+#include "chrome/services/sharing/nearby/nearby_shared_remotes.h"
 #include "chrome/services/sharing/nearby/platform/atomic_boolean.h"
 #include "chrome/services/sharing/nearby/platform/atomic_uint32.h"
 #include "chrome/services/sharing/nearby/platform/ble_medium.h"
+#include "chrome/services/sharing/nearby/platform/ble_v2_medium.h"
 #include "chrome/services/sharing/nearby/platform/bluetooth_adapter.h"
 #include "chrome/services/sharing/nearby/platform/bluetooth_classic_medium.h"
 #include "chrome/services/sharing/nearby/platform/condition_variable.h"
@@ -26,6 +25,8 @@
 #include "chrome/services/sharing/nearby/platform/submittable_executor.h"
 #include "chrome/services/sharing/nearby/platform/webrtc.h"
 #include "chrome/services/sharing/nearby/platform/wifi_lan_medium.h"
+#include "chromeos/ash/services/nearby/public/mojom/firewall_hole.mojom.h"
+#include "chromeos/ash/services/nearby/public/mojom/tcp_socket_factory.mojom.h"
 #include "chromeos/services/network_config/public/mojom/cros_network_config.mojom.h"
 #include "device/bluetooth/public/mojom/adapter.mojom.h"
 #include "mojo/public/cpp/bindings/shared_remote.h"
@@ -37,6 +38,7 @@
 #include "third_party/nearby/src/internal/platform/implementation/bluetooth_classic.h"
 #include "third_party/nearby/src/internal/platform/implementation/condition_variable.h"
 #include "third_party/nearby/src/internal/platform/implementation/count_down_latch.h"
+#include "third_party/nearby/src/internal/platform/implementation/credential_storage.h"
 #include "third_party/nearby/src/internal/platform/implementation/log_message.h"
 #include "third_party/nearby/src/internal/platform/implementation/mutex.h"
 #include "third_party/nearby/src/internal/platform/implementation/scheduled_executor.h"
@@ -45,11 +47,10 @@
 #include "third_party/nearby/src/internal/platform/implementation/submittable_executor.h"
 #include "third_party/nearby/src/internal/platform/implementation/webrtc.h"
 #include "third_party/nearby/src/internal/platform/implementation/wifi.h"
+#include "third_party/nearby/src/internal/platform/implementation/wifi_direct.h"
 #include "third_party/nearby/src/internal/platform/implementation/wifi_hotspot.h"
 
-namespace location {
-namespace nearby {
-namespace api {
+namespace nearby::api {
 
 int GetCurrentTid() {
   // SubmittableExecutor and ScheduledExecutor does not own a thread pool
@@ -57,13 +58,24 @@ int GetCurrentTid() {
   return 0;
 }
 
-std::string ImplementationPlatform::GetDownloadPath(std::string& parent_folder,
-                                                    std::string& file_name) {
+std::string ImplementationPlatform::GetCustomSavePath(
+    const std::string& parent_folder,
+    const std::string& file_name) {
+  // This should return the <saved_custom_path>/file_name. For now we will
+  // just return an empty string, since chrome doesn't call this yet.
+  // TODO(b/223710122): Eventually chrome should implement this method.
+  NOTIMPLEMENTED();
+  return std::string();
+}
+
+std::string ImplementationPlatform::GetDownloadPath(
+    const std::string& parent_folder,
+    const std::string& file_name) {
   // This should return the <download_path>/parent_folder/file_name. For now we
   // will just return an empty string, since chrome doesn't call this yet.
   // TODO(b/223710122): Eventually chrome should implement this method.
   NOTIMPLEMENTED();
-  return std::string("");
+  return std::string();
 }
 
 OSName ImplementationPlatform::GetCurrentOS() {
@@ -103,14 +115,14 @@ std::unique_ptr<AtomicUint32> ImplementationPlatform::CreateAtomicUint32(
 
 std::unique_ptr<BluetoothAdapter>
 ImplementationPlatform::CreateBluetoothAdapter() {
-  auto& connections = connections::NearbyConnections::GetInstance();
-  const mojo::SharedRemote<bluetooth::mojom::Adapter>& bluetooth_adapter =
-      connections.bluetooth_adapter();
-
-  if (!bluetooth_adapter.is_bound())
-    return nullptr;
-
-  return std::make_unique<chrome::BluetoothAdapter>(bluetooth_adapter);
+  nearby::NearbySharedRemotes* nearby_shared_remotes =
+      nearby::NearbySharedRemotes::GetInstance();
+  if (nearby_shared_remotes &&
+      nearby_shared_remotes->bluetooth_adapter.is_bound()) {
+    return std::make_unique<chrome::BluetoothAdapter>(
+        nearby_shared_remotes->bluetooth_adapter);
+  }
+  return nullptr;
 }
 
 std::unique_ptr<CountDownLatch> ImplementationPlatform::CreateCountDownLatch(
@@ -133,7 +145,7 @@ std::unique_ptr<InputFile> ImplementationPlatform::CreateInputFile(
 }
 
 std::unique_ptr<InputFile> ImplementationPlatform::CreateInputFile(
-    absl::string_view file_path,
+    const std::string& file_path,
     size_t size) {
   // This constructor is not called by Chrome. Returning nullptr, just in case.
   // TODO(b/223710122): Eventually chrome should implement and use this
@@ -151,7 +163,7 @@ std::unique_ptr<OutputFile> ImplementationPlatform::CreateOutputFile(
 }
 
 std::unique_ptr<OutputFile> ImplementationPlatform::CreateOutputFile(
-    absl::string_view file_path) {
+    const std::string& file_path) {
   // This constructor is not called by Chrome. Returning nullptr, just in case.
   // TODO(b/223710122): Eventually chrome should implement and use this
   // constructor exclusively.
@@ -169,37 +181,52 @@ std::unique_ptr<LogMessage> ImplementationPlatform::CreateLogMessage(
 std::unique_ptr<BluetoothClassicMedium>
 ImplementationPlatform::CreateBluetoothClassicMedium(
     api::BluetoothAdapter& adapter) {
-  // Ignore the provided |adapter| argument. It provides no interface useful
-  // to implement chrome::BluetoothClassicMedium.
-
-  auto& connections = connections::NearbyConnections::GetInstance();
-  const mojo::SharedRemote<bluetooth::mojom::Adapter>& bluetooth_adapter =
-      connections.bluetooth_adapter();
-
-  if (!bluetooth_adapter.is_bound())
-    return nullptr;
-
-  return std::make_unique<chrome::BluetoothClassicMedium>(bluetooth_adapter);
+  nearby::NearbySharedRemotes* nearby_shared_remotes =
+      nearby::NearbySharedRemotes::GetInstance();
+  // Ignore the provided |adapter| argument; it is a reference to the object
+  // created by ImplementationPlatform::CreateBluetoothAdapter(). Instead,
+  // directly use the cached bluetooth::mojom::Adapter.
+  if (nearby_shared_remotes &&
+      nearby_shared_remotes->bluetooth_adapter.is_bound()) {
+    return std::make_unique<chrome::BluetoothClassicMedium>(
+        nearby_shared_remotes->bluetooth_adapter);
+  }
+  return nullptr;
 }
 
 std::unique_ptr<BleMedium> ImplementationPlatform::CreateBleMedium(
     api::BluetoothAdapter& adapter) {
-  // Ignore the provided |adapter| argument. It provides no interface useful
-  // to implement chrome::BleMedium.
-
-  auto& connections = connections::NearbyConnections::GetInstance();
-  const mojo::SharedRemote<bluetooth::mojom::Adapter>& bluetooth_adapter =
-      connections.bluetooth_adapter();
-
-  if (!bluetooth_adapter.is_bound())
-    return nullptr;
-
-  return std::make_unique<chrome::BleMedium>(bluetooth_adapter);
+  nearby::NearbySharedRemotes* nearby_shared_remotes =
+      nearby::NearbySharedRemotes::GetInstance();
+  // Ignore the provided |adapter| argument; it is a reference to the object
+  // created by ImplementationPlatform::CreateBluetoothAdapter(). Instead,
+  // directly use the cached bluetooth::mojom::Adapter.
+  if (nearby_shared_remotes &&
+      nearby_shared_remotes->bluetooth_adapter.is_bound()) {
+    return std::make_unique<chrome::BleMedium>(
+        nearby_shared_remotes->bluetooth_adapter);
+  }
+  return nullptr;
 }
 
 std::unique_ptr<ble_v2::BleMedium> ImplementationPlatform::CreateBleV2Medium(
     api::BluetoothAdapter& adapter) {
-  // Do nothing. ble_v2::BleMedium is not yet supported in Chrome Nearby.
+  nearby::NearbySharedRemotes* nearby_shared_remotes =
+      nearby::NearbySharedRemotes::GetInstance();
+  // Ignore the provided |adapter| argument; it is a reference to the object
+  // created by ImplementationPlatform::CreateBluetoothAdapter(). Instead,
+  // directly use the cached bluetooth::mojom::Adapter.
+  if (nearby_shared_remotes &&
+      nearby_shared_remotes->bluetooth_adapter.is_bound()) {
+    return std::make_unique<chrome::BleV2Medium>(
+        nearby_shared_remotes->bluetooth_adapter);
+  }
+  return nullptr;
+}
+
+// TODO(b/279611359): Wire into Chrome impl.
+std::unique_ptr<api::CredentialStorage>
+ImplementationPlatform::CreateCredentialStorage() {
   return nullptr;
 }
 
@@ -212,18 +239,27 @@ std::unique_ptr<WifiMedium> ImplementationPlatform::CreateWifiMedium() {
   return nullptr;
 }
 
+std::unique_ptr<WifiDirectMedium>
+ImplementationPlatform::CreateWifiDirectMedium() {
+  return nullptr;
+}
+
 std::unique_ptr<WifiHotspotMedium>
 ImplementationPlatform::CreateWifiHotspotMedium() {
   return nullptr;
 }
 
 std::unique_ptr<WifiLanMedium> ImplementationPlatform::CreateWifiLanMedium() {
-  auto& connections = connections::NearbyConnections::GetInstance();
+  nearby::NearbySharedRemotes* nearby_shared_remotes =
+      nearby::NearbySharedRemotes::GetInstance();
+  if (!nearby_shared_remotes) {
+    return nullptr;
+  }
 
   // TODO(https://crbug.com/1261238): This should always be bound when the
   // WifiLan feature flag is enabled. Update logging to ERROR after launch.
   const mojo::SharedRemote<chromeos::network_config::mojom::CrosNetworkConfig>&
-      cros_network_config = connections.cros_network_config();
+      cros_network_config = nearby_shared_remotes->cros_network_config;
   if (!cros_network_config.is_bound()) {
     VLOG(1) << "CrosNetworkConfig not bound. Returning null WifiLan medium";
     return nullptr;
@@ -232,7 +268,7 @@ std::unique_ptr<WifiLanMedium> ImplementationPlatform::CreateWifiLanMedium() {
   // TODO(https://crbug.com/1261238): This should always be bound when the
   // WifiLan feature flag is enabled. Update logging to ERROR after launch.
   const mojo::SharedRemote<sharing::mojom::FirewallHoleFactory>&
-      firewall_hole_factory = connections.firewall_hole_factory();
+      firewall_hole_factory = nearby_shared_remotes->firewall_hole_factory;
   if (!firewall_hole_factory.is_bound()) {
     VLOG(1) << "FirewallHoleFactory not bound. Returning null WifiLan medium";
     return nullptr;
@@ -241,7 +277,7 @@ std::unique_ptr<WifiLanMedium> ImplementationPlatform::CreateWifiLanMedium() {
   // TODO(https://crbug.com/1261238): This should always be bound when the
   // WifiLan feature flag is enabled. Update logging to ERROR after launch.
   const mojo::SharedRemote<sharing::mojom::TcpSocketFactory>&
-      tcp_socket_factory = connections.tcp_socket_factory();
+      tcp_socket_factory = nearby_shared_remotes->tcp_socket_factory;
   if (!tcp_socket_factory.is_bound()) {
     VLOG(1) << "TcpSocketFactory not bound. Returning null WifiLan medium";
     return nullptr;
@@ -252,24 +288,49 @@ std::unique_ptr<WifiLanMedium> ImplementationPlatform::CreateWifiLanMedium() {
 }
 
 std::unique_ptr<WebRtcMedium> ImplementationPlatform::CreateWebRtcMedium() {
-  auto& connections = connections::NearbyConnections::GetInstance();
+  nearby::NearbySharedRemotes* nearby_shared_remotes =
+      nearby::NearbySharedRemotes::GetInstance();
 
-  const mojo::SharedRemote<network::mojom::P2PSocketManager>& socket_manager =
-      connections.socket_manager();
-  const mojo::SharedRemote<
-      location::nearby::connections::mojom::MdnsResponderFactory>&
-      mdns_responder_factory = connections.mdns_responder_factory();
-  const mojo::SharedRemote<sharing::mojom::IceConfigFetcher>&
-      ice_config_fetcher = connections.ice_config_fetcher();
-  const mojo::SharedRemote<sharing::mojom::WebRtcSignalingMessenger>&
-      messenger = connections.webrtc_signaling_messenger();
-
-  if (!socket_manager.is_bound() || !mdns_responder_factory.is_bound() ||
-      !ice_config_fetcher.is_bound() || !messenger.is_bound()) {
-    LOG(ERROR)
-        << "Not all webrtc dependencies were bound. Returning null medium";
+  if (!nearby_shared_remotes) {
+    LOG(ERROR) << "No NearbySharedRemotes instance. Returning null medium.";
     return nullptr;
   }
+
+  const mojo::SharedRemote<network::mojom::P2PSocketManager>& socket_manager =
+      nearby_shared_remotes->socket_manager;
+  const mojo::SharedRemote<sharing::mojom::MdnsResponderFactory>&
+      mdns_responder_factory = nearby_shared_remotes->mdns_responder_factory;
+  const mojo::SharedRemote<sharing::mojom::IceConfigFetcher>&
+      ice_config_fetcher = nearby_shared_remotes->ice_config_fetcher;
+  const mojo::SharedRemote<sharing::mojom::WebRtcSignalingMessenger>&
+      messenger = nearby_shared_remotes->webrtc_signaling_messenger;
+
+  auto log_error = [](std::string dependency_name) {
+    LOG(ERROR) << "Webrtc dependency [" << dependency_name
+               << "] is not bound. Returning null medium.";
+  };
+
+  if (!socket_manager.is_bound()) {
+    log_error("socket_manager");
+    return nullptr;
+  }
+
+  if (!mdns_responder_factory.is_bound()) {
+    log_error("mdns_responder_factory");
+    return nullptr;
+  }
+
+  if (!ice_config_fetcher.is_bound()) {
+    log_error("ice_config_fetcher");
+    return nullptr;
+  }
+
+  if (!messenger.is_bound()) {
+    log_error("messenger");
+    return nullptr;
+  }
+
+  auto& connections = connections::NearbyConnections::GetInstance();
 
   return std::make_unique<chrome::WebRtcMedium>(
       socket_manager, mdns_responder_factory, ice_config_fetcher, messenger,
@@ -291,6 +352,4 @@ ImplementationPlatform::CreateConditionVariable(Mutex* mutex) {
       static_cast<chrome::Mutex*>(mutex));
 }
 
-}  // namespace api
-}  // namespace nearby
-}  // namespace location
+}  // namespace nearby::api

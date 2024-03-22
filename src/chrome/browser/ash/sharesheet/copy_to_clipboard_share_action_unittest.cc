@@ -1,16 +1,14 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/ash/sharesheet/copy_to_clipboard_share_action.h"
 
-#include "ash/public/cpp/tablet_mode.h"
+#include "ash/public/cpp/system/toast_data.h"
 #include "base/test/metrics/histogram_tester.h"
-#include "base/test/scoped_feature_list.h"
 #include "chrome/browser/sharesheet/share_action/share_action_cache.h"
 #include "chrome/browser/sharesheet/sharesheet_metrics.h"
 #include "chrome/browser/sharesheet/sharesheet_test_util.h"
-#include "chrome/common/chrome_features.h"
 #include "chrome/grit/generated_resources.h"
 #include "chrome/test/base/chrome_ash_test_base.h"
 #include "chrome/test/base/testing_profile.h"
@@ -24,8 +22,7 @@
 #include "ui/chromeos/strings/grit/ui_chromeos_strings.h"
 #include "url/gurl.h"
 
-namespace ash {
-namespace sharesheet {
+namespace ash::sharesheet {
 
 namespace {
 
@@ -34,7 +31,7 @@ class MockCopyToClipboardShareAction : public CopyToClipboardShareAction {
   explicit MockCopyToClipboardShareAction(Profile* profile)
       : CopyToClipboardShareAction(profile) {}
 
-  MOCK_METHOD(void, ShowToast, (const ash::ToastData& toast_data), (override));
+  MOCK_METHOD(void, ShowToast, (ash::ToastData toast_data), (override));
 };
 
 }  // namespace
@@ -47,8 +44,6 @@ class CopyToClipboardShareActionTest : public ChromeAshTestBase {
   void SetUp() override {
     ChromeAshTestBase::SetUp();
 
-    scoped_feature_list_.InitAndEnableFeature(
-        features::kSharesheetCopyToClipboard);
     profile_ = std::make_unique<TestingProfile>();
     share_action_cache_ =
         std::make_unique<::sharesheet::ShareActionCache>(profile_.get());
@@ -60,7 +55,6 @@ class CopyToClipboardShareActionTest : public ChromeAshTestBase {
   }
 
  private:
-  base::test::ScopedFeatureList scoped_feature_list_;
   std::unique_ptr<TestingProfile> profile_;
   std::unique_ptr<::sharesheet::ShareActionCache> share_action_cache_;
 };
@@ -161,7 +155,7 @@ TEST_F(CopyToClipboardShareActionTest,
           IDS_SHARESHEET_COPY_TO_CLIPBOARD_SHARE_ACTION_LABEL));
   storage::FileSystemURL url1 = ::sharesheet::FileInNonNativeFileSystemType(
       profile(), base::FilePath(::sharesheet::kTestPdfFile));
-  EXPECT_FALSE(copy_action->ShouldShowAction(
+  EXPECT_TRUE(copy_action->ShouldShowAction(
       apps_util::MakeShareIntent({url1.ToGURL()}, {::sharesheet::kMimeTypePdf}),
       /* contains_hosted_document= */ false));
 }
@@ -241,40 +235,4 @@ TEST_F(CopyToClipboardShareActionTest, CopyToClipboardMultipleImageFiles) {
       ::sharesheet::SharesheetMetrics::MimeType::kImageFile, 1);
 }
 
-TEST_F(CopyToClipboardShareActionTest, CopyToClipboardRecordFormFactorTablet) {
-  base::HistogramTester histograms;
-
-  // Set Tablet mode
-  ash::TabletMode::Get()->SetEnabledForTest(true);
-
-  // Invoke copy to clipboard action then check metrics update
-  auto* copy_action =
-      share_action_cache()->GetActionFromName(l10n_util::GetStringUTF16(
-          IDS_SHARESHEET_COPY_TO_CLIPBOARD_SHARE_ACTION_LABEL));
-  copy_action->LaunchAction(/*controller=*/nullptr, /*root_view=*/nullptr,
-                            ::sharesheet::CreateValidTextIntent());
-  histograms.ExpectBucketCount(
-      ::sharesheet::kSharesheetCopyToClipboardFormFactorResultHistogram,
-      ::sharesheet::SharesheetMetrics::FormFactor::kTablet, 1);
-}
-
-TEST_F(CopyToClipboardShareActionTest,
-       CopyToClipboardRecordFormFactorClamshell) {
-  base::HistogramTester histograms;
-
-  // Set Clamshell mode
-  ash::TabletMode::Get()->SetEnabledForTest(false);
-
-  // Invoke copy to clipboard action then check metrics update
-  auto* copy_action =
-      share_action_cache()->GetActionFromName(l10n_util::GetStringUTF16(
-          IDS_SHARESHEET_COPY_TO_CLIPBOARD_SHARE_ACTION_LABEL));
-  copy_action->LaunchAction(/*controller=*/nullptr, /*root_view=*/nullptr,
-                            ::sharesheet::CreateValidTextIntent());
-  histograms.ExpectBucketCount(
-      ::sharesheet::kSharesheetCopyToClipboardFormFactorResultHistogram,
-      ::sharesheet::SharesheetMetrics::FormFactor::kClamshell, 1);
-}
-
-}  // namespace sharesheet
-}  // namespace ash
+}  // namespace ash::sharesheet

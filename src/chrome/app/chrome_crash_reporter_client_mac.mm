@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,7 +6,7 @@
 
 #include <CoreFoundation/CoreFoundation.h>
 
-#include "base/mac/scoped_cftyperef.h"
+#include "base/apple/scoped_cftyperef.h"
 #include "base/path_service.h"
 #include "base/rand_util.h"
 #include "base/strings/sys_string_conversions.h"
@@ -17,13 +17,13 @@
 
 bool ChromeCrashReporterClient::ReportingIsEnforcedByPolicy(
     bool* breakpad_enabled) {
-  base::ScopedCFTypeRef<CFStringRef> key(
-      base::SysUTF8ToCFStringRef(policy::key::kMetricsReportingEnabled));
+  base::apple::ScopedCFTypeRef<CFStringRef> key =
+      base::SysUTF8ToCFStringRef(policy::key::kMetricsReportingEnabled);
   Boolean key_valid;
-  Boolean metrics_reporting_enabled = CFPreferencesGetAppBooleanValue(key,
-      kCFPreferencesCurrentApplication, &key_valid);
-  if (key_valid &&
-      CFPreferencesAppValueIsForced(key, kCFPreferencesCurrentApplication)) {
+  Boolean metrics_reporting_enabled = CFPreferencesGetAppBooleanValue(
+      key.get(), kCFPreferencesCurrentApplication, &key_valid);
+  if (key_valid && CFPreferencesAppValueIsForced(
+                       key.get(), kCFPreferencesCurrentApplication)) {
     *breakpad_enabled = metrics_reporting_enabled;
     return true;
   }

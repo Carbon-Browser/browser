@@ -1,9 +1,6 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
-
-import {addSingletonGetter, sendWithPromise} from 'chrome://resources/js/cr.m.js';
-import {ContactUpdate} from './types.js';
 
 /**
  * JavaScript hooks into the native WebUI handler to pass Contacts to the
@@ -19,6 +16,12 @@ export class NearbyContactBrowserProxy {
   downloadContacts() {
     chrome.send('downloadContacts');
   }
+
+  /** @return {!NearbyContactBrowserProxy} */
+  static getInstance() {
+    return instance || (instance = new NearbyContactBrowserProxy());
+  }
 }
 
-addSingletonGetter(NearbyContactBrowserProxy);
+/** @type {?NearbyContactBrowserProxy} */
+let instance = null;

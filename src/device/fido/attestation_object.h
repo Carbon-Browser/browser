@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,6 +9,7 @@
 
 #include <array>
 #include <memory>
+#include <string_view>
 #include <vector>
 
 #include "base/component_export.h"
@@ -25,7 +26,30 @@ class AttestationStatement;
 // https://www.w3.org/TR/2017/WD-webauthn-20170505/#cred-attestation.
 class COMPONENT_EXPORT(DEVICE_FIDO) AttestationObject {
  public:
+  // ResponseFields contains the parts of an attestation object that are needed
+  // when constructing a browser's response to a create() call.
+  struct COMPONENT_EXPORT(DEVICE_FIDO) ResponseFields {
+    ResponseFields();
+    ~ResponseFields();
+    ResponseFields(ResponseFields&&);
+    ResponseFields(const ResponseFields&) = delete;
+    ResponseFields& operator=(const ResponseFields&) = delete;
+
+    std::vector<uint8_t> attestation_object_bytes;
+    std::vector<uint8_t> authenticator_data;
+    absl::optional<std::vector<uint8_t>> public_key_der;
+    int32_t public_key_algo;
+  };
+
   static absl::optional<AttestationObject> Parse(const cbor::Value& value);
+
+  // ParseForResponseFields parses a serialized attestation object and extracts
+  // the fields needed to build a browser's response to a create() call. If
+  // `attestation_acceptable` is false any attestation will have been removed
+  // in the return value.
+  static absl::optional<ResponseFields> ParseForResponseFields(
+      std::vector<uint8_t> attestation_object_bytes,
+      bool attestation_acceptable);
 
   AttestationObject(AuthenticatorData data,
                     std::unique_ptr<AttestationStatement> statement);
@@ -47,8 +71,13 @@ class COMPONENT_EXPORT(DEVICE_FIDO) AttestationObject {
   // Replaces the attestation statement with a “none” attestation, and replaces
   // device AAGUID with zero bytes (unless |erase_aaguid| is kInclude) as
   // specified for step 20.3 in
-  // https://w3c.github.io/webauthn/#createCredential.
-  void EraseAttestationStatement(AAGUID erase_aaguid);
+  // https://w3c.github.io/webauthn/#createCredential. Returns true if any
+  // modifications needed to be made and false otherwise.
+  bool EraseAttestationStatement(AAGUID erase_aaguid);
+
+  // EraseExtension deletes the named extension. It returns true iff the
+  // extension was present.
+  bool EraseExtension(std::string_view name);
 
   // Returns true if the attestation is a "self" attestation, i.e. is just the
   // private key signing itself to show that it is fresh. See

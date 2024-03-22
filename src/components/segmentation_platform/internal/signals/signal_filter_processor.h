@@ -1,13 +1,15 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef COMPONENTS_SEGMENTATION_PLATFORM_INTERNAL_SIGNALS_SIGNAL_FILTER_PROCESSOR_H_
 #define COMPONENTS_SEGMENTATION_PLATFORM_INTERNAL_SIGNALS_SIGNAL_FILTER_PROCESSOR_H_
 
+#include <set>
+
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
-#include "components/segmentation_platform/internal/execution/default_model_manager.h"
+#include "components/segmentation_platform/internal/database/segment_info_database.h"
 #include "components/segmentation_platform/public/proto/segmentation_platform.pb.h"
 
 namespace segmentation_platform {
@@ -28,7 +30,7 @@ class SignalFilterProcessor {
                         UserActionSignalHandler* user_action_signal_handler,
                         HistogramSignalHandler* histogram_signal_handler,
                         HistoryServiceObserver* history_observer,
-                        const std::vector<SegmentId>& segment_ids);
+                        const base::flat_set<SegmentId>& segment_ids);
   ~SignalFilterProcessor();
 
   // Disallow copy/assign.
@@ -47,16 +49,18 @@ class SignalFilterProcessor {
   void EnableMetrics(bool enable_metrics);
 
  private:
-  void FilterSignals(DefaultModelManager::SegmentInfoList segment_infos);
+  void FilterSignals(
+      std::unique_ptr<SegmentInfoDatabase::SegmentInfoList> segment_infos);
 
   // Boolean to only record metrics the first time models are updated.
   bool is_first_time_model_update_{true};
 
-  const raw_ptr<StorageService> storage_service_;
+  const raw_ptr<StorageService, DanglingUntriaged> storage_service_;
   const raw_ptr<UserActionSignalHandler> user_action_signal_handler_;
   const raw_ptr<HistogramSignalHandler> histogram_signal_handler_;
-  const raw_ptr<HistoryServiceObserver> history_observer_;
-  std::vector<SegmentId> segment_ids_;
+  const raw_ptr<HistoryServiceObserver, AcrossTasksDanglingUntriaged>
+      history_observer_;
+  const base::flat_set<SegmentId> segment_ids_;
 
   base::WeakPtrFactory<SignalFilterProcessor> weak_ptr_factory_{this};
 };

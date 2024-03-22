@@ -1,10 +1,11 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include <stddef.h>
 #include <stdint.h>
 
+#include "base/memory/raw_ptr.h"
 #include "chrome/browser/ash/power/power_data_collector.h"
 #include "chromeos/dbus/power/power_manager_client.h"
 #include "chromeos/dbus/power_manager/power_supply_properties.pb.h"
@@ -18,18 +19,19 @@ class PowerDataCollectorTest : public testing::Test {
   ~PowerDataCollectorTest() override = default;
 
   void SetUp() override {
-    PowerManagerClient::InitializeFake();
+    chromeos::PowerManagerClient::InitializeFake();
     PowerDataCollector::InitializeForTesting();
     power_data_collector_ = PowerDataCollector::Get();
   }
 
   void TearDown() override {
     PowerDataCollector::Shutdown();
-    PowerManagerClient::Shutdown();
+    chromeos::PowerManagerClient::Shutdown();
   }
 
  protected:
-  PowerDataCollector* power_data_collector_ = nullptr;
+  raw_ptr<PowerDataCollector, DanglingUntriaged | ExperimentalAsh>
+      power_data_collector_ = nullptr;
 };
 
 TEST_F(PowerDataCollectorTest, PowerChanged) {

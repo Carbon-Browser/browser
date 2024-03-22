@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,6 +10,10 @@ namespace feed {
 
 static_assert(!std::is_abstract_v<StubFeedApi>);
 
+SurfaceId StubFeedApi::CreateSurface(const StreamType& type,
+                                     SingleWebFeedEntryPoint entry_point) {
+  return {};
+}
 WebFeedSubscriptions& StubFeedApi::subscriptions() {
   return web_feed_subscriptions_;
 }
@@ -28,20 +32,20 @@ PersistentKeyValueStore& StubFeedApi::GetPersistentKeyValueStore() {
   return persistent_key_value_store_;
 }
 EphemeralChangeId StubFeedApi::CreateEphemeralChange(
-    const StreamType& stream_type,
+    SurfaceId surface_id,
     std::vector<feedstore::DataOperation> operations) {
   return {};
 }
 EphemeralChangeId StubFeedApi::CreateEphemeralChangeFromPackedData(
-    const StreamType& stream_type,
+    SurfaceId surface_id,
     base::StringPiece data) {
   return {};
 }
-bool StubFeedApi::CommitEphemeralChange(const StreamType& stream_type,
+bool StubFeedApi::CommitEphemeralChange(SurfaceId surface_id,
                                         EphemeralChangeId id) {
   return {};
 }
-bool StubFeedApi::RejectEphemeralChange(const StreamType& stream_type,
+bool StubFeedApi::RejectEphemeralChange(SurfaceId surface_id,
                                         EphemeralChangeId id) {
   return {};
 }
@@ -55,7 +59,7 @@ std::string StubFeedApi::DumpStateForDebugging() {
   return {};
 }
 
-base::Time StubFeedApi::GetLastFetchTime(const StreamType& stream_type) {
+base::Time StubFeedApi::GetLastFetchTime(SurfaceId surface_id) {
   return base::Time();
 }
 

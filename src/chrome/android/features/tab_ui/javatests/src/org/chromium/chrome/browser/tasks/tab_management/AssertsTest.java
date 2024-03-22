@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -17,7 +17,7 @@ import org.chromium.chrome.test.ChromeJUnit4ClassRunner;
 /**
  * Test that ensures Java asserts are working in tab_management feature module.
  *
- * Not a robolectric test because we want to make sure asserts are enabled after dexing.
+ * <p>Not a robolectric test because we want to make sure asserts are enabled after dexing.
  */
 @RunWith(ChromeJUnit4ClassRunner.class)
 public class AssertsTest {

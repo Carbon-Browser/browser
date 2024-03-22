@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,17 +13,19 @@
 namespace blink {
 
 class ComputedStyle;
-class Document;
 class FillLayer;
 class ImageResourceObserver;
 class LayoutBox;
 class LayoutBoxModelObject;
-class LayoutNGTableCell;
-class LayoutObject;
 class LayoutTableCell;
 class LayoutView;
-class NGPhysicalBoxFragment;
+class PhysicalBoxFragment;
 struct PaintInfo;
+
+struct SnappedAndUnsnappedOutsets {
+  PhysicalBoxStrut snapped;
+  PhysicalBoxStrut unsnapped;
+};
 
 class BackgroundImageGeometry {
   STACK_ALLOCATED();
@@ -34,21 +36,22 @@ class BackgroundImageGeometry {
       const LayoutView&,
       const PhysicalOffset& element_positioning_area_offset);
 
-  // Constructor for table cells where background_object may be the row or
-  // column the background image is attached to.
-  BackgroundImageGeometry(const LayoutTableCell&,
-                          const LayoutObject* background_object);
-
   // Generic constructor for all other elements.
   explicit BackgroundImageGeometry(const LayoutBoxModelObject&);
 
   // Constructor for TablesNG table parts.
-  BackgroundImageGeometry(const LayoutNGTableCell& cell,
+  BackgroundImageGeometry(const LayoutTableCell& cell,
                           PhysicalOffset cell_offset,
                           const LayoutBox& table_part,
                           PhysicalSize table_part_size);
 
-  explicit BackgroundImageGeometry(const NGPhysicalBoxFragment&);
+  explicit BackgroundImageGeometry(const PhysicalBoxFragment&);
+
+  // Compute the initial position area based on the geometry for the object
+  // this BackgroundImageGeometry was created for.
+  PhysicalRect ComputePositioningArea(const PaintInfo& paint_info,
+                                      const FillLayer& fill_layer,
+                                      const PhysicalRect& paint_rect) const;
 
   // Calculates data members. This must be called before any of the following
   // getters is called. The document lifecycle phase must be at least
@@ -70,8 +73,9 @@ class BackgroundImageGeometry {
   const PhysicalRect& UnsnappedDestRect() const { return unsnapped_dest_rect_; }
   const PhysicalRect& SnappedDestRect() const { return snapped_dest_rect_; }
 
-  // Compute the phase relative to the (snapped) destination offset.
-  PhysicalOffset ComputeDestPhase() const;
+  // Compute the phase of the image accounting for the size and spacing of the
+  // image.
+  PhysicalOffset ComputePhase() const;
 
   // Tile size is the area into which to draw one copy of the image. It
   // need not be the same as the intrinsic size of the image; if not,
@@ -96,9 +100,11 @@ class BackgroundImageGeometry {
   }
 
   const ImageResourceObserver& ImageClient() const;
-  const Document& ImageDocument() const;
   const ComputedStyle& ImageStyle(const ComputedStyle& fragment_style) const;
-  InterpolationQuality ImageInterpolationQuality() const;
+
+  bool CanCompositeBackgroundAttachmentFixed() const;
+
+  static bool HasBackgroundFixedToViewport(const LayoutBoxModelObject&);
 
  private:
   BackgroundImageGeometry(const LayoutBoxModelObject* box,
@@ -127,54 +133,69 @@ class BackgroundImageGeometry {
   void SetSpaceX(LayoutUnit space, LayoutUnit extra_offset);
   void SetSpaceY(LayoutUnit space, LayoutUnit extra_offset);
 
+  PhysicalRect FixedAttachmentPositioningArea(const PaintInfo&) const;
   void UseFixedAttachment(const PhysicalOffset& attachment_point);
-  PhysicalOffset GetPositioningOffsetForCell(const LayoutTableCell&,
-                                             const LayoutBox&);
-  PhysicalSize GetBackgroundObjectDimensions(const LayoutTableCell&,
-                                             const LayoutBox&);
 
   // Compute adjustments for the destination rects. Adjustments
   // both optimize painting when the background is obscured by a
   // border, and snap the dest rect to the border. They also
   // account for the background-clip property.
-  void ComputeDestRectAdjustments(const FillLayer&,
-                                  const PhysicalRect&,
-                                  bool,
-                                  LayoutRectOutsets&,
-                                  LayoutRectOutsets&) const;
+  SnappedAndUnsnappedOutsets ComputeDestRectAdjustments(
+      const FillLayer&,
+      const PhysicalRect& unsnapped_positioning_area,
+      bool disallow_border_derived_adjustment) const;
 
   // Positioning area adjustments modify the size of the
   // positioning area to snap values and apply the
   // background-origin property.
-  void ComputePositioningAreaAdjustments(const FillLayer&,
-                                         const PhysicalRect&,
-                                         bool,
-                                         LayoutRectOutsets&,
-                                         LayoutRectOutsets&) const;
+  SnappedAndUnsnappedOutsets ComputePositioningAreaAdjustments(
+      const FillLayer&,
+      const PhysicalRect& unsnapped_positioning_area,
+      bool disallow_border_derived_adjustment) const;
 
-  void ComputePositioningArea(const PaintInfo&,
-                              const FillLayer&,
-                              const PhysicalRect&,
-                              PhysicalRect&,
-                              PhysicalRect&,
-                              PhysicalOffset&,
-                              PhysicalOffset&);
+  void AdjustPositioningArea(const PaintInfo&,
+                             const FillLayer&,
+                             const PhysicalRect&,
+                             PhysicalRect&,
+                             PhysicalRect&,
+                             PhysicalOffset&,
+                             PhysicalOffset&);
   void CalculateFillTileSize(const FillLayer&,
                              const PhysicalSize&,
                              const PhysicalSize&);
+  void CalculateRepeatAndPosition(
+      const FillLayer&,
+      const PhysicalSize& unsnapped_positioning_area_size,
+      const PhysicalSize& snapped_positioning_area_size,
+      const PhysicalOffset& unsnapped_box_offset,
+      const PhysicalOffset& snapped_box_offset);
+
+  PhysicalBoxStrut VisualOverflowOutsets() const;
+  PhysicalBoxStrut InnerBorderOutsets(
+      const PhysicalRect& dest_rect,
+      const PhysicalRect& positioning_area) const;
+  SnappedAndUnsnappedOutsets ObscuredBorderOutsets(
+      const PhysicalRect& dest_rect,
+      const PhysicalRect& positioning_area) const;
 
   // The offset of the background image within the background positioning area.
   PhysicalOffset OffsetInBackground(const FillLayer&) const;
 
-  // |box_| is the source for the Document. In most cases it also provides the
-  // background properties (see |positioning_box_| for exceptions.) It's also
-  // the image client unless painting the view background.
+  // In most cases this is the same as positioning_box_. They are different
+  // when we are painting:
+  // 1. the view background (box_ is the LayoutView, and positioning_box_ is
+  //    the LayoutView's RootBox()), or
+  // 2. a table cell using its row/column's background (box_ is the table cell,
+  //    and positioning_box_ is the row/column).
+  // When they are different:
+  // - ImageClient() uses box_ if painting view, otherwise positioning_box_;
+  // - ImageStyle() uses positioning_box_;
+  // - FillLayers come from box_ if painting view, otherwise positioning_box_.
   const LayoutBoxModelObject* const box_;
 
   // The positioning box is the source of geometric information for positioning
-  // and sizing the background. It also provides the background properties if
-  // painting the view background or a table-cell using its container's
-  // (row's/column's) background.
+  // and sizing the background. It also provides the information listed in the
+  // comment for box_.
   const LayoutBoxModelObject* const positioning_box_;
 
   // When painting table cells or the view, the positioning area

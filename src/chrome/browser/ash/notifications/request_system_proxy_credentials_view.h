@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,7 +8,8 @@
 #include <memory>
 #include <string>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
+#include "base/memory/raw_ptr.h"
 #include "ui/base/metadata/metadata_header_macros.h"
 #include "ui/base/ui_base_types.h"
 #include "ui/views/view.h"
@@ -62,9 +63,9 @@ class RequestSystemProxyCredentialsView final
 
   const std::u16string window_title_;
 
-  views::Textfield* username_textfield_ = nullptr;
-  views::Textfield* password_textfield_ = nullptr;
-  views::Label* error_label_ = nullptr;
+  raw_ptr<views::Textfield, ExperimentalAsh> username_textfield_ = nullptr;
+  raw_ptr<views::Textfield, ExperimentalAsh> password_textfield_ = nullptr;
+  raw_ptr<views::Label, ExperimentalAsh> error_label_ = nullptr;
 
   const std::string proxy_server_;
   const bool show_error_label_;

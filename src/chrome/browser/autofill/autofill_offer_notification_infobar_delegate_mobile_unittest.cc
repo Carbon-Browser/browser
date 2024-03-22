@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -22,7 +22,7 @@ TEST(AutofillOfferNotificationInfoBarDelegateMobileTest,
           offer_details_url, card);
 
   EXPECT_EQ(delegate->credit_card_identifier_string(),
-            card.CardIdentifierStringForAutofillDisplay());
+            card.CardNameAndLastFourDigits());
   EXPECT_EQ(offer_details_url, delegate->deep_link_url());
 }
 

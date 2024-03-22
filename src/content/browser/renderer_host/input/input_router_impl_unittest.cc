@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -20,17 +20,17 @@
 #include "base/task/single_thread_task_runner.h"
 #include "base/test/scoped_feature_list.h"
 #include "base/test/task_environment.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "build/build_config.h"
 #include "cc/input/touch_action.h"
-#include "content/browser/renderer_host/input/gesture_event_queue.h"
 #include "content/browser/renderer_host/input/input_router_client.h"
 #include "content/browser/renderer_host/input/mock_input_disposition_handler.h"
 #include "content/browser/renderer_host/input/mock_input_router_client.h"
 #include "content/browser/renderer_host/mock_render_widget_host.h"
+#include "content/browser/scheduler/browser_ui_thread_scheduler.h"
 #include "content/browser/site_instance_group.h"
 #include "content/common/content_constants_internal.h"
-#include "content/public/common/content_features.h"
+#include "content/common/features.h"
+#include "content/common/input/gesture_event_queue.h"
 #include "content/public/common/content_switches.h"
 #include "content/public/test/browser_task_environment.h"
 #include "content/public/test/mock_render_process_host.h"
@@ -108,7 +108,7 @@ class MockRenderWidgetHostViewForStylusWriting
 
   bool RequestStartStylusWriting() override { return supports_stylus_writing_; }
 
-  void SetHoverActionStylusWritable(bool stylus_writable) override {
+  void NotifyHoverActionStylusWritable(bool stylus_writable) override {
     hover_action_stylus_writable_ = stylus_writable;
   }
 
@@ -133,7 +133,8 @@ class MockInputRouterImplClient : public InputRouterImplClient {
 
   void OnImeCompositionRangeChanged(
       const gfx::Range& range,
-      const std::vector<gfx::Rect>& character_bounds) override {}
+      const absl::optional<std::vector<gfx::Rect>>& character_bounds,
+      const absl::optional<std::vector<gfx::Rect>>& line_bounds) override {}
 
   void OnImeCancelComposition() override {}
 
@@ -171,6 +172,11 @@ class MockInputRouterImplClient : public InputRouterImplClient {
 
   void IncrementInFlightEventCount() override {
     input_router_client_.IncrementInFlightEventCount();
+  }
+
+  void NotifyUISchedulerOfScrollStateUpdate(
+      BrowserUIThreadScheduler::ScrollState scroll_state) override {
+    input_router_client_.NotifyUISchedulerOfScrollStateUpdate(scroll_state);
   }
 
   void DecrementInFlightEventCount(
@@ -284,8 +290,9 @@ class InputRouterImplTestBase : public testing::Test {
     browser_context_ = std::make_unique<TestBrowserContext>();
     process_host_ =
         std::make_unique<MockRenderProcessHost>(browser_context_.get());
-    site_instance_group_ = base::WrapRefCounted(new SiteInstanceGroup(
-        SiteInstanceImpl::NextBrowsingInstanceId(), process_host_.get()));
+    site_instance_group_ =
+        base::WrapRefCounted(SiteInstanceGroup::CreateForTesting(
+            browser_context_.get(), process_host_.get()));
     widget_host_ = MakeNewWidgetHost();
     mock_view_ =
         new MockRenderWidgetHostViewForStylusWriting(widget_host_.get());
@@ -498,7 +505,7 @@ class InputRouterImplTestBase : public testing::Test {
 
   static void RunTasksAndWait(base::TimeDelta delay) {
     base::RunLoop run_loop;
-    base::ThreadTaskRunnerHandle::Get()->PostDelayedTask(
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostDelayedTask(
         FROM_HERE, run_loop.QuitClosure(), delay);
     run_loop.Run();
   }
@@ -529,7 +536,8 @@ class InputRouterImplTestBase : public testing::Test {
         TouchEventWithLatencyInfo(touch_event_),
         blink::mojom::InputEventResultSource::kMainThread, ui::LatencyInfo(),
         blink::mojom::InputEventResultState::kNoConsumerExists, nullptr,
-        blink::mojom::TouchActionOptional::New(cc::TouchAction::kPanY));
+        blink::mojom::TouchActionOptional::New(cc::TouchAction::kPanY),
+        nullptr);
     EXPECT_EQ(input_router_->AllowedTouchAction().value(),
               cc::TouchAction::kAuto);
   }
@@ -542,7 +550,7 @@ class InputRouterImplTestBase : public testing::Test {
     input_router_->TouchEventHandled(
         TouchEventWithLatencyInfo(touch_event_),
         blink::mojom::InputEventResultSource::kMainThread, ui::LatencyInfo(),
-        state, nullptr, std::move(touch_action));
+        state, nullptr, std::move(touch_action), nullptr);
     EXPECT_EQ(input_router_->touch_action_filter_.num_of_active_touches_, 1);
     ReleaseTouchPoint(0);
     input_router_->OnTouchEventAck(
@@ -560,7 +568,8 @@ class InputRouterImplTestBase : public testing::Test {
         TouchEventWithLatencyInfo(touch_event_),
         blink::mojom::InputEventResultSource::kCompositorThread,
         ui::LatencyInfo(), blink::mojom::InputEventResultState::kNotConsumed,
-        nullptr, blink::mojom::TouchActionOptional::New(cc::TouchAction::kPan));
+        nullptr, blink::mojom::TouchActionOptional::New(cc::TouchAction::kPan),
+        nullptr);
     EXPECT_TRUE(input_router_->touch_event_queue_.IsTimeoutRunningForTesting());
     input_router_->SetTouchActionFromMain(cc::TouchAction::kPan);
     EXPECT_FALSE(
@@ -592,7 +601,8 @@ class InputRouterImplTestBase : public testing::Test {
   std::unique_ptr<MockInputRouterImplClient> client_;
   std::unique_ptr<InputRouterImpl> input_router_;
   std::unique_ptr<MockInputDispositionHandler> disposition_handler_;
-  raw_ptr<MockRenderWidgetHostViewForStylusWriting> mock_view_;
+  raw_ptr<MockRenderWidgetHostViewForStylusWriting, DanglingUntriaged>
+      mock_view_;
 
  private:
   content::BrowserTaskEnvironment task_environment_;
@@ -1464,7 +1474,7 @@ TEST_F(InputRouterImplTest,
   dispatched_messages[0]->ToEvent()->CallCallback(
       blink::mojom::InputEventResultSource::kMainThread, ui::LatencyInfo(),
       blink::mojom::InputEventResultState::kConsumed, nullptr,
-      blink::mojom::TouchActionOptional::New(cc::TouchAction::kNone));
+      blink::mojom::TouchActionOptional::New(cc::TouchAction::kNone), nullptr);
   EXPECT_EQ(1U, disposition_handler_->GetAndResetAckCount());
   EXPECT_FALSE(TouchEventTimeoutEnabled());
 
@@ -1551,7 +1561,7 @@ TEST_F(InputRouterImplTest, TouchActionResetBeforeEventReachesRenderer) {
   touch_press_event1[0]->ToEvent()->CallCallback(
       blink::mojom::InputEventResultSource::kMainThread, ui::LatencyInfo(),
       blink::mojom::InputEventResultState::kConsumed, nullptr,
-      blink::mojom::TouchActionOptional::New(cc::TouchAction::kNone));
+      blink::mojom::TouchActionOptional::New(cc::TouchAction::kNone), nullptr);
   touch_move_event1[0]->ToEvent()->CallCallback(
       blink::mojom::InputEventResultState::kConsumed);
 
@@ -1576,7 +1586,8 @@ TEST_F(InputRouterImplTest, TouchActionResetBeforeEventReachesRenderer) {
   touch_press_event2[0]->ToEvent()->CallCallback(
       blink::mojom::InputEventResultSource::kCompositorThread,
       ui::LatencyInfo(), blink::mojom::InputEventResultState::kConsumed,
-      nullptr, blink::mojom::TouchActionOptional::New(cc::TouchAction::kAuto));
+      nullptr, blink::mojom::TouchActionOptional::New(cc::TouchAction::kAuto),
+      nullptr);
   touch_press_event2[0]->ToEvent()->CallCallback(
       blink::mojom::InputEventResultState::kConsumed);
   touch_move_event2[0]->ToEvent()->CallCallback(
@@ -1617,7 +1628,7 @@ TEST_F(InputRouterImplTest, TouchActionResetWhenTouchHasNoConsumer) {
   touch_press_event1[0]->ToEvent()->CallCallback(
       blink::mojom::InputEventResultSource::kMainThread, ui::LatencyInfo(),
       blink::mojom::InputEventResultState::kConsumed, nullptr,
-      blink::mojom::TouchActionOptional::New(cc::TouchAction::kNone));
+      blink::mojom::TouchActionOptional::New(cc::TouchAction::kNone), nullptr);
   touch_move_event1[0]->ToEvent()->CallCallback(
       blink::mojom::InputEventResultState::kConsumed);
 
@@ -1695,7 +1706,7 @@ TEST_F(InputRouterImplTest, TouchActionResetWhenTouchHandlerRemoved) {
   dispatched_messages[0]->ToEvent()->CallCallback(
       blink::mojom::InputEventResultSource::kMainThread, ui::LatencyInfo(),
       blink::mojom::InputEventResultState::kConsumed, nullptr,
-      blink::mojom::TouchActionOptional::New(cc::TouchAction::kNone));
+      blink::mojom::TouchActionOptional::New(cc::TouchAction::kNone), nullptr);
   EXPECT_EQ(0U, GetAndResetDispatchedMessages().size());
   dispatched_messages[1]->ToEvent()->CallCallback(
       blink::mojom::InputEventResultState::kNotConsumed);
@@ -1833,7 +1844,7 @@ TEST_F(InputRouterImplTest, DoubleTapGestureDependsOnFirstTap) {
   dispatched_messages[0]->ToEvent()->CallCallback(
       blink::mojom::InputEventResultSource::kMainThread, ui::LatencyInfo(),
       blink::mojom::InputEventResultState::kConsumed, nullptr,
-      blink::mojom::TouchActionOptional::New(cc::TouchAction::kNone));
+      blink::mojom::TouchActionOptional::New(cc::TouchAction::kNone), nullptr);
   ReleaseTouchPoint(0);
   SendTouchEvent();
 
@@ -2209,7 +2220,7 @@ TEST_F(InputRouterImplTest, OverscrollDispatch) {
   dispatched_messages[0]->ToEvent()->CallCallback(
       blink::mojom::InputEventResultSource::kCompositorThread,
       ui::LatencyInfo(), blink::mojom::InputEventResultState::kNotConsumed,
-      wheel_overscroll.Clone(), nullptr);
+      wheel_overscroll.Clone(), nullptr, nullptr);
 
   client_overscroll = client_->GetAndResetOverscroll();
   EXPECT_EQ(wheel_overscroll.accumulated_overscroll,
@@ -2278,7 +2289,8 @@ TEST_F(InputRouterImplTest, TouchActionInCallback) {
   dispatched_messages[0]->ToEvent()->CallCallback(
       blink::mojom::InputEventResultSource::kCompositorThread,
       ui::LatencyInfo(), blink::mojom::InputEventResultState::kConsumed,
-      nullptr, blink::mojom::TouchActionOptional::New(cc::TouchAction::kPan));
+      nullptr, blink::mojom::TouchActionOptional::New(cc::TouchAction::kPan),
+      nullptr);
   ASSERT_EQ(1U, disposition_handler_->GetAndResetAckCount());
   absl::optional<cc::TouchAction> allowed_touch_action = AllowedTouchAction();
   cc::TouchAction compositor_allowed_touch_action =
@@ -2470,7 +2482,8 @@ TEST_F(InputRouterImplStylusWritingTest,
   dispatched_messages[0]->ToEvent()->CallCallback(
       blink::mojom::InputEventResultSource::kCompositorThread,
       ui::LatencyInfo(), blink::mojom::InputEventResultState::kNotConsumed,
-      nullptr, blink::mojom::TouchActionOptional::New(cc::TouchAction::kPan));
+      nullptr, blink::mojom::TouchActionOptional::New(cc::TouchAction::kPan),
+      nullptr);
   ASSERT_EQ(1U, disposition_handler_->GetAndResetAckCount());
   absl::optional<cc::TouchAction> allowed_touch_action = AllowedTouchAction();
   cc::TouchAction compositor_allowed_touch_action =

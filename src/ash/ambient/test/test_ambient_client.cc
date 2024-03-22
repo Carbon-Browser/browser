@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -96,6 +96,11 @@ void TestAmbientClient::DownloadImage(
 
 scoped_refptr<network::SharedURLLoaderFactory>
 TestAmbientClient::GetURLLoaderFactory() {
+  return url_loader_factory_;
+}
+
+scoped_refptr<network::SharedURLLoaderFactory>
+TestAmbientClient::GetSigninURLLoaderFactory() {
   return url_loader_factory_;
 }
 

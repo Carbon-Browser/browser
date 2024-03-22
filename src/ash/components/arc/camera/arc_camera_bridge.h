@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,6 +9,7 @@
 #include <memory>
 
 #include "ash/components/arc/mojom/camera.mojom.h"
+#include "base/memory/raw_ptr.h"
 #include "components/keyed_service/core/keyed_service.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
 
@@ -46,10 +47,13 @@ class ArcCameraBridge : public KeyedService, public mojom::CameraHost {
       mojo::PendingRemote<cros::mojom::CameraHalClient> client,
       RegisterCameraHalClientCallback callback) override;
 
+  static void EnsureFactoryBuilt();
+
  private:
   class PendingStartCameraServiceResult;
 
-  ArcBridgeService* const arc_bridge_service_;  // Owned by ArcServiceManager.
+  const raw_ptr<ArcBridgeService, ExperimentalAsh>
+      arc_bridge_service_;  // Owned by ArcServiceManager.
 
   std::map<PendingStartCameraServiceResult*,
            std::unique_ptr<PendingStartCameraServiceResult>>

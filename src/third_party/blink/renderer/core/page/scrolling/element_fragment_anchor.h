@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -51,11 +51,6 @@ class CORE_EXPORT ElementFragmentAnchor final : public FragmentAnchor {
   // abort keeping the fragment target in view to avoid fighting with user
   // scrolls.
   void DidScroll(mojom::blink::ScrollType type) override;
-
-  // Attempts to focus the anchor if we couldn't focus right after install
-  // (because rendering was blocked at the time). This can cause script to run
-  // so we can't do it in Invoke.
-  void PerformScriptableActions() override;
 
   void Trace(Visitor*) const override;
 

@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -28,16 +28,19 @@ import org.chromium.chrome.browser.lifecycle.StartStopWithNativeObserver;
  * TrustedWebActivityDisclosureController.
  */
 public abstract class DisclosureController
-        implements NativeInitObserver, TrustedWebActivityModel.DisclosureEventsCallback,
-                   StartStopWithNativeObserver {
+        implements NativeInitObserver,
+                TrustedWebActivityModel.DisclosureEventsCallback,
+                StartStopWithNativeObserver {
     private final TrustedWebActivityModel mModel;
     private final CurrentPageVerifier mCurrentPageVerifier;
 
     private boolean mPreviousShouldShowDisclosure;
 
-    public DisclosureController(TrustedWebActivityModel model,
+    public DisclosureController(
+            TrustedWebActivityModel model,
             ActivityLifecycleDispatcher lifecycleDispatcher,
-            CurrentPageVerifier currentPageVerifier, String packageName) {
+            CurrentPageVerifier currentPageVerifier,
+            String packageName) {
         mModel = model;
         mCurrentPageVerifier = currentPageVerifier;
 

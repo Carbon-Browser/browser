@@ -1,4 +1,4 @@
-// Copyright (c) 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,12 +8,13 @@
 #include <string>
 #include <vector>
 
-#include "base/callback_forward.h"
 #include "base/files/file_path.h"
+#include "base/functional/callback_forward.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
 #include "base/memory/weak_ptr.h"
 #include "base/sequence_checker.h"
-#include "chromeos/dbus/cryptohome/UserDataAuth.pb.h"
+#include "chromeos/ash/components/dbus/cryptohome/UserDataAuth.pb.h"
 #include "components/account_id/account_id.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 
@@ -75,7 +76,8 @@ class CachedPolicyKeyLoader {
   // Task runner for background file operations.
   scoped_refptr<base::SequencedTaskRunner> task_runner_;
 
-  ash::CryptohomeMiscClient* const cryptohome_misc_client_;
+  const raw_ptr<ash::CryptohomeMiscClient, ExperimentalAsh>
+      cryptohome_misc_client_;
   const AccountId account_id_;
   const base::FilePath user_policy_key_dir_;
   base::FilePath cached_policy_key_path_;

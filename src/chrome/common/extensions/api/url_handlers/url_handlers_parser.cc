@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -72,7 +72,7 @@ const std::vector<UrlHandlerInfo>* UrlHandlers::GetUrlHandlers(
     const Extension* extension) {
   UrlHandlers* info = static_cast<UrlHandlers*>(
       extension->GetManifestData(mkeys::kUrlHandlers));
-  return info ? &info->handlers : NULL;
+  return info ? &info->handlers : nullptr;
 }
 
 // static
@@ -108,7 +108,7 @@ UrlHandlersParser::~UrlHandlersParser() {
 }
 
 bool ParseUrlHandler(const std::string& handler_id,
-                     const base::DictionaryValue& handler_info,
+                     const base::Value::Dict& handler_info,
                      std::vector<UrlHandlerInfo>* url_handlers,
                      std::u16string* error,
                      Extension* extension) {
@@ -118,22 +118,22 @@ bool ParseUrlHandler(const std::string& handler_id,
   handler.id = handler_id;
 
   if (const std::string* ptr =
-          handler_info.FindStringKey(mkeys::kUrlHandlerTitle)) {
+          handler_info.FindString(mkeys::kUrlHandlerTitle)) {
     handler.title = *ptr;
   } else {
     *error = merrors::kInvalidURLHandlerTitle;
     return false;
   }
 
-  const base::ListValue* manif_patterns = NULL;
-  if (!handler_info.GetList(mkeys::kMatches, &manif_patterns) ||
-      manif_patterns->GetListDeprecated().size() == 0) {
+  const base::Value::List* manif_patterns =
+      handler_info.FindList(mkeys::kMatches);
+  if (!manif_patterns || manif_patterns->empty()) {
     *error = ErrorUtils::FormatErrorMessageUTF16(
         merrors::kInvalidURLHandlerPattern, handler_id);
     return false;
   }
 
-  for (const auto& entry : manif_patterns->GetListDeprecated()) {
+  for (const auto& entry : *manif_patterns) {
     std::string str_pattern =
         entry.is_string() ? entry.GetString() : std::string();
     // TODO(sergeygs): Limit this to non-top-level domains.
@@ -155,25 +155,24 @@ bool ParseUrlHandler(const std::string& handler_id,
 
 bool UrlHandlersParser::Parse(Extension* extension, std::u16string* error) {
   std::unique_ptr<UrlHandlers> info(new UrlHandlers);
-  const base::DictionaryValue* all_handlers = NULL;
-  if (!extension->manifest()->GetDictionary(
-        mkeys::kUrlHandlers, &all_handlers)) {
+  const base::Value::Dict* all_handlers =
+      extension->manifest()->available_values().FindDict(mkeys::kUrlHandlers);
+  if (!all_handlers) {
     *error = merrors::kInvalidURLHandlers;
     return false;
   }
 
   DCHECK(extension->is_platform_app());
 
-  for (base::DictionaryValue::Iterator iter(*all_handlers); !iter.IsAtEnd();
-       iter.Advance()) {
+  for (const auto item : *all_handlers) {
     // A URL handler entry is a title and a list of URL patterns to handle.
-    const base::DictionaryValue* handler = NULL;
-    if (!iter.value().GetAsDictionary(&handler)) {
+    const base::Value::Dict* handler = item.second.GetIfDict();
+    if (!handler) {
       *error = merrors::kInvalidURLHandlerPatternElement16;
       return false;
     }
 
-    if (!ParseUrlHandler(iter.key(), *handler, &info->handlers, error,
+    if (!ParseUrlHandler(item.first, *handler, &info->handlers, error,
                          extension)) {
       // Text in |error| is set by ParseUrlHandler.
       return false;

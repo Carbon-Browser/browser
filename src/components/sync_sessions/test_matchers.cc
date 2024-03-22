@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -157,9 +157,9 @@ class MatchesSyncedSessionMatcher
       *listener << " which is null";
       return false;
     }
-    if (!session_tag_.MatchAndExplain(actual->session_tag, listener)) {
+    if (!session_tag_.MatchAndExplain(actual->GetSessionTag(), listener)) {
       *listener << " which contains an unexpected session tag: "
-                << actual->session_tag;
+                << actual->GetSessionTag();
       return false;
     }
 

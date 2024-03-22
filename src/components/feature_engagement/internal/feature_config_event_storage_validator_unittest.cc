@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -19,10 +19,18 @@ namespace feature_engagement {
 
 namespace {
 
-const base::Feature kEventStorageTestFeatureFoo{
-    "test_foo", base::FEATURE_DISABLED_BY_DEFAULT};
-const base::Feature kEventStorageTestFeatureBar{
-    "test_bar", base::FEATURE_DISABLED_BY_DEFAULT};
+BASE_FEATURE(kEventStorageTestFeatureFoo,
+             "test_foo",
+             base::FEATURE_DISABLED_BY_DEFAULT);
+BASE_FEATURE(kEventStorageTestFeatureBar,
+             "test_bar",
+             base::FEATURE_DISABLED_BY_DEFAULT);
+BASE_FEATURE(kEventStorageTestGroupOne,
+             "test_group_one",
+             base::FEATURE_DISABLED_BY_DEFAULT);
+BASE_FEATURE(kEventStorageTestGroupTwo,
+             "test_group_two",
+             base::FEATURE_DISABLED_BY_DEFAULT);
 
 FeatureConfig kNeverStored;
 FeatureConfig kStoredInUsed1Day;
@@ -34,6 +42,8 @@ FeatureConfig kStoredInTrigger10Days;
 FeatureConfig kStoredInEventConfigs1Day;
 FeatureConfig kStoredInEventConfigs2Days;
 FeatureConfig kStoredInEventConfigs10Days;
+
+GroupConfig kGroupNeverStored;
 
 void InitializeStorageFeatureConfigs() {
   FeatureConfig default_config;
@@ -96,6 +106,17 @@ void InitializeStorageFeatureConfigs() {
       EventConfig("myevent", Comparator(ANY, 0), 0, 10));
   kStoredInEventConfigs10Days.event_configs.insert(
       EventConfig("unrelated_event", Comparator(ANY, 0), 0, 100));
+
+  GroupConfig default_group_config;
+  default_config.valid = true;
+  default_config.trigger = EventConfig("myevent", Comparator(ANY, 0), 0, 0);
+  default_config.event_configs.insert(
+      EventConfig("myevent", Comparator(ANY, 0), 0, 0));
+  default_config.event_configs.insert(
+      EventConfig("unrelated_event", Comparator(ANY, 0), 0, 100));
+  default_config.session_rate = Comparator(ANY, 0);
+
+  kGroupNeverStored = default_group_config;
 }
 
 class FeatureConfigEventStorageValidatorTest : public ::testing::Test {
@@ -115,7 +136,7 @@ class FeatureConfigEventStorageValidatorTest : public ::testing::Test {
     validator_.ClearForTesting();
     EditableConfiguration configuration;
     configuration.SetConfiguration(&kEventStorageTestFeatureFoo, foo_config);
-    validator_.InitializeFeatures(features, configuration);
+    validator_.InitializeFeatures(features, {}, configuration);
   }
 
   void UseConfigs(const FeatureConfig& foo_config,
@@ -127,7 +148,27 @@ class FeatureConfigEventStorageValidatorTest : public ::testing::Test {
     EditableConfiguration configuration;
     configuration.SetConfiguration(&kEventStorageTestFeatureFoo, foo_config);
     configuration.SetConfiguration(&kEventStorageTestFeatureBar, bar_config);
-    validator_.InitializeFeatures(features, configuration);
+    validator_.InitializeFeatures(features, {}, configuration);
+  }
+
+  void UseConfigs(const FeatureConfig& foo_config,
+                  const FeatureConfig& bar_config,
+                  const GroupConfig& group_one_config,
+                  const GroupConfig& group_two_config) {
+    FeatureVector features = {&kEventStorageTestFeatureFoo,
+                              &kEventStorageTestFeatureBar};
+    GroupVector groups = {&kEventStorageTestGroupOne,
+                          &kEventStorageTestGroupTwo};
+
+    validator_.ClearForTesting();
+    EditableConfiguration configuration;
+    configuration.SetConfiguration(&kEventStorageTestFeatureFoo, foo_config);
+    configuration.SetConfiguration(&kEventStorageTestFeatureBar, bar_config);
+    configuration.SetConfiguration(&kEventStorageTestGroupOne,
+                                   group_one_config);
+    configuration.SetConfiguration(&kEventStorageTestGroupTwo,
+                                   group_two_config);
+    validator_.InitializeFeatures(features, groups, configuration);
   }
 
   void VerifyNeverKeep() {
@@ -184,18 +225,27 @@ class FeatureConfigEventStorageValidatorTest : public ::testing::Test {
 
 TEST_F(FeatureConfigEventStorageValidatorTest,
        ShouldOnlyUseConfigFromEnabledFeatures) {
-  scoped_feature_list_.InitWithFeatures({kEventStorageTestFeatureFoo},
-                                        {kEventStorageTestFeatureBar});
+  scoped_feature_list_.InitWithFeatures(
+      {kEventStorageTestFeatureFoo, kEventStorageTestGroupOne},
+      {kEventStorageTestFeatureBar, kEventStorageTestGroupTwo});
 
   FeatureConfig foo_config = kNeverStored;
   foo_config.used = EventConfig("fooevent", Comparator(ANY, 0), 0, 1);
   FeatureConfig bar_config = kNeverStored;
   bar_config.used = EventConfig("barevent", Comparator(ANY, 0), 0, 1);
-  UseConfigs(foo_config, bar_config);
+  GroupConfig group_one_config = kGroupNeverStored;
+  group_one_config.trigger =
+      EventConfig("grouponeevent", Comparator(ANY, 0), 0, 1);
+  GroupConfig group_two_config = kGroupNeverStored;
+  group_two_config.trigger =
+      EventConfig("grouptwoevent", Comparator(ANY, 0), 0, 1);
+  UseConfigs(foo_config, bar_config, group_one_config, group_two_config);
 
   EXPECT_FALSE(validator_.ShouldStore("myevent"));
   EXPECT_TRUE(validator_.ShouldStore("fooevent"));
   EXPECT_FALSE(validator_.ShouldStore("barevent"));
+  EXPECT_TRUE(validator_.ShouldStore("grouponeevent"));
+  EXPECT_FALSE(validator_.ShouldStore("grouptwoevent"));
 }
 
 TEST_F(FeatureConfigEventStorageValidatorTest,

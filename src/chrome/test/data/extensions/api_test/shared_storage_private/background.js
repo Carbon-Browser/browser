@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -25,6 +25,10 @@ chrome.test.runTests([
     items = await chrome.sharedStoragePrivate.get();
     chrome.test.assertEq(1, Object.keys(items).length);
     chrome.test.assertEq(3, items.c);
+
+    // Clean up the keys added by the test, so that it will pollute the ash
+    // state for the Lacros browser tests.
+    await chrome.sharedStoragePrivate.remove(['c']);
 
     chrome.test.succeed();
   },

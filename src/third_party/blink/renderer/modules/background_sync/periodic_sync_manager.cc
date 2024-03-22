@@ -1,9 +1,10 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "third_party/blink/renderer/modules/background_sync/periodic_sync_manager.h"
 
+#include "base/task/sequenced_task_runner.h"
 #include "third_party/blink/public/common/browser_interface_broker_proxy.h"
 #include "third_party/blink/public/platform/platform.h"
 #include "third_party/blink/renderer/bindings/core/v8/script_promise.h"
@@ -46,7 +47,8 @@ ScriptPromise PeriodicSyncManager::registerPeriodicSync(
     return ScriptPromise();
   }
 
-  auto* resolver = MakeGarbageCollected<ScriptPromiseResolver>(script_state);
+  auto* resolver = MakeGarbageCollected<ScriptPromiseResolver>(
+      script_state, exception_state.GetContext());
   ScriptPromise promise = resolver->Promise();
 
   mojom::blink::SyncRegistrationOptionsPtr sync_registration =
@@ -54,7 +56,7 @@ ScriptPromise PeriodicSyncManager::registerPeriodicSync(
 
   GetBackgroundSyncServiceRemote()->Register(
       std::move(sync_registration), registration_->RegistrationId(),
-      resolver->WrapCallbackInScriptScope(WTF::Bind(
+      resolver->WrapCallbackInScriptScope(WTF::BindOnce(
           &PeriodicSyncManager::RegisterCallback, WrapPersistent(this))));
 
   return promise;
@@ -86,8 +88,8 @@ ScriptPromise PeriodicSyncManager::getTags(ScriptState* script_state) {
   GetBackgroundSyncServiceRemote()->GetRegistrations(
       registration_->RegistrationId(),
       resolver->WrapCallbackInScriptScope(
-          WTF::Bind(&PeriodicSyncManager::GetRegistrationsCallback,
-                    WrapPersistent(this))));
+          WTF::BindOnce(&PeriodicSyncManager::GetRegistrationsCallback,
+                        WrapPersistent(this))));
   return promise;
 }
 
@@ -113,7 +115,7 @@ ScriptPromise PeriodicSyncManager::unregister(ScriptState* script_state,
 
   GetBackgroundSyncServiceRemote()->Unregister(
       registration_->RegistrationId(), tag,
-      resolver->WrapCallbackInScriptScope(WTF::Bind(
+      resolver->WrapCallbackInScriptScope(WTF::BindOnce(
           &PeriodicSyncManager::UnregisterCallback, WrapPersistent(this))));
   return promise;
 }

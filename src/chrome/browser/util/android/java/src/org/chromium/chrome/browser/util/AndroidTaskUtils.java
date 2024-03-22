@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -24,9 +24,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
-/**
- * Deals with Document-related API calls.
- */
+/** Deals with Document-related API calls. */
 public class AndroidTaskUtils {
     public static final String TAG = "DocumentUtilities";
 

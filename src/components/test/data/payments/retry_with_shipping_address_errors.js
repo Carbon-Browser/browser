@@ -1,5 +1,5 @@
 /*
- * Copyright 2018 The Chromium Authors. All rights reserved.
+ * Copyright 2018 The Chromium Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -9,7 +9,7 @@ var gPaymentResponse = null;
 /**
  * Launches the PaymentRequest UI
  */
-function buy() { // eslint-disable-line no-unused-vars
+function buy() {
   var options = {
     requestShipping: true,
   };
@@ -24,7 +24,7 @@ function buy() { // eslint-disable-line no-unused-vars
  *
  * @param {PaymentValidationErrors} validationErrors Represent validation errors
  */
-function retry(validationErrors) { // eslint-disable-line no-unused-vars
+function retry(validationErrors) {
   if (gPaymentResponse == null) {
     return;
   }

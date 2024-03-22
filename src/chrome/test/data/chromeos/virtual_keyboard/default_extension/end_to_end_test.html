@@ -1,5 +1,5 @@
 <!--
-Copyright 2013 The Chromium Authors. All rights reserved.
+Copyright 2013 The Chromium Authors
 Use of this source code is governed by a BSD-style license that can be
 found in the LICENSE file.
 -->
@@ -19,13 +19,15 @@ found in the LICENSE file.
   input.focus();
 
   var verifyInput = function(expected) {
-    window.domAutomationController.send(input.value == expected);
+    return input.value == expected;
   };
 
   var waitForInput = function(char) {
-    input.oninput = function() {
-      verifyInput(char);
-    };
+    return new Promise(resolve => {
+      input.oninput = function() {
+        resolve(verifyInput(char));
+      };
+    });
   };
 </script>
 </html>

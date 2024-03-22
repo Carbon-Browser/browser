@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,7 +11,7 @@
 #include "base/android/jni_string.h"
 #include "base/android/locale_utils.h"
 #include "chrome/browser/browser_process.h"
-#include "chrome/browser/ui/android/fast_checkout/jni_headers/FastCheckoutBridge_jni.h"
+#include "chrome/browser/ui/android/fast_checkout/internal/jni/FastCheckoutBridge_jni.h"
 #include "chrome/browser/ui/android/fast_checkout/ui_view_android_utils.h"
 #include "chrome/browser/ui/fast_checkout/fast_checkout_controller.h"
 #include "components/autofill/core/browser/data_model/autofill_profile.h"
@@ -36,17 +36,26 @@ void FastCheckoutViewImpl::OnOptionsSelected(
     JNIEnv* env,
     const base::android::JavaParamRef<jobject>& autofill_profile_java,
     const base::android::JavaParamRef<jobject>& credit_card_java) {
-  // TODO(crbug.com/1334642): Notify the controller.
+  std::unique_ptr<autofill::AutofillProfile> autofill_profile =
+      CreateFastCheckoutAutofillProfileFromJava(
+          env, autofill_profile_java,
+          g_browser_process->GetApplicationLocale());
+
+  std::unique_ptr<autofill::CreditCard> credit_card =
+      CreateFastCheckoutCreditCardFromJava(env, credit_card_java);
+
+  controller_->OnOptionsSelected(std::move(autofill_profile),
+                                 std::move(credit_card));
 }
 
 void FastCheckoutViewImpl::OnDismiss(JNIEnv* env) {
-  // TODO(crbug.com/1334642): Notify the controller.
+  controller_->OnDismiss();
 }
 
 void FastCheckoutViewImpl::Show(
-    base::span<const autofill::AutofillProfile> autofill_profiles,
-    base::span<const autofill::CreditCard> credit_cards) {
-  if (!RecreateJavaObject()) {
+    const std::vector<autofill::AutofillProfile*>& autofill_profiles,
+    const std::vector<autofill::CreditCard*>& credit_cards) {
+  if (!RecreateJavaObjectIfNecessary()) {
     // It's possible that the constructor cannot access the bottom sheet clank
     // component. That case may be temporary but we can't let users in a waiting
     // state so report that TouchToFill is dismissed in order to show the normal
@@ -63,7 +72,7 @@ void FastCheckoutViewImpl::Show(
     Java_FastCheckoutBridge_setAutofillProfile(
         env, autofill_profiles_array, i,
         CreateFastCheckoutAutofillProfile(
-            env, autofill_profiles[i],
+            env, *autofill_profiles[i],
             g_browser_process->GetApplicationLocale()));
   }
 
@@ -73,22 +82,31 @@ void FastCheckoutViewImpl::Show(
     Java_FastCheckoutBridge_setCreditCard(
         env, credit_cards_array, i,
         CreateFastCheckoutCreditCard(
-            env, credit_cards[i], g_browser_process->GetApplicationLocale()));
+            env, *credit_cards[i], g_browser_process->GetApplicationLocale()));
   }
 
   Java_FastCheckoutBridge_showBottomSheet(
       env, java_object_internal_, autofill_profiles_array, credit_cards_array);
 }
 
-bool FastCheckoutViewImpl::RecreateJavaObject() {
+void FastCheckoutViewImpl::OpenAutofillProfileSettings(JNIEnv* env) {
+  controller_->OpenAutofillProfileSettings();
+}
+
+void FastCheckoutViewImpl::OpenCreditCardSettings(JNIEnv* env) {
+  controller_->OpenCreditCardSettings();
+}
+
+bool FastCheckoutViewImpl::RecreateJavaObjectIfNecessary() {
   if (controller_->GetNativeView() == nullptr ||
       controller_->GetNativeView()->GetWindowAndroid() == nullptr) {
     return false;  // No window attached (yet or anymore).
   }
+
   if (java_object_internal_) {
-    Java_FastCheckoutBridge_destroy(AttachCurrentThread(),
-                                    java_object_internal_);
+    return true;
   }
+
   java_object_internal_ = Java_FastCheckoutBridge_create(
       AttachCurrentThread(), reinterpret_cast<intptr_t>(this),
       controller_->GetNativeView()->GetWindowAndroid()->GetJavaObject());

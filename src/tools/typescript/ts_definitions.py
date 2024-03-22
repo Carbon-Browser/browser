@@ -1,4 +1,4 @@
-# Copyright 2021 The Chromium Authors. All rights reserved.
+# Copyright 2021 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -26,13 +26,15 @@ def _write_tsconfig_json(gen_dir, tsconfig):
   if not os.path.exists(gen_dir):
     os.makedirs(gen_dir)
 
-  with open(os.path.join(gen_dir, _TSCONFIG_GEN), 'w') as generated_tsconfig:
+  with open(os.path.join(gen_dir, _TSCONFIG_GEN), 'w',
+            encoding='utf-8') as generated_tsconfig:
     json.dump(tsconfig, generated_tsconfig, indent=2)
   return
 
 
 def main(argv):
   parser = argparse.ArgumentParser()
+  parser.add_argument('--deps', nargs='*')
   parser.add_argument('--gen_dir', required=True)
   parser.add_argument('--out_dir', required=True)
   parser.add_argument('--root_dir', required=True)
@@ -40,7 +42,8 @@ def main(argv):
   parser.add_argument('--path_mappings', nargs='*')
   args = parser.parse_args(argv)
 
-  with open(os.path.join(_HERE_DIR, _TSCONFIG_BASE)) as root_tsconfig:
+  with open(os.path.join(_HERE_DIR, _TSCONFIG_BASE),
+            encoding='utf-8') as root_tsconfig:
     tsconfig = json.loads(root_tsconfig.read())
 
   root_dir = os.path.relpath(args.root_dir, args.gen_dir)
@@ -61,6 +64,9 @@ def main(argv):
       mapping = m.split('|')
       path_mappings[mapping[0]].append(os.path.join('./', mapping[1]))
     tsconfig['compilerOptions']['paths'] = path_mappings
+
+  if args.deps is not None:
+    tsconfig['references'] = [{'path': dep} for dep in args.deps]
 
   _write_tsconfig_json(args.gen_dir, tsconfig)
 

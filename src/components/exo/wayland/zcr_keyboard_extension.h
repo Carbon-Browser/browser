@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,6 +6,8 @@
 #define COMPONENTS_EXO_WAYLAND_ZCR_KEYBOARD_EXTENSION_H_
 
 #include <stdint.h>
+
+#include "base/memory/raw_ptr.h"
 
 struct wl_client;
 
@@ -20,7 +22,7 @@ struct WaylandKeyboardExtension {
   WaylandKeyboardExtension& operator=(const WaylandKeyboardExtension&) = delete;
 
   // Owned by Server, which always outlives zcr_keyboard_extension.
-  SerialTracker* const serial_tracker;
+  const raw_ptr<SerialTracker, ExperimentalAsh> serial_tracker;
 };
 
 void bind_keyboard_extension(wl_client* client,

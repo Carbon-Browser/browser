@@ -1,35 +1,31 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include "ios/chrome/browser/policy/policy_watcher_browser_agent.h"
+#import "ios/chrome/browser/policy/policy_watcher_browser_agent.h"
 
 #import <Foundation/Foundation.h>
 
-#include "base/mac/backup_util.h"
-#include "base/mac/foundation_util.h"
-#include "base/metrics/histogram_functions.h"
-#include "base/path_service.h"
-#include "base/run_loop.h"
-#include "base/task/thread_pool.h"
-#include "components/prefs/pref_change_registrar.h"
-#include "components/prefs/pref_service.h"
-#include "components/sync/base/pref_names.h"
+#import "base/apple/backup_util.h"
+#import "base/apple/foundation_util.h"
+#import "base/metrics/histogram_functions.h"
+#import "base/path_service.h"
+#import "base/run_loop.h"
+#import "base/task/sequenced_task_runner.h"
+#import "base/task/thread_pool.h"
+#import "components/prefs/pref_change_registrar.h"
+#import "components/prefs/pref_service.h"
+#import "components/sync/base/pref_names.h"
 #import "ios/chrome/app/application_delegate/app_state.h"
-#include "ios/chrome/browser/application_context.h"
-#import "ios/chrome/browser/browser_state/chrome_browser_state.h"
-#include "ios/chrome/browser/policy/policy_watcher_browser_agent_observer.h"
-#include "ios/chrome/browser/pref_names.h"
-#import "ios/chrome/browser/signin/authentication_service_factory.h"
+#import "ios/chrome/browser/policy/policy_watcher_browser_agent_observer.h"
+#import "ios/chrome/browser/shared/coordinator/scene/scene_state.h"
+#import "ios/chrome/browser/shared/model/application_context/application_context.h"
+#import "ios/chrome/browser/shared/model/browser_state/chrome_browser_state.h"
+#import "ios/chrome/browser/shared/model/prefs/pref_names.h"
+#import "ios/chrome/browser/shared/public/commands/policy_change_commands.h"
+#import "ios/chrome/browser/signin/model/authentication_service_factory.h"
 #import "ios/chrome/browser/ui/authentication/signin/signin_utils.h"
-#import "ios/chrome/browser/ui/commands/policy_change_commands.h"
-#import "ios/chrome/browser/ui/main/scene_state.h"
-#import "ios/chrome/browser/ui/main/scene_state_browser_agent.h"
-#include "ios/web/public/thread/web_task_traits.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
+#import "ios/web/public/thread/web_task_traits.h"
 
 NSString* kSyncDisabledAlertShownKey = @"SyncDisabledAlertShown";
 
@@ -75,14 +71,16 @@ void PolicyWatcherBrowserAgent::Initialize(id<PolicyChangeCommands> handler) {
   // done after the handler is set to make sure the UI can be displayed.
   ForceSignOutIfSigninDisabled();
 
+  // TODO(crbug.com/1435427): Instead of directly accessing internal sync prefs,
+  // go through proper APIs (SyncService/SyncUserSettings).
   browser_prefs_change_observer_.Add(
-      syncer::prefs::kSyncManaged,
+      syncer::prefs::internal::kSyncManaged,
       base::BindRepeating(
           &PolicyWatcherBrowserAgent::ShowSyncDisabledPromptIfNeeded,
           base::Unretained(this)));
 
   // Try to show the alert in case the policy changed since last time.
-  base::SequencedTaskRunnerHandle::Get()->PostTask(
+  base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE,
       base::BindOnce(&PolicyWatcherBrowserAgent::ShowSyncDisabledPromptIfNeeded,
                      weak_factory_.GetWeakPtr()));
@@ -93,7 +91,7 @@ void PolicyWatcherBrowserAgent::Initialize(id<PolicyChangeCommands> handler) {
           &PolicyWatcherBrowserAgent::UpdateAppContainerBackupExclusion,
           base::Unretained(this)));
 
-  base::SequencedTaskRunnerHandle::Get()->PostTask(
+  base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE,
       base::BindOnce(
           &PolicyWatcherBrowserAgent::UpdateAppContainerBackupExclusion,
@@ -103,7 +101,8 @@ void PolicyWatcherBrowserAgent::Initialize(id<PolicyChangeCommands> handler) {
 void PolicyWatcherBrowserAgent::ForceSignOutIfSigninDisabled() {
   DCHECK(handler_);
   DCHECK(auth_service_);
-  if (!signin::IsSigninAllowedByPolicy()) {
+  if ((auth_service_->GetServiceStatus() ==
+       AuthenticationService::ServiceStatus::SigninDisabledByPolicy)) {
     if (auth_service_->HasPrimaryIdentity(signin::ConsentLevel::kSignin)) {
       sign_out_in_progress_ = true;
       base::UmaHistogramBoolean("Enterprise.BrowserSigninIOS.SignedOutByPolicy",
@@ -113,11 +112,12 @@ void PolicyWatcherBrowserAgent::ForceSignOutIfSigninDisabled() {
           weak_factory_.GetWeakPtr();
       // Sign the user out, but keep synced data (bookmarks, passwords, etc)
       // locally to be consistent with the policy's behavior on other platforms.
-      auth_service_->SignOut(
-          signin_metrics::ProfileSignout::SIGNOUT_PREF_CHANGED,
-          /*force_clear_browsing_data=*/false, ^{
-            weak_ptr->OnSignOutComplete();
-          });
+      auth_service_->SignOut(signin_metrics::ProfileSignout::kPrefChanged,
+                             /*force_clear_browsing_data=*/false, ^{
+                               if (weak_ptr) {
+                                 weak_ptr->OnSignOutComplete();
+                               }
+                             });
     }
 
     for (auto& observer : observers_) {
@@ -130,13 +130,14 @@ void PolicyWatcherBrowserAgent::ShowSyncDisabledPromptIfNeeded() {
   NSUserDefaults* standard_defaults = [NSUserDefaults standardUserDefaults];
   BOOL syncDisabledAlertShown =
       [standard_defaults boolForKey:kSyncDisabledAlertShownKey];
+  // TODO(crbug.com/1435427): Instead of directly accessing internal sync prefs,
+  // go through proper APIs (SyncService/SyncUserSettings).
   BOOL isSyncDisabledByAdministrator =
       browser_->GetBrowserState()->GetPrefs()->GetBoolean(
-          syncer::prefs::kSyncManaged);
+          syncer::prefs::internal::kSyncManaged);
 
   if (!syncDisabledAlertShown && isSyncDisabledByAdministrator) {
-    SceneState* scene_state =
-        SceneStateBrowserAgent::FromBrowser(browser_)->GetSceneState();
+    SceneState* scene_state = browser_->GetSceneState();
     BOOL scene_is_active =
         scene_state.activationLevel >= SceneActivationLevelForegroundActive;
     if (scene_is_active) {
@@ -156,16 +157,16 @@ void PolicyWatcherBrowserAgent::UpdateAppContainerBackupExclusion() {
   // TODO(crbug.com/1303652): If multiple profiles are supported on iOS, update
   // this logic to work with multiple profiles having possibly-possibly
   // conflicting preference values.
-  base::FilePath storage_dir = base::mac::GetUserLibraryPath();
+  base::FilePath storage_dir = base::apple::GetUserLibraryPath();
   if (backup_allowed) {
     base::ThreadPool::PostTask(
         FROM_HERE, {base::MayBlock(), base::TaskPriority::USER_VISIBLE},
-        base::BindOnce(base::IgnoreResult(&base::mac::ClearBackupExclusion),
+        base::BindOnce(base::IgnoreResult(&base::apple::ClearBackupExclusion),
                        std::move(storage_dir)));
   } else {
     base::ThreadPool::PostTask(
         FROM_HERE, {base::MayBlock(), base::TaskPriority::USER_VISIBLE},
-        base::BindOnce(base::IgnoreResult(&base::mac::SetBackupExclusion),
+        base::BindOnce(base::IgnoreResult(&base::apple::SetBackupExclusion),
                        std::move(storage_dir)));
   }
 }
@@ -181,12 +182,11 @@ void PolicyWatcherBrowserAgent::RemoveObserver(
 }
 
 void PolicyWatcherBrowserAgent::OnSignOutComplete() {
-  SceneState* scene_state =
-      SceneStateBrowserAgent::FromBrowser(browser_)->GetSceneState();
+  SceneState* scene_state = browser_->GetSceneState();
   sign_out_in_progress_ = false;
-  BOOL sceneIsActive =
+  BOOL scene_is_active =
       scene_state.activationLevel >= SceneActivationLevelForegroundActive;
-  if (sceneIsActive) {
+  if (scene_is_active) {
     // Try to show the signout prompt in all cases: if there is a sign
     // in in progress, the UI will prevent the prompt from showing.
     [handler_ showForceSignedOutPrompt];

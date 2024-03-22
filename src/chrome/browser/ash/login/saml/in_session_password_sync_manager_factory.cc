@@ -1,17 +1,13 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/ash/login/saml/in_session_password_sync_manager_factory.h"
 
-#include "ash/constants/ash_features.h"
 #include "chrome/browser/ash/login/saml/in_session_password_sync_manager.h"
 #include "chrome/browser/ash/profiles/profile_helper.h"
 #include "chrome/browser/profiles/profile.h"
-#include "components/keyed_service/content/browser_context_dependency_manager.h"
 #include "components/keyed_service/core/keyed_service.h"
-#include "components/user_manager/user.h"
-#include "components/user_manager/user_manager.h"
 #include "content/public/browser/browser_context.h"
 
 namespace ash {
@@ -19,28 +15,32 @@ namespace ash {
 // static
 InSessionPasswordSyncManagerFactory*
 InSessionPasswordSyncManagerFactory::GetInstance() {
-  return base::Singleton<InSessionPasswordSyncManagerFactory>::get();
+  static base::NoDestructor<InSessionPasswordSyncManagerFactory> instance;
+  return instance.get();
 }
 
 // static
 InSessionPasswordSyncManager*
 InSessionPasswordSyncManagerFactory::GetForProfile(Profile* profile) {
-  if (!features::IsSamlReauthenticationOnLockscreenEnabled())
-    return nullptr;
-
   return static_cast<InSessionPasswordSyncManager*>(
       GetInstance()->GetServiceForBrowserContext(profile, true));
 }
 
 InSessionPasswordSyncManagerFactory::InSessionPasswordSyncManagerFactory()
-    : BrowserContextKeyedServiceFactory(
+    : ProfileKeyedServiceFactory(
           "InSessionPasswordSyncManager",
-          BrowserContextDependencyManager::GetInstance()) {}
+          ProfileSelections::Builder()
+              .WithRegular(ProfileSelection::kOriginalOnly)
+              // TODO(crbug.com/1418376): Check if this service is needed in
+              // Guest mode.
+              .WithGuest(ProfileSelection::kOriginalOnly)
+              .Build()) {}
 
 InSessionPasswordSyncManagerFactory::~InSessionPasswordSyncManagerFactory() =
     default;
 
-KeyedService* InSessionPasswordSyncManagerFactory::BuildServiceInstanceFor(
+std::unique_ptr<KeyedService>
+InSessionPasswordSyncManagerFactory::BuildServiceInstanceForBrowserContext(
     content::BrowserContext* context) const {
   Profile* profile = static_cast<Profile*>(context);
 
@@ -48,7 +48,7 @@ KeyedService* InSessionPasswordSyncManagerFactory::BuildServiceInstanceFor(
   if (!ProfileHelper::IsPrimaryProfile(profile)) {
     return nullptr;
   }
-  return new InSessionPasswordSyncManager(profile);
+  return std::make_unique<InSessionPasswordSyncManager>(profile);
 }
 
 }  // namespace ash

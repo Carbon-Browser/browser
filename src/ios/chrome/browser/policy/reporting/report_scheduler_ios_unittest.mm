@@ -1,30 +1,25 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include "ios/chrome/browser/policy/reporting/report_scheduler_ios.h"
-#include "base/time/time.h"
-#include "components/enterprise/browser/reporting/real_time_report_generator.h"
+#import "ios/chrome/browser/policy/reporting/report_scheduler_ios.h"
 
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
-
-#include "base/callback_helpers.h"
-#include "base/test/gmock_callback_support.h"
-#include "base/test/metrics/histogram_tester.h"
-#include "base/test/scoped_feature_list.h"
-#include "base/threading/thread_task_runner_handle.h"
-#include "components/enterprise/browser/controller/fake_browser_dm_token_storage.h"
-#include "components/enterprise/browser/reporting/common_pref_names.h"
-#include "components/enterprise/browser/reporting/report_request.h"
-#include "components/policy/core/common/cloud/mock_cloud_policy_client.h"
-#include "ios/chrome/browser/policy/reporting/reporting_delegate_factory_ios.h"
-#include "ios/chrome/test/ios_chrome_scoped_testing_local_state.h"
-#include "ios/web/public/test/web_task_environment.h"
-#include "testing/gmock/include/gmock/gmock.h"
-#include "testing/gtest/include/gtest/gtest.h"
-#include "testing/platform_test.h"
+#import "base/functional/callback_helpers.h"
+#import "base/task/single_thread_task_runner.h"
+#import "base/test/gmock_callback_support.h"
+#import "base/test/metrics/histogram_tester.h"
+#import "base/test/scoped_feature_list.h"
+#import "base/time/time.h"
+#import "components/enterprise/browser/controller/fake_browser_dm_token_storage.h"
+#import "components/enterprise/browser/reporting/common_pref_names.h"
+#import "components/enterprise/browser/reporting/report_request.h"
+#import "components/policy/core/common/cloud/mock_cloud_policy_client.h"
+#import "ios/chrome/browser/policy/reporting/reporting_delegate_factory_ios.h"
+#import "ios/chrome/test/ios_chrome_scoped_testing_local_state.h"
+#import "ios/web/public/test/web_task_environment.h"
+#import "testing/gmock/include/gmock/gmock.h"
+#import "testing/gtest/include/gtest/gtest.h"
+#import "testing/platform_test.h"
 
 using ::base::test::RunOnceCallback;
 using ::testing::_;
@@ -48,7 +43,7 @@ ACTION_P(ScheduleGeneratorCallback, request_number) {
   ReportRequestQueue requests;
   for (int i = 0; i < request_number; i++)
     requests.push(std::make_unique<ReportRequest>(ReportType::kFull));
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE, base::BindOnce(std::move(arg0), std::move(requests)));
 }
 
@@ -111,8 +106,6 @@ class ReportSchedulerIOSTest : public PlatformTest {
     params.client = client_;
     params.delegate = report_delegate_factory_.GetReportSchedulerDelegate();
     params.report_generator = std::move(generator_ptr_);
-    params.real_time_report_generator =
-        std::make_unique<RealTimeReportGenerator>(&report_delegate_factory_),
     scheduler_ = std::make_unique<ReportScheduler>(std::move(params));
     scheduler_->SetReportUploaderForTesting(std::move(uploader_ptr_));
   }

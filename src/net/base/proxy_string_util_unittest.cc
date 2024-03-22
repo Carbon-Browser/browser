@@ -1,9 +1,10 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "net/base/proxy_string_util.h"
 
+#include "net/base/proxy_chain.h"
 #include "net/base/proxy_server.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
@@ -210,9 +211,17 @@ TEST(ProxySpecificationUtilTest, PacResultElementToProxyServer) {
   };
 
   for (const auto& test : tests) {
-    ProxyServer uri = PacResultElementToProxyServer(test.input_pac);
-    EXPECT_TRUE(uri.is_valid());
-    EXPECT_EQ(test.expected_uri, ProxyServerToProxyUri(uri));
+    SCOPED_TRACE(test.input_pac);
+    ProxyServer server = PacResultElementToProxyServer(test.input_pac);
+    EXPECT_TRUE(server.is_valid());
+    EXPECT_EQ(test.expected_uri, ProxyServerToProxyUri(server));
+
+    ProxyChain chain = PacResultElementToProxyChain(test.input_pac);
+    EXPECT_TRUE(chain.IsValid());
+    if (!chain.is_direct()) {
+      EXPECT_EQ(test.expected_uri,
+                ProxyServerToProxyUri(chain.GetProxyServer(/*chain_index=*/0)));
+    }
   }
 }
 
@@ -229,8 +238,12 @@ TEST(ProxySpecificationUtilTest, InvalidPacResultElementToProxyServer) {
   };
 
   for (const char* test : tests) {
-    ProxyServer uri = PacResultElementToProxyServer(test);
-    EXPECT_FALSE(uri.is_valid());
+    SCOPED_TRACE(test);
+    ProxyServer server = PacResultElementToProxyServer(test);
+    EXPECT_FALSE(server.is_valid());
+
+    ProxyChain chain = PacResultElementToProxyChain(test);
+    EXPECT_FALSE(chain.IsValid());
   }
 }
 

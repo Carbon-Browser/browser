@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,23 +7,35 @@
 
 #import <UIKit/UIKit.h>
 
+#import "ios/chrome/browser/shared/ui/table_view/cells/table_view_link_header_footer_item.h"
+#import "ios/chrome/browser/shared/ui/table_view/legacy_chrome_table_view_controller.h"
 #import "ios/chrome/browser/ui/settings/settings_root_view_controlling.h"
-#import "ios/chrome/browser/ui/table_view/cells/table_view_link_header_footer_item.h"
-#import "ios/chrome/browser/ui/table_view/chrome_table_view_controller.h"
 
 // SettingsRootTableViewController is a base class for integrating UITableViews
 // into the Settings UI. This class is made to be subclassed and contains the
 // logic to handle the most common user interactions (edit, delete...).
 @interface SettingsRootTableViewController
-    : ChromeTableViewController <SettingsRootViewControlling,
-                                 TableViewLinkHeaderFooterItemDelegate,
-                                 UIAdaptivePresentationControllerDelegate>
+    : LegacyChromeTableViewController <SettingsRootViewControlling,
+                                       TableViewLinkHeaderFooterItemDelegate,
+                                       UIAdaptivePresentationControllerDelegate>
 
 // Delete button for the toolbar.
 @property(nonatomic, strong, readonly) UIBarButtonItem* deleteButton;
 
-// Add button for the toolbar.
-@property(nonatomic, strong, readonly) UIBarButtonItem* addButtonInToolbar;
+// Custom left button for the toolbar.
+// Return a non nil value to provide a custom button displayed on the left
+// side of the toolbar. Default is nil.
+@property(nonatomic, strong, readonly) UIBarButtonItem* customLeftToolbarButton;
+
+// Custom right button for the toolbar.
+// Return a non nil value to provide a custom button displayed on the right
+// side of the toolbar. Default is nil.
+@property(nonatomic, strong, readonly)
+    UIBarButtonItem* customRightToolbarButton;
+
+// Back button on navigation panel. This is used to store back button while it
+// is replaced with Cancel during editing.
+@property(nonatomic, strong) UIBarButtonItem* backButtonItem;
 
 // Whether this table view controller should hide the "Done" button (the right
 // navigation bar button). Default is NO.
@@ -33,12 +45,8 @@
 // navigation bar button) on edit. Default is NO.
 @property(nonatomic, assign) BOOL shouldDisableDoneButtonOnEdit;
 
-// Whether this table view controller should show the "Add" button in the
-// toolbar(bottom left). Default is NO.
-@property(nonatomic, assign) BOOL shouldShowAddButtonInToolbar;
-
 // Whether this table view controller should show the "Delete" button in the
-// toolbar(bottom left). Default is YES. Set in `viewDidLoad`.
+// toolbar(bottom left) in edit mode. Default is YES. Set in `viewDidLoad`.
 @property(nonatomic, assign) BOOL shouldShowDeleteButtonInToolbar;
 
 // Updates the edit or done button to reflect editing state.  If the
@@ -48,15 +56,22 @@
 // setEditing:animated: method instead of being manually triggered.
 - (void)updateUIForEditState;
 
-// Updates the edit or done button to reflect editing state in the toolbar.
-// Shows Add button in the left end if `shouldShowAddButtonInToolbar` is YES. In
-// edit state, the left end shows the Delete button and the right end shows
-// Done.
+// Updates the buttons in the toolbar to reflect its editing state.
+// If `customLeftToolbarButton` or `customRightToolbarButton` are non nil, they
+// are displayed on the toolbar. In the absence of custom buttons and in edit
+// state, the left end shows the Delete button and the right end shows Done. In
+// no edit state and no custom buttons, the edit button is displayed on the
+// right end.
 - (void)updatedToolbarForEditState;
 
 // Reloads the table view model with `loadModel` and then reloads the
 // table view data.
 - (void)reloadData;
+
+// Configures the handlers on another root table view controller, copying them
+// from the receiver.
+- (void)configureHandlersForRootViewController:
+    (id<SettingsRootViewControlling>)controller;
 
 @end
 
@@ -108,8 +123,8 @@
 // * Removes the transparent veil.
 - (void)allowUserInteraction;
 
-// Called when the add button in the toolbar is pressed. Subclasses should
-// override this method.
+// Called when the add button in the toolbar is pressed. Subclasses must
+// override this method if `shouldShowAddButtonInToolbar` is set to YES.
 - (void)addButtonCallback;
 
 @end

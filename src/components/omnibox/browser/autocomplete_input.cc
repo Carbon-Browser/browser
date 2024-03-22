@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,6 +7,7 @@
 #include <vector>
 
 #include "base/logging.h"
+#include "base/strings/strcat.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/string_split.h"
 #include "base/strings/string_util.h"
@@ -185,7 +186,12 @@ void AutocompleteInput::Init(
   PopulateTermsPrefixedByHttpOrHttps(text_, &terms_prefixed_by_http_or_https_);
 
   DCHECK(!added_default_scheme_to_typed_url_);
-
+  typed_url_had_http_scheme_ =
+      base::StartsWith(text,
+                       base::ASCIIToUTF16(base::StrCat(
+                           {url::kHttpScheme, url::kStandardSchemeSeparator})),
+                       base::CompareCase::INSENSITIVE_ASCII) &&
+      canonicalized_url.SchemeIs(url::kHttpScheme);
   GURL upgraded_url;
   if (should_use_https_as_default_scheme_ &&
       type_ == metrics::OmniboxInputType::URL &&
@@ -270,16 +276,16 @@ metrics::OmniboxInputType AutocompleteInput::Parse(
     return metrics::OmniboxInputType::QUERY;
 
 #if BUILDFLAG(IS_CHROMEOS)
-  const bool is_lacros_or_lacros_is_primary =
+  const bool is_lacros_or_lacros_is_enabled =
 #if BUILDFLAG(IS_CHROMEOS_LACROS)
       true;
 #else
       // ChromeOS's launcher is using the omnibox from Ash. As such we have to
       // allow Ash to use the os scheme if Lacros is the primary browser.
-      crosapi::lacros_startup_state::IsLacrosPrimaryEnabled();
+      crosapi::lacros_startup_state::IsLacrosEnabled();
 #endif  // BUILDFLAG(IS_CHROMEOS_LACROS)
-  if (is_lacros_or_lacros_is_primary &&
-      crosapi::gurl_os_handler_utils::IsAshOsAsciiScheme(parsed_scheme_utf8)) {
+  if (is_lacros_or_lacros_is_enabled &&
+      crosapi::gurl_os_handler_utils::IsOsScheme(parsed_scheme_utf8)) {
     // Lacros and Ash have a different set of internal chrome:// pages.
     // However - once Lacros is the primary browser, the Ash browser cannot be
     // reached anymore and many internal status / information / ... pages
@@ -295,8 +301,9 @@ metrics::OmniboxInputType AutocompleteInput::Parse(
     // either case, |parsed_scheme_utf8| will tell us that this is a file URL,
     // but |parts->scheme| might be empty, e.g. if the user typed "C:\foo".
 
-#if BUILDFLAG(IS_IOS)
-    // On iOS, which cannot display file:/// URLs, treat this case like a query.
+#if (BUILDFLAG(IS_IOS) || BUILDFLAG(IS_ANDROID))
+    // On iOS and Android, which cannot display file:/// URLs, treat this case
+    // like a query.
     return metrics::OmniboxInputType::QUERY;
 #else
     return metrics::OmniboxInputType::URL;
@@ -305,7 +312,9 @@ metrics::OmniboxInputType AutocompleteInput::Parse(
 
   // Treat javascript: scheme queries followed by things that are unlikely to
   // be code as UNKNOWN, rather than script to execute (URL).
-  if (RE2::FullMatch(base::UTF16ToUTF8(text), "(?i)javascript:([^;=().\"]*)")) {
+  if (base::EqualsCaseInsensitiveASCII(parsed_scheme_utf8,
+                                       url::kJavaScriptScheme) &&
+      RE2::FullMatch(base::UTF16ToUTF8(text), "(?i)javascript:([^;=().\"]*)")) {
     return metrics::OmniboxInputType::UNKNOWN;
   }
 
@@ -532,7 +541,8 @@ metrics::OmniboxInputType AutocompleteInput::Parse(
   // The .example and .test TLDs are special-cased as known TLDs due to
   // https://tools.ietf.org/html/rfc6761. Unlike localhost, these are not valid
   // host names, so they must have at least one subdomain to be a URL.
-  for (const base::StringPiece domain : {"example", "test"}) {
+  // .local is used for Multicast DNS in https://www.rfc-editor.org/rfc/rfc6762.
+  for (const base::StringPiece domain : {"example", "test", "local"}) {
     // The +1 accounts for a possible trailing period.
     if (canonicalized_url->DomainIs(domain) &&
         (canonicalized_url->host().length() > (domain.length() + 1)))
@@ -549,11 +559,6 @@ metrics::OmniboxInputType AutocompleteInput::Parse(
           (canonicalized_url->host().length() > (domain.length() + 1))) {
           return metrics::OmniboxInputType::URL;
       }
-  }
-
-  // Check if the host part of the URL matches the '.word' pattern for handshake domains
-  if (std::regex_search(canonicalized_url->host(), tldRegex)) {
-      return metrics::OmniboxInputType::URL;
   }
 
   // No scheme, username, port, and no known TLD on the host.
@@ -772,7 +777,7 @@ void AutocompleteInput::Clear() {
   prefer_keyword_ = false;
   allow_exact_keyword_match_ = false;
   omit_asynchronous_matches_ = false;
-  focus_type_ = OmniboxFocusType::DEFAULT;
+  focus_type_ = metrics::OmniboxFocusType::INTERACTION_DEFAULT;
   terms_prefixed_by_http_or_https_.clear();
   query_tile_id_.reset();
   https_port_for_testing_ = 0;
@@ -800,4 +805,8 @@ size_t AutocompleteInput::EstimateMemoryUsage() const {
 void AutocompleteInput::WriteIntoTrace(perfetto::TracedValue context) const {
   auto dict = std::move(context).WriteDictionary();
   dict.Add("text", text_);
+}
+
+bool AutocompleteInput::IsZeroSuggest() const {
+  return focus_type_ != metrics::OmniboxFocusType::INTERACTION_DEFAULT;
 }

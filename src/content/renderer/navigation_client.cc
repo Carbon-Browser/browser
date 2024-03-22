@@ -1,12 +1,12 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "content/renderer/navigation_client.h"
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/check.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "content/common/frame.mojom.h"
 #include "content/renderer/render_frame_impl.h"
 #include "services/network/public/mojom/fetch_api.mojom.h"
@@ -36,20 +36,27 @@ void NavigationClient::CommitNavigation(
     blink::mojom::ControllerServiceWorkerInfoPtr controller_service_worker_info,
     blink::mojom::ServiceWorkerContainerInfoForClientPtr container_info,
     mojo::PendingRemote<network::mojom::URLLoaderFactory>
-        prefetch_loader_factory,
+        subresource_proxying_loader_factory,
+    mojo::PendingRemote<network::mojom::URLLoaderFactory>
+        keep_alive_loader_factory,
+    mojo::PendingAssociatedRemote<blink::mojom::FetchLaterLoaderFactory>
+        fetch_later_loader_factory,
+    const blink::DocumentToken& document_token,
     const base::UnguessableToken& devtools_navigation_token,
-    const blink::ParsedPermissionsPolicy& permissions_policy,
+    const absl::optional<blink::ParsedPermissionsPolicy>& permissions_policy,
     blink::mojom::PolicyContainerPtr policy_container,
     mojo::PendingRemote<blink::mojom::CodeCacheHost> code_cache_host,
+    mojo::PendingRemote<blink::mojom::ResourceCache> resource_cache,
     mojom::CookieManagerInfoPtr cookie_manager_info,
     mojom::StorageInfoPtr storage_info,
     CommitNavigationCallback callback) {
   DCHECK(blink::IsRequestDestinationFrame(common_params->request_destination));
 
-  // TODO(ahemery): The reset should be done when the navigation did commit
-  // (meaning at a later stage). This is not currently possible because of
-  // race conditions leading to the early deletion of NavigationRequest would
-  // unexpectedly abort the ongoing navigation. Remove when the races are fixed.
+  // TODO(https://crbug.com/1467502): The reset should be done when the
+  // navigation did commit (meaning at a later stage). This is not currently
+  // possible because of race conditions leading to the early deletion of
+  // NavigationRequest would unexpectedly abort the ongoing navigation. Remove
+  // when the races are fixed.
   ResetDisconnectionHandler();
   render_frame_->CommitNavigation(
       std::move(common_params), std::move(commit_params),
@@ -57,9 +64,12 @@ void NavigationClient::CommitNavigation(
       std::move(url_loader_client_endpoints), std::move(subresource_loaders),
       std::move(subresource_overrides),
       std::move(controller_service_worker_info), std::move(container_info),
-      std::move(prefetch_loader_factory), devtools_navigation_token,
-      permissions_policy, std::move(policy_container),
-      std::move(code_cache_host), std::move(cookie_manager_info),
+      std::move(subresource_proxying_loader_factory),
+      std::move(keep_alive_loader_factory),
+      std::move(fetch_later_loader_factory), document_token,
+      devtools_navigation_token, permissions_policy,
+      std::move(policy_container), std::move(code_cache_host),
+      std::move(resource_cache), std::move(cookie_manager_info),
       std::move(storage_info), std::move(callback));
 }
 
@@ -72,6 +82,7 @@ void NavigationClient::CommitFailedNavigation(
     const net::ResolveErrorInfo& resolve_error_info,
     const absl::optional<std::string>& error_page_content,
     std::unique_ptr<blink::PendingURLLoaderFactoryBundle> subresource_loaders,
+    const blink::DocumentToken& document_token,
     blink::mojom::PolicyContainerPtr policy_container,
     mojom::AlternativeErrorPageOverrideInfoPtr alternative_error_page_info,
     CommitFailedNavigationCallback callback) {
@@ -80,8 +91,8 @@ void NavigationClient::CommitFailedNavigation(
       std::move(common_params), std::move(commit_params),
       has_stale_copy_in_cache, error_code, extended_error_code,
       resolve_error_info, error_page_content, std::move(subresource_loaders),
-      std::move(policy_container), std::move(alternative_error_page_info),
-      std::move(callback));
+      document_token, std::move(policy_container),
+      std::move(alternative_error_page_info), std::move(callback));
 }
 
 void NavigationClient::Bind(
@@ -112,6 +123,11 @@ void NavigationClient::SetUpRendererInitiatedNavigation(
                  base::BindOnce(
                      &NavigationClient::NotifyNavigationCancellationWindowEnded,
                      weak_ptr_factory_.GetWeakPtr()));
+}
+
+void NavigationClient::ResetWithoutCancelling() {
+  navigation_client_receiver_.ResetWithReason(
+      mojom::NavigationClient::kResetForSwap, "");
 }
 
 void NavigationClient::NotifyNavigationCancellationWindowEnded() {

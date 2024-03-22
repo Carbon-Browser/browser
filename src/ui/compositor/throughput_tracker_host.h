@@ -1,11 +1,11 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef UI_COMPOSITOR_THROUGHPUT_TRACKER_HOST_H_
 #define UI_COMPOSITOR_THROUGHPUT_TRACKER_HOST_H_
 
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
 #include "cc/metrics/frame_sequence_tracker.h"
 #include "ui/compositor/compositor_export.h"
 

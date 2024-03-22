@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -20,8 +20,11 @@ void ShowPrivacySandboxPrompt(Browser* browser,
 void ShowPrivacySandboxDialog(Browser* browser,
                               PrivacySandboxService::PromptType prompt_type);
 
-// Creates and shows a bubble for |browser| displaying the Privacy Sandbox
-// notice the user.
-void ShowPrivacySandboxNoticeBubble(Browser* browser);
+// Returns whether a Privacy Sandbox prompt can be shown in the |browser|.
+// Checks if the maximum dialog height fits the prompt height.
+bool CanWindowHeightFitPrivacySandboxPrompt(Browser* browser);
+
+// Returns whether a window can fit PrivacySandbox prompt width.
+bool CanWindowWidthFitPrivacySandboxPrompt(Browser* browser);
 
 #endif  // CHROME_BROWSER_UI_PRIVACY_SANDBOX_PRIVACY_SANDBOX_PROMPT_H_

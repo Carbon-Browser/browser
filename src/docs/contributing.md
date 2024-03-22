@@ -86,7 +86,7 @@ contribution can be accepted:
 
 ## Initial git setup
 
-1. Visit <https://chromium-review.googlesource.com/new-password> and follow the
+1. Visit <https://chromium.googlesource.com/new-password> and follow the
    on-screen instructions to get credentials for uploading changes.
 2. Tell git about your name, email and some other settings.
    ```
@@ -172,8 +172,7 @@ has more in-depth tips for writing a good commit description.
 ### Chromium-specific description tips
 
 - Links to previous CLs should be formatted as `https://crrev.com/c/NUMBER`,
-  which forwards to [Gitiles][cr-gitiles], rather than linking to the review at
-  <https://chromium-review.googlesource.com>.
+  which is slightly shorter than <https://chromium-review.googlesource.com>.
 
 - If there are instructions for testers to verify the change is correct,
   include them with the `Test:` tag:
@@ -203,6 +202,30 @@ git cl upload -r foo@example.com,bar@example.com -b 123456
 
 See `git cl help upload` for a full list of flags.
 
+### Uploading dependent changes
+
+If you wish to work on multiple related changes without waiting for
+them to land, you can do so in Gerrit using dependent changes.
+
+To put this into an example, let‘s say you have a commit for feature A
+and this is in the process of being reviewed on Gerrit.  Now let’s say
+you want to start more work based on it before it lands on main.
+
+```
+git checkout featureA
+git checkout -b featureB
+git branch --set-upstream-to featureA
+# ... edit some files
+# ... git add ...
+git commit
+git cl upload
+```
+
+In Gerrit, there would then be a “relation chain” shown where the
+feature A change is the parent of the feature B change.  If A
+introduces a new file which B changes, the review for B will only show
+the diff from A.
+
 ## Code review
 
 Code reviews are covered in more detail on the [code review
@@ -210,15 +233,20 @@ policies][code-reviews] page.
 
 ### Finding a reviewer
 
-Ideally, the reviewer is someone who is familiar with the area of code in
-question. If you're not sure who that should be, check with anyone in the
-nearest ancestor OWNERS file.
+Please note here that a "reviewer" in this context is someone that not
+only provides comment on the CL but also someone who can approve the
+submission by providing a CR+1.
 
-- Anybody can review code, but there must be at least one owner for each
-  affected directory.
-- If there are multiple reviewers, make it clear what each reviewer is expected
-  to review.
-- `git cl owners` automatically suggests reviewers based on the OWNERS files.
+Reviewers must be [committers](https://www.chromium.org/getting-involved/become-a-committer/).
+Ideally they should be committers who are familiar with the area of code
+in question. If you're not sure who these should be, check with anyone in
+the nearest ancestor OWNERS file.
+
+- There must be at least one owner for each affected directory.
+- If there are multiple reviewers, make it clear what each reviewer is
+expected to review.
+- `git cl owners` automatically suggests reviewers based on the OWNERS
+files.
 
 _Note:_ By default, please only select one reviewer for each file (that is, a
 single reviewer may review multiple files, but typically each file only needs
@@ -233,6 +261,11 @@ There are times when requesting multiple reviewers for the same file may be
 desirable - such as when the code is particularly complicated, or when the file
 uses multiple systems and a perspective from each is valuable. In this case,
 please make it explicit that you would like both reviewers to review.
+
+Submissions to the chromium/src repository by a change contributor who is
+not a Chromium committer will require two committers to Code-Review+1 the
+submissions. If the owner of the CL is already a committer, then only one
+other committer is needed to Code-Review+1.
 
 ### Requesting review
 
@@ -318,6 +351,31 @@ Alternatively, a developer with commit access can [directly
 commit][direct-commit] a change, bypassing the commit queue. This should only
 be used in emergencies because it will bypass all the safety nets.
 
+## Relanding a change
+
+Occasionally changes that pass the [commit queue][commit-queue] and get
+submitted into Chromium will later be reverted. If this happens to your change,
+don't be discouraged! This can be a common part of the Chromium development
+cycle and happens for a variety of reasons, including a conflict with an
+unanticipated change or tests not covered on the commit queue.
+
+If this happens to your change, you're encouraged to pursue a reland. When doing
+so, following these basic steps can streamline the re-review process:
+- **Create the reland**: Click the `CREATE RELAND` button on the original change
+  in Gerrit. This will create a new change whose diff is identical to the
+  original, but has a small paper-trail in the commit message that leads back to
+  the original. This can be useful for sheriffs when debugging regressions.
+- **Append the fix**: If the reland requires file modifications not present in
+  the original change, simply upload these fixes in a subsequent patchset to the
+  reland change. By comparing the first patchset with the latest, this gives
+  reviewers the ability to see the diff of _just_ the reland fix.
+- **Describe the fix**: In the commit message of the reland change, briefly
+  summarize what's changed that makes relanding again safe. Explanations can
+  include: "included needed fix", "disabled failing tests", "crash was fixed
+  elsewhere". Specifically for that last case: if the reland change is identical
+  to the original and the reland fix was handled separately in a preceding
+  change, make sure to link to that change in the commit message of the reland.
+
 ## Code guidelines
 
 In addition to the adhering to the [styleguide][cr-styleguide], the following
@@ -331,16 +389,19 @@ general rules of thumb can be helpful in navigating how to structure changes:
   product in the Chromium repositories that depends on that line of code or else
   the line of code should be removed.
 
-  Completely new additions to the project (e.g., support for a new OS or
-  architecture, or a new top-level directory for a new sub-project) must be
-  approved by chrome-eng-review@google.com. For long-term maintenance reasons,
-  we will accept only things that are used by the Chromium project and things
-  whose benefit to Chromium outweighs any cost increase in maintaining
-  Chromium's supported architectures / platforms (e.g. adding one ifdef branch
-  for an unsupported architecture / platform has negligible cost and is likely
-  fine, but introducing new abstractions in the code has a high cost and would
-  need to provide Chromium with corresponding benefit). See the
-  [new port policy](new_port_policy.md) for further guidance.
+  When you are adding support for a new OS, a new architecture, a new port or
+  a new top-level directory, please send an email to
+  chrome-atls@google.com and get approval. For long-term maintenance
+  reasons, we will accept only things that are used by the Chromium project
+  (including Chromium-supported projects like V8 and Skia) and things whose
+  benefit to Chromium outweighs any cost increase in maintaining Chromium's
+  supported architectures / platforms (e.g. adding one ifdef branch for an
+  unsupported architecture / platform has negligible cost and is likely fine,
+  but introducing new abstractions or changes to higher level directories has
+  a high cost and would need to provide Chromium with corresponding benefit).
+  Note that an unsupported architecture / platform will not have bots on
+  Google-managed waterfalls (even FYI bots) or maintained by Chromium
+  developers. Please use existing ifdef branches as much as possible.
 
 - **Code should only be moved to a central location (e.g., //base) when
   multiple consumers would benefit.** We should resist the temptation to
@@ -370,7 +431,7 @@ general rules of thumb can be helpful in navigating how to structure changes:
   Reducing the number of languages eases toolchain and infrastructure
   requirements, and minimizes the learning hurdles for developers to be
   successful contributing across the codebase. Additions of new languages must
-  be approved by [//ENG_REVIEW_OWNERS](../ENG_REVIEW_OWNERS).
+  be approved by [//ATL_OWNERS](../ATL_OWNERS).
 
 - **When your team is making API changes or migrating between services, the
   team mandating the change needs to do at least 80% of the work.** The
@@ -435,9 +496,6 @@ formats.
     `-r foo@example.com` when running `git cl upload`.
   * A comma-separated list of reviewer email addresses (e.g.
     foo@example.com, bar@example.com).
-* **Tbr:** The same format as the `R` footer, but indicates to the
-  commit queue that it can skip checking that all files in the change
-  have been approved by their respective `OWNERS`.
 * **Cq-Include-Trybots:**
   * A comma-separated list of trybots which should be triggered and
     checked by the CQ in addition to the normal set.
@@ -499,7 +557,6 @@ formats.
 [core-principles]: https://www.chromium.org/developers/core-principles
 [corporate-cla]: https://cla.developers.google.com/about/google-corporate?csw=1
 [cr-authors]: https://chromium.googlesource.com/chromium/src/+/HEAD/AUTHORS
-[cr-gitiles]: https://chromium.googlesource.com/chromium/src/+/main/
 [cr-styleguide]: https://chromium.googlesource.com/chromium/src/+/main/styleguide/styleguide.md
 [crbug-new]: https://bugs.chromium.org/p/chromium/issues/entry
 [crbug]: https://bugs.chromium.org/p/chromium/issues/list

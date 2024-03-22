@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -65,8 +65,7 @@ ElementIdentifier::KnownIdentifiers& ElementIdentifier::GetKnownIdentifiers() {
 }
 
 void PrintTo(ElementIdentifier element_identifier, std::ostream* os) {
-  *os << "ElementIdentifier " << element_identifier.GetRawValue() << " ["
-      << element_identifier.GetName() << "]";
+  *os << "ElementIdentifier " << element_identifier.GetName();
 }
 
 void PrintTo(ElementContext element_context, std::ostream* os) {

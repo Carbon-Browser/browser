@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -90,12 +90,12 @@ class ResetSettingsHandlerTest : public testing::Test {
 };
 
 TEST_F(ResetSettingsHandlerTest, HandleResetProfileSettings) {
-  base::Value list(base::Value::Type::LIST);
+  base::Value::List list;
   std::string expected_callback_id("dummyCallbackId");
   list.Append(expected_callback_id);
   list.Append(false);
   list.Append("");
-  handler()->HandleResetProfileSettings(list.GetList());
+  handler()->HandleResetProfileSettings(list);
   // Check that the delegate ProfileResetter was called.
   EXPECT_EQ(1u, handler()->resets());
   // Check that Javascript side is notified after resetting is done.

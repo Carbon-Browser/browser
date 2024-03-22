@@ -36,10 +36,12 @@ enum ContentType {
   Xmlhttprequest = 2048,
   Media = 16384,
   Font = 32768,
+  WebBundle = 65536,
   Default = (1 << 24) - 1,
 };
 
 std::string ContentTypeToString(ContentType content_type);
+ContentType ContentTypeFromString(const std::string& content_type);
 
 }  // namespace adblock
 

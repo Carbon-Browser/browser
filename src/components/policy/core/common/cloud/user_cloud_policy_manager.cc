@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,10 +7,10 @@
 #include <string>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/task/sequenced_task_runner.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/task/single_thread_task_runner.h"
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
 #include "components/account_id/account_id.h"
@@ -74,7 +74,8 @@ std::unique_ptr<UserCloudPolicyManager> UserCloudPolicyManager::Create(
   auto policy_manager = std::make_unique<UserCloudPolicyManager>(
       std::move(store), component_policy_cache_dir,
       std::unique_ptr<CloudExternalDataManager>(),
-      base::ThreadTaskRunnerHandle::Get(), network_connection_tracker_getter);
+      base::SingleThreadTaskRunner::GetCurrentDefault(),
+      network_connection_tracker_getter);
   policy_manager->Init(schema_registry);
   return policy_manager;
 }
@@ -86,12 +87,23 @@ void UserCloudPolicyManager::Shutdown() {
 }
 
 void UserCloudPolicyManager::SetSigninAccountId(const AccountId& account_id) {
+  if (account_id.is_valid()) {
+    // Start the recorder as it is assumed that there is now a valid managed
+    // account.
+    StartRecordingMetric();
+  }
+
   store_->SetSigninAccountId(account_id);
 }
 
-void UserCloudPolicyManager::SetPoliciesRequired(bool required) {
+void UserCloudPolicyManager::SetPoliciesRequired(bool required,
+                                                 PolicyFetchReason reason) {
   policies_required_ = required;
-  RefreshPolicies();
+  RefreshPolicies(reason);
+}
+
+bool UserCloudPolicyManager::ArePoliciesRequired() const {
+  return policies_required_;
 }
 
 void UserCloudPolicyManager::Connect(
@@ -113,16 +125,6 @@ void UserCloudPolicyManager::Connect(
     external_data_manager_->Connect(std::move(url_loader_factory));
 }
 
-// static
-std::unique_ptr<CloudPolicyClient>
-UserCloudPolicyManager::CreateCloudPolicyClient(
-    DeviceManagementService* device_management_service,
-    scoped_refptr<network::SharedURLLoaderFactory> url_loader_factory) {
-  return std::make_unique<CloudPolicyClient>(
-      device_management_service, std::move(url_loader_factory),
-      CloudPolicyClient::DeviceDMTokenCallback());
-}
-
 void UserCloudPolicyManager::DisconnectAndRemovePolicy() {
   if (external_data_manager_)
     external_data_manager_->Disconnect();
@@ -137,7 +139,7 @@ void UserCloudPolicyManager::DisconnectAndRemovePolicy() {
   // all external data references have been removed, causing the
   // |external_data_manager_| to clear its cache as well.
   store_->Clear();
-  SetPoliciesRequired(false);
+  SetPoliciesRequired(false, PolicyFetchReason::kUnspecified);
 }
 
 void UserCloudPolicyManager::GetChromePolicy(PolicyMap* policy_map) {
@@ -168,6 +170,11 @@ bool UserCloudPolicyManager::IsFirstPolicyLoadComplete(
     PolicyDomain domain) const {
   return !policies_required_ ||
          CloudPolicyManager::IsFirstPolicyLoadComplete(domain);
+}
+
+void UserCloudPolicyManager::StartRecordingMetric() {
+  // Starts a recording session by creating the recorder.
+  metrics_recorder_ = std::make_unique<UserPolicyMetricsRecorder>(this);
 }
 
 }  // namespace policy

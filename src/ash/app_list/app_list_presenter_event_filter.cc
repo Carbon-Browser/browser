@@ -1,10 +1,11 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "ash/app_list/app_list_presenter_event_filter.h"
 
 #include <memory>
+#include <optional>
 #include <utility>
 
 #include "ash/app_list/app_list_controller_impl.h"
@@ -23,7 +24,6 @@
 #include "ash/shell.h"
 #include "ash/system/status_area_widget.h"
 #include "base/check.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "ui/aura/window.h"
 #include "ui/events/event.h"
 #include "ui/gfx/geometry/point.h"
@@ -137,13 +137,6 @@ void AppListPresenterEventFilter::ProcessLocatedEvent(ui::LocatedEvent* event) {
     return;
 
   if (!Shell::Get()->IsInTabletMode()) {
-    // Do not dismiss the app list if the event is targeting shelf area
-    // containing app icons.
-    if (target == shelf->hotseat_widget()->GetNativeWindow() &&
-        shelf->hotseat_widget()->EventTargetsShelfView(*event)) {
-      return;
-    }
-
     // Don't dismiss the auto-hide shelf if event happened in status area. Then
     // the event can still be propagated.
     const aura::Window* status_window =

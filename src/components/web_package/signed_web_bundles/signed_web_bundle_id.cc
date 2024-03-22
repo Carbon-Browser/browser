@@ -1,10 +1,12 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "components/web_package/signed_web_bundles/signed_web_bundle_id.h"
 
 #include "base/containers/span.h"
+#include "base/functional/bind.h"
+#include "base/rand_util.h"
 #include "base/ranges/algorithm.h"
 #include "base/strings/string_piece.h"
 #include "base/strings/string_util.h"
@@ -14,18 +16,7 @@
 
 namespace web_package {
 
-namespace {
-
-constexpr uint8_t kTypeSuffixLength = 3;
-
-constexpr uint8_t kTypeDevelopment[] = {0x00, 0x00, 0x02};
-constexpr uint8_t kTypeEd25519PublicKey[] = {0x00, 0x01, 0x02};
-
-static_assert(std::size(kTypeDevelopment) == kTypeSuffixLength);
-static_assert(std::size(kTypeEd25519PublicKey) == kTypeSuffixLength);
-
-}  // namespace
-
+// static
 base::expected<SignedWebBundleId, std::string> SignedWebBundleId::Create(
     base::StringPiece encoded_id) {
   if (encoded_id.size() != kEncodedIdLength) {
@@ -43,47 +34,79 @@ base::expected<SignedWebBundleId, std::string> SignedWebBundleId::Create(
     }
   }
 
-  // Base32 decode the ID and convert it into an array.
-  const std::string decoded_id_string =
+  // Base32 decode the ID as an array.
+  const std::vector<uint8_t> decoded_id =
       base32::Base32Decode(base::ToUpperASCII(encoded_id));
-  if (decoded_id_string.size() != kDecodedIdLength) {
+  if (decoded_id.size() != kDecodedIdLength) {
     return base::unexpected(
         "The signed web bundle ID could not be decoded from its base32 "
         "representation.");
   }
-  std::array<uint8_t, kDecodedIdLength> decoded_id;
-  base::ranges::copy(decoded_id_string, decoded_id.begin());
 
-  auto type_suffix = base::make_span(decoded_id).last<kTypeSuffixLength>();
+  auto decoded_span = base::make_span(decoded_id);
+  auto type_suffix = decoded_span.last<kTypeSuffixLength>();
   if (base::ranges::equal(type_suffix, kTypeDevelopment)) {
     return SignedWebBundleId(Type::kDevelopment, encoded_id,
-                             std::move(decoded_id));
+                             decoded_span.first<kDecodedIdLength>());
   }
   if (base::ranges::equal(type_suffix, kTypeEd25519PublicKey)) {
     return SignedWebBundleId(Type::kEd25519PublicKey, encoded_id,
-                             std::move(decoded_id));
+                             decoded_span.first<kDecodedIdLength>());
   }
   return base::unexpected("The signed web bundle ID has an unknown type.");
+}
+
+// static
+SignedWebBundleId SignedWebBundleId::CreateForEd25519PublicKey(
+    Ed25519PublicKey public_key) {
+  std::array<uint8_t, kDecodedIdLength> decoded_id;
+  base::ranges::copy(public_key.bytes(), decoded_id.begin());
+  base::ranges::copy(kTypeEd25519PublicKey,
+                     decoded_id.end() - kTypeSuffixLength);
+
+  auto encoded_id_uppercase = base32::Base32Encode(
+      decoded_id, base32::Base32EncodePolicy::OMIT_PADDING);
+  auto encoded_id = base::ToLowerASCII(encoded_id_uppercase);
+  return SignedWebBundleId(Type::kEd25519PublicKey, encoded_id, decoded_id);
+}
+
+// static
+SignedWebBundleId SignedWebBundleId::CreateForDevelopment(
+    base::span<const uint8_t, kDecodedIdLength - kTypeSuffixLength> data) {
+  std::array<uint8_t, kDecodedIdLength> decoded_id;
+  base::ranges::copy(data, decoded_id.begin());
+  base::ranges::copy(kTypeDevelopment, decoded_id.end() - kTypeSuffixLength);
+
+  auto encoded_id_uppercase = base32::Base32Encode(
+      decoded_id, base32::Base32EncodePolicy::OMIT_PADDING);
+  auto encoded_id = base::ToLowerASCII(encoded_id_uppercase);
+  return SignedWebBundleId(Type::kDevelopment, encoded_id, decoded_id);
+}
+
+// static
+SignedWebBundleId SignedWebBundleId::CreateRandomForDevelopment(
+    base::RepeatingCallback<void(void*, size_t)> random_generator) {
+  std::array<uint8_t, kDecodedIdLength - kTypeSuffixLength> random_bytes;
+  random_generator.Run(random_bytes.data(), random_bytes.size());
+  return CreateForDevelopment(random_bytes);
 }
 
 SignedWebBundleId::SignedWebBundleId(
     Type type,
     base::StringPiece encoded_id,
-    std::array<uint8_t, kDecodedIdLength> decoded_id)
-    : type_(type),
-      encoded_id_(encoded_id),
-      decoded_id_(std::move(decoded_id)) {}
+    base::span<const uint8_t, kDecodedIdLength> decoded_id)
+    : type_(type), encoded_id_(encoded_id) {
+  base::ranges::copy(decoded_id, decoded_id_.begin());
+}
 
 SignedWebBundleId::SignedWebBundleId(const SignedWebBundleId& other) = default;
 
 SignedWebBundleId::~SignedWebBundleId() = default;
 
-Ed25519PublicKey SignedWebBundleId::GetEd25519PublicKey() const {
-  CHECK_EQ(type(), Type::kEd25519PublicKey);
-
-  return Ed25519PublicKey::Create(
-      base::make_span(decoded_id_)
-          .first<kDecodedIdLength - kTypeSuffixLength>());
+// static
+base::RepeatingCallback<void(void*, size_t)>
+SignedWebBundleId::GetDefaultRandomGenerator() {
+  return base::BindRepeating(&base::RandBytes);
 }
 
 }  // namespace web_package

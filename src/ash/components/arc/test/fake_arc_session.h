@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -40,6 +40,8 @@ class FakeArcSession : public ArcSession {
       ArcClientAdapter::DemoModeDelegate* delegate) override;
   void TrimVmMemory(TrimVmMemoryCallback callback, int page_limit) override;
   void SetDefaultDeviceScaleFactor(float scale_factor) override;
+  void SetUseVirtioBlkData(bool use_virtio_blk_data) override;
+  void SetArcSignedIn(bool arc_signed_in) override;
 
   // To emulate unexpected stop, such as crash.
   void StopWithReason(ArcStopReason reason);

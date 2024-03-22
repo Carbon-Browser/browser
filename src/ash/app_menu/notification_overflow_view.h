@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,6 +10,9 @@
 
 #include "ash/app_menu/app_menu_export.h"
 #include "ash/app_menu/notification_item_view.h"
+#include "base/memory/raw_ptr.h"
+#include "ui/base/metadata/metadata_header_macros.h"
+#include "ui/views/view.h"
 
 namespace message_center {
 class ProportionalImageView;
@@ -23,6 +26,8 @@ namespace ash {
 class NotificationOverflowImageView;
 
 class APP_MENU_EXPORT NotificationOverflowView : public views::View {
+  METADATA_HEADER(NotificationOverflowView, views::View)
+
  public:
   NotificationOverflowView();
 
@@ -52,14 +57,15 @@ class APP_MENU_EXPORT NotificationOverflowView : public views::View {
 
   // The horizontal separator that is placed between the displayed
   // NotificationItemView and the overflow icons. Owned by the views hierarchy.
-  views::MenuSeparator* separator_;
+  raw_ptr<views::MenuSeparator, ExperimentalAsh> separator_;
 
   // The list of overflow icons. Listed in right to left ordering.
   std::vector<NotificationOverflowImageView*> image_views_;
 
   // The overflow icon shown when there are more than |kMaxOverflowIcons|
   // notifications.
-  message_center::ProportionalImageView* overflow_icon_ = nullptr;
+  raw_ptr<message_center::ProportionalImageView, ExperimentalAsh>
+      overflow_icon_ = nullptr;
 };
 
 }  // namespace ash

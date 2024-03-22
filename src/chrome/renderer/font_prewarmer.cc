@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,6 @@
 #include "content/public/renderer/render_frame.h"
 #include "third_party/blink/public/platform/web_font_prewarmer.h"
 #include "third_party/blink/public/web/web_local_frame.h"
-#include "third_party/blink/public/web/web_performance.h"
 #include "third_party/blink/public/web/win/web_font_rendering.h"
 
 // static

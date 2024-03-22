@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,6 +9,7 @@
 
 #include "ash/public/cpp/screen_backlight_observer.h"
 #include "ash/system/power/backlights_forced_off_setter.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/scoped_observation.h"
 #include "base/timer/timer.h"
@@ -69,7 +70,8 @@ class LockScreenNoteDisplayStateHandler : public ScreenBacklightObserver {
   void NoteLaunchDone(bool success);
 
   // Object used to force the backlights off.
-  BacklightsForcedOffSetter* const backlights_forced_off_setter_;
+  const raw_ptr<BacklightsForcedOffSetter, ExperimentalAsh>
+      backlights_forced_off_setter_;
 
   // Whether lock screen note launch is delayed until the screen is reported to
   // be off - this is used if lock screen note launch is requested when

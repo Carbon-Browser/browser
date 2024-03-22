@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -66,6 +66,10 @@ const LoginAcceleratorData kLoginAcceleratorData[] = {
        kLaunchDiagnostics,
        ui::VKEY_ESCAPE, ui::EF_CONTROL_DOWN | ui::EF_COMMAND_DOWN,
        true, kScopeOobe | kScopeLogin,
+    }, {
+      kEnableQuickStart,
+      ui::VKEY_Q, ui::EF_CONTROL_DOWN | ui::EF_ALT_DOWN,
+       false, kScopeOobe,
     },
 };
 // clang-format on

@@ -1,11 +1,12 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "ash/app_list/views/app_list_view_util.h"
 
-#include "base/callback.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
+#include <optional>
+
+#include "base/functional/callback.h"
 #include "ui/compositor/layer.h"
 #include "ui/compositor/layer_animator.h"
 #include "ui/views/animation/animation_builder.h"
@@ -58,7 +59,7 @@ void StartSlideInAnimation(views::View* view,
 void SlideViewIntoPositionWithSequenceBlock(
     views::View* view,
     int vertical_offset,
-    const absl::optional<base::TimeDelta>& time_delta,
+    const std::optional<base::TimeDelta>& time_delta,
     gfx::Tween::Type tween_type,
     views::AnimationSequenceBlock* sequence_block) {
   DCHECK(view->layer());

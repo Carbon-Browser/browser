@@ -1,4 +1,4 @@
-# Copyright 2020 The Chromium Authors. All rights reserved.
+# Copyright 2020 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -22,6 +22,16 @@ swarming.pool_realm(
     ],
 )
 
+luci.binding(
+    realm = "pools/ci",
+    roles = "role/swarming.poolViewer",
+    projects = [
+        "infra",
+        "infra-experimental",
+        "v8",
+    ],
+)
+
 swarming.pool_realm(name = "pools/try")
 
 swarming.pool_realm(
@@ -29,6 +39,8 @@ swarming.pool_realm(
     groups = [
         "project-chromium-ci-dev-task-accounts",
         "project-chromium-try-dev-task-accounts",
+        #TODO(b/258041976): mac os vm experiments
+        "chromium-swarming-dev-led-access",
     ],
 )
 

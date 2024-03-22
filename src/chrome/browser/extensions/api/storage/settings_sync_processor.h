@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,8 +9,10 @@
 #include <string>
 
 #include "base/memory/raw_ptr.h"
+#include "base/values.h"
 #include "components/sync/base/model_type.h"
 #include "components/value_store/value_store_change.h"
+#include "extensions/common/extension_id.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace syncer {
@@ -38,7 +40,7 @@ class SettingsSyncProcessor {
   ~SettingsSyncProcessor();
 
   // Initializes this with the initial state of sync.
-  void Init(const base::Value& initial_state);
+  void Init(const base::Value::Dict& initial_state);
 
   // Sends |changes| to sync.
   absl::optional<syncer::ModelError> SendChanges(
@@ -52,13 +54,13 @@ class SettingsSyncProcessor {
 
  private:
   // ID of the extension the changes are for.
-  const std::string extension_id_;
+  const ExtensionId extension_id_;
 
   // Sync model type. Either EXTENSION_SETTING or APP_SETTING.
   const syncer::ModelType type_;
 
   // The sync processor used to send changes to sync.
-  const raw_ptr<syncer::SyncChangeProcessor> sync_processor_;
+  const raw_ptr<syncer::SyncChangeProcessor, DanglingUntriaged> sync_processor_;
 
   // Whether Init() has been called.
   bool initialized_;

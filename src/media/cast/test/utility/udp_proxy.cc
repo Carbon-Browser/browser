@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,16 +11,16 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
 #include "base/containers/circular_deque.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
 #include "base/memory/raw_ptr.h"
 #include "base/message_loop/message_pump_type.h"
 #include "base/rand_util.h"
 #include "base/synchronization/waitable_event.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/threading/thread.h"
 #include "base/threading/thread_restrictions.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "base/time/default_tick_clock.h"
 #include "base/time/time.h"
 #include "net/base/io_buffer.h"
@@ -721,7 +721,7 @@ class UDPProxyImpl final : public UDPProxy {
     // We ignore all problems, callbacks and errors.
     // If it didn't work we just drop the packet at and call it a day.
     auto buf = base::MakeRefCounted<net::WrappedIOBuffer>(
-        reinterpret_cast<char*>(&packet->front()));
+        reinterpret_cast<char*>(&packet->front()), packet->size());
     size_t buf_size = packet->size();
     int result;
     if (destination.address().empty()) {
@@ -748,10 +748,12 @@ class UDPProxyImpl final : public UDPProxy {
         std::make_unique<net::UDPServerSocket>(net_log, net::NetLogSource());
     BuildPipe(&to_dest_pipe_, new PacketSender(this, &destination_));
     BuildPipe(&from_dest_pipe_, new PacketSender(this, &return_address_));
-    to_dest_pipe_->InitOnIOThread(base::ThreadTaskRunnerHandle::Get(),
-                                  base::DefaultTickClock::GetInstance());
-    from_dest_pipe_->InitOnIOThread(base::ThreadTaskRunnerHandle::Get(),
-                                    base::DefaultTickClock::GetInstance());
+    to_dest_pipe_->InitOnIOThread(
+        base::SingleThreadTaskRunner::GetCurrentDefault(),
+        base::DefaultTickClock::GetInstance());
+    from_dest_pipe_->InitOnIOThread(
+        base::SingleThreadTaskRunner::GetCurrentDefault(),
+        base::DefaultTickClock::GetInstance());
 
     VLOG(0) << "From:" << local_port_.ToString();
     if (!destination_is_mutable_)
@@ -803,7 +805,7 @@ class UDPProxyImpl final : public UDPProxy {
     while (true) {
       packet_ = std::make_unique<Packet>(kMaxPacketSize);
       auto recv_buf = base::MakeRefCounted<net::WrappedIOBuffer>(
-          reinterpret_cast<char*>(&packet_->front()));
+          reinterpret_cast<char*>(&packet_->front()), packet_->size());
       int len =
           socket_->RecvFrom(recv_buf.get(), kMaxPacketSize, &recv_address_,
                             base::BindOnce(&UDPProxyImpl::ReadCallback,

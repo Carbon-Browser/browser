@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -46,7 +46,9 @@ class TableViewDelegate {
 
   virtual bool IsColumnVisible(int column_id) const = 0;
 
-  virtual void SetColumnVisibility(int column_id, bool new_visibility) = 0;
+  // Returns whether the visibility has been changed. (Always return true on
+  // Mac. See TaskManagerMac::toggleColumn)
+  virtual bool SetColumnVisibility(int column_id, bool new_visibility) = 0;
 
   virtual bool IsTableSorted() const = 0;
 
@@ -133,7 +135,7 @@ class TaskManagerTableModel : public TaskManagerObserver,
   // exists, or the default column settings.
   // The columns settings are the visible columns and the last sorted column
   // and the direction of the sort.
-  std::unique_ptr<base::DictionaryValue> columns_settings_;
+  base::Value::Dict columns_settings_;
 
   // The table model observer that will be set by the table view of the task
   // manager.

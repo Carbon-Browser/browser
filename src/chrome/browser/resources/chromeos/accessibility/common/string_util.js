@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,16 @@
  */
 
 export class StringUtil {
-  constructor() {}
+  /**
+   * @param {string} str
+   * @return {string}
+   */
+  static toUpperCamelCase(str) {
+    const wordRegex = /(?:^\w|[A-Z]|(?:\b|_)\w)/g;
+    const underscoreAndWhitespaceRegex = /(\s|_)+/g;
+    return str.replace(wordRegex, word => word.toUpperCase())
+        .replace(underscoreAndWhitespaceRegex, '');
+  }
 
   /**
    * Returns the length of the longest common prefix of two strings.
@@ -68,6 +77,15 @@ export class StringUtil {
   }
 
   /**
+   * @param {string} title
+   * @return {string}
+   */
+  static toTitleCase(title) {
+    return title.replace(
+        /\w\S*/g, word => word.charAt(0).toUpperCase() + word.substr(1));
+  }
+
+  /**
    * Returns a unicode-aware substring of |text|.
    * @param {string} text
    * @param {number} startIndex
@@ -81,6 +99,24 @@ export class StringUtil {
       result += textSymbolArray[i];
     }
     return result;
+  }
+
+  /**
+   * Converts a camel case string to snake case.
+   * @param {string} s A camel case string, e.g. 'brailleTable8'.
+   * @return {string} A snake case string, e.g. 'braille_table_8'.
+   */
+  static camelToSnake(s) {
+    return s.replace(/([A-Z0-9])/g, '_$1').toLowerCase();
+  }
+
+  /**
+   * @param {string} ch The character to test.
+   * @return {boolean} True if a character breaks a word, used to determine
+   *     if the previous word should be spoken.
+   */
+  static isWordBreakChar(ch) {
+    return Boolean(ch.match(/^\W$/));
   }
 }
 

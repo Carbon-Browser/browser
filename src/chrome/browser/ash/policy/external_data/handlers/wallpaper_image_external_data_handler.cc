@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -42,8 +42,10 @@ void WallpaperImageExternalDataHandler::OnExternalDataFetched(
 }
 
 void WallpaperImageExternalDataHandler::RemoveForAccountId(
-    const AccountId& account_id) {
-  WallpaperControllerClientImpl::Get()->RemoveUserWallpaper(account_id);
+    const AccountId& account_id,
+    base::OnceClosure on_removed) {
+  WallpaperControllerClientImpl::Get()->RemoveUserWallpaper(
+      account_id, std::move(on_removed));
 }
 
 }  // namespace policy

@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,9 +7,9 @@
  * 'settings-rivacy-guide-dialog' is a settings dialog that helps users guide
  * various privacy settings.
  */
-import 'chrome://resources/cr_elements/cr_icon_button/cr_icon_button.m.js';
-import 'chrome://resources/cr_elements/shared_style_css.m.js';
-import '../../prefs/prefs.js';
+import 'chrome://resources/cr_elements/cr_icon_button/cr_icon_button.js';
+import 'chrome://resources/cr_elements/cr_shared_style.css.js';
+import 'chrome://resources/cr_components/settings_prefs/prefs.js';
 import '../../settings_shared.css.js';
 import './privacy_guide_page.js';
 

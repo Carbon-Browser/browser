@@ -1,32 +1,28 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 package org.chromium.content_public.browser;
+
+import android.graphics.Point;
+
+import androidx.annotation.Nullable;
 
 /**
  * An interface that is notified of events and state changes related to gesture processing
  * from content layer.
  */
 public abstract class GestureStateListener {
-    /**
-     * Called when the pinch gesture starts.
-     */
+    /** Called when the pinch gesture starts. */
     public void onPinchStarted() {}
 
-    /**
-     * Called when the pinch gesture ends.
-     */
+    /** Called when the pinch gesture ends. */
     public void onPinchEnded() {}
 
-    /**
-     * Called when a fling starts.
-     */
+    /** Called when a fling starts. */
     public void onFlingStartGesture(int scrollOffsetY, int scrollExtentY, boolean isDirectionUp) {}
 
-    /**
-     * Called when a fling has ended.
-     */
+    /** Called when a fling has ended. */
     public void onFlingEndGesture(int scrollOffsetY, int scrollExtentY) {}
 
     /**
@@ -34,12 +30,13 @@ public abstract class GestureStateListener {
      * This callback is called whenever any layer is scrolled (like a frame or div). It is
      * not called when a JS touch handler consumes the event (preventDefault), it is not called
      * for JS-initiated scrolling.
+     *
+     * @param rootScrollOffset Updated root scroll offset if the scroll was consumed by the
+     *                         viewport, null otherwise.
      */
-    public void onScrollUpdateGestureConsumed() {}
+    public void onScrollUpdateGestureConsumed(@Nullable Point rootScrollOffset) {}
 
-    /**
-     * Called when a scroll gesture has started.
-     */
+    /** Called when a scroll gesture has started. */
     public void onScrollStarted(int scrollOffsetY, int scrollExtentY, boolean isDirectionUp) {}
 
     /**
@@ -49,14 +46,10 @@ public abstract class GestureStateListener {
      */
     public void onVerticalScrollDirectionChanged(boolean directionUp, float currentScrollRatio) {}
 
-    /**
-     * Called when a scroll gesture has stopped.
-     */
+    /** Called when a scroll gesture has stopped. */
     public void onScrollEnded(int scrollOffsetY, int scrollExtentY) {}
 
-    /**
-     * Called when the min or max scale factor may have been changed.
-     */
+    /** Called when the min or max scale factor may have been changed. */
     public void onScaleLimitsChanged(float minPageScaleFactor, float maxPageScaleFactor) {}
 
     /**
@@ -77,14 +70,10 @@ public abstract class GestureStateListener {
      */
     public void onShowUnhandledTapUIIfNeeded(int x, int y) {}
 
-    /**
-     * Called when the gesture source loses window focus.
-     */
+    /** Called when the gesture source loses window focus. */
     public void onWindowFocusChanged(boolean hasWindowFocus) {}
 
-    /**
-     * Called when a long press gesture event was processed by the rendereer.
-     */
+    /** Called when a long press gesture event was processed by the rendereer. */
     public void onLongPress() {}
 
     /**
@@ -95,8 +84,9 @@ public abstract class GestureStateListener {
      */
     public void didOverscroll(float accumulatedOverscrollX, float accumulatedOverscrollY) {}
 
-    /**
-     * Called when the gesture source is being destroyed.
-     */
+    /** Called when the scroll offsets or extents may have changed. */
+    public void onScrollOffsetOrExtentChanged(int scrollOffsetY, int scrollExtentY) {}
+
+    /** Called when the gesture source is being destroyed. */
     public void onDestroyed() {}
 }

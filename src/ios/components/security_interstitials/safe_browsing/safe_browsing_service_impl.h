@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -49,6 +49,7 @@ class SafeBrowsingServiceImpl : public SafeBrowsingService {
   scoped_refptr<network::SharedURLLoaderFactory> GetURLLoaderFactory() override;
   scoped_refptr<safe_browsing::SafeBrowsingDatabaseManager> GetDatabaseManager()
       override;
+  network::mojom::NetworkContext* GetNetworkContext() override;
   void ClearCookies(const net::CookieDeletionInfo::TimeRange& creation_range,
                     base::OnceClosure callback) override;
 
@@ -56,7 +57,8 @@ class SafeBrowsingServiceImpl : public SafeBrowsingService {
   // A helper class for enabling/disabling Safe Browsing and maintaining state
   // on the IO thread. This class may be constructed and destroyed on the UI
   // thread, but all of its other methods should only be called on the IO
-  // thread.
+  // thread. If kSafeBrowsingOnUIThread is enabled then it will be used on the
+  // UI thread.
   class IOThreadEnabler : public base::RefCountedThreadSafe<IOThreadEnabler> {
    public:
     IOThreadEnabler(scoped_refptr<safe_browsing::SafeBrowsingDatabaseManager>
@@ -80,7 +82,7 @@ class SafeBrowsingServiceImpl : public SafeBrowsingService {
     // Enables or disables Safe Browsing database updates and lookups.
     void SetSafeBrowsingEnabled(bool enabled);
 
-    // Clears all cookies. Calls the given |callback| when deletion is complete.
+    // Clears all cookies. Calls the given `callback` when deletion is complete.
     void ClearAllCookies(base::OnceClosure callback);
 
    private:
@@ -99,13 +101,14 @@ class SafeBrowsingServiceImpl : public SafeBrowsingService {
     void SetUpURLLoaderFactory(
         scoped_refptr<SafeBrowsingServiceImpl> safe_browsing_service);
 
-    // This tracks whether the service is running.
+    // This tracks whether the service is running. Only used if
+    // kSafeBrowsingOnUIThread is enabled.
     bool enabled_ = false;
 
     // This tracks whether ShutDown() has been called.
     bool shutting_down_ = false;
 
-    // This is wrapped by |network_context|.
+    // This is wrapped by `network_context`.
     std::unique_ptr<net::URLRequestContext> url_request_context_;
 
     // The network context used for Safe Browsing related network requests.
@@ -114,7 +117,7 @@ class SafeBrowsingServiceImpl : public SafeBrowsingService {
     // An IO thread remote for a URLLoaderFactory created on the UI thread.
     mojo::Remote<network::mojom::URLLoaderFactory> url_loader_factory_;
 
-    // A SharedURLLoaderFactory that wraps |url_loader_factory_|.
+    // A SharedURLLoaderFactory that wraps `url_loader_factory_`.
     scoped_refptr<network::WeakWrapperSharedURLLoaderFactory>
         shared_url_loader_factory_;
 
@@ -140,7 +143,12 @@ class SafeBrowsingServiceImpl : public SafeBrowsingService {
   // The URLLoaderFactory used for Safe Browsing network requests.
   mojo::Remote<network::mojom::URLLoaderFactory> url_loader_factory_;
 
-  // A SharedURLLoaderFactory that wraps |url_loader_factory_|.
+  // A PendingReceiver for `url_loader_factory_`, used during service
+  // initialization.
+  mojo::PendingReceiver<network::mojom::URLLoaderFactory>
+      url_loader_factory_pending_reciever_;
+
+  // A SharedURLLoaderFactory that wraps `url_loader_factory_`.
   scoped_refptr<network::WeakWrapperSharedURLLoaderFactory>
       shared_url_loader_factory_;
 
@@ -148,6 +156,10 @@ class SafeBrowsingServiceImpl : public SafeBrowsingService {
   // the IO thread.
   scoped_refptr<safe_browsing::SafeBrowsingDatabaseManager>
       safe_browsing_db_manager_;
+
+  // This tracks whether the service is running. Only used if
+  // kSafeBrowsingOnUIThread is enabled.
+  bool enabled_ = false;
 
   // This watches for changes to the Safe Browsing opt-out preference.
   std::unique_ptr<PrefChangeRegistrar> pref_change_registrar_;

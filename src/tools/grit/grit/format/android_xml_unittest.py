@@ -1,11 +1,10 @@
 #!/usr/bin/env python3
-# Copyright (c) 2012 The Chromium Authors. All rights reserved.
+# Copyright 2012 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
 """Unittest for android_xml.py."""
 
-from __future__ import print_function
 
 import os
 import sys
@@ -14,7 +13,7 @@ import unittest
 if __name__ == '__main__':
   sys.path.append(os.path.join(os.path.dirname(__file__), '../..'))
 
-from six import StringIO
+from io import StringIO
 
 from grit import util
 from grit.format import android_xml
@@ -139,7 +138,7 @@ a sledge hammer."</string>
     self.assertTrue(android_xml.ShouldOutputNode(msg_world, tagged_only=False))
 
 
-class DummyOutput(object):
+class DummyOutput:
 
   def __init__(self, type, language):
     self.type = type

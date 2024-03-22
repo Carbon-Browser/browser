@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,8 +10,6 @@
 
 namespace extensions {
 namespace image_writer {
-
-extern const int kPartitionTableSize;
 
 // Encapsulates an operation for destroying partitions.  This is achieved by
 // creating a dummy blank image which is then burned to the disk.

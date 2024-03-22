@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,7 +12,7 @@
 
 #include <memory>
 
-#include "base/mac/scoped_cftyperef.h"
+#include "base/apple/scoped_cftyperef.h"
 #include "base/mac/scoped_ioplugininterface.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
@@ -175,7 +175,7 @@ class XboxControllerMac final : public AbstractHapticGamepad {
   bool device_is_open_ = false;
   bool interface_is_open_ = false;
 
-  base::ScopedCFTypeRef<CFRunLoopSourceRef> source_;
+  base::apple::ScopedCFTypeRef<CFRunLoopSourceRef> source_;
 
   // This will be set to the max packet size reported by the interface, which
   // is 32 bytes. I would have expected USB to do message framing itself, but

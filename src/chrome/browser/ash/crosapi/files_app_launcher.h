@@ -1,14 +1,14 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CHROME_BROWSER_ASH_CROSAPI_FILES_APP_LAUNCHER_H_
 #define CHROME_BROWSER_ASH_CROSAPI_FILES_APP_LAUNCHER_H_
 
-#include <string>
-
-#include "base/callback.h"
+#include "base/functional/callback.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
+#include "base/scoped_observation.h"
 #include "chrome/browser/apps/app_service/app_service_proxy_forward.h"
 #include "components/services/app_service/public/cpp/app_registry_cache.h"
 #include "components/services/app_service/public/cpp/instance_registry.h"
@@ -45,12 +45,17 @@ class FilesAppLauncher : public apps::AppRegistryCache::Observer,
   void OnInstanceRegistryWillBeDestroyed(
       apps::InstanceRegistry* cache) override;
 
-  apps::AppServiceProxy* const proxy_;
-
-  // AppId for files.app, depending on whether or not switched to SWA.
-  const std::string app_id_;
+  const raw_ptr<apps::AppServiceProxy, ExperimentalAsh> proxy_;
 
   base::OnceClosure callback_;
+
+  base::ScopedObservation<apps::InstanceRegistry,
+                          apps::InstanceRegistry::Observer>
+      instance_registry_observation_{this};
+
+  base::ScopedObservation<apps::AppRegistryCache,
+                          apps::AppRegistryCache::Observer>
+      app_registry_cache_observer_{this};
 
   base::WeakPtrFactory<FilesAppLauncher> weak_factory_{this};
 };

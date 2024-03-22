@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,7 +13,7 @@
 #include "base/containers/contains.h"
 #include "base/files/scoped_temp_dir.h"
 #include "base/run_loop.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/task/single_thread_task_runner.h"
 #include "chrome/browser/sync_file_system/local/canned_syncable_file_system.h"
 #include "chrome/browser/sync_file_system/local/local_file_sync_context.h"
 #include "chrome/browser/sync_file_system/local/sync_file_system_backend.h"
@@ -43,21 +43,21 @@ class LocalFileChangeTrackerTest : public testing::Test {
         in_memory_env_(leveldb_chrome::NewMemEnv("LocalFileChangeTrackerTest")),
         file_system_(GURL("http://example.com"),
                      in_memory_env_.get(),
-                     base::ThreadTaskRunnerHandle::Get().get(),
-                     base::ThreadTaskRunnerHandle::Get().get()) {}
+                     base::SingleThreadTaskRunner::GetCurrentDefault().get(),
+                     base::SingleThreadTaskRunner::GetCurrentDefault().get()) {}
 
   LocalFileChangeTrackerTest(const LocalFileChangeTrackerTest&) = delete;
   LocalFileChangeTrackerTest& operator=(const LocalFileChangeTrackerTest&) =
       delete;
 
   void SetUp() override {
-    file_system_.SetUp(CannedSyncableFileSystem::QUOTA_ENABLED);
+    file_system_.SetUp();
 
     ASSERT_TRUE(base_dir_.CreateUniqueTempDir());
-    sync_context_ =
-        new LocalFileSyncContext(base_dir_.GetPath(), in_memory_env_.get(),
-                                 base::ThreadTaskRunnerHandle::Get().get(),
-                                 base::ThreadTaskRunnerHandle::Get().get());
+    sync_context_ = new LocalFileSyncContext(
+        base_dir_.GetPath(), in_memory_env_.get(),
+        base::SingleThreadTaskRunner::GetCurrentDefault().get(),
+        base::SingleThreadTaskRunner::GetCurrentDefault().get());
     ASSERT_EQ(
         SYNC_STATUS_OK,
         file_system_.MaybeInitializeFileSystemContext(sync_context_.get()));

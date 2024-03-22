@@ -1,4 +1,4 @@
-// Copyright (c) 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,8 +7,9 @@
 
 #include <stdint.h>
 
-#include "base/callback.h"
 #include "base/containers/circular_deque.h"
+#include "base/functional/callback.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/task/single_thread_task_runner.h"
 #include "base/time/time.h"
@@ -23,7 +24,6 @@
 
 namespace cc {
 class AnimationHost;
-class RasterDarkModeFilter;
 class LayerTreeFrameSink;
 class LayerTreeHost;
 class LayerTreeSettings;
@@ -63,11 +63,22 @@ class PLATFORM_EXPORT LayerTreeView
   // destroyed.
   void Disconnect();
 
+  // Drops any references back to the current delegate and attaches to
+  // `delegate`.
+  void ReattachTo(LayerTreeViewDelegate* delegate,
+                  scoped_refptr<scheduler::WidgetScheduler> scheduler);
+
   cc::AnimationHost* animation_host() { return animation_host_.get(); }
 
   void SetVisible(bool visible);
 
   // cc::LayerTreeHostClient implementation.
+  // NOTE: LayerTreeView allows re-attaching itself to a different delegate.
+  // Since the compositor is threaded, we could receive callbacks from the host
+  // which are tied to content committed by the previous delegate.
+  //
+  // Ensure such callbacks have a `source_frame_number` to ensure callbacks
+  // associated with the previous delegate are safely discarded.
   void WillBeginMainFrame() override;
   void DidBeginMainFrame() override;
   void WillUpdateLayers() override;
@@ -78,6 +89,7 @@ class PLATFORM_EXPORT LayerTreeView
       bool defer_status,
       cc::PaintHoldingReason reason,
       absl::optional<cc::PaintHoldingCommitTrigger> trigger) override;
+  void OnCommitRequested() override;
   void BeginMainFrameNotExpectedSoon() override;
   void BeginMainFrameNotExpectedUntil(base::TimeTicks time) override;
   void UpdateLayerTreeHost() override;
@@ -88,11 +100,12 @@ class PLATFORM_EXPORT LayerTreeView
   void DidInitializeLayerTreeFrameSink() override;
   void DidFailToInitializeLayerTreeFrameSink() override;
   void WillCommit(const cc::CommitState&) override;
-  void DidCommit(base::TimeTicks commit_start_time,
+  void DidCommit(int source_frame_number,
+                 base::TimeTicks commit_start_time,
                  base::TimeTicks commit_finish_time) override;
-  void DidCommitAndDrawFrame() override;
+  void DidCommitAndDrawFrame(int source_frame_number) override;
   void DidReceiveCompositorFrameAck() override {}
-  void DidCompletePageScaleAnimation() override;
+  void DidCompletePageScaleAnimation(int source_frame_number) override;
   void DidPresentCompositorFrame(
       uint32_t frame_token,
       const gfx::PresentationFeedback& feedback) override;
@@ -106,12 +119,11 @@ class PLATFORM_EXPORT LayerTreeView
   void NotifyThroughputTrackerResults(
       cc::CustomTrackerResults results) override;
   void DidObserveFirstScrollDelay(
+      int source_frame_number,
       base::TimeDelta first_scroll_delay,
       base::TimeTicks first_scroll_timestamp) override;
   void RunPaintBenchmark(int repeat_count,
                          cc::PaintBenchmarkResult& result) override;
-  void ReportEventLatency(
-      std::vector<cc::EventLatencyTracker::LatencyData> latencies) override;
 
   // cc::LayerTreeHostSingleThreadClient implementation.
   void DidSubmitCompositorFrame() override;
@@ -127,7 +139,7 @@ class PLATFORM_EXPORT LayerTreeView
       uint32_t frame_token,
       base::OnceCallback<void(base::TimeTicks)> callback);
 
-#if BUILDFLAG(IS_MAC)
+#if BUILDFLAG(IS_APPLE)
   void AddCoreAnimationErrorCodeCallback(
       uint32_t frame_token,
       base::OnceCallback<void(gfx::CALayerResult)> callback);
@@ -156,32 +168,42 @@ class PLATFORM_EXPORT LayerTreeView
 
   scoped_refptr<scheduler::WidgetScheduler> widget_scheduler_;
   const std::unique_ptr<cc::AnimationHost> animation_host_;
-  std::unique_ptr<cc::RasterDarkModeFilter> dark_mode_filter_;
 
   // The delegate_ becomes null when Disconnect() is called. After that, the
   // class should do nothing in calls from the LayerTreeHost, and just wait to
   // be destroyed. It is not expected to be used at all after Disconnect()
   // outside of handling/dropping LayerTreeHost client calls.
-  LayerTreeViewDelegate* delegate_;
+  raw_ptr<LayerTreeViewDelegate, ExperimentalRenderer> delegate_;
   std::unique_ptr<cc::LayerTreeHost> layer_tree_host_;
 
-  // This class should do nothing and access no pointers once this value becomes
-  // true.
-  bool layer_tree_frame_sink_request_failed_while_invisible_ = false;
+  enum class FrameSinkState {
+    kNoFrameSink,
+    kRequestBufferedInvisible,
+    kRequestPending,
+    kInitializing,
+    kInitialized
+  };
+  FrameSinkState frame_sink_state_ = FrameSinkState::kNoFrameSink;
 
   base::circular_deque<
       std::pair<uint32_t,
                 std::vector<base::OnceCallback<void(base::TimeTicks)>>>>
       presentation_callbacks_;
 
-#if BUILDFLAG(IS_MAC)
+#if BUILDFLAG(IS_APPLE)
   base::circular_deque<std::pair<
       uint32_t,
       std::vector<base::OnceCallback<void(gfx::CALayerResult error_code)>>>>
       core_animation_error_code_callbacks_;
 #endif
 
+  // Tracks the source frame number for the first main frame when a new
+  // delegate is bound to this view. This is used to safely ignore redundant
+  // callbacks which are tied to content produced by the previous delegate.
+  int first_source_frame_for_current_delegate_ = 0;
+
   base::WeakPtrFactory<LayerTreeView> weak_factory_{this};
+  base::WeakPtrFactory<LayerTreeView> weak_factory_for_delegate_{this};
 };
 
 }  // namespace blink

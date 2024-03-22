@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,7 @@
 
 #include <string>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
 
@@ -37,7 +37,9 @@ class VersionUpdater {
     FAILED_HTTP,
     FAILED_DOWNLOAD,
     DISABLED,
-    DISABLED_BY_ADMIN
+    DISABLED_BY_ADMIN,
+    UPDATE_TO_ROLLBACK_VERSION_DISALLOWED,
+    DEFERRED
   };
 
   // Promotion state (Mac-only).
@@ -127,6 +129,9 @@ class VersionUpdater {
       StatusCallback callback,
       const std::string& update_version,
       int64_t update_size) = 0;
+
+  // If an update is downloaded but deferred, apply the deferred update.
+  virtual void ApplyDeferredUpdate() = 0;
 #endif
 };
 

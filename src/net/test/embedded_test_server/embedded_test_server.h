@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,10 +12,10 @@
 #include <string>
 #include <vector>
 
-#include "base/callback.h"
 #include "base/files/file_path.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
-#include "base/memory/ref_counted.h"
+#include "base/memory/scoped_refptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/strings/string_piece.h"
 #include "base/threading/thread.h"
@@ -23,14 +23,17 @@
 #include "net/base/address_list.h"
 #include "net/base/host_port_pair.h"
 #include "net/base/ip_endpoint.h"
-#include "net/cert/ocsp_revocation_status.h"
+#include "net/cert/test_root_certs.h"
 #include "net/cert/x509_certificate.h"
 #include "net/socket/ssl_server_socket.h"
 #include "net/socket/stream_socket.h"
 #include "net/socket/tcp_server_socket.h"
 #include "net/ssl/ssl_server_config.h"
+#include "net/test/cert_builder.h"
 #include "net/test/embedded_test_server/http_connection.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
+#include "third_party/boringssl/src/pki/ocsp_revocation_status.h"
+#include "third_party/boringssl/src/pki/parse_certificate.h"
 #include "url/gurl.h"
 #include "url/origin.h"
 
@@ -67,7 +70,7 @@ class EmbeddedTestServerHandle {
   friend class EmbeddedTestServer;
 
   explicit EmbeddedTestServerHandle(EmbeddedTestServer* test_server);
-  EmbeddedTestServer* test_server_ = nullptr;
+  raw_ptr<EmbeddedTestServer> test_server_ = nullptr;
 };
 
 // Class providing an HTTP server for testing purpose. This is a basic server
@@ -196,9 +199,10 @@ class EmbeddedTestServer {
       kTryLater,
       kSigRequired,
       kUnauthorized,
-      // The response will not be valid OCSPResponse DER.
+      // The response will not be valid bssl::OCSPResponse DER.
       kInvalidResponse,
-      // OCSPResponse will be valid DER but the contained ResponseData will not.
+      // bssl::OCSPResponse will be valid DER but the contained ResponseData
+      // will not.
       kInvalidResponseData,
     };
 
@@ -241,7 +245,7 @@ class EmbeddedTestServer {
         kMismatch,
       };
 
-      OCSPRevocationStatus cert_status = OCSPRevocationStatus::GOOD;
+      bssl::OCSPRevocationStatus cert_status = bssl::OCSPRevocationStatus::GOOD;
       Date ocsp_date = Date::kValid;
       Serial serial = Serial::kMatch;
     };
@@ -306,6 +310,12 @@ class EmbeddedTestServer {
 
     // A list of IP addresses to include in the leaf subjectAltName extension.
     std::vector<net::IPAddress> ip_addresses;
+
+    // A list of key usages to include in the leaf keyUsage extension.
+    std::vector<bssl::KeyUsageBit> key_usages;
+
+    // Generate embedded SCTList in the certificate for the specified logs.
+    std::vector<CertBuilder::SctConfig> embedded_scts;
   };
 
   typedef base::RepeatingCallback<std::unique_ptr<HttpResponse>(
@@ -347,7 +357,7 @@ class EmbeddedTestServer {
 
   // Registers the EmbeddedTestServer's certs for the current process. See
   // constructor documentation for more information.
-  static void RegisterTestCerts();
+  [[nodiscard]] static ScopedTestRoot RegisterTestCerts();
 
   // Sets a connection listener, that would be notified when various connection
   // events happen. May only be called before the server is started. Caller
@@ -363,11 +373,14 @@ class EmbeddedTestServer {
 
   // Equivalent of StartAndReturnHandle(), but requires manual Shutdown() by
   // the caller.
-  [[nodiscard]] bool Start(int port = 0);
+  [[nodiscard]] bool Start(int port = 0,
+                           base::StringPiece address = "127.0.0.1");
 
   // Starts listening for incoming connections but will not yet accept them.
-  // Returns whether a listening socket has been succesfully created.
-  [[nodiscard]] bool InitializeAndListen(int port = 0);
+  // Returns whether a listening socket has been successfully created.
+  [[nodiscard]] bool InitializeAndListen(
+      int port = 0,
+      base::StringPiece address = "127.0.0.1");
 
   // Starts the Accept IO Thread and begins accepting connections.
   [[nodiscard]] EmbeddedTestServerHandle
@@ -447,12 +460,12 @@ class EmbeddedTestServer {
   // ServeFilesFromSourceDirectory.
   void ServeFilesFromDirectory(const base::FilePath& directory);
 
-  // Serves files relative to DIR_SOURCE_ROOT.
+  // Serves files relative to DIR_SRC_TEST_DATA_ROOT.
   void ServeFilesFromSourceDirectory(base::StringPiece relative);
   void ServeFilesFromSourceDirectory(const base::FilePath& relative);
 
   // Registers the default handlers and serve additional files from the
-  // |directory| directory, relative to DIR_SOURCE_ROOT.
+  // |directory| directory, relative to DIR_SRC_TEST_DATA_ROOT.
   void AddDefaultHandlers(const base::FilePath& directory);
 
   // Returns the directory that files will be served from if |relative| is
@@ -586,6 +599,7 @@ class EmbeddedTestServer {
 
   base::ThreadChecker thread_checker_;
 
+  ScopedTestRoot scoped_test_root_;
   net::SSLServerConfig ssl_config_;
   ServerCertificate cert_ = CERT_OK;
   ServerCertificateConfig cert_config_;

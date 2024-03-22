@@ -1,18 +1,17 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #import "ios/chrome/browser/ui/bubble/bubble_view_controller_presenter.h"
 
-#include "base/check.h"
+#import "base/check.h"
 #import "base/ios/block_types.h"
-#include "ios/chrome/browser/ui/bubble/bubble_util.h"
+#import "base/metrics/histogram_macros.h"
+#import "ios/chrome/browser/ui/bubble/bubble_constants.h"
+#import "ios/chrome/browser/ui/bubble/bubble_util.h"
+#import "ios/chrome/browser/ui/bubble/bubble_view.h"
 #import "ios/chrome/browser/ui/bubble/bubble_view_controller.h"
-#include "ios/chrome/browser/ui/util/ui_util.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
+#import "ios/chrome/browser/ui/bubble/bubble_view_controller_presenter+private.h"
 
 namespace {
 
@@ -35,11 +34,15 @@ const CGFloat kVoiceOverAnnouncementDelay = 1;
 @interface BubbleViewControllerPresenter () <UIGestureRecognizerDelegate,
                                              BubbleViewDelegate>
 
+// The `parentView` of the underlying BubbleView, passed in
+// -presentInViewController:view:anchorPoint.
+@property(nonatomic, strong) UIView* parentView;
+// The frame of the view the underlying BubbleView anchored to, can be
+// CGRectZero if un-provided or inapplicable. Passed in
+// -presentInViewController:view:anchorPoint:anchorViewFrame.
+@property(nonatomic, assign) CGRect anchorViewFrame;
 // Redeclared as readwrite so the value can be changed internally.
 @property(nonatomic, assign, readwrite, getter=isUserEngaged) BOOL userEngaged;
-// The underlying BubbleViewController managed by this object.
-// `bubbleViewController` manages the BubbleView instance.
-@property(nonatomic, strong) BubbleViewController* bubbleViewController;
 // The tap gesture recognizer intercepting tap gestures occurring inside the
 // bubble view. Taps inside must be differentiated from taps outside to track
 // UMA metrics.
@@ -51,20 +54,6 @@ const CGFloat kVoiceOverAnnouncementDelay = 1;
 @property(nonatomic, strong) UITapGestureRecognizer* outsideBubbleTapRecognizer;
 // The swipe gesture recognizer to dismiss the bubble on swipes.
 @property(nonatomic, strong) UISwipeGestureRecognizer* swipeRecognizer;
-// The timer used to dismiss the bubble after a certain length of time. The
-// bubble is dismissed automatically if the user does not dismiss it manually.
-// If the user dismisses it manually, this timer is invalidated. The timer
-// maintains a strong reference to the presenter, so it must be retained weakly
-// to prevent a retain cycle. The run loop retains a strong reference to the
-// timer so it is not deallocated until it is invalidated.
-@property(nonatomic, weak) NSTimer* bubbleDismissalTimer;
-// The timer used to reset the user's engagement. The user is considered
-// engaged with the bubble while it is visible and for a certain duration after
-// it disappears. The timer maintains a strong reference to the presenter, so it
-// must be retained weakly to prevent a retain cycle. The run loop retains a
-// strong reference to the timer so it is not deallocated until it is
-// invalidated.
-@property(nonatomic, weak) NSTimer* engagementTimer;
 // The direction the underlying BubbleView's arrow is pointing.
 @property(nonatomic, assign) BubbleArrowDirection arrowDirection;
 // The alignment of the underlying BubbleView's arrow.
@@ -77,7 +66,8 @@ const CGFloat kVoiceOverAnnouncementDelay = 1;
 @property(nonatomic, assign, getter=isPresenting) BOOL presenting;
 // The block invoked when the bubble is dismissed (both via timer and via tap).
 // Is optional.
-@property(nonatomic, strong) ProceduralBlockWithSnoozeAction dismissalCallback;
+@property(nonatomic, strong)
+    CallbackWithIPHDismissalReasonType dismissalCallback;
 
 @end
 
@@ -103,7 +93,7 @@ const CGFloat kVoiceOverAnnouncementDelay = 1;
                    alignment:(BubbleAlignment)alignment
                   bubbleType:(BubbleViewType)type
            dismissalCallback:
-               (ProceduralBlockWithSnoozeAction)dismissalCallback {
+               (CallbackWithIPHDismissalReasonType)dismissalCallback {
   self = [super init];
   if (self) {
     _bubbleViewController =
@@ -147,8 +137,8 @@ const CGFloat kVoiceOverAnnouncementDelay = 1;
                            arrowDirection:(BubbleArrowDirection)arrowDirection
                                 alignment:(BubbleAlignment)alignment
                      isLongDurationBubble:(BOOL)isLongDurationBubble
-                        dismissalCallback:
-                            (ProceduralBlockWithSnoozeAction)dismissalCallback {
+                        dismissalCallback:(CallbackWithIPHDismissalReasonType)
+                                              dismissalCallback {
   self.isLongDurationBubble = isLongDurationBubble;
   return [self initWithText:text
                       title:nil
@@ -169,6 +159,18 @@ const CGFloat kVoiceOverAnnouncementDelay = 1;
 - (void)presentInViewController:(UIViewController*)parentViewController
                            view:(UIView*)parentView
                     anchorPoint:(CGPoint)anchorPoint {
+  [self presentInViewController:parentViewController
+                           view:parentView
+                    anchorPoint:anchorPoint
+                anchorViewFrame:CGRectZero];
+}
+
+- (void)presentInViewController:(UIViewController*)parentViewController
+                           view:(UIView*)parentView
+                    anchorPoint:(CGPoint)anchorPoint
+                anchorViewFrame:(CGRect)anchorViewFrame {
+  _parentView = parentView;
+  _anchorViewFrame = anchorViewFrame;
   CGPoint anchorPointInParent =
       [parentView.window convertPoint:anchorPoint toView:parentView];
   self.bubbleViewController.view.frame =
@@ -239,6 +241,7 @@ const CGFloat kVoiceOverAnnouncementDelay = 1;
 }
 
 - (void)dismissAnimated:(BOOL)animated
+                 reason:(IPHDismissalReasonType)reason
            snoozeAction:(feature_engagement::Tracker::SnoozeAction)action {
   // Because this object must stay in memory to handle the `userEngaged`
   // property correctly, it is possible for `dismissAnimated` to be called
@@ -246,6 +249,8 @@ const CGFloat kVoiceOverAnnouncementDelay = 1;
   if (!self.presenting) {
     return;
   }
+
+  UMA_HISTOGRAM_ENUMERATION("InProductHelp.DismissalReason.iOS", reason);
 
   [self.bubbleDismissalTimer invalidate];
   self.bubbleDismissalTimer = nil;
@@ -258,12 +263,17 @@ const CGFloat kVoiceOverAnnouncementDelay = 1;
   self.presenting = NO;
 
   if (self.dismissalCallback) {
-    self.dismissalCallback(action);
+    self.dismissalCallback(reason, action);
   }
 }
 
 - (void)dismissAnimated:(BOOL)animated {
+  [self dismissAnimated:animated reason:IPHDismissalReasonType::kUnknown];
+}
+
+- (void)dismissAnimated:(BOOL)animated reason:(IPHDismissalReasonType)reason {
   [self dismissAnimated:animated
+                 reason:reason
            snoozeAction:feature_engagement::Tracker::SnoozeAction::DISMISSED];
 }
 
@@ -317,12 +327,12 @@ const CGFloat kVoiceOverAnnouncementDelay = 1;
 #pragma mark - BubbleViewDelegate
 
 - (void)didTapCloseButton {
-  [self dismissAnimated:YES
-           snoozeAction:feature_engagement::Tracker::SnoozeAction::DISMISSED];
+  [self dismissAnimated:YES reason:IPHDismissalReasonType::kTappedClose];
 }
 
 - (void)didTapSnoozeButton {
   [self dismissAnimated:YES
+                 reason:IPHDismissalReasonType::kTappedSnooze
            snoozeAction:feature_engagement::Tracker::SnoozeAction::SNOOZED];
 }
 
@@ -330,12 +340,19 @@ const CGFloat kVoiceOverAnnouncementDelay = 1;
 
 // Invoked by tapping inside the bubble. Dismisses the bubble.
 - (void)tapInsideBubbleRecognized:(id)sender {
-  [self dismissAnimated:YES];
+  [self dismissAnimated:YES reason:IPHDismissalReasonType::kTappedIPH];
 }
 
 // Invoked by tapping outside the bubble. Dismisses the bubble.
-- (void)tapOutsideBubbleRecognized:(id)sender {
-  [self dismissAnimated:YES];
+- (void)tapOutsideBubbleRecognized:(UITapGestureRecognizer*)sender {
+  CGPoint touchLocation = [sender locationOfTouch:0 inView:self.parentView];
+  IPHDismissalReasonType reasonType = IPHDismissalReasonType::kUnknown;
+  if (CGRectContainsPoint(_anchorViewFrame, touchLocation)) {
+    reasonType = IPHDismissalReasonType::kTappedAnchorView;
+  } else {
+    reasonType = IPHDismissalReasonType::kTappedOutsideIPHAndAnchorView;
+  }
+  [self dismissAnimated:YES reason:reasonType];
 }
 
 // Automatically dismisses the bubble view when `bubbleDismissalTimer` fires.
@@ -345,7 +362,7 @@ const CGFloat kVoiceOverAnnouncementDelay = 1;
   if (usesScreenReader && !self.bubbleShouldAutoDismissUnderAccessibility) {
     // No-op. Keep the IPH available for screen reader users.
   } else {
-    [self dismissAnimated:YES];
+    [self dismissAnimated:YES reason:IPHDismissalReasonType::kTimedOut];
   }
 }
 
@@ -356,9 +373,13 @@ const CGFloat kVoiceOverAnnouncementDelay = 1;
   self.engagementTimer = nil;
 }
 
-// Invoked when the keybord is dismissed.
+// Invoked when the keyboard is dismissed.
 - (void)onKeyboardHide:(NSNotification*)notification {
-  [self dismissAnimated:YES];
+  BOOL usesScreenReader = UIAccessibilityIsVoiceOverRunning() ||
+                          UIAccessibilityIsSwitchControlRunning();
+  if (usesScreenReader && !self.bubbleShouldAutoDismissUnderAccessibility) {
+    [self dismissAnimated:YES reason:IPHDismissalReasonType::kOnKeyboardHide];
+  }
 }
 
 // Calculates the frame of the BubbleView. `rect` is the frame of the bubble's

@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,17 +6,18 @@
 
 #include <string>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/numerics/safe_conversions.h"
 #include "base/strings/strcat.h"
 #include "chrome/browser/ui/views/chrome_layout_provider.h"
-#include "chrome/grit/chromium_strings.h"
+#include "chrome/grit/branded_strings.h"
 #include "chrome/grit/generated_resources.h"
 #include "components/strings/grit/components_strings.h"
 #include "components/vector_icons/vector_icons.h"
 #include "ui/base/l10n/l10n_util.h"
 #include "ui/base/metadata/metadata_impl_macros.h"
 #include "ui/base/resource/resource_bundle.h"
+#include "ui/base/ui_base_features.h"
 #include "ui/gfx/color_palette.h"
 #include "ui/gfx/geometry/point.h"
 #include "ui/gfx/geometry/rect.h"
@@ -35,6 +36,7 @@
 #include "ui/views/controls/throbber.h"
 #include "ui/views/layout/box_layout.h"
 #include "ui/views/layout/fill_layout.h"
+#include "ui/views/layout/layout_provider.h"
 #include "ui/views/widget/widget.h"
 
 DeviceChooserContentView::DeviceChooserContentView(
@@ -267,10 +269,24 @@ std::unique_ptr<views::View> DeviceChooserContentView::CreateExtraView() {
       ->set_cross_axis_alignment(views::BoxLayout::CrossAxisAlignment::kCenter);
 
   if (chooser_controller_->ShouldShowHelpButton()) {
-    auto help_button = views::CreateVectorImageButtonWithNativeTheme(
-        base::BindRepeating(&permissions::ChooserController::OpenHelpCenterUrl,
-                            base::Unretained(chooser_controller_.get())),
-        vector_icons::kHelpOutlineIcon);
+    std::unique_ptr<views::ImageButton> help_button;
+    if (features::IsChromeRefresh2023()) {
+      help_button = views::ImageButton::CreateIconButton(
+          base::BindRepeating(
+              &permissions::ChooserController::OpenHelpCenterUrl,
+              base::Unretained(chooser_controller_.get())),
+          vector_icons::kHelpOutlineIcon,
+          l10n_util::GetStringUTF16(IDS_LEARN_MORE),
+          views::ImageButton::MaterialIconStyle::kLarge,
+          views::LayoutProvider::Get()->GetInsetsMetric(
+              views::INSETS_VECTOR_IMAGE_BUTTON));
+    } else {
+      help_button = views::CreateVectorImageButtonWithNativeTheme(
+          base::BindRepeating(
+              &permissions::ChooserController::OpenHelpCenterUrl,
+              base::Unretained(chooser_controller_.get())),
+          vector_icons::kHelpOutlineIcon);
+    }
     help_button->SetTooltipText(l10n_util::GetStringUTF16(IDS_LEARN_MORE));
     container->AddChildView(std::move(help_button));
   }

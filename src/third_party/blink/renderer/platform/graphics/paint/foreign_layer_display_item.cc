@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -61,7 +61,6 @@ void RecordForeignLayer(GraphicsContext& context,
       client, type, std::move(layer), origin,
       client.VisualRectOutsetForRasterEffects(),
       client.GetPaintInvalidationReason());
-  paint_controller.RecordDebugInfo(client);
   if (properties) {
     paint_controller.UpdateCurrentPaintChunkProperties(*previous_properties);
   }

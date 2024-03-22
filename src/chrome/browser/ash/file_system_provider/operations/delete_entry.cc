@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,12 +13,12 @@ namespace ash {
 namespace file_system_provider {
 namespace operations {
 
-DeleteEntry::DeleteEntry(extensions::EventRouter* event_router,
+DeleteEntry::DeleteEntry(RequestDispatcher* dispatcher,
                          const ProvidedFileSystemInfo& file_system_info,
                          const base::FilePath& entry_path,
                          bool recursive,
                          storage::AsyncFileUtil::StatusCallback callback)
-    : Operation(event_router, file_system_info),
+    : Operation(dispatcher, file_system_info),
       entry_path_(entry_path),
       recursive_(recursive),
       callback_(std::move(callback)) {}
@@ -47,14 +47,14 @@ bool DeleteEntry::Execute(int request_id) {
 }
 
 void DeleteEntry::OnSuccess(int /* request_id */,
-                            std::unique_ptr<RequestValue> /* result */,
+                            const RequestValue& /* result */,
                             bool has_more) {
   DCHECK(callback_);
   std::move(callback_).Run(base::File::FILE_OK);
 }
 
 void DeleteEntry::OnError(int /* request_id */,
-                          std::unique_ptr<RequestValue> /* result */,
+                          const RequestValue& /* result */,
                           base::File::Error error) {
   DCHECK(callback_);
   std::move(callback_).Run(error);

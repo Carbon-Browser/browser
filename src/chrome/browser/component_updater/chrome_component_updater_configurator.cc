@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,10 +8,13 @@
 #include <string>
 #include <vector>
 
-#include "base/bind.h"
-#include "base/callback.h"
+#include "base/files/file_path.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
+#include "base/path_service.h"
 #include "base/strings/sys_string_conversions.h"
+#include "base/time/time.h"
 #include "base/version.h"
 #include "build/branding_buildflags.h"
 #include "build/build_config.h"
@@ -21,6 +24,7 @@
 #include "chrome/browser/net/system_network_context_manager.h"
 #include "chrome/browser/update_client/chrome_update_query_params_delegate.h"
 #include "chrome/common/channel_info.h"
+#include "chrome/common/chrome_paths.h"
 #include "components/component_updater/component_updater_command_line_config_policy.h"
 #include "components/component_updater/configurator_impl.h"
 #include "components/prefs/pref_service.h"
@@ -53,10 +57,10 @@ class ChromeConfigurator : public update_client::Configurator {
                      PrefService* pref_service);
 
   // update_client::Configurator overrides.
-  double InitialDelay() const override;
-  int NextCheckDelay() const override;
-  int OnDemandDelay() const override;
-  int UpdateDelay() const override;
+  base::TimeDelta InitialDelay() const override;
+  base::TimeDelta NextCheckDelay() const override;
+  base::TimeDelta OnDemandDelay() const override;
+  base::TimeDelta UpdateDelay() const override;
   std::vector<GURL> UpdateUrl() const override;
   std::vector<GURL> PingUrl() const override;
   std::string GetProdId() const override;
@@ -82,13 +86,15 @@ class ChromeConfigurator : public update_client::Configurator {
   GetProtocolHandlerFactory() const override;
   absl::optional<bool> IsMachineExternallyManaged() const override;
   update_client::UpdaterStateProvider GetUpdaterStateProvider() const override;
+  absl::optional<base::FilePath> GetCrxCachePath() const override;
 
  private:
   friend class base::RefCountedThreadSafe<ChromeConfigurator>;
 
+  absl::optional<base::FilePath> GetBackgroundDownloaderCache() const;
+
   ConfiguratorImpl configurator_impl_;
-  raw_ptr<PrefService>
-      pref_service_;  // This member is not owned by this class.
+  raw_ptr<PrefService> pref_service_;
   scoped_refptr<update_client::NetworkFetcherFactory> network_fetcher_factory_;
   scoped_refptr<update_client::CrxDownloaderFactory> crx_downloader_factory_;
   scoped_refptr<update_client::UnzipperFactory> unzip_factory_;
@@ -108,19 +114,19 @@ ChromeConfigurator::ChromeConfigurator(const base::CommandLine* cmdline,
   DCHECK(pref_service_);
 }
 
-double ChromeConfigurator::InitialDelay() const {
+base::TimeDelta ChromeConfigurator::InitialDelay() const {
   return configurator_impl_.InitialDelay();
 }
 
-int ChromeConfigurator::NextCheckDelay() const {
+base::TimeDelta ChromeConfigurator::NextCheckDelay() const {
   return configurator_impl_.NextCheckDelay();
 }
 
-int ChromeConfigurator::OnDemandDelay() const {
+base::TimeDelta ChromeConfigurator::OnDemandDelay() const {
   return configurator_impl_.OnDemandDelay();
 }
 
-int ChromeConfigurator::UpdateDelay() const {
+base::TimeDelta ChromeConfigurator::UpdateDelay() const {
   return configurator_impl_.UpdateDelay();
 }
 
@@ -186,8 +192,8 @@ ChromeConfigurator::GetNetworkFetcherFactory() {
 scoped_refptr<update_client::CrxDownloaderFactory>
 ChromeConfigurator::GetCrxDownloaderFactory() {
   if (!crx_downloader_factory_) {
-    crx_downloader_factory_ =
-        update_client::MakeCrxDownloaderFactory(GetNetworkFetcherFactory());
+    crx_downloader_factory_ = update_client::MakeCrxDownloaderFactory(
+        GetNetworkFetcherFactory(), GetBackgroundDownloaderCache());
   }
   return crx_downloader_factory_;
 }
@@ -255,12 +261,29 @@ ChromeConfigurator::GetUpdaterStateProvider() const {
 #endif
 }
 
+absl::optional<base::FilePath> ChromeConfigurator::GetCrxCachePath() const {
+  base::FilePath path;
+  bool result = base::PathService::Get(chrome::DIR_USER_DATA, &path);
+  return result ? absl::optional<base::FilePath>(
+                      path.AppendASCII("component_crx_cache"))
+                : absl::nullopt;
+}
+
+// TODO(crbug/1496582): Consolidate the cache path getters.
+absl::optional<base::FilePath>
+ChromeConfigurator::GetBackgroundDownloaderCache() const {
+  base::FilePath path;
+  bool result = base::PathService::Get(chrome::DIR_USER_DATA, &path);
+  return result ? absl::optional<base::FilePath>(
+                      path.AppendASCII("download_cache"))
+                : absl::nullopt;
+}
+
 }  // namespace
 
 scoped_refptr<update_client::Configurator>
-MakeChromeComponentUpdaterConfigurator(
-    const base::CommandLine* cmdline,
-    PrefService* pref_service) {
+MakeChromeComponentUpdaterConfigurator(const base::CommandLine* cmdline,
+                                       PrefService* pref_service) {
   return base::MakeRefCounted<ChromeConfigurator>(cmdline, pref_service);
 }
 

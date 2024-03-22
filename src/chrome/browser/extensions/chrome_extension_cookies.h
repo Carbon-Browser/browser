@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -17,7 +17,7 @@
 #include "components/keyed_service/core/keyed_service.h"
 #include "mojo/public/cpp/bindings/unique_receiver_set.h"
 #include "net/cookies/cookie_store.h"
-#include "net/cookies/first_party_set_metadata.h"
+#include "net/first_party_sets/first_party_set_metadata.h"
 #include "services/network/cookie_settings.h"
 #include "services/network/public/mojom/cookie_manager.mojom-forward.h"
 #include "services/network/public/mojom/restricted_cookie_manager.mojom.h"
@@ -47,6 +47,8 @@ class ChromeExtensionCookies
       public content_settings::Observer,
       public content_settings::CookieSettings::Observer {
  public:
+  explicit ChromeExtensionCookies(Profile* profile);
+  ~ChromeExtensionCookies() override;
   ChromeExtensionCookies(const ChromeExtensionCookies&) = delete;
   ChromeExtensionCookies& operator=(const ChromeExtensionCookies&) = delete;
 
@@ -93,7 +95,6 @@ class ChromeExtensionCookies
     void ComputeFirstPartySetMetadataAndCreateRestrictedCookieManager(
         const url::Origin& origin,
         const net::IsolationInfo& isolation_info,
-        const bool first_party_sets_enabled,
         mojo::PendingReceiver<network::mojom::RestrictedCookieManager>
             receiver);
 
@@ -115,7 +116,6 @@ class ChromeExtensionCookies
     void CreateRestrictedCookieManager(
         const url::Origin& origin,
         const net::IsolationInfo& isolation_info,
-        bool first_party_sets_enabled,
         mojo::PendingReceiver<network::mojom::RestrictedCookieManager> receiver,
         net::FirstPartySetMetadata first_party_set_metadata);
 
@@ -134,9 +134,6 @@ class ChromeExtensionCookies
 
     base::WeakPtrFactory<IOData> weak_factory_{this};
   };
-
-  explicit ChromeExtensionCookies(Profile* profile);
-  ~ChromeExtensionCookies() override;
 
   // content_settings::Observer:
   void OnContentSettingChanged(
@@ -161,8 +158,6 @@ class ChromeExtensionCookies
   base::ScopedObservation<content_settings::CookieSettings,
                           content_settings::CookieSettings::Observer>
       cookie_settings_observation_{this};
-
-  const bool first_party_sets_enabled_;
 };
 
 }  // namespace extensions

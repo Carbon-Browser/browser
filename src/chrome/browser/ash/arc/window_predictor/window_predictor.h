@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,13 +6,13 @@
 #define CHROME_BROWSER_ASH_ARC_WINDOW_PREDICTOR_WINDOW_PREDICTOR_H_
 
 #include <memory>
+#include <vector>
 
 #include "ash/components/arc/mojom/app.mojom.h"
 #include "base/no_destructor.h"
+#include "chrome/browser/ash/app_list/arc/arc_app_list_prefs.h"
 #include "chrome/browser/ash/arc/window_predictor/arc_predictor_app_launch_handler.h"
-#include "chrome/browser/ui/app_list/arc/arc_app_list_prefs.h"
-
-class Profile;
+#include "chrome/browser/ash/arc/window_predictor/window_predictor_utils.h"
 
 namespace arc {
 
@@ -26,24 +26,31 @@ class WindowPredictor {
   WindowPredictor(const WindowPredictor&) = delete;
   WindowPredictor& operator=(const WindowPredictor&) = delete;
 
-  // Create App Launch Handler.
-  void MaybeCreateAppLaunchHandler(Profile* profile);
+  // Create ARC app ghost window and add the corresponding to the launching
+  // list, it will be launched after ARC ready.
+  bool LaunchArcAppWithGhostWindow(
+      Profile* profile,
+      const std::string& app_id,
+      const ArcAppListPrefs::AppInfo& app_info,
+      const apps::IntentPtr& intent,
+      int event_flags,
+      GhostWindowType window_type,
+      WindowPredictorUseCase use_case,
+      const arc::mojom::WindowInfoPtr& window_info);
 
   // Get predict app window info by app id and existed window info.
   arc::mojom::WindowInfoPtr PredictAppWindowInfo(
       const ArcAppListPrefs::AppInfo& app_info,
       arc::mojom::WindowInfoPtr window_info);
 
-  ArcPredictorAppLaunchHandler* app_launch_handler() {
-    return app_launch_handler_.get();
-  }
+  bool IsAppPendingLaunch(Profile* profile, const std::string& app_id);
 
  private:
   friend class base::NoDestructor<WindowPredictor>;
   WindowPredictor();
   ~WindowPredictor();
 
-  std::unique_ptr<ArcPredictorAppLaunchHandler> app_launch_handler_;
+  int32_t launch_counter = 0;
 };
 
 }  // namespace arc

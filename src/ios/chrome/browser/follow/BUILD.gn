@@ -1,88 +1,32 @@
-# Copyright 2022 The Chromium Authors. All rights reserved.
+# Copyright 2022 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
 import("//ios/web/public/js_messaging/optimize_ts.gni")
 
-source_set("follow") {
-  sources = [
-    "follow_java_script_feature.h",
-    "follow_java_script_feature.mm",
-  ]
-  deps = [
-    ":rss_link_js",
-    "//ios/chrome/browser/ui/follow",
-    "//ios/web/public",
-    "//ios/web/public/js_messaging",
-    "//net",
-  ]
-  configs += [ "//build/config/compiler:enable_arc" ]
-}
-
-source_set("utils") {
-  configs += [ "//build/config/compiler:enable_arc" ]
-  sources = [
-    "follow_util.h",
-    "follow_util.mm",
-  ]
-  deps = [
-    ":enums",
-    "//ios/chrome/browser/browser_state",
-    "//ios/chrome/browser/ntp:features",
-    "//ios/chrome/browser/signin",
-    "//ios/web/public",
-    "//url",
-  ]
-}
-
 source_set("enums") {
-  configs += [ "//build/config/compiler:enable_arc" ]
-  sources = [ "follow_action_state.h" ]
+  sources = [
+    "follow_action_state.h",
+    "followed_web_site_state.h",
+  ]
   deps = []
 }
 
-source_set("tab_helper") {
+source_set("service") {
   sources = [
-    "follow_iph_presenter.h",
-    "follow_menu_updater.h",
-    "follow_tab_helper.h",
-    "follow_tab_helper.mm",
+    "follow_configuration.h",
+    "follow_configuration.mm",
+    "follow_service.h",
+    "follow_service_observer.h",
+    "follow_service_observer.mm",
+    "followed_web_site.h",
+    "followed_web_site.mm",
+    "web_page_urls.h",
+    "web_page_urls.mm",
   ]
   deps = [
-    ":follow",
+    ":enums",
     "//base",
-    "//components/feature_engagement/public",
-    "//components/history/core/browser",
     "//components/keyed_service/core",
-    "//ios/chrome/app/strings:ios_strings_grit",
-    "//ios/chrome/browser",
-    "//ios/chrome/browser/browser_state",
-    "//ios/chrome/browser/feature_engagement",
-    "//ios/chrome/browser/follow:enums",
-    "//ios/chrome/browser/follow:utils",
-    "//ios/chrome/browser/history",
-    "//ios/public/provider/chrome/browser",
-    "//ios/public/provider/chrome/browser/follow",
-    "//ios/web/public",
-    "//ios/web/public/js_messaging",
-    "//ui/base",
   ]
-  configs += [ "//build/config/compiler:enable_arc" ]
-}
-
-source_set("unit_tests") {
-  configs += [ "//build/config/compiler:enable_arc" ]
-  testonly = true
-  sources = [ "follow_util_unittest.mm" ]
-  deps = [
-    ":utils",
-    "//testing/gtest",
-  ]
-}
-
-optimize_ts("rss_link_js") {
-  visibility = [ ":follow" ]
-
-  sources = [ "resources/rss_link.ts" ]
-  deps = [ "//ios/web/public/js_messaging:gcrweb" ]
 }

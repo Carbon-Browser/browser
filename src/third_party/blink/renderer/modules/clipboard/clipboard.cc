@@ -1,10 +1,12 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "third_party/blink/renderer/modules/clipboard/clipboard.h"
 
 #include <utility>
+
+#include "net/base/mime_util.h"
 #include "third_party/blink/renderer/bindings/core/v8/script_promise_resolver.h"
 #include "third_party/blink/renderer/core/event_target_names.h"
 #include "third_party/blink/renderer/core/frame/local_dom_window.h"
@@ -28,8 +30,10 @@ Clipboard* Clipboard::clipboard(Navigator& navigator) {
 
 Clipboard::Clipboard(Navigator& navigator) : Supplement<Navigator>(navigator) {}
 
-ScriptPromise Clipboard::read(ScriptState* script_state) {
-  return ClipboardPromise::CreateForRead(GetExecutionContext(), script_state);
+ScriptPromise Clipboard::read(ScriptState* script_state,
+                              ClipboardUnsanitizedFormats* formats) {
+  return ClipboardPromise::CreateForRead(GetExecutionContext(), script_state,
+                                         formats);
 }
 
 ScriptPromise Clipboard::readText(ScriptState* script_state) {
@@ -59,16 +63,23 @@ ExecutionContext* Clipboard::GetExecutionContext() const {
 
 // static
 String Clipboard::ParseWebCustomFormat(const String& format) {
-  String web_custom_format;
   if (format.StartsWith(ui::kWebClipboardFormatPrefix)) {
-    web_custom_format = format.Substring(
+    String web_custom_format_suffix = format.Substring(
         static_cast<unsigned>(std::strlen(ui::kWebClipboardFormatPrefix)));
+    std::string web_top_level_mime_type;
+    std::string web_mime_sub_type;
+    if (net::ParseMimeTypeWithoutParameter(web_custom_format_suffix.Utf8(),
+                                           &web_top_level_mime_type,
+                                           &web_mime_sub_type)) {
+      return String::Format("%s/%s", web_top_level_mime_type.c_str(),
+                            web_mime_sub_type.c_str());
+    }
   }
-  return web_custom_format;
+  return g_empty_string;
 }
 
 void Clipboard::Trace(Visitor* visitor) const {
-  EventTargetWithInlineData::Trace(visitor);
+  EventTarget::Trace(visitor);
   Supplement<Navigator>::Trace(visitor);
 }
 

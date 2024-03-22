@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,11 +10,6 @@
 #include "third_party/skia/include/core/SkColor.h"
 #include "ui/base/metadata/metadata_header_macros.h"
 #include "ui/views/view.h"
-
-namespace {
-class WebAppToolbarBackButton;
-class WebAppToolbarReloadButton;
-}  // namespace
 
 class BackForwardButton;
 class ReloadButton;
@@ -35,8 +30,6 @@ class WebAppNavigationButtonContainer : public views::View,
   BackForwardButton* back_button();
   ReloadButton* reload_button();
 
-  void SetIconColor(SkColor icon_color);
-
  protected:
   // CommandObserver:
   void EnabledStateChangedForCommand(int id, bool enabled) override;
@@ -46,8 +39,8 @@ class WebAppNavigationButtonContainer : public views::View,
   const raw_ptr<Browser> browser_;
 
   // These members are owned by the views hierarchy.
-  raw_ptr<WebAppToolbarBackButton> back_button_ = nullptr;
-  raw_ptr<WebAppToolbarReloadButton> reload_button_ = nullptr;
+  raw_ptr<BackForwardButton> back_button_ = nullptr;
+  raw_ptr<ReloadButton> reload_button_ = nullptr;
 };
 
 #endif  // CHROME_BROWSER_UI_VIEWS_WEB_APPS_FRAME_TOOLBAR_WEB_APP_NAVIGATION_BUTTON_CONTAINER_H_

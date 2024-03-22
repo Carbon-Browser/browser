@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,7 +10,7 @@
 
 #include "base/callback_list.h"
 #include "components/sync/base/model_type.h"
-#include "components/version_info/version_info.h"
+#include "components/version_info/channel.h"
 
 namespace syncer {
 

@@ -1,4 +1,4 @@
-// Copyright 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -47,6 +47,7 @@ class CC_EXPORT PictureLayer : public Layer {
                         const CommitState& commit_state,
                         const ThreadUnsafeCommitState& unsafe_state) override;
   void SetNeedsDisplayRect(const gfx::Rect& layer_rect) override;
+  bool RequiresSetNeedsDisplayOnHdrHeadroomChange() const override;
   sk_sp<const SkPicture> GetPicture() const override;
   bool Update() override;
   void RunMicroBenchmark(MicroBenchmark* benchmark) override;
@@ -75,7 +76,7 @@ class CC_EXPORT PictureLayer : public Layer {
     PictureLayerInputs();
     ~PictureLayerInputs();
 
-    raw_ptr<ContentLayerClient> client = nullptr;
+    raw_ptr<ContentLayerClient, DanglingUntriaged> client = nullptr;
     bool nearest_neighbor = false;
     bool is_backdrop_filter_mask = false;
     scoped_refptr<DisplayItemList> display_list;

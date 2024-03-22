@@ -1,24 +1,24 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 // clang-format off
 import 'chrome://resources/cr_elements/cr_slider/cr_slider.js';
 
+import {getTrustedHTML} from 'chrome://resources/js/static_types.js';
 import {CrSliderElement} from 'chrome://resources/cr_elements/cr_slider/cr_slider.js';
-
 import {pressAndReleaseKeyOn} from 'chrome://resources/polymer/v3_0/iron-test-helpers/mock-interactions.js';
 import {flush} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
-
 import {assertEquals, assertFalse, assertTrue} from 'chrome://webui-test/chai_assert.js';
-import {eventToPromise, flushTasks} from 'chrome://webui-test/test_util.js';
+import {eventToPromise} from 'chrome://webui-test/test_util.js';
+import {flushTasks} from 'chrome://webui-test/polymer_test_util.js';
 // clang-format on
 
 suite('cr-slider', function() {
   let crSlider: CrSliderElement;
 
   setup(function() {
-    document.body.innerHTML = `
+    document.body.innerHTML = getTrustedHTML`
       <style>
         #wrapper {
           width: 200px;
@@ -127,6 +127,46 @@ suite('cr-slider', function() {
     assertEquals(98, crSlider.value);
     pressPageDown();
     assertEquals(97, crSlider.value);
+  });
+
+  test('key events with key down intervals', () => {
+    crSlider.keyPressSliderIncrement = 10;
+    pressArrowRight();
+    assertEquals(10, crSlider.value);
+    pressPageUp();
+    assertEquals(20, crSlider.value);
+    pressArrowUp();
+    assertEquals(30, crSlider.value);
+    pressHome();
+    assertEquals(0, crSlider.value);
+    pressArrowLeft();
+    assertEquals(0, crSlider.value);
+    pressArrowDown();
+    assertEquals(0, crSlider.value);
+    pressPageDown();
+    assertEquals(0, crSlider.value);
+    pressEnd();
+    assertEquals(100, crSlider.value);
+    pressArrowRight();
+    assertEquals(100, crSlider.value);
+    pressPageUp();
+    assertEquals(100, crSlider.value);
+    pressArrowUp();
+    assertEquals(100, crSlider.value);
+    pressArrowLeft();
+    assertEquals(90, crSlider.value);
+    pressArrowDown();
+    assertEquals(80, crSlider.value);
+    pressPageDown();
+    assertEquals(70, crSlider.value);
+
+    // Verify value stays within bounds.
+    crSlider.value = 98;
+    pressArrowRight();
+    assertEquals(100, crSlider.value);
+    crSlider.value = 2;
+    pressArrowLeft();
+    assertEquals(0, crSlider.value);
   });
 
   test('no-keybindings', () => {
@@ -445,8 +485,10 @@ suite('cr-slider', function() {
       });
 
   test('container hidden until value set', async () => {
-    document.body.innerHTML = '<cr-slider></cr-slider>';
-    crSlider = document.body.querySelector('cr-slider')!;
+    document.body.innerHTML = window.trustedTypes!.emptyHTML;
+    crSlider = document.createElement('cr-slider');
+    document.body.appendChild(crSlider);
+
     assertTrue(
         crSlider.shadowRoot!.querySelector<HTMLElement>('#container')!.hidden);
     crSlider.value = 0;

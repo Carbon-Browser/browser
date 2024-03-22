@@ -1,10 +1,9 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "ash/session/test_session_controller_client.h"
 
-#include <algorithm>
 #include <string>
 
 #include "ash/login/login_screen_controller.h"
@@ -13,11 +12,12 @@
 #include "ash/session/test_pref_service_provider.h"
 #include "ash/shell.h"
 #include "ash/wallpaper/wallpaper_controller_impl.h"
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
+#include "base/ranges/algorithm.h"
 #include "base/run_loop.h"
 #include "base/strings/stringprintf.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/task/single_thread_task_runner.h"
 #include "components/account_id/account_id.h"
 #include "components/prefs/pref_service.h"
 #include "components/session_manager/session_manager_types.h"
@@ -35,7 +35,7 @@ bool g_provide_signin_pref_service = true;
 // without introducing dependency on google_api.
 std::string GetUserIdFromEmail(const std::string& email) {
   std::string user_id = email;
-  std::transform(user_id.begin(), user_id.end(), user_id.begin(), ::tolower);
+  base::ranges::transform(user_id, user_id.begin(), ::tolower);
   return user_id;
 }
 
@@ -138,12 +138,13 @@ void TestSessionControllerClient::AddUserSession(
     user_manager::UserType user_type,
     bool provide_pref_service,
     bool is_new_profile,
-    const std::string& given_name) {
+    const std::string& given_name,
+    bool is_account_managed) {
   auto account_id = AccountId::FromUserEmail(
       use_lower_case_user_id_ ? GetUserIdFromEmail(display_email)
                               : display_email);
   AddUserSession(account_id, display_email, user_type, provide_pref_service,
-                 is_new_profile, given_name);
+                 is_new_profile, given_name, is_account_managed);
 }
 
 void TestSessionControllerClient::AddUserSession(
@@ -152,7 +153,8 @@ void TestSessionControllerClient::AddUserSession(
     user_manager::UserType user_type,
     bool provide_pref_service,
     bool is_new_profile,
-    const std::string& given_name) {
+    const std::string& given_name,
+    bool is_account_managed) {
   // Set is_ephemeral in user_info to true if the user type is guest or public
   // account.
   bool is_ephemeral = user_type == user_manager::USER_TYPE_GUEST ||
@@ -167,6 +169,10 @@ void TestSessionControllerClient::AddUserSession(
   session.user_info.is_ephemeral = is_ephemeral;
   session.user_info.is_new_profile = is_new_profile;
   session.user_info.given_name = given_name;
+  session.user_info.has_gaia_account =
+      account_id.GetAccountType() == AccountType::GOOGLE &&
+      !account_id.GetGaiaId().empty();
+  session.user_info.is_managed = is_account_managed;
   controller_->UpdateUserSession(std::move(session));
 
   if (provide_pref_service && prefs_provider_ &&
@@ -189,7 +195,7 @@ void TestSessionControllerClient::LockScreen() {
 }
 
 void TestSessionControllerClient::UnlockScreen() {
-  SetSessionState(session_manager::SessionState::ACTIVE);
+  RequestHideLockScreen();
 }
 
 void TestSessionControllerClient::FlushForTest() {
@@ -221,15 +227,24 @@ void TestSessionControllerClient::RequestLockScreen() {
     Shell::Get()->login_screen_controller()->ShowLockScreen();
   }
 
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE, base::BindOnce(&TestSessionControllerClient::SetSessionState,
                                 weak_ptr_factory_.GetWeakPtr(),
                                 session_manager::SessionState::LOCKED));
 }
 
+void TestSessionControllerClient::RequestHideLockScreen() {
+  ++request_hide_lock_screen_count_;
+  SetSessionState(session_manager::SessionState::ACTIVE);
+}
+
 void TestSessionControllerClient::RequestSignOut() {
   Reset();
   ++request_sign_out_count_;
+}
+
+void TestSessionControllerClient::RequestRestartForUpdate() {
+  ++request_restart_for_update_count_;
 }
 
 void TestSessionControllerClient::AttemptRestartChrome() {
@@ -272,11 +287,10 @@ void TestSessionControllerClient::CycleActiveUser(
     session_id = 1u;
 
   // Maps session id to AccountId and call SwitchActiveUser.
-  auto it =
-      std::find_if(sessions.begin(), sessions.end(),
-                   [session_id](const std::unique_ptr<UserSession>& session) {
-                     return session && session->session_id == session_id;
-                   });
+  auto it = base::ranges::find_if(
+      sessions, [session_id](const std::unique_ptr<UserSession>& session) {
+        return session && session->session_id == session_id;
+      });
   if (it == sessions.end()) {
     NOTREACHED();
     return;
@@ -309,8 +323,17 @@ PrefService* TestSessionControllerClient::GetUserPrefService(
   return prefs_provider_ ? prefs_provider_->GetUserPrefs(account_id) : nullptr;
 }
 
+base::FilePath TestSessionControllerClient::GetProfilePath(
+    const AccountId& account_id) {
+  return base::FilePath("/profile/path").Append(account_id.GetUserEmail());
+}
+
 bool TestSessionControllerClient::IsEnterpriseManaged() const {
   return is_enterprise_managed_;
+}
+
+std::optional<int> TestSessionControllerClient::GetExistingUsersCount() const {
+  return existing_users_count_;
 }
 
 void TestSessionControllerClient::DoSwitchUser(const AccountId& account_id,

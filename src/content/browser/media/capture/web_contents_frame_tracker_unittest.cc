@@ -1,10 +1,13 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "content/browser/media/capture/web_contents_frame_tracker.h"
+
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
+#include "base/task/sequenced_task_runner.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/test/scoped_feature_list.h"
 #include "build/build_config.h"
 #include "content/browser/media/capture/mouse_cursor_overlay_controller.h"
@@ -16,6 +19,8 @@
 #include "content/test/test_render_view_host.h"
 #include "content/test/test_web_contents.h"
 #include "media/base/media_switches.h"
+#include "media/capture/mojom/video_capture_types.mojom.h"
+#include "media/capture/video/video_capture_feedback.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "ui/display/screen_info.h"
@@ -44,8 +49,9 @@ class SimpleContext : public WebContentsFrameTracker::Context {
   absl::optional<gfx::Rect> GetScreenBounds() override {
     return screen_bounds_;
   }
-  viz::FrameSinkId GetFrameSinkIdForCapture() override {
-    return frame_sink_id_;
+
+  WebContentsImpl::CaptureTarget GetCaptureTarget() override {
+    return WebContentsImpl::CaptureTarget{frame_sink_id_, gfx::NativeView{}};
   }
   void IncrementCapturerCount(const gfx::Size& capture_size) override {
     ++capturer_count_;
@@ -116,9 +122,10 @@ class WebContentsFrameTrackerTest : public RenderViewHostTestHarness {
     // cleaner to do so in case we want to switch to a different threading model
     // for the tests in the future.
     GetUIThreadTaskRunner({})->PostTask(
-        FROM_HERE, base::BindOnce(&WebContentsFrameTrackerTest::SetUpOnUIThread,
-                                  base::Unretained(this),
-                                  base::ThreadTaskRunnerHandle::Get()));
+        FROM_HERE,
+        base::BindOnce(&WebContentsFrameTrackerTest::SetUpOnUIThread,
+                       base::Unretained(this),
+                       base::SingleThreadTaskRunner::GetCurrentDefault()));
     RunAllTasksUntilIdle();
   }
 
@@ -152,7 +159,7 @@ class WebContentsFrameTrackerTest : public RenderViewHostTestHarness {
     raw_context_->set_screen_bounds(gfx::Rect{size});
   }
 
-  void SetFrameSinkId(const viz::FrameSinkId id) {
+  void SetFrameSinkId(viz::FrameSinkId id) {
     raw_context_->set_frame_sink_id(id);
   }
 
@@ -162,7 +169,8 @@ class WebContentsFrameTrackerTest : public RenderViewHostTestHarness {
     GetUIThreadTaskRunner({})->PostTask(
         FROM_HERE,
         base::BindOnce(&WebContentsFrameTracker::WillStartCapturingWebContents,
-                       base::Unretained(tracker_.get()), capture_size));
+                       base::Unretained(tracker_.get()), capture_size,
+                       true /* is_high_dpi_enabled */));
   }
 
   void StopTrackerOnUIThread() {
@@ -197,7 +205,7 @@ class WebContentsFrameTrackerTest : public RenderViewHostTestHarness {
   std::unique_ptr<WebContentsFrameTracker> tracker_;
 
   // Save because the pointed-to location should not change during testing.
-  raw_ptr<SimpleContext> raw_context_;
+  raw_ptr<SimpleContext, AcrossTasksDanglingUntriaged> raw_context_;
 };
 
 TEST_F(WebContentsFrameTrackerTest, CalculatesPreferredSizeClampsToView) {
@@ -342,7 +350,7 @@ TEST_F(WebContentsFrameTrackerTest, NotifiesOfTargetChanges) {
   EXPECT_CALL(
       *device(),
       OnTargetChanged(absl::make_optional<viz::VideoCaptureTarget>(kNewId),
-                      /*crop_version=*/0))
+                      /*sub_capture_target_version=*/0))
       .Times(1);
 
   // The tracker doesn't actually use the frame host information, just
@@ -357,10 +365,11 @@ TEST_F(WebContentsFrameTrackerTest,
 
   // Expect the callback handed to Crop() to be invoke with kSuccess.
   bool success = false;
-  base::OnceCallback<void(media::mojom::CropRequestResult)> callback =
+  base::OnceCallback<void(media::mojom::ApplySubCaptureTargetResult)> callback =
       base::BindOnce(
-          [](bool* success, media::mojom::CropRequestResult result) {
-            *success = (result == media::mojom::CropRequestResult::kSuccess);
+          [](bool* success, media::mojom::ApplySubCaptureTargetResult result) {
+            *success =
+                (result == media::mojom::ApplySubCaptureTargetResult::kSuccess);
           },
           &success);
 
@@ -368,10 +377,12 @@ TEST_F(WebContentsFrameTrackerTest,
   EXPECT_CALL(*device(),
               OnTargetChanged(absl::make_optional<viz::VideoCaptureTarget>(
                                   kInitSinkId, kCropId),
-                              /*crop_version=*/1))
+                              /*sub_capture_target_version=*/1))
       .Times(1);
 
-  tracker()->Crop(kCropId, /*crop_version=*/1, std::move(callback));
+  tracker()->ApplySubCaptureTarget(
+      media::mojom::SubCaptureTargetType::kCropTarget, kCropId,
+      /*sub_capture_target_version=*/1, std::move(callback));
 
   RunAllTasksUntilIdle();
   EXPECT_TRUE(success);
@@ -534,6 +545,90 @@ TEST_F(WebContentsFrameTrackerTest, HighDpiScalingIsStable) {
       gfx::ScaleToRoundedSize(kContentSize, 1.23f);
   tracker()->SetCapturedContentSize(kScaledSmallerContentSize);
   EXPECT_DOUBLE_EQ(context()->scale_override(), 1.25f);
+}
+
+TEST_F(WebContentsFrameTrackerTest, HighDpiAdjustsForResourceUtilization) {
+  base::test::ScopedFeatureList feature_list;
+  feature_list.InitAndEnableFeature(media::kWebContentsCaptureHiDpi);
+
+  StartTrackerOnUIThread(kSize1080p);
+  RunAllTasksUntilIdle();
+
+  // Both factors should be 2.0f, which should be exactly a scaling factor.
+  tracker()->SetCapturedContentSize(gfx::Size(960, 540));
+  EXPECT_DOUBLE_EQ(context()->scale_override(), 2.0f);
+
+  // Start with default feedback, which should be ignored.
+  media::VideoCaptureFeedback feedback;
+  tracker()->OnUtilizationReport(feedback);
+  EXPECT_DOUBLE_EQ(context()->scale_override(), 2.0f);
+
+  // As the feedback continues to be poor, the scale override should lower.
+  feedback.resource_utilization = 0.9f;
+  tracker()->OnUtilizationReport(feedback);
+  EXPECT_DOUBLE_EQ(context()->scale_override(), 1.75f);
+  tracker()->OnUtilizationReport(feedback);
+  EXPECT_DOUBLE_EQ(context()->scale_override(), 1.5f);
+  tracker()->OnUtilizationReport(feedback);
+  EXPECT_DOUBLE_EQ(context()->scale_override(), 1.25f);
+  tracker()->OnUtilizationReport(feedback);
+  EXPECT_DOUBLE_EQ(context()->scale_override(), 1.0f);
+
+  // If things get significantly better, it should go back up.
+  feedback.resource_utilization = 0.49f;
+  tracker()->OnUtilizationReport(feedback);
+  EXPECT_DOUBLE_EQ(context()->scale_override(), 1.25f);
+  tracker()->OnUtilizationReport(feedback);
+  EXPECT_DOUBLE_EQ(context()->scale_override(), 1.5f);
+  tracker()->OnUtilizationReport(feedback);
+  EXPECT_DOUBLE_EQ(context()->scale_override(), 1.75f);
+  tracker()->OnUtilizationReport(feedback);
+  EXPECT_DOUBLE_EQ(context()->scale_override(), 2.0f);
+}
+
+TEST_F(WebContentsFrameTrackerTest, HighDpiAdjustsForMaxPixelRate) {
+  base::test::ScopedFeatureList feature_list;
+  feature_list.InitAndEnableFeature(media::kWebContentsCaptureHiDpi);
+
+  StartTrackerOnUIThread(kSize1080p);
+  RunAllTasksUntilIdle();
+
+  tracker()->SetCapturedContentSize(kSize720p);
+  EXPECT_DOUBLE_EQ(context()->scale_override(), 1.5f);
+
+  // Test using too many pixels.
+  media::VideoCaptureFeedback feedback;
+  feedback.max_pixels = kSize720p.width() * kSize720p.height() - 1;
+
+  // We should lower the maximum, which should eventually lower the override.
+  // First, max is now 1.75f.
+  tracker()->OnUtilizationReport(feedback);
+  EXPECT_DOUBLE_EQ(context()->scale_override(), 1.5f);
+
+  // Now max is 1.5f.
+  tracker()->OnUtilizationReport(feedback);
+  EXPECT_DOUBLE_EQ(context()->scale_override(), 1.5f);
+
+  // Now max is 1.25f.
+  tracker()->OnUtilizationReport(feedback);
+  EXPECT_DOUBLE_EQ(context()->scale_override(), 1.25f);
+
+  // Now max is 1.0f.
+  tracker()->OnUtilizationReport(feedback);
+  EXPECT_DOUBLE_EQ(context()->scale_override(), 1.0f);
+  tracker()->OnUtilizationReport(feedback);
+  EXPECT_DOUBLE_EQ(context()->scale_override(), 1.0f);
+
+  // Things should only change if it gets significantly better.
+  feedback.max_pixels = kSize720p.width() * kSize720p.height() + 1;
+  tracker()->OnUtilizationReport(feedback);
+  EXPECT_DOUBLE_EQ(context()->scale_override(), 1.0f);
+
+  feedback.max_pixels = kSize720p.width() * kSize720p.height() * 1.33f;
+  tracker()->OnUtilizationReport(feedback);
+  EXPECT_DOUBLE_EQ(context()->scale_override(), 1.25f);
+  tracker()->OnUtilizationReport(feedback);
+  EXPECT_DOUBLE_EQ(context()->scale_override(), 1.5f);
 }
 
 }  // namespace

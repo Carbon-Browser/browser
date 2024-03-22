@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,7 +9,7 @@
 #include <memory>
 #include <string>
 
-#include "base/memory/weak_ptr.h"
+#include "base/memory/raw_ptr.h"
 #include "base/strings/string_piece.h"
 
 namespace content {
@@ -19,6 +19,7 @@ class WebContents;
 
 namespace ash {
 namespace test {
+
 class TestConditionWaiter;
 
 using UIPath = std::initializer_list<base::StringPiece>;
@@ -138,6 +139,13 @@ class JSChecker {
       const std::string& css_class,
       std::initializer_list<base::StringPiece> element_ids);
 
+  // Waiter that waits until the specified element is (not) present in the
+  // document.
+  [[nodiscard]] std::unique_ptr<TestConditionWaiter>
+  CreateElementTextContentWaiter(
+      const std::string& content,
+      std::initializer_list<base::StringPiece> element_ids);
+
   // Expects that indicated UI element is not hidden.
   // NOTE: This only checks hidden property - it might not work for elements
   // hidden by "display: none" style.
@@ -235,12 +243,11 @@ class JSChecker {
     web_contents_ = web_contents;
   }
 
- private:
-  void GetBoolImpl(const std::string& expression, bool* result);
-  void GetIntImpl(const std::string& expression, int* result);
-  void GetStringImpl(const std::string& expression, std::string* result);
+  content::WebContents* web_contents() { return web_contents_; }
 
-  content::WebContents* web_contents_ = nullptr;
+ private:
+  raw_ptr<content::WebContents, DanglingUntriaged | ExperimentalAsh>
+      web_contents_ = nullptr;
 };
 
 // Helper method to create the JSChecker instance from the login/oobe
@@ -266,14 +273,5 @@ std::string GetAttributeExpression(
 
 }  // namespace test
 }  // namespace ash
-
-// TODO(https://crbug.com/1164001): remove after the //chrome/browser/chromeos
-// source migration is finished.
-namespace chromeos::test {
-using ::ash::test::ExecuteOobeJS;
-using ::ash::test::GetOobeElementPath;
-using ::ash::test::OobeJS;
-using ::ash::test::UIPath;
-}  // namespace chromeos::test
 
 #endif  // CHROME_BROWSER_ASH_LOGIN_TEST_JS_CHECKER_H_

@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -73,8 +73,8 @@ class ContactCenterInsightsExtensionManagerTest : public ::testing::Test {
   content::BrowserTaskEnvironment task_environment_;
   TestingProfileManager profile_manager_;
 
-  raw_ptr<TestingProfile> affiliated_user_profile_;
-  raw_ptr<TestingProfile> unaffiliated_user_profile_;
+  raw_ptr<TestingProfile, DanglingUntriaged> affiliated_user_profile_;
+  raw_ptr<TestingProfile, DanglingUntriaged> unaffiliated_user_profile_;
 };
 
 TEST_F(ContactCenterInsightsExtensionManagerTest,

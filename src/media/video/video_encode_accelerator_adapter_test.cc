@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,7 @@
 #include <memory>
 #include <string>
 
-#include "base/callback_helpers.h"
+#include "base/functional/callback_helpers.h"
 #include "base/logging.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/scoped_refptr.h"
@@ -16,7 +16,6 @@
 #include "base/test/bind.h"
 #include "base/test/gmock_callback_support.h"
 #include "base/test/task_environment.h"
-#include "base/threading/sequenced_task_runner_handle.h"
 #include "base/threading/thread.h"
 #include "base/time/time.h"
 #include "build/build_config.h"
@@ -28,8 +27,10 @@
 #include "media/video/gpu_video_accelerator_factories.h"
 #include "media/video/mock_gpu_video_accelerator_factories.h"
 #include "media/video/mock_video_encode_accelerator.h"
+#include "media/video/video_encoder_info.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "third_party/libyuv/include/libyuv.h"
+#include "ui/gfx/color_space.h"
 
 using ::testing::_;
 using ::testing::AtLeast;
@@ -72,7 +73,7 @@ class VideoEncodeAcceleratorAdapterTest
         .WillRepeatedly(Return(vea_runner_));
 
     auto media_log = std::make_unique<NullMediaLog>();
-    callback_runner_ = base::SequencedTaskRunnerHandle::Get();
+    callback_runner_ = base::SequencedTaskRunner::GetCurrentDefault();
     vae_adapter_ = std::make_unique<VideoEncodeAcceleratorAdapter>(
         gpu_factories_.get(), media_log->Clone(), callback_runner_);
   }
@@ -104,9 +105,11 @@ class VideoEncodeAcceleratorAdapterTest
     gmb->Unmap();
 
     gpu::MailboxHolder empty_mailboxes[media::VideoFrame::kMaxPlanes];
-    return VideoFrame::WrapExternalGpuMemoryBuffer(
+    auto frame = VideoFrame::WrapExternalGpuMemoryBuffer(
         gfx::Rect(gmb_size), size, std::move(gmb), empty_mailboxes,
         base::NullCallback(), timestamp);
+    frame->set_color_space(kYUVColorSpace);
+    return frame;
   }
 
   scoped_refptr<VideoFrame> CreateGreenCpuFrame(gfx::Size size,
@@ -115,18 +118,21 @@ class VideoEncodeAcceleratorAdapterTest
                                          gfx::Rect(size), size, timestamp);
 
     // Green I420 frame (Y:0x96, U:0x40, V:0x40)
-    libyuv::I420Rect(
-        frame->data(VideoFrame::kYPlane), frame->stride(VideoFrame::kYPlane),
-        frame->data(VideoFrame::kUPlane), frame->stride(VideoFrame::kUPlane),
-        frame->data(VideoFrame::kVPlane), frame->stride(VideoFrame::kVPlane),
-        0,                               // left
-        0,                               // top
-        frame->visible_rect().width(),   // right
-        frame->visible_rect().height(),  // bottom
-        0x96,                            // Y color
-        0x40,                            // U color
-        0x40);                           // V color
+    libyuv::I420Rect(frame->writable_data(VideoFrame::kYPlane),
+                     frame->stride(VideoFrame::kYPlane),
+                     frame->writable_data(VideoFrame::kUPlane),
+                     frame->stride(VideoFrame::kUPlane),
+                     frame->writable_data(VideoFrame::kVPlane),
+                     frame->stride(VideoFrame::kVPlane),
+                     0,                               // left
+                     0,                               // top
+                     frame->visible_rect().width(),   // right
+                     frame->visible_rect().height(),  // bottom
+                     0x96,                            // Y color
+                     0x40,                            // U color
+                     0x40);                           // V color
 
+    frame->set_color_space(kYUVColorSpace);
     return frame;
   }
 
@@ -136,7 +142,7 @@ class VideoEncodeAcceleratorAdapterTest
                                          gfx::Rect(size), size, timestamp);
 
     // Green XRGB frame (R:0x3B, G:0xD9, B:0x24)
-    libyuv::ARGBRect(frame->data(VideoFrame::kARGBPlane),
+    libyuv::ARGBRect(frame->writable_data(VideoFrame::kARGBPlane),
                      frame->stride(VideoFrame::kARGBPlane),
                      0,                               // left
                      0,                               // top
@@ -144,6 +150,7 @@ class VideoEncodeAcceleratorAdapterTest
                      frame->visible_rect().height(),  // bottom
                      0x24D93B00);                     // V color
 
+    frame->set_color_space(kRGBColorSpace);
     return frame;
   }
 
@@ -161,6 +168,23 @@ class VideoEncodeAcceleratorAdapterTest
         EXPECT_TRUE(false) << "not supported pixel format";
         return nullptr;
     }
+  }
+
+  gfx::ColorSpace ExpectedColorSpace(VideoPixelFormat src_format,
+                                     VideoPixelFormat dst_format) {
+    // Converting between YUV formats doesn't change the color space.
+    if (IsYuvPlanar(src_format) && IsYuvPlanar(dst_format)) {
+      return kYUVColorSpace;
+    }
+
+    // libyuv's RGB to YUV methods always output BT.601.
+    if (IsRGB(src_format) && IsYuvPlanar(dst_format)) {
+      return gfx::ColorSpace::CreateREC601();
+    }
+
+    EXPECT_TRUE(false) << "unexpected formats: src=" << src_format
+                       << ", dst=" << dst_format;
+    return gfx::ColorSpace();
   }
 
   VideoEncoder::EncoderStatusCB ValidatingStatusCB(
@@ -185,9 +209,14 @@ class VideoEncodeAcceleratorAdapterTest
 
  protected:
   VideoCodecProfile profile_ = VP8PROFILE_ANY;
+  static constexpr gfx::ColorSpace kRGBColorSpace =
+      gfx::ColorSpace::CreateSRGB();
+  static constexpr gfx::ColorSpace kYUVColorSpace =
+      gfx::ColorSpace::CreateREC709();
   std::vector<VideoEncodeAccelerator::SupportedProfile> supported_profiles_;
   base::test::TaskEnvironment task_environment_;
-  raw_ptr<FakeVideoEncodeAccelerator> vea_;  // owned by |vae_adapter_|
+  raw_ptr<FakeVideoEncodeAccelerator, AcrossTasksDanglingUntriaged>
+      vea_;  // owned by |vae_adapter_|
   std::unique_ptr<MockGpuVideoAcceleratorFactories> gpu_factories_;
   std::unique_ptr<VideoEncodeAcceleratorAdapter> vae_adapter_;
   scoped_refptr<base::SequencedTaskRunner> vea_runner_;
@@ -197,22 +226,28 @@ class VideoEncodeAcceleratorAdapterTest
 TEST_F(VideoEncodeAcceleratorAdapterTest, PreInitialize) {
   VideoEncoder::Options options;
   options.frame_size = gfx::Size(640, 480);
-  VideoEncoder::OutputCB output_cb = base::BindLambdaForTesting(
-      [&](VideoEncoderOutput, absl::optional<VideoEncoder::CodecDescription>) {
-      });
 
-  adapter()->Initialize(profile_, options, std::move(output_cb),
-                        ValidatingStatusCB());
+  adapter()->Initialize(profile_, options, /*info_cb=*/base::DoNothing(),
+                        /*output_cb=*/base::DoNothing(), ValidatingStatusCB());
   RunUntilIdle();
 }
 
 TEST_F(VideoEncodeAcceleratorAdapterTest, InitializeAfterFirstFrame) {
   VideoEncoder::Options options;
   options.frame_size = gfx::Size(640, 480);
-  int outputs_count = 0;
   auto pixel_format = PIXEL_FORMAT_I420;
+  const gfx::ColorSpace expected_color_space =
+      ExpectedColorSpace(pixel_format, pixel_format);
+
+  bool info_cb_called = false;
+  VideoEncoder::EncoderInfoCB info_cb = base::BindLambdaForTesting(
+      [&](const VideoEncoderInfo& info) { info_cb_called = true; });
+
+  int outputs_count = 0;
   VideoEncoder::OutputCB output_cb = base::BindLambdaForTesting(
-      [&](VideoEncoderOutput, absl::optional<VideoEncoder::CodecDescription>) {
+      [&](VideoEncoderOutput output,
+          absl::optional<VideoEncoder::CodecDescription>) {
+        EXPECT_EQ(output.color_space, expected_color_space);
         outputs_count++;
       });
 
@@ -223,13 +258,18 @@ TEST_F(VideoEncodeAcceleratorAdapterTest, InitializeAfterFirstFrame) {
         EXPECT_EQ(frame->coded_size(), options.frame_size);
         return BitstreamBufferMetadata(1, keyframe, frame->timestamp());
       }));
-  adapter()->Initialize(profile_, options, std::move(output_cb),
-                        ValidatingStatusCB());
+  adapter()->Initialize(profile_, options, std::move(info_cb),
+                        std::move(output_cb), ValidatingStatusCB());
 
   auto frame =
       CreateGreenFrame(options.frame_size, pixel_format, base::Milliseconds(1));
-  adapter()->Encode(frame, true, ValidatingStatusCB());
+
+  adapter()->Encode(frame, VideoEncoder::EncodeOptions(true),
+                    ValidatingStatusCB());
   RunUntilIdle();
+  vea()->NotifyEncoderInfoChange(VideoEncoderInfo());
+  RunUntilIdle();
+  EXPECT_TRUE(info_cb_called);
   EXPECT_EQ(outputs_count, 1);
 }
 
@@ -239,6 +279,8 @@ TEST_F(VideoEncodeAcceleratorAdapterTest, TemporalSvc) {
   options.scalability_mode = SVCScalabilityMode::kL1T3;
   int outputs_count = 0;
   auto pixel_format = PIXEL_FORMAT_I420;
+  const gfx::ColorSpace expected_color_space =
+      ExpectedColorSpace(pixel_format, pixel_format);
   VideoEncoder::OutputCB output_cb = base::BindLambdaForTesting(
       [&](VideoEncoderOutput output,
           absl::optional<VideoEncoder::CodecDescription>) {
@@ -248,8 +290,12 @@ TEST_F(VideoEncodeAcceleratorAdapterTest, TemporalSvc) {
           EXPECT_EQ(output.temporal_id, 1);
         else if (output.timestamp == base::Milliseconds(3))
           EXPECT_EQ(output.temporal_id, 2);
+        else if (output.timestamp == base::Milliseconds(4))
+          EXPECT_EQ(output.temporal_id, 2);
         else
           EXPECT_EQ(output.temporal_id, 2);
+
+        EXPECT_EQ(output.color_space, expected_color_space);
         outputs_count++;
       });
 
@@ -265,14 +311,17 @@ TEST_F(VideoEncodeAcceleratorAdapterTest, TemporalSvc) {
         } else if (frame->timestamp() == base::Milliseconds(3)) {
           result.vp9 = Vp9Metadata();
           result.vp9->temporal_idx = 2;
-        } else {
+        } else if (frame->timestamp() == base::Milliseconds(4)) {
           result.av1 = Av1Metadata();
           result.av1->temporal_idx = 2;
+        } else {
+          result.h265 = H265Metadata();
+          result.h265->temporal_idx = 2;
         }
         return result;
       }));
-  adapter()->Initialize(profile_, options, std::move(output_cb),
-                        ValidatingStatusCB());
+  adapter()->Initialize(profile_, options, /*info_cb=*/base::DoNothing(),
+                        std::move(output_cb), ValidatingStatusCB());
 
   auto frame1 =
       CreateGreenFrame(options.frame_size, pixel_format, base::Milliseconds(1));
@@ -282,15 +331,24 @@ TEST_F(VideoEncodeAcceleratorAdapterTest, TemporalSvc) {
       CreateGreenFrame(options.frame_size, pixel_format, base::Milliseconds(3));
   auto frame4 =
       CreateGreenFrame(options.frame_size, pixel_format, base::Milliseconds(4));
-  adapter()->Encode(frame1, true, ValidatingStatusCB());
+  auto frame5 =
+      CreateGreenFrame(options.frame_size, pixel_format, base::Milliseconds(5));
+  adapter()->Encode(frame1, VideoEncoder::EncodeOptions(true),
+                    ValidatingStatusCB());
   RunUntilIdle();
-  adapter()->Encode(frame2, true, ValidatingStatusCB());
+  adapter()->Encode(frame2, VideoEncoder::EncodeOptions(true),
+                    ValidatingStatusCB());
   RunUntilIdle();
-  adapter()->Encode(frame3, true, ValidatingStatusCB());
+  adapter()->Encode(frame3, VideoEncoder::EncodeOptions(true),
+                    ValidatingStatusCB());
   RunUntilIdle();
-  adapter()->Encode(frame4, true, ValidatingStatusCB());
+  adapter()->Encode(frame4, VideoEncoder::EncodeOptions(true),
+                    ValidatingStatusCB());
   RunUntilIdle();
-  EXPECT_EQ(outputs_count, 4);
+  adapter()->Encode(frame5, VideoEncoder::EncodeOptions(true),
+                    ValidatingStatusCB());
+  RunUntilIdle();
+  EXPECT_EQ(outputs_count, 5);
 }
 
 TEST_F(VideoEncodeAcceleratorAdapterTest, FlushDuringInitialize) {
@@ -298,8 +356,12 @@ TEST_F(VideoEncodeAcceleratorAdapterTest, FlushDuringInitialize) {
   options.frame_size = gfx::Size(640, 480);
   int outputs_count = 0;
   auto pixel_format = PIXEL_FORMAT_I420;
+  const gfx::ColorSpace expected_color_space =
+      ExpectedColorSpace(pixel_format, pixel_format);
   VideoEncoder::OutputCB output_cb = base::BindLambdaForTesting(
-      [&](VideoEncoderOutput, absl::optional<VideoEncoder::CodecDescription>) {
+      [&](VideoEncoderOutput output,
+          absl::optional<VideoEncoder::CodecDescription>) {
+        EXPECT_EQ(output.color_space, expected_color_space);
         outputs_count++;
       });
 
@@ -310,12 +372,13 @@ TEST_F(VideoEncodeAcceleratorAdapterTest, FlushDuringInitialize) {
         EXPECT_EQ(frame->coded_size(), options.frame_size);
         return BitstreamBufferMetadata(1, keyframe, frame->timestamp());
       }));
-  adapter()->Initialize(profile_, options, std::move(output_cb),
-                        ValidatingStatusCB());
+  adapter()->Initialize(profile_, options, /*info_cb=*/base::DoNothing(),
+                        std::move(output_cb), ValidatingStatusCB());
 
   auto frame =
       CreateGreenFrame(options.frame_size, pixel_format, base::Milliseconds(1));
-  adapter()->Encode(frame, true, ValidatingStatusCB());
+  adapter()->Encode(frame, VideoEncoder::EncodeOptions(true),
+                    ValidatingStatusCB());
   adapter()->Flush(base::BindLambdaForTesting([&](EncoderStatus s) {
     EXPECT_TRUE(s.is_ok());
     EXPECT_EQ(outputs_count, 1);
@@ -343,14 +406,15 @@ TEST_F(VideoEncodeAcceleratorAdapterTest, InitializationError) {
         return BitstreamBufferMetadata(1, keyframe, frame->timestamp());
       }));
   adapter()->Initialize(
-      VIDEO_CODEC_PROFILE_UNKNOWN, options, std::move(output_cb),
-      base::BindLambdaForTesting([](EncoderStatus s) {
+      VIDEO_CODEC_PROFILE_UNKNOWN, options, /*info_cb=*/base::DoNothing(),
+      std::move(output_cb), base::BindLambdaForTesting([](EncoderStatus s) {
         EXPECT_EQ(s.code(), EncoderStatus::Codes::kEncoderInitializationError);
       }));
 
   auto frame =
       CreateGreenFrame(options.frame_size, pixel_format, base::Milliseconds(1));
-  adapter()->Encode(frame, true, std::move(expect_error_done_cb));
+  adapter()->Encode(frame, VideoEncoder::EncodeOptions(true),
+                    std::move(expect_error_done_cb));
   RunUntilIdle();
   EXPECT_EQ(outputs_count, 0);
 }
@@ -369,14 +433,15 @@ TEST_F(VideoEncodeAcceleratorAdapterTest, EncodingError) {
       base::BindLambdaForTesting(
           [&](EncoderStatus s) { EXPECT_FALSE(s.is_ok()); });
 
-  adapter()->Initialize(profile_, options, std::move(output_cb),
-                        ValidatingStatusCB());
+  adapter()->Initialize(profile_, options, /*info_cb=*/base::DoNothing(),
+                        std::move(output_cb), ValidatingStatusCB());
 
   vea()->SetWillEncodingSucceed(false);
 
   auto frame =
       CreateGreenFrame(options.frame_size, pixel_format, base::Milliseconds(1));
-  adapter()->Encode(frame, true, std::move(expect_error_done_cb));
+  adapter()->Encode(frame, VideoEncoder::EncodeOptions(true),
+                    std::move(expect_error_done_cb));
   RunUntilIdle();
   EXPECT_EQ(outputs_count, 0);
 }
@@ -388,32 +453,38 @@ TEST_P(VideoEncodeAcceleratorAdapterTest, TwoFramesResize) {
   gfx::Size small_size(480, 320);
   gfx::Size large_size(800, 600);
   auto pixel_format = GetParam();
+  auto small_frame =
+      CreateGreenFrame(small_size, pixel_format, base::Milliseconds(1));
+  auto large_frame =
+      CreateGreenFrame(large_size, pixel_format, base::Milliseconds(2));
+
+  VideoPixelFormat expected_input_format = PIXEL_FORMAT_I420;
+#if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)
+  if (pixel_format != PIXEL_FORMAT_I420 || !small_frame->IsMappable())
+    expected_input_format = PIXEL_FORMAT_NV12;
+#endif
+  const gfx::ColorSpace expected_color_space =
+      ExpectedColorSpace(pixel_format, expected_input_format);
   VideoEncoder::OutputCB output_cb = base::BindLambdaForTesting(
-      [&](VideoEncoderOutput, absl::optional<VideoEncoder::CodecDescription>) {
+      [&](VideoEncoderOutput output,
+          absl::optional<VideoEncoder::CodecDescription>) {
+        EXPECT_EQ(output.color_space, expected_color_space);
         outputs_count++;
       });
 
   vea()->SetEncodingCallback(base::BindLambdaForTesting(
       [&](BitstreamBuffer&, bool keyframe, scoped_refptr<VideoFrame> frame) {
-#if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)
-        EXPECT_EQ(frame->format(),
-                  IsYuvPlanar(pixel_format) ? pixel_format : PIXEL_FORMAT_I420);
-#else
-        // Everywhere except on Linux resize switches frame into CPU mode.
-        EXPECT_EQ(frame->format(), PIXEL_FORMAT_I420);
-#endif
+        EXPECT_EQ(frame->format(), expected_input_format);
         EXPECT_EQ(frame->coded_size(), options.frame_size);
         return BitstreamBufferMetadata(1, keyframe, frame->timestamp());
       }));
-  adapter()->Initialize(profile_, options, std::move(output_cb),
-                        ValidatingStatusCB());
+  adapter()->Initialize(profile_, options, /*info_cb=*/base::DoNothing(),
+                        std::move(output_cb), ValidatingStatusCB());
 
-  auto small_frame =
-      CreateGreenFrame(small_size, pixel_format, base::Milliseconds(1));
-  auto large_frame =
-      CreateGreenFrame(large_size, pixel_format, base::Milliseconds(2));
-  adapter()->Encode(small_frame, true, ValidatingStatusCB());
-  adapter()->Encode(large_frame, false, ValidatingStatusCB());
+  adapter()->Encode(small_frame, VideoEncoder::EncodeOptions(true),
+                    ValidatingStatusCB());
+  adapter()->Encode(large_frame, VideoEncoder::EncodeOptions(false),
+                    ValidatingStatusCB());
   RunUntilIdle();
   EXPECT_EQ(outputs_count, 2);
 }
@@ -424,8 +495,12 @@ TEST_F(VideoEncodeAcceleratorAdapterTest, AutomaticResizeSupport) {
   int outputs_count = 0;
   gfx::Size small_size(480, 320);
   auto pixel_format = PIXEL_FORMAT_NV12;
+  const gfx::ColorSpace expected_color_space =
+      ExpectedColorSpace(pixel_format, pixel_format);
   VideoEncoder::OutputCB output_cb = base::BindLambdaForTesting(
-      [&](VideoEncoderOutput, absl::optional<VideoEncoder::CodecDescription>) {
+      [&](VideoEncoderOutput output,
+          absl::optional<VideoEncoder::CodecDescription>) {
+        EXPECT_EQ(output.color_space, expected_color_space);
         outputs_count++;
       });
 
@@ -435,15 +510,17 @@ TEST_F(VideoEncodeAcceleratorAdapterTest, AutomaticResizeSupport) {
         return BitstreamBufferMetadata(1, keyframe, frame->timestamp());
       }));
   vea()->SupportResize();
-  adapter()->Initialize(profile_, options, std::move(output_cb),
-                        ValidatingStatusCB());
+  adapter()->Initialize(profile_, options, /*info_cb=*/base::DoNothing(),
+                        std::move(output_cb), ValidatingStatusCB());
 
   auto frame1 =
       CreateGreenFrame(small_size, pixel_format, base::Milliseconds(1));
   auto frame2 =
       CreateGreenFrame(small_size, pixel_format, base::Milliseconds(2));
-  adapter()->Encode(frame1, true, ValidatingStatusCB());
-  adapter()->Encode(frame2, false, ValidatingStatusCB());
+  adapter()->Encode(frame1, VideoEncoder::EncodeOptions(true),
+                    ValidatingStatusCB());
+  adapter()->Encode(frame2, VideoEncoder::EncodeOptions(false),
+                    ValidatingStatusCB());
   RunUntilIdle();
   EXPECT_EQ(outputs_count, 2);
 }
@@ -463,20 +540,40 @@ TEST_P(VideoEncodeAcceleratorAdapterTest, RunWithAllPossibleInputConversions) {
           : VideoEncodeAcceleratorAdapter::InputBufferKind::CpuMemBuf;
   adapter()->SetInputBufferPreferenceForTesting(input_kind);
 
+  const VideoPixelFormat expected_input_format =
+      input_kind == VideoEncodeAcceleratorAdapter::InputBufferKind::GpuMemBuf
+          ? PIXEL_FORMAT_NV12
+          : PIXEL_FORMAT_I420;
+
+  constexpr auto get_source_format = [](int i) {
+    // Every 4 frames switch between the 3 supported formats.
+    const int rem = i % 12;
+    auto format = PIXEL_FORMAT_XRGB;
+    if (rem < 4)
+      format = PIXEL_FORMAT_I420;
+    else if (rem < 8)
+      format = PIXEL_FORMAT_NV12;
+    return format;
+  };
+
   VideoEncoder::OutputCB output_cb = base::BindLambdaForTesting(
-      [&](VideoEncoderOutput, absl::optional<VideoEncoder::CodecDescription>) {
+      [&](VideoEncoderOutput output,
+          absl::optional<VideoEncoder::CodecDescription>) {
+        VideoPixelFormat source_frame_format = get_source_format(outputs_count);
+        const gfx::ColorSpace expected_color_space =
+            ExpectedColorSpace(source_frame_format, expected_input_format);
+        EXPECT_EQ(output.color_space, expected_color_space);
         outputs_count++;
       });
 
   vea()->SetEncodingCallback(base::BindLambdaForTesting(
       [&](BitstreamBuffer&, bool keyframe, scoped_refptr<VideoFrame> frame) {
-        EXPECT_EQ(frame->format(),
-                  IsYuvPlanar(pixel_format) ? pixel_format : PIXEL_FORMAT_I420);
+        EXPECT_EQ(frame->format(), expected_input_format);
         EXPECT_EQ(frame->coded_size(), options.frame_size);
         return BitstreamBufferMetadata(1, keyframe, frame->timestamp());
       }));
-  adapter()->Initialize(profile_, options, std::move(output_cb),
-                        ValidatingStatusCB());
+  adapter()->Initialize(profile_, options, /*info_cb=*/base::DoNothing(),
+                        std::move(output_cb), ValidatingStatusCB());
 
   for (int frame_index = 0; frame_index < frames_to_encode; frame_index++) {
     gfx::Size size;
@@ -487,17 +584,12 @@ TEST_P(VideoEncodeAcceleratorAdapterTest, RunWithAllPossibleInputConversions) {
     else
       size = same_size;
 
-    // Every 4 frames switch between the 3 supported formats.
-    const int rem = frame_index % 12;
-    auto format = PIXEL_FORMAT_XRGB;
-    if (rem < 4)
-      format = PIXEL_FORMAT_I420;
-    else if (rem < 8)
-      format = PIXEL_FORMAT_NV12;
+    const auto format = get_source_format(frame_index);
     bool key = frame_index % 9 == 0;
     auto frame =
         CreateGreenFrame(size, format, base::Milliseconds(frame_index));
-    adapter()->Encode(frame, key, ValidatingStatusCB());
+    adapter()->Encode(frame, VideoEncoder::EncodeOptions(key),
+                      ValidatingStatusCB());
   }
 
   RunUntilIdle();
@@ -509,9 +601,12 @@ TEST_F(VideoEncodeAcceleratorAdapterTest, DroppedFrame) {
   options.frame_size = gfx::Size(640, 480);
   auto pixel_format = PIXEL_FORMAT_I420;
   std::vector<base::TimeDelta> output_timestamps;
+  const gfx::ColorSpace expected_color_space =
+      ExpectedColorSpace(pixel_format, pixel_format);
   VideoEncoder::OutputCB output_cb = base::BindLambdaForTesting(
       [&](VideoEncoderOutput output,
           absl::optional<VideoEncoder::CodecDescription>) {
+        EXPECT_EQ(output.color_space, expected_color_space);
         output_timestamps.push_back(output.timestamp);
       });
 
@@ -520,8 +615,8 @@ TEST_F(VideoEncodeAcceleratorAdapterTest, DroppedFrame) {
         size_t size = keyframe ? 1 : 0;  // Drop non-key frame
         return BitstreamBufferMetadata(size, keyframe, frame->timestamp());
       }));
-  adapter()->Initialize(profile_, options, std::move(output_cb),
-                        ValidatingStatusCB());
+  adapter()->Initialize(profile_, options, /*info_cb=*/base::DoNothing(),
+                        std::move(output_cb), ValidatingStatusCB());
 
   auto frame1 =
       CreateGreenFrame(options.frame_size, pixel_format, base::Milliseconds(1));
@@ -529,9 +624,12 @@ TEST_F(VideoEncodeAcceleratorAdapterTest, DroppedFrame) {
       CreateGreenFrame(options.frame_size, pixel_format, base::Milliseconds(2));
   auto frame3 =
       CreateGreenFrame(options.frame_size, pixel_format, base::Milliseconds(3));
-  adapter()->Encode(frame1, true, ValidatingStatusCB());
-  adapter()->Encode(frame2, false, ValidatingStatusCB());
-  adapter()->Encode(frame3, true, ValidatingStatusCB());
+  adapter()->Encode(frame1, VideoEncoder::EncodeOptions(true),
+                    ValidatingStatusCB());
+  adapter()->Encode(frame2, VideoEncoder::EncodeOptions(false),
+                    ValidatingStatusCB());
+  adapter()->Encode(frame3, VideoEncoder::EncodeOptions(true),
+                    ValidatingStatusCB());
   RunUntilIdle();
   ASSERT_EQ(output_timestamps.size(), 2u);
   EXPECT_EQ(output_timestamps[0], base::Milliseconds(1));
@@ -546,12 +644,18 @@ TEST_F(VideoEncodeAcceleratorAdapterTest,
   auto pixel_format = PIXEL_FORMAT_I420;
   int output_count_before_change = 0;
   int output_count_after_change = 0;
+  const gfx::ColorSpace expected_color_space =
+      ExpectedColorSpace(pixel_format, pixel_format);
   VideoEncoder::OutputCB first_output_cb = base::BindLambdaForTesting(
-      [&](VideoEncoderOutput, absl::optional<VideoEncoder::CodecDescription>) {
+      [&](VideoEncoderOutput output,
+          absl::optional<VideoEncoder::CodecDescription>) {
+        EXPECT_EQ(output.color_space, expected_color_space);
         output_count_before_change++;
       });
   VideoEncoder::OutputCB second_output_cb = base::BindLambdaForTesting(
-      [&](VideoEncoderOutput, absl::optional<VideoEncoder::CodecDescription>) {
+      [&](VideoEncoderOutput output,
+          absl::optional<VideoEncoder::CodecDescription>) {
+        EXPECT_EQ(output.color_space, expected_color_space);
         output_count_after_change++;
       });
 
@@ -562,12 +666,13 @@ TEST_F(VideoEncodeAcceleratorAdapterTest,
         EXPECT_EQ(frame->coded_size(), options.frame_size);
         return BitstreamBufferMetadata(1, keyframe, frame->timestamp());
       }));
-  adapter()->Initialize(profile_, options, std::move(first_output_cb),
-                        ValidatingStatusCB());
+  adapter()->Initialize(profile_, options, /*info_cb=*/base::DoNothing(),
+                        std::move(first_output_cb), ValidatingStatusCB());
   // We must encode one frame before we can change options.
   auto first_frame =
       CreateGreenFrame(options.frame_size, pixel_format, base::Milliseconds(1));
-  adapter()->Encode(first_frame, true, ValidatingStatusCB());
+  adapter()->Encode(first_frame, VideoEncoder::EncodeOptions(true),
+                    ValidatingStatusCB());
   RunUntilIdle();
 
   options.bitrate = Bitrate::VariableBitrate(12345u, 23456u);
@@ -575,7 +680,8 @@ TEST_F(VideoEncodeAcceleratorAdapterTest,
                            ValidatingStatusCB());
   auto second_frame =
       CreateGreenFrame(options.frame_size, pixel_format, base::Milliseconds(2));
-  adapter()->Encode(second_frame, true, ValidatingStatusCB());
+  adapter()->Encode(second_frame, VideoEncoder::EncodeOptions(true),
+                    ValidatingStatusCB());
   RunUntilIdle();
 
   EXPECT_EQ(output_count_before_change, 1);

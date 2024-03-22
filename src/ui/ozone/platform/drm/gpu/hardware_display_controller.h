@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,16 +12,19 @@
 #include <memory>
 #include <vector>
 
-#include "base/callback.h"
 #include "base/containers/flat_map.h"
+#include "base/functional/callback.h"
+#include "base/memory/raw_ptr.h"
 #include "base/time/time.h"
 #include "base/timer/timer.h"
-#include "base/trace_event/traced_value.h"
+#include "third_party/perfetto/include/perfetto/tracing/traced_value_forward.h"
 #include "third_party/skia/include/core/SkBitmap.h"
 #include "ui/gfx/buffer_types.h"
 #include "ui/gfx/swap_result.h"
 #include "ui/ozone/platform/drm/gpu/drm_overlay_plane.h"
 #include "ui/ozone/platform/drm/gpu/hardware_display_plane_manager.h"
+#include "ui/ozone/platform/drm/gpu/page_flip_watchdog.h"
+#include "ui/ozone/public/drm_modifiers_filter.h"
 #include "ui/ozone/public/swap_completion_callback.h"
 
 namespace gfx {
@@ -31,17 +34,12 @@ struct GpuFenceHandle;
 
 namespace ui {
 
-// The maximum amount of time we will wait for a new modeset attempt before we
-// crash the GPU process.
-constexpr base::TimeDelta kWaitForModesetTimeout = base::Seconds(15);
-
 class CrtcController;
 class DrmFramebuffer;
 class DrmDumbBuffer;
 class DrmDevice;
 
-// The HDCOz will handle modesettings and scannout operations for hardware
-// devices.
+// The HDC will handle modesetting and scanout operations for hardware devices.
 //
 // In the DRM world there are 3 components that need to be paired up to be able
 // to display an image to the monitor: CRTC (cathode ray tube controller),
@@ -97,7 +95,8 @@ class DrmDevice;
 class HardwareDisplayController {
  public:
   HardwareDisplayController(std::unique_ptr<CrtcController> controller,
-                            const gfx::Point& origin);
+                            const gfx::Point& origin,
+                            raw_ptr<DrmModifiersFilter> drm_modifiers_filter);
 
   HardwareDisplayController(const HardwareDisplayController&) = delete;
   HardwareDisplayController& operator=(const HardwareDisplayController&) =
@@ -109,7 +108,8 @@ class HardwareDisplayController {
   // |commit_request|.
   void GetModesetProps(CommitRequest* commit_request,
                        const DrmOverlayPlaneList& modeset_planes,
-                       const drmModeModeInfo& mode);
+                       const drmModeModeInfo& mode,
+                       bool enable_vrr);
   // Gets the props required to enable/disable a CRTC onto |commit_request|.
   void GetEnableProps(CommitRequest* commit_request,
                       const DrmOverlayPlaneList& modeset_planes);
@@ -122,7 +122,7 @@ class HardwareDisplayController {
   // event. The event will be posted on the graphics card file descriptor |fd_|
   // and it can be read and processed by |drmHandleEvent|. That function can
   // define the callback for the page flip event. A generic data argument will
-  // be presented to the callback. We use that argument to pass in the HDCO
+  // be presented to the callback. We use that argument to pass in the HDC
   // object the event belongs to.
   //
   // Between this call and the callback, the framebuffers used in this call
@@ -147,8 +147,8 @@ class HardwareDisplayController {
   std::vector<uint64_t> GetFormatModifiersForTestModeset(
       uint32_t fourcc_format);
 
-  void UpdatePreferredModiferForFormat(gfx::BufferFormat buffer_format,
-                                       uint64_t modifier);
+  void UpdatePreferredModifierForFormat(gfx::BufferFormat buffer_format,
+                                        uint64_t modifier);
 
   // Moves the hardware cursor to |location|.
   void MoveCursor(const gfx::Point& location);
@@ -182,19 +182,34 @@ class HardwareDisplayController {
       DrmOverlayPlaneList pending_planes,
       const gfx::PresentationFeedback& presentation_feedback);
 
-  void AsValueInto(base::trace_event::TracedValue* value) const;
+  // Adds trace records to |context|.
+  void WriteIntoTrace(perfetto::TracedValue context) const;
 
  private:
+  // These values are persisted to logs. Entries should not be
+  // renumbered and numeric values should never be reused.
+  enum PageFlipResult {
+    // Indicates that the page flip was committed successfully.
+    kSuccess = 0,
+    // Indicates that the page flip failed because we could not assign
+    // planes.
+    kFailedPlaneAssignment = 1,
+    // Indicates that we assigned planes but the DRM commit failed.
+    kFailedCommit = 2,
+    kMaxValue = kFailedCommit,
+  };
   // Loops over |crtc_controllers_| and save their props into |commit_request|
   // to be enabled/modeset.
   void GetModesetPropsForCrtcs(CommitRequest* commit_request,
                                const DrmOverlayPlaneList& modeset_planes,
                                bool use_current_crtc_mode,
-                               const drmModeModeInfo& mode);
+                               const drmModeModeInfo& mode,
+                               absl::optional<bool> enable_vrr);
   void OnModesetComplete(const DrmOverlayPlaneList& modeset_planes);
-  bool ScheduleOrTestPageFlip(const DrmOverlayPlaneList& plane_list,
-                              scoped_refptr<PageFlipRequest> page_flip_request,
-                              gfx::GpuFenceHandle* release_fence);
+  PageFlipResult ScheduleOrTestPageFlip(
+      const DrmOverlayPlaneList& plane_list,
+      scoped_refptr<PageFlipRequest> page_flip_request,
+      gfx::GpuFenceHandle* release_fence);
   void AllocateCursorBuffers();
   DrmDumbBuffer* NextCursorBuffer();
   void UpdateCursorImage();
@@ -220,17 +235,17 @@ class HardwareDisplayController {
   std::unique_ptr<DrmDumbBuffer> cursor_buffers_[2];
   gfx::Point cursor_location_;
   int cursor_frontbuffer_ = 0;
-  DrmDumbBuffer* current_cursor_ = nullptr;
+  raw_ptr<DrmDumbBuffer, ExperimentalAsh> current_cursor_ = nullptr;
 
   // Maps each fourcc_format to its preferred modifier which was generated
   // through modeset-test and updated in UpdatePreferredModifierForFormat().
   base::flat_map<uint32_t /*fourcc_format*/, uint64_t /*preferred_modifier*/>
       preferred_format_modifier_;
 
-  // Used to crash the GPU process if a page flip commit fails and no new
-  // modeset attempts come in.
-  base::OneShotTimer crash_gpu_timer_;
-  int16_t failed_page_flip_counter_ = 0;
+  // Used to crash the GPU process when unrecoverable failures occur.
+  PageFlipWatchdog watchdog_;
+
+  raw_ptr<DrmModifiersFilter> drm_modifiers_filter_;
 
   base::WeakPtrFactory<HardwareDisplayController> weak_ptr_factory_{this};
 };

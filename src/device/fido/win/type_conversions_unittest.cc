@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,6 +12,7 @@
 #include "device/fido/attestation_statement.h"
 #include "device/fido/fido_parsing_utils.h"
 #include "device/fido/fido_test_data.h"
+#include "device/fido/fido_transport_protocol.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
@@ -114,17 +115,34 @@ TEST(TypeConversionsTest, ToAuthenticatorMakeCredentialResponse) {
     if (!response)
       return;
 
-    EXPECT_EQ(response->attestation_object()
-                  .authenticator_data()
+    EXPECT_EQ(response->attestation_object.authenticator_data()
                   .SerializeToByteArray(),
               test.authenticator_data);
     EXPECT_EQ(
-        response->attestation_object().attestation_statement().format_name(),
+        response->attestation_object.attestation_statement().format_name(),
         base::WideToUTF8(test.format));
-    EXPECT_EQ(cbor::Writer::Write(AsCBOR(
-                  response->attestation_object().attestation_statement())),
+    EXPECT_EQ(cbor::Writer::Write(
+                  AsCBOR(response->attestation_object.attestation_statement())),
               test.cbor_attestation_statement);
-    EXPECT_EQ(response->transport_used(), test.expected_transport);
+    EXPECT_EQ(response->transport_used, test.expected_transport);
+    if (test.expected_transport == FidoTransportProtocol::kInternal) {
+      EXPECT_THAT(*response->transports,
+                  testing::ElementsAre(FidoTransportProtocol::kInternal));
+    } else {
+      EXPECT_FALSE(response->transports);
+    }
+  }
+}
+
+TEST(TypeConversionsTest, Transports) {
+  for (int i = 0; i < 16; i++) {
+    const uint32_t mask = 1u << i;
+    const absl::optional<FidoTransportProtocol> transport =
+        FromWinTransportsMask(mask);
+    if (transport) {
+      const uint32_t result = ToWinTransportsMask({*transport});
+      EXPECT_EQ(result, mask);
+    }
   }
 }
 

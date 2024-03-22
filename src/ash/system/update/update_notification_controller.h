@@ -1,14 +1,16 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef ASH_SYSTEM_UPDATE_UPDATE_NOTIFICATION_CONTROLLER_H_
 #define ASH_SYSTEM_UPDATE_UPDATE_NOTIFICATION_CONTROLLER_H_
 
+#include <optional>
+
 #include "ash/ash_export.h"
 #include "ash/system/model/update_model.h"
 #include "base/files/file_path.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
+#include "base/memory/raw_ptr.h"
 
 namespace gfx {
 struct VectorIcon;
@@ -45,19 +47,21 @@ class ASH_EXPORT UpdateNotificationController : public UpdateObserver {
   friend class UpdateNotificationControllerTest;
 
   bool ShouldShowUpdate() const;
+  bool ShouldShowDeferredUpdate() const;
   std::u16string GetTitle() const;
   std::u16string GetMessage() const;
   const gfx::VectorIcon& GetIcon() const;
   message_center::SystemNotificationWarningLevel GetWarningLevel() const;
-  void HandleNotificationClick(absl::optional<int> index);
+  void HandleNotificationClick(std::optional<int> index);
   void GenerateUpdateNotification(
-      absl::optional<bool> slow_boot_file_path_exists);
+      std::optional<bool> slow_boot_file_path_exists);
 
-  UpdateModel* const model_;
+  const raw_ptr<UpdateModel, ExperimentalAsh> model_;
 
   base::FilePath slow_boot_file_path_;
   bool slow_boot_file_path_exists_ = false;
-  ShutdownConfirmationDialog* confirmation_dialog_ = nullptr;
+  raw_ptr<ShutdownConfirmationDialog, ExperimentalAsh> confirmation_dialog_ =
+      nullptr;
 
   base::WeakPtrFactory<UpdateNotificationController> weak_ptr_factory_{this};
 };

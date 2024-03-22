@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,10 +8,13 @@
 #include <stdint.h>
 
 #include <memory>
+#include <string>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
+#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "ui/base/ui_base_types.h"
+#include "ui/gfx/geometry/rounded_corners_f.h"
 #include "ui/gfx/native_widget_types.h"
 #include "ui/views/controls/menu/menu_types.h"
 #include "ui/views/views_export.h"
@@ -22,7 +25,7 @@ class TimeTicks;
 
 namespace gfx {
 class Rect;
-}
+}  // namespace gfx
 
 namespace ui {
 class MenuModel;
@@ -124,7 +127,7 @@ class VIEWS_EXPORT MenuRunner {
                  base::RepeatingClosure());
 
   // Creates a runner for a custom-created toolkit-views menu.
-  MenuRunner(MenuItemView* menu, int32_t run_types);
+  MenuRunner(std::unique_ptr<MenuItemView> menu, int32_t run_types);
 
   MenuRunner(const MenuRunner&) = delete;
   MenuRunner& operator=(const MenuRunner&) = delete;
@@ -132,21 +135,31 @@ class VIEWS_EXPORT MenuRunner {
   ~MenuRunner();
 
   // Runs the menu. MenuDelegate::OnMenuClosed will be notified of the results.
-  // If |anchor| uses a |BUBBLE_..| type, the bounds will get determined by
-  // using |bounds| as the thing to point at in screen coordinates.
+  // If `anchor` uses a `BUBBLE_..` type, the bounds will get determined by
+  // using `bounds` as the thing to point at in screen coordinates.
   // `native_view_for_gestures` is a NativeView that is used for cases where the
   // surface hosting the menu has a different gfx::NativeView than the `parent`.
   // This is required to correctly route gesture events to the correct
   // NativeView in the cases where the surface hosting the menu is a
   // WebContents.
-  // Note that this is a blocking call for a native menu on Mac.
-  // See http://crbug.com/682544.
+  // `corners` assigns the customized `RoundedCornersF` to the context menu. If
+  // it's set, the passed in corner will be used to render each corner radius of
+  // the context menu. This only works when using `USE_ASH_SYS_UI_LAYOUT`.
+  // Note that this is a blocking call for a native menu on Mac. See
+  // http://crbug.com/682544.
+  // `show_menu_host_duration_histogram` is the name of the histogram measuring
+  // time from when Widget::Show() is called to when the first frame is
+  // presented for menu. It is recorded in MenuHost and it happens only when the
+  // histogram name is non-empty.
   void RunMenuAt(Widget* parent,
                  MenuButtonController* button_controller,
                  const gfx::Rect& bounds,
                  MenuAnchorPosition anchor,
                  ui::MenuSourceType source_type,
-                 gfx::NativeView native_view_for_gestures = nullptr);
+                 gfx::NativeView native_view_for_gestures = gfx::NativeView(),
+                 absl::optional<gfx::RoundedCornersF> corners = absl::nullopt,
+                 absl::optional<std::string> show_menu_host_duration_histogram =
+                     absl::nullopt);
 
   // Returns true if we're in a nested run loop running the menu.
   bool IsRunning() const;

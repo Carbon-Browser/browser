@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -15,8 +15,9 @@
 #include "components/mirroring/service/media_remoter.h"
 #include "components/mirroring/service/message_dispatcher.h"
 #include "components/mirroring/service/mirror_settings.h"
-#include "components/mirroring/service/receiver_setup_querier.h"
+#include "components/mirroring/service/rpc_dispatcher_impl.h"
 #include "components/mirroring/service/rtp_stream.h"
+#include "components/mirroring/service/session_logger.h"
 #include "gpu/config/gpu_info.h"
 #include "media/capture/video/video_capture_feedback.h"
 #include "media/cast/cast_environment.h"
@@ -26,17 +27,17 @@
 #include "mojo/public/cpp/bindings/pending_remote.h"
 #include "mojo/public/cpp/bindings/remote.h"
 #include "services/network/public/mojom/network_context.mojom.h"
+#include "third_party/abseil-cpp/absl/types/optional.h"
 
+namespace base {
+class OneShotTimer;
+}
 namespace media {
 class AudioInputDevice;
 namespace cast {
 class CastTransport;
 }  // namespace cast
 }  // namespace media
-
-namespace gpu {
-class GpuChannelHost;
-}  // namespace gpu
 
 namespace viz {
 class Gpu;
@@ -46,7 +47,6 @@ namespace mirroring {
 
 class ReceiverResponse;
 class VideoCaptureClient;
-class ReceiverSetupQuerier;
 
 // Controls a mirroring session, including audio/video capturing, Cast
 // Streaming, and the switching to/from media remoting. When constructed, it
@@ -71,7 +71,10 @@ class COMPONENT_EXPORT(MIRRORING_SERVICE) Session final
 
   ~Session() override;
 
-  // RtpStreamClient implemenation.
+  using AsyncInitializeDoneCB = base::OnceCallback<void()>;
+  void AsyncInitialize(AsyncInitializeDoneCB done_cb);
+
+  // RtpStreamClient implementation.
   void OnError(const std::string& message) override;
   void RequestRefreshFrame() override;
   void CreateVideoEncodeAccelerator(
@@ -83,10 +86,12 @@ class COMPONENT_EXPORT(MIRRORING_SERVICE) Session final
       std::unique_ptr<std::vector<media::cast::FrameEvent>> frame_events,
       std::unique_ptr<std::vector<media::cast::PacketEvent>> packet_events);
 
-  // Helper method for setting constraints from the ANSWER response.
-  void SetConstraints(const openscreen::cast::Answer& answer,
-                      media::cast::FrameSenderConfig* audio_config,
-                      media::cast::FrameSenderConfig* video_config);
+  // Helper method for applying the constraints from |answer| to the audio and
+  // video configs.
+  void ApplyConstraintsToConfigs(
+      const openscreen::cast::Answer& answer,
+      absl::optional<media::cast::FrameSenderConfig>& audio_config,
+      absl::optional<media::cast::FrameSenderConfig>& video_config);
 
   // Callback for ANSWER response. If the ANSWER is invalid, |observer_| will
   // get notified with error, and session is stopped. Otherwise, capturing and
@@ -110,8 +115,13 @@ class COMPONENT_EXPORT(MIRRORING_SERVICE) Session final
   // Callback for CAPABILITIES_RESPONSE.
   void OnCapabilitiesResponse(const ReceiverResponse& response);
 
+  void SwitchSourceTab();
+
+  base::Value::Dict GetMirroringStats() const;
+
  private:
   class AudioCapturingCallback;
+  using SupportedProfiles = media::VideoEncodeAccelerator::SupportedProfiles;
 
   // MediaRemoter::Client implementation.
   void ConnectToRemotingSource(
@@ -145,36 +155,45 @@ class COMPONENT_EXPORT(MIRRORING_SERVICE) Session final
   // Callback by media::cast::VideoSender to report resource utilization.
   void ProcessFeedback(const media::VideoCaptureFeedback& feedback);
 
-  media::VideoEncodeAccelerator::SupportedProfiles GetSupportedVeaProfiles();
-
   // Create and send OFFER message.
   void CreateAndSendOffer();
 
   // Send GET_CAPABILITIES message.
   void QueryCapabilitiesForRemoting();
 
+  // Initialize `media_remoter_` and `rpc_dispatcher_`.
+  void InitMediaRemoter(const std::vector<std::string>& caps);
+  // Called 5 seconds after the `media_remoter_` is initialized for Remote
+  // Playabck sessions. It terminates the streaming session if remoting is not
+  // started when it's called.
+  void OnRemotingStartTimeout();
+
+  void OnAsyncInitializeDone(const SupportedProfiles& profiles);
+
   // Provided by client.
   const mojom::SessionParameters session_params_;
 
   // State transition:
+  // INITIALIZING
+  //     |
+  //    \./
   // MIRRORING <-------> REMOTING
   //     |                   |
   //     .---> STOPPED <----.
   enum {
-    MIRRORING,  // A mirroring streaming session is starting or started.
-    REMOTING,   // A remoting streaming session is starting or started.
-    STOPPED,    // The session is stopped due to user's request or errors.
-  } state_;
+    INITIALIZING,  // The session is initializing, and can't be used yet.
+    MIRRORING,     // A mirroring streaming session is starting or started.
+    REMOTING,      // A remoting streaming session is starting or started.
+    STOPPED,       // The session is stopped due to user's request or errors.
+  } state_ = INITIALIZING;
 
   mojo::Remote<mojom::SessionObserver> observer_;
   mojo::Remote<mojom::ResourceProvider> resource_provider_;
   MirrorSettings mirror_settings_;
 
   std::unique_ptr<MessageDispatcher> message_dispatcher_;
-
+  std::unique_ptr<RpcDispatcherImpl> rpc_dispatcher_;
   mojo::Remote<network::mojom::NetworkContext> network_context_;
-
-  std::unique_ptr<ReceiverSetupQuerier> setup_querier_;
 
   // Created after OFFER/ANSWER exchange succeeds.
   std::unique_ptr<AudioRtpStream> audio_stream_;
@@ -188,9 +207,23 @@ class COMPONENT_EXPORT(MIRRORING_SERVICE) Session final
   scoped_refptr<media::AudioInputDevice> audio_input_device_;
   std::unique_ptr<MediaRemoter> media_remoter_;
   std::unique_ptr<viz::Gpu> gpu_;
-  scoped_refptr<gpu::GpuChannelHost> gpu_channel_host_;
-  media::VideoEncodeAccelerator::SupportedProfiles supported_profiles_;
+  SupportedProfiles supported_profiles_;
   mojo::Remote<media::mojom::VideoEncodeAcceleratorProvider> vea_provider_;
+  std::unique_ptr<SessionLogger> session_logger_;
+
+  // A callback to call after initialization is completed
+  AsyncInitializeDoneCB init_done_cb_;
+
+  // Indicates whether we're in the middle of switching tab sources.
+  bool switching_tab_source_ = false;
+
+  // This timer is used to stop the session in case Remoting is not started
+  // before timeout. The timer is stopped when Remoting session successfully
+  // starts.
+  base::OneShotTimer remote_playback_start_timer_;
+  // Records the time when the streaming session is started and `media_remoter_`
+  // is initialized.
+  absl::optional<base::Time> remote_playback_start_time_;
 
   base::WeakPtrFactory<Session> weak_factory_{this};
 };

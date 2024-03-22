@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,6 +10,7 @@
 #include "ash/system/accessibility/autoclick_menu_view.h"
 #include "ash/system/locale/locale_update_controller_impl.h"
 #include "ash/system/tray/tray_bubble_view.h"
+#include "base/memory/raw_ptr.h"
 
 namespace views {
 class Widget;
@@ -70,29 +71,36 @@ class ASH_EXPORT AutoclickMenuBubbleController
 
   // TrayBubbleView::Delegate:
   void BubbleViewDestroyed() override;
+  std::u16string GetAccessibleNameForBubble() override;
+  void HideBubble(const TrayBubbleView* bubble_view) override;
 
   // LocaleChangeObserver:
   void OnLocaleChanged() override;
 
   // For tests only.
   views::Widget* GetBubbleWidgetForTesting() { return bubble_widget_; }
+  void SetAnimateForTesting(bool animate) { animate_ = animate; }
 
  private:
   friend class AutoclickMenuBubbleControllerTest;
   friend class AutoclickTest;
+  friend class AutoclickTestUtils;
   friend class FloatingAccessibilityControllerTest;
 
   // Owned by views hierarchy.
-  TrayBubbleView* bubble_view_ = nullptr;
-  AutoclickMenuView* menu_view_ = nullptr;
+  raw_ptr<TrayBubbleView, ExperimentalAsh> bubble_view_ = nullptr;
+  raw_ptr<AutoclickMenuView, ExperimentalAsh> menu_view_ = nullptr;
   FloatingMenuPosition position_ = kDefaultAutoclickMenuPosition;
 
-  views::Widget* bubble_widget_ = nullptr;
+  raw_ptr<views::Widget, ExperimentalAsh> bubble_widget_ = nullptr;
 
   // The controller for the scroll bubble. Only exists during a scroll. Owned
   // by this class so that positioning calculations can take place using both
   // classes at once.
   std::unique_ptr<AutoclickScrollBubbleController> scroll_bubble_controller_;
+
+  // Whether to animate position changes. Can be set to false for testing.
+  bool animate_ = true;
 };
 
 }  // namespace ash

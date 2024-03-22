@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,8 +7,8 @@
 
 #import <UIKit/UIKit.h>
 
+#import "ios/chrome/browser/shared/ui/table_view/legacy_chrome_table_view_controller.h"
 #import "ios/chrome/browser/ui/authentication/unified_consent/identity_chooser/identity_chooser_consumer.h"
-#import "ios/chrome/browser/ui/table_view/chrome_table_view_controller.h"
 
 @protocol IdentityChooserViewControllerPresentationDelegate;
 
@@ -16,7 +16,7 @@
 // identity. IdentityChooserViewController also displays "Add Account…" cell
 // at the end.
 @interface IdentityChooserViewController
-    : ChromeTableViewController<IdentityChooserConsumer>
+    : LegacyChromeTableViewController <IdentityChooserConsumer>
 
 // Presentation delegate.
 @property(nonatomic, weak) id<IdentityChooserViewControllerPresentationDelegate>

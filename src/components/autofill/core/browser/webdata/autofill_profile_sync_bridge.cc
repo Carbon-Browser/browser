@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,15 +8,12 @@
 #include <unordered_set>
 #include <vector>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/containers/contains.h"
-#include "base/guid.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/strings/utf_string_conversions.h"
 #include "components/autofill/core/browser/autofill_profile_sync_util.h"
 #include "components/autofill/core/browser/data_model/autofill_profile.h"
-#include "components/autofill/core/browser/field_types.h"
-#include "components/autofill/core/browser/geo/country_names.h"
 #include "components/autofill/core/browser/proto/autofill_sync.pb.h"
 #include "components/autofill/core/browser/webdata/autofill_profile_sync_difference_tracker.h"
 #include "components/autofill/core/browser/webdata/autofill_table.h"
@@ -88,20 +85,22 @@ AutofillProfileSyncBridge::AutofillProfileSyncBridge(
 }
 
 AutofillProfileSyncBridge::~AutofillProfileSyncBridge() {
-  DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 }
 
 std::unique_ptr<MetadataChangeList>
 AutofillProfileSyncBridge::CreateMetadataChangeList() {
-  DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   return std::make_unique<syncer::SyncMetadataStoreChangeList>(
-      GetAutofillTable(), syncer::AUTOFILL_PROFILE);
+      GetAutofillTable(), syncer::AUTOFILL_PROFILE,
+      base::BindRepeating(&syncer::ModelTypeChangeProcessor::ReportError,
+                          change_processor()->GetWeakPtr()));
 }
 
-optional<syncer::ModelError> AutofillProfileSyncBridge::MergeSyncData(
+optional<syncer::ModelError> AutofillProfileSyncBridge::MergeFullSyncData(
     std::unique_ptr<MetadataChangeList> metadata_change_list,
     syncer::EntityChangeList entity_data) {
-  DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 
   AutofillProfileInitialSyncDifferenceTracker initial_sync_tracker(
       GetAutofillTable());
@@ -128,14 +127,13 @@ optional<syncer::ModelError> AutofillProfileSyncBridge::MergeSyncData(
       FlushSyncTracker(std::move(metadata_change_list), &initial_sync_tracker));
 
   web_data_backend_->CommitChanges();
-  web_data_backend_->NotifyThatSyncHasStarted(syncer::AUTOFILL_PROFILE);
   return absl::nullopt;
 }
 
-optional<ModelError> AutofillProfileSyncBridge::ApplySyncChanges(
+optional<ModelError> AutofillProfileSyncBridge::ApplyIncrementalSyncChanges(
     std::unique_ptr<MetadataChangeList> metadata_change_list,
     syncer::EntityChangeList entity_changes) {
-  DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 
   AutofillProfileSyncDifferenceTracker tracker(GetAutofillTable());
   for (const std::unique_ptr<syncer::EntityChange>& change : entity_changes) {
@@ -165,9 +163,10 @@ optional<ModelError> AutofillProfileSyncBridge::ApplySyncChanges(
 
 void AutofillProfileSyncBridge::GetData(StorageKeyList storage_keys,
                                         DataCallback callback) {
-  DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   std::vector<std::unique_ptr<AutofillProfile>> entries;
-  if (!GetAutofillTable()->GetAutofillProfiles(&entries)) {
+  if (!GetAutofillTable()->GetAutofillProfiles(
+          AutofillProfile::Source::kLocalOrSyncable, &entries)) {
     change_processor()->ReportError(
         {FROM_HERE, "Failed to load entries from table."});
     return;
@@ -186,10 +185,11 @@ void AutofillProfileSyncBridge::GetData(StorageKeyList storage_keys,
 }
 
 void AutofillProfileSyncBridge::GetAllDataForDebugging(DataCallback callback) {
-  DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 
   std::vector<std::unique_ptr<AutofillProfile>> entries;
-  if (!GetAutofillTable()->GetAutofillProfiles(&entries)) {
+  if (!GetAutofillTable()->GetAutofillProfiles(
+          AutofillProfile::Source::kLocalOrSyncable, &entries)) {
     change_processor()->ReportError(
         {FROM_HERE, "Failed to load entries from table."});
     return;
@@ -205,30 +205,25 @@ void AutofillProfileSyncBridge::GetAllDataForDebugging(DataCallback callback) {
 
 void AutofillProfileSyncBridge::ActOnLocalChange(
     const AutofillProfileChange& change) {
-  DCHECK(change.data_model());
   if (!change_processor()->IsTrackingMetadata() ||
-      change.data_model()->record_type() != AutofillProfile::LOCAL_PROFILE) {
+      change.data_model().source() !=
+          AutofillProfile::Source::kLocalOrSyncable) {
     return;
   }
 
-  auto metadata_change_list =
-      std::make_unique<syncer::SyncMetadataStoreChangeList>(
-          GetAutofillTable(), syncer::AUTOFILL_PROFILE);
+  std::unique_ptr<MetadataChangeList> metadata_change_list =
+      CreateMetadataChangeList();
 
   switch (change.type()) {
     case AutofillProfileChange::ADD:
     case AutofillProfileChange::UPDATE:
       change_processor()->Put(
           change.key(),
-          CreateEntityDataFromAutofillProfile(*change.data_model()),
+          CreateEntityDataFromAutofillProfile(change.data_model()),
           metadata_change_list.get());
       break;
     case AutofillProfileChange::REMOVE:
       change_processor()->Delete(change.key(), metadata_change_list.get());
-      break;
-    case AutofillProfileChange::EXPIRE:
-      // EXPIRE changes are not being issued for profiles.
-      NOTREACHED();
       break;
   }
 
@@ -236,10 +231,6 @@ void AutofillProfileSyncBridge::ActOnLocalChange(
   // the metadata change list) because the open WebDatabase transaction is
   // committed by the AutofillWebDataService when the original local write
   // operation (that triggered this notification to the bridge) finishes.
-
-  if (optional<ModelError> error = metadata_change_list->TakeError()) {
-    change_processor()->ReportError(*error);
-  }
 }
 
 absl::optional<syncer::ModelError> AutofillProfileSyncBridge::FlushSyncTracker(
@@ -247,9 +238,9 @@ absl::optional<syncer::ModelError> AutofillProfileSyncBridge::FlushSyncTracker(
     AutofillProfileSyncDifferenceTracker* tracker) {
   DCHECK(tracker);
 
-  RETURN_IF_ERROR(tracker->FlushToLocal(
-      base::BindOnce(&AutofillWebDataBackend::NotifyOfMultipleAutofillChanges,
-                     base::Unretained(web_data_backend_))));
+  RETURN_IF_ERROR(tracker->FlushToLocal(base::BindOnce(
+      &AutofillWebDataBackend::NotifyOnAutofillChangedBySync,
+      base::Unretained(web_data_backend_), syncer::AUTOFILL_PROFILE)));
 
   std::vector<std::unique_ptr<AutofillProfile>> profiles_to_upload_to_sync;
   std::vector<std::string> profiles_to_delete_from_sync;
@@ -265,9 +256,7 @@ absl::optional<syncer::ModelError> AutofillProfileSyncBridge::FlushSyncTracker(
     change_processor()->Delete(storage_key, metadata_change_list.get());
   }
 
-  return static_cast<syncer::SyncMetadataStoreChangeList*>(
-             metadata_change_list.get())
-      ->TakeError();
+  return change_processor()->GetError();
 }
 
 void AutofillProfileSyncBridge::LoadMetadata() {
@@ -305,7 +294,7 @@ std::string AutofillProfileSyncBridge::GetStorageKey(
 
 void AutofillProfileSyncBridge::AutofillProfileChanged(
     const AutofillProfileChange& change) {
-  DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   ActOnLocalChange(change);
 }
 

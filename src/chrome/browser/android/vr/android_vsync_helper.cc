@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,7 +8,7 @@
 
 #include "base/android/jni_android.h"
 #include "base/logging.h"
-#include "chrome/android/features/vr/jni_headers/AndroidVSyncHelper_jni.h"
+#include "chrome/android/features/vr/split_jni_headers/AndroidVSyncHelper_jni.h"
 
 using base::android::AttachCurrentThread;
 using base::android::JavaParamRef;

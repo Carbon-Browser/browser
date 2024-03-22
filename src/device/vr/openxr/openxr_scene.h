@@ -1,15 +1,18 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 #ifndef DEVICE_VR_OPENXR_OPENXR_SCENE_H_
 #define DEVICE_VR_OPENXR_OPENXR_SCENE_H_
 
+#include "base/memory/raw_ref.h"
 #include "base/scoped_generic.h"
 #include "device/vr/openxr/openxr_extension_handle.h"
 #include "device/vr/openxr/openxr_scene_plane.h"
-#include "device/vr/openxr/openxr_util.h"
+#include "third_party/openxr/src/include/openxr/openxr.h"
 
 namespace device {
+
+class OpenXrExtensionHelper;
 
 // C++ wrapper for XrSceneMSFT
 class OpenXrScene {
@@ -26,7 +29,7 @@ class OpenXrScene {
   XrSceneMSFT Handle() const { return scene_.get(); }
 
  private:
-  const device::OpenXrExtensionHelper& extensions_;
+  const raw_ref<const device::OpenXrExtensionHelper> extensions_;
   OpenXrExtensionHandle<XrSceneMSFT> scene_;
 };
 

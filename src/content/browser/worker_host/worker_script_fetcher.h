@@ -1,17 +1,18 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CONTENT_BROWSER_WORKER_HOST_WORKER_SCRIPT_FETCHER_H_
 #define CONTENT_BROWSER_WORKER_HOST_WORKER_SCRIPT_FETCHER_H_
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "content/browser/navigation_subresource_loader_params.h"
 #include "content/common/content_export.h"
 #include "content/public/browser/service_worker_client_info.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
 #include "mojo/public/cpp/bindings/receiver.h"
 #include "net/url_request/redirect_info.h"
+#include "services/metrics/public/cpp/ukm_source_id.h"
 #include "services/network/public/cpp/weak_wrapper_shared_url_loader_factory.h"
 #include "services/network/public/mojom/client_security_state.mojom-forward.h"
 #include "services/network/public/mojom/url_loader.mojom.h"
@@ -23,6 +24,7 @@
 #include "third_party/blink/public/mojom/worker/worker_main_script_load_params.mojom.h"
 
 namespace net {
+class IsolationInfo;
 class SiteForCookies;
 }  // namespace net
 
@@ -206,14 +208,15 @@ class WorkerScriptFetcher : public network::mojom::URLLoaderClient {
 
   // network::mojom::URLLoaderClient
   void OnReceiveEarlyHints(network::mojom::EarlyHintsPtr early_hints) override;
-  void OnReceiveResponse(network::mojom::URLResponseHeadPtr head,
-                         mojo::ScopedDataPipeConsumerHandle body) override;
+  void OnReceiveResponse(
+      network::mojom::URLResponseHeadPtr head,
+      mojo::ScopedDataPipeConsumerHandle body,
+      absl::optional<mojo_base::BigBuffer> cached_metadata) override;
   void OnReceiveRedirect(const net::RedirectInfo& redirect_info,
                          network::mojom::URLResponseHeadPtr head) override;
   void OnUploadProgress(int64_t current_position,
                         int64_t total_size,
                         OnUploadProgressCallback callback) override;
-  void OnReceiveCachedMetadata(mojo_base::BigBuffer data) override;
   void OnTransferSizeUpdated(int32_t transfer_size_diff) override;
   void OnComplete(const network::URLLoaderCompletionStatus& status) override;
 
@@ -230,18 +233,11 @@ class WorkerScriptFetcher : public network::mojom::URLLoaderClient {
   // URLLoader instance backed by a request interceptor or the network service.
   std::unique_ptr<blink::ThrottlingURLLoader> url_loader_;
 
-  // URLLoader instance for handling a response received from the default
-  // network loader. This can be provided by an interceptor.
-  mojo::PendingRemote<network::mojom::URLLoader> response_url_loader_;
-  mojo::Receiver<network::mojom::URLLoaderClient> response_url_loader_receiver_{
-      this};
-
   blink::mojom::WorkerMainScriptLoadParamsPtr main_script_load_params_;
   absl::optional<SubresourceLoaderParams> subresource_loader_params_;
 
   std::vector<net::RedirectInfo> redirect_infos_;
   std::vector<network::mojom::URLResponseHeadPtr> redirect_response_heads_;
-  network::mojom::URLResponseHeadPtr response_head_;
 
   base::WeakPtrFactory<WorkerScriptFetcher> weak_factory_{this};
 };

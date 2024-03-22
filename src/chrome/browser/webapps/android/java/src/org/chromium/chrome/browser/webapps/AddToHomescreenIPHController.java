@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,15 +7,13 @@ package org.chromium.chrome.browser.webapps;
 import android.app.Activity;
 import android.content.Context;
 import android.content.pm.ResolveInfo;
-import android.os.Bundle;
-
-import androidx.vectordrawable.graphics.drawable.VectorDrawableCompat;
 
 import org.chromium.base.metrics.RecordUserAction;
 import org.chromium.chrome.browser.banners.AppMenuVerbiage;
 import org.chromium.chrome.browser.feature_engagement.TrackerFactory;
 import org.chromium.chrome.browser.profiles.Profile;
 import org.chromium.chrome.browser.tab.Tab;
+import org.chromium.components.browser_ui.util.TraceEventVectorDrawableCompat;
 import org.chromium.components.embedder_support.util.UrlConstants;
 import org.chromium.components.feature_engagement.EventConstants;
 import org.chromium.components.feature_engagement.FeatureConstants;
@@ -48,13 +46,17 @@ public class AddToHomescreenIPHController {
 
     /**
      * Creates an {@link AddToHomescreenIPHController}.
+     *
      * @param activity The associated activity.
      * @param windowAndroid The associated {@link WindowAndroid}.
      * @param modalDialogManager The {@link ModalDialogManager} for showing the dialog.
      * @param messageDispatcher The {@link MessageDispatcher} for displaying messages.
      */
-    public AddToHomescreenIPHController(Activity activity, WindowAndroid windowAndroid,
-            ModalDialogManager modalDialogManager, MessageDispatcher messageDispatcher) {
+    public AddToHomescreenIPHController(
+            Activity activity,
+            WindowAndroid windowAndroid,
+            ModalDialogManager modalDialogManager,
+            MessageDispatcher messageDispatcher) {
         mActivity = activity;
         mWindowAndroid = windowAndroid;
         mModalDialogManager = modalDialogManager;
@@ -64,17 +66,20 @@ public class AddToHomescreenIPHController {
 
     /**
      * Called to show in-product-help message.
+     *
      * @param tab The current tab.
      */
     public void showAddToHomescreenIPH(Tab tab) {
+        if (!mTracker.shouldTriggerHelpUI(FeatureConstants.ADD_TO_HOMESCREEN_MESSAGE_FEATURE)) {
+            return;
+        }
+
         if (mActivity == null) return;
         if (!canShowAddToHomescreenMenuItem(mActivity, tab)) return;
         showMessageIPH(tab);
     }
 
-    /**
-     * Called to notify that the activity is in the process of being destroyed.
-     */
+    /** Called to notify that the activity is in the process of being destroyed. */
     public void destroy() {
         mActivity = null;
     }
@@ -86,8 +91,9 @@ public class AddToHomescreenIPHController {
         if (url.isEmpty() || !url.isValid()) return false;
 
         String urlString = url.getSpec();
-        boolean isChromeScheme = urlString.startsWith(UrlConstants.CHROME_URL_PREFIX)
-                || urlString.startsWith(UrlConstants.CHROME_NATIVE_URL_PREFIX);
+        boolean isChromeScheme =
+                urlString.startsWith(UrlConstants.CHROME_URL_PREFIX)
+                        || urlString.startsWith(UrlConstants.CHROME_NATIVE_URL_PREFIX);
         boolean isFileScheme = urlString.startsWith(UrlConstants.FILE_URL_PREFIX);
         boolean isContentScheme = urlString.startsWith(UrlConstants.CONTENT_URL_PREFIX);
         boolean urlSchemeSupported = !isChromeScheme && !isFileScheme && !isContentScheme;
@@ -114,22 +120,35 @@ public class AddToHomescreenIPHController {
     private void showMessageIPH(Tab tab) {
         PropertyModel model =
                 new PropertyModel.Builder(MessageBannerProperties.ALL_KEYS)
-                        .with(MessageBannerProperties.MESSAGE_IDENTIFIER,
+                        .with(
+                                MessageBannerProperties.MESSAGE_IDENTIFIER,
                                 MessageIdentifier.ADD_TO_HOMESCREEN_IPH)
-                        .with(MessageBannerProperties.ICON,
-                                VectorDrawableCompat.create(mActivity.getResources(),
-                                        R.drawable.ic_apps_blue_24dp, mActivity.getTheme()))
-                        .with(MessageBannerProperties.TITLE,
-                                mActivity.getResources().getString(
-                                        R.string.iph_message_add_to_home_screen_title))
-                        .with(MessageBannerProperties.DESCRIPTION,
-                                mActivity.getResources().getString(
-                                        R.string.iph_message_add_to_home_screen_description))
-                        .with(MessageBannerProperties.PRIMARY_BUTTON_TEXT,
-                                mActivity.getResources().getString(
-                                        R.string.iph_message_add_to_home_screen_action))
+                        .with(
+                                MessageBannerProperties.ICON,
+                                TraceEventVectorDrawableCompat.create(
+                                        mActivity.getResources(),
+                                        R.drawable.ic_apps_blue_24dp,
+                                        mActivity.getTheme()))
+                        .with(
+                                MessageBannerProperties.TITLE,
+                                mActivity
+                                        .getResources()
+                                        .getString(R.string.iph_message_add_to_home_screen_title))
+                        .with(
+                                MessageBannerProperties.DESCRIPTION,
+                                mActivity
+                                        .getResources()
+                                        .getString(
+                                                R.string
+                                                        .iph_message_add_to_home_screen_description))
+                        .with(
+                                MessageBannerProperties.PRIMARY_BUTTON_TEXT,
+                                mActivity
+                                        .getResources()
+                                        .getString(R.string.iph_message_add_to_home_screen_action))
                         .with(MessageBannerProperties.ON_DISMISSED, this::onMessageDismissed)
-                        .with(MessageBannerProperties.ON_PRIMARY_ACTION,
+                        .with(
+                                MessageBannerProperties.ON_PRIMARY_ACTION,
                                 () -> {
                                     onMessageAddButtonClicked(tab);
                                     return PrimaryActionClickBehavior.DISMISS_IMMEDIATELY;
@@ -143,12 +162,12 @@ public class AddToHomescreenIPHController {
     private void onMessageAddButtonClicked(Tab tab) {
         if (tab.isDestroyed() || mActivity == null) return;
 
-        Bundle menuItemData = new Bundle();
-        // Used for UMA.
-        menuItemData.putInt(
-                AppBannerManager.MENU_TITLE_KEY, AppMenuVerbiage.APP_MENU_OPTION_ADD_TO_HOMESCREEN);
         AddToHomescreenCoordinator.showForAppMenu(
-                mActivity, mWindowAndroid, mModalDialogManager, tab.getWebContents(), menuItemData);
+                mActivity,
+                mWindowAndroid,
+                mModalDialogManager,
+                tab.getWebContents(),
+                AppMenuVerbiage.APP_MENU_OPTION_ADD_TO_HOMESCREEN);
         mTracker.notifyEvent(EventConstants.ADD_TO_HOMESCREEN_DIALOG_SHOWN);
         RecordUserAction.record("Android.AddToHomescreenIPH.Message.Clicked");
     }

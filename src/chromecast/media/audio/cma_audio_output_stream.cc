@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,7 +8,7 @@
 #include <limits>
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/logging.h"
 #include "base/synchronization/waitable_event.h"
@@ -57,14 +57,19 @@ void CmaAudioOutputStream::SetRunning(bool running) {
 }
 
 void CmaAudioOutputStream::Initialize(
-    const std::string& application_session_id,
-    chromecast::mojom::MultiroomInfoPtr multiroom_info) {
+    const std::string& application_session_id) {
   DCHECK_CALLED_ON_VALID_THREAD(media_thread_checker_);
   DCHECK_EQ(cma_backend_state_, CmaBackendState::kUninitialized);
+  // If AUDIO_PREFETCH is enabled, we're able to push audio ahead of
+  // realtime. Set the sync mode to kModeSyncPts to allow cma backend to
+  // buffer the early pushed data, instead of dropping them.
   output_ = std::make_unique<CmaAudioOutput>(
       audio_params_, kSampleFormatS16, device_id_, application_session_id,
+      audio_params_.effects() & ::media::AudioParameters::AUDIO_PREFETCH
+          ? MediaPipelineDeviceParams::kModeSyncPts
+          : MediaPipelineDeviceParams::kModeIgnorePts,
       false /*use_hw_av_sync*/, 0 /*audio_track_session_id*/,
-      std::move(multiroom_info), cma_backend_factory_, this);
+      cma_backend_factory_, this);
   cma_backend_state_ = CmaBackendState::kStopped;
 
   audio_bus_ = ::media::AudioBus::Create(audio_params_);
@@ -212,7 +217,7 @@ void CmaAudioOutputStream::PushBuffer() {
   }
   last_rendering_delay_ = delay;
 
-  int frame_count = source_callback_->OnMoreData(delay, base::TimeTicks(), 0,
+  int frame_count = source_callback_->OnMoreData(delay, base::TimeTicks(), {},
                                                  audio_bus_.get());
 
   DVLOG(3) << "frames_filled=" << frame_count << " with latency=" << delay;
@@ -226,7 +231,7 @@ void CmaAudioOutputStream::PushBuffer() {
   audio_bus_->ToInterleaved<::media::SignedInt16SampleTypeTraits>(
       frame_count, reinterpret_cast<int16_t*>(decoder_buffer->writable_data()));
   push_in_progress_ = true;
-  output_->PushBuffer(std::move(decoder_buffer));
+  output_->PushBuffer(std::move(decoder_buffer), false /*is_silence*/);
 }
 
 void CmaAudioOutputStream::OnPushBufferComplete(BufferStatus status) {

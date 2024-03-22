@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,6 +6,7 @@
 #define SANDBOX_POLICY_LINUX_BPF_NETWORK_POLICY_LINUX_H_
 
 #include "sandbox/linux/bpf_dsl/bpf_dsl.h"
+#include "sandbox/linux/system_headers/linux_syscalls.h"
 #include "sandbox/policy/export.h"
 #include "sandbox/policy/linux/bpf_base_policy_linux.h"
 

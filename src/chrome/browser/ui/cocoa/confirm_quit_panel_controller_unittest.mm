@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -43,9 +43,9 @@ TEST_F(ConfirmQuitPanelControllerTest, ShowAndDismiss) {
 TEST_F(ConfirmQuitPanelControllerTest, KeyCombinationForMenuItem) {
   Class controller = [ConfirmQuitPanelController class];
 
-  NSMenuItem* item = [[[NSMenuItem alloc] initWithTitle:@""
-                                                 action:@selector(unused)
-                                          keyEquivalent:@""] autorelease];
+  NSMenuItem* item = [[NSMenuItem alloc] initWithTitle:@""
+                                                action:@selector(unused)
+                                         keyEquivalent:@""];
   item.keyEquivalent = @"q";
   item.keyEquivalentModifierMask = NSEventModifierFlagCommand;
   EXPECT_NSEQ(TestString(@"{Cmd}Q"),

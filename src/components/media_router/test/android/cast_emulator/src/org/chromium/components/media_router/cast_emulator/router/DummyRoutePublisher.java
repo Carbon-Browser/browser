@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -66,10 +66,11 @@ public final class DummyRoutePublisher implements RoutePublisher {
                         .addControlFilters(controlFilters)
                         .build();
 
-        MediaRouteProviderDescriptor providerDescriptor = new MediaRouteProviderDescriptor.Builder()
-                                                                  .addRoute(testRouteDescriptor1)
-                                                                  .addRoute(testRouteDescriptor2)
-                                                                  .build();
+        MediaRouteProviderDescriptor providerDescriptor =
+                new MediaRouteProviderDescriptor.Builder()
+                        .addRoute(testRouteDescriptor1)
+                        .addRoute(testRouteDescriptor2)
+                        .build();
         mProvider.setDescriptor(providerDescriptor);
     }
 

@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -47,14 +47,6 @@ bool DeviceInfo::IsSetOutputSurfaceSupported() {
 bool DeviceInfo::SupportsOverlaySurfaces() {
   static const bool result = MediaCodecUtil::IsSurfaceViewOutputSupported();
   return result;
-}
-
-bool DeviceInfo::IsAsyncApiSupported() {
-  // Technically the base setCallback() API is available in L, but we
-  // need the version which accepts a Handler which is in M... but
-  // in M there's a MediaCodec bug that's not fixed until N :|
-  // https://crbug.com/873094 https://crbug.com/610523
-  return SdkVersion() >= base::android::SDK_VERSION_NOUGAT;
 }
 
 void DeviceInfo::AddSupportedCodecProfileLevels(

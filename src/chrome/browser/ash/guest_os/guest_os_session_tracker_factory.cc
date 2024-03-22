@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,7 +8,6 @@
 #include "chrome/browser/ash/guest_os/guest_os_session_tracker.h"
 #include "chrome/browser/ash/profiles/profile_helper.h"
 #include "chrome/browser/profiles/profile.h"
-#include "components/keyed_service/content/browser_context_dependency_manager.h"
 
 namespace guest_os {
 
@@ -26,16 +25,22 @@ GuestOsSessionTrackerFactory* GuestOsSessionTrackerFactory::GetInstance() {
 }
 
 GuestOsSessionTrackerFactory::GuestOsSessionTrackerFactory()
-    : BrowserContextKeyedServiceFactory(
+    : ProfileKeyedServiceFactory(
           "GuestOsSessionTracker",
-          BrowserContextDependencyManager::GetInstance()) {}
+          ProfileSelections::Builder()
+              .WithRegular(ProfileSelection::kRedirectedToOriginal)
+              .WithGuest(ProfileSelection::kNone)
+              .WithAshInternals(ProfileSelection::kNone)
+              .WithSystem(ProfileSelection::kNone)
+              .Build()) {}
 
 GuestOsSessionTrackerFactory::~GuestOsSessionTrackerFactory() = default;
 
-KeyedService* GuestOsSessionTrackerFactory::BuildServiceInstanceFor(
+std::unique_ptr<KeyedService>
+GuestOsSessionTrackerFactory::BuildServiceInstanceForBrowserContext(
     content::BrowserContext* context) const {
   Profile* profile = Profile::FromBrowserContext(context);
-  return new GuestOsSessionTracker(
+  return std::make_unique<GuestOsSessionTracker>(
       ash::ProfileHelper::GetUserIdHashFromProfile(profile));
 }
 

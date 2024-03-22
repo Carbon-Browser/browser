@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,9 +12,10 @@
 #include <vector>
 
 #include "base/containers/span.h"
-#include "base/memory/ref_counted.h"
+#include "base/memory/scoped_refptr.h"
 #include "media/base/limits.h"
 #include "media/base/subsample_entry.h"
+#include "media/base/video_types.h"
 #include "media/gpu/accelerated_video_decoder.h"
 #include "media/gpu/h264_dpb.h"
 #include "media/gpu/media_gpu_export.h"
@@ -73,6 +74,15 @@ class MEDIA_GPU_EXPORT H264Decoder : public AcceleratedVideoDecoder {
     // any new pictures at given time. The decoder is expected to handle
     // this situation as normal and return from Decode() with kRanOutOfSurfaces.
     virtual scoped_refptr<H264Picture> CreateH264Picture() = 0;
+
+    // |secure_handle| is a reference to the corresponding secure memory when
+    // doing secure decoding on ARM. This is invoked instead of CreateAV1Picture
+    // when doing secure decoding on ARM. Default implementation returns
+    // nullptr.
+    // TODO(jkardatzke): Remove this once we move to the V4L2 flat stateless
+    // decoder and add a field to media::CodecPicture instead.
+    virtual scoped_refptr<H264Picture> CreateH264PictureSecure(
+        uint64_t secure_handle);
 
     // Provides the raw NALU data for an SPS. The |sps| passed to
     // SubmitFrameMetadata() is always the most recent SPS passed to
@@ -171,6 +181,10 @@ class MEDIA_GPU_EXPORT H264Decoder : public AcceleratedVideoDecoder {
     // kNotSupported.
     virtual Status SetStream(base::span<const uint8_t> stream,
                              const DecryptConfig* decrypt_config);
+
+    // Notifies whether or not the current platform requires reference lists.
+    // In general, implementations don't need it.
+    virtual bool RequiresRefLists();
   };
 
   H264Decoder(std::unique_ptr<H264Accelerator> accelerator,
@@ -191,6 +205,9 @@ class MEDIA_GPU_EXPORT H264Decoder : public AcceleratedVideoDecoder {
   gfx::Rect GetVisibleRect() const override;
   VideoCodecProfile GetProfile() const override;
   uint8_t GetBitDepth() const override;
+  VideoChromaSampling GetChromaSampling() const override;
+  VideoColorSpace GetVideoColorSpace() const override;
+  absl::optional<gfx::HDRMetadata> GetHDRMetadata() const override;
   size_t GetRequiredNumOfPictures() const override;
   size_t GetNumReferenceFrames() const override;
 
@@ -338,6 +355,10 @@ class MEDIA_GPU_EXPORT H264Decoder : public AcceleratedVideoDecoder {
   // Decrypting config for the most recent data passed to SetStream().
   std::unique_ptr<DecryptConfig> current_decrypt_config_;
 
+  // Secure handle to pass through to the accelerator when doing secure playback
+  // on ARM.
+  uint64_t secure_handle_ = 0;
+
   // Keep track of when SetStream() is called so that
   // H264Accelerator::SetStream() can be called.
   bool current_stream_has_been_changed_ = false;
@@ -388,11 +409,11 @@ class MEDIA_GPU_EXPORT H264Decoder : public AcceleratedVideoDecoder {
   std::unique_ptr<H264NALU> curr_nalu_;
   std::unique_ptr<H264SliceHeader> curr_slice_hdr_;
 
-  // Encrypted SEI NALUs preceding a fully encrypted slice NALU. We need to
+  // Encrypted NALUs preceding a fully encrypted (CENCv1) slice NALU. We need to
   // save these that are part of a single sample so they can all be decrypted
   // together.
-  std::vector<base::span<const uint8_t>> encrypted_sei_nalus_;
-  std::vector<SubsampleEntry> sei_subsamples_;
+  std::vector<base::span<const uint8_t>> prior_cencv1_nalus_;
+  std::vector<SubsampleEntry> prior_cencv1_subsamples_;
 
   // These are absl::nullopt unless get recovery point SEI message after Reset.
   // A frame_num of the frame at output order that is correct in content.
@@ -410,11 +431,20 @@ class MEDIA_GPU_EXPORT H264Decoder : public AcceleratedVideoDecoder {
   VideoCodecProfile profile_;
   // Bit depth of input bitstream.
   uint8_t bit_depth_ = 0;
+  // Chroma subsampling format of input bitstream.
+  VideoChromaSampling chroma_sampling_ = VideoChromaSampling::kUnknown;
+  // Video picture color space of input bitstream.
+  VideoColorSpace picture_color_space_;
+  // HDR metadata in the bitstream.
+  absl::optional<gfx::HDRMetadata> hdr_metadata_;
 
   // PicOrderCount of the previously outputted frame.
   int last_output_poc_;
 
   const std::unique_ptr<H264Accelerator> accelerator_;
+
+  // Whether the current decoder will utilize reference lists.
+  const bool requires_ref_lists_;
 };
 
 }  // namespace media

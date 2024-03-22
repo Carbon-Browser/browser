@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -37,9 +37,7 @@ class FormDataParser {
     const std::string& name() const { return name_; }
     base::Value take_value() { return std::move(value_); }
 
-    void set_name(base::StringPiece str) {
-      name_.assign(str.data(), str.size());
-    }
+    void set_name(base::StringPiece str) { name_ = str; }
     void SetBinaryValue(base::StringPiece str);
     void SetStringValue(std::string str);
 

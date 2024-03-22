@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -45,9 +45,9 @@ PpapiDispatcher::PpapiDispatcher(
   // Delay initializing the SyncChannel until after we add filters. This
   // ensures that the filters won't miss any messages received by
   // the channel.
-  channel_ = IPC::SyncChannel::Create(this, GetIPCTaskRunner(),
-                                      base::ThreadTaskRunnerHandle::Get(),
-                                      GetShutdownEvent());
+  channel_ = IPC::SyncChannel::Create(
+      this, GetIPCTaskRunner(),
+      base::SingleThreadTaskRunner::GetCurrentDefault(), GetShutdownEvent());
   scoped_refptr<ppapi::proxy::PluginMessageFilter> plugin_filter(
       new ppapi::proxy::PluginMessageFilter(
           NULL, globals->resource_reply_thread_registrar()));
@@ -172,7 +172,7 @@ void PpapiDispatcher::OnMsgInitializeNaClDispatcher(
   logging::InitLogging(settings);
 
   base::FeatureList::ClearInstanceForTesting();
-  base::FeatureList::InitializeInstance(
+  base::FeatureList::InitInstance(
       base::CommandLine::ForCurrentProcess()->GetSwitchValueASCII(
           switches::kEnableFeatures),
       base::CommandLine::ForCurrentProcess()->GetSwitchValueASCII(

@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -20,8 +20,9 @@ PinKeyboardAnimation::PinKeyboardAnimation(bool grow,
           LayerAnimationElement::TRANSFORM | LayerAnimationElement::OPACITY,
           duration),
       tween_type_(tween_type) {
-  if (!grow)
+  if (!grow) {
     std::swap(start_opacity_, end_opacity_);
+  }
 
   transform_ = std::make_unique<ui::InterpolatedScale>(
       gfx::Point3F(1, start_opacity_, 1), gfx::Point3F(1, end_opacity_, 1));

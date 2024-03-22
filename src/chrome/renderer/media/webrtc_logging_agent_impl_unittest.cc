@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,8 +6,9 @@
 
 #include <string>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
+#include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
 #include "base/task/single_thread_task_runner.h"
 #include "base/test/task_environment.h"
@@ -40,7 +41,7 @@ class WebRtcLoggingClientRecorder : public mojom::WebRtcLoggingClient {
   void OnStopped() override { log_->on_stopped_count++; }
 
  private:
-  Log* const log_;
+  const raw_ptr<Log, ExperimentalRenderer> log_;
 };
 
 }  // namespace

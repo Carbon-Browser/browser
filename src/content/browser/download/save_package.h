@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -29,7 +29,6 @@
 #include "content/public/browser/save_page_type.h"
 #include "content/public/common/referrer.h"
 #include "net/base/net_errors.h"
-#include "services/data_decoder/public/mojom/web_bundler.mojom.h"
 #include "services/metrics/public/cpp/ukm_source_id.h"
 #include "third_party/blink/public/mojom/frame/frame.mojom-forward.h"
 #include "url/gurl.h"
@@ -42,7 +41,7 @@ class DownloadItemImpl;
 
 namespace content {
 class DownloadManagerImpl;
-class Page;
+class PageImpl;
 class FrameTreeNode;
 class RenderFrameHostImpl;
 class SaveFileManager;
@@ -89,7 +88,7 @@ class CONTENT_EXPORT SavePackage
   // Constructor for user initiated page saving. This constructor results in a
   // SavePackage that will generate and sanitize a suggested name for the user
   // in the "Save As" dialog box.
-  explicit SavePackage(Page& page);
+  explicit SavePackage(PageImpl& page);
 
   SavePackage(const SavePackage&) = delete;
   SavePackage& operator=(const SavePackage&) = delete;
@@ -167,7 +166,7 @@ class CONTENT_EXPORT SavePackage
 
   // Used only for testing. Bypasses the file and directory name generation /
   // sanitization by providing well known paths better suited for tests.
-  SavePackage(Page& page,
+  SavePackage(PageImpl& page,
               SavePageType save_type,
               const base::FilePath& file_full_path,
               const base::FilePath& directory_full_path);
@@ -178,13 +177,8 @@ class CONTENT_EXPORT SavePackage
       SavePackageDownloadCreatedCallback download_created_callback,
       download::DownloadItemImpl* item);
 
-  // Callback for WebContents::GenerateMHTML() and
-  // WebContents::GenerateWebBundle().
-  void OnMHTMLOrWebBundleGenerated(int64_t size);
-
-  // Callback for WebContents::GenerateWebBundle().
-  void OnWebBundleGenerated(uint64_t size,
-                            data_decoder::mojom::WebBundlerError error);
+  // Callback for WebContents::GenerateMHTML().
+  void OnMHTMLGenerated(int64_t size);
 
   // Notes from Init() above applies here as well.
   void InternalInit();
@@ -261,7 +255,7 @@ class CONTENT_EXPORT SavePackage
   // with the help of CreatePendingSaveItem, EnqueueSavableResource,
   // EnqueueFrame.
   void GetSavableResourceLinks();
-  void GetSavableResourceLinksForRenderFrameHost(RenderFrameHost* rfh);
+  void GetSavableResourceLinksForRenderFrameHost(RenderFrameHostImpl* rfh);
 
   // Helper for finding or creating a SaveItem with the given parameters.
   SaveItem* CreatePendingSaveItem(
@@ -363,7 +357,7 @@ class CONTENT_EXPORT SavePackage
 
   // The current page, may be null if the primary page has been navigated away
   // or destroyed.
-  base::WeakPtr<Page> page_;
+  base::WeakPtr<PageImpl> page_;
 
   // A queue for items we are about to start saving.
   base::circular_deque<std::unique_ptr<SaveItem>> waiting_item_queue_;
@@ -401,11 +395,19 @@ class CONTENT_EXPORT SavePackage
   SaveItemIdMap saved_success_items_;
 
   // Non-owning pointer for handling file writing on the download sequence.
-  raw_ptr<SaveFileManager> file_manager_ = nullptr;
+  // This dangling raw_ptr occurred in:
+  // content_browsertests: SavePackageBrowserTest.Reload
+  // https://ci.chromium.org/ui/p/chromium/builders/try/linux-rel/1378285/test-results?q=ExactID%3Aninja%3A%2F%2Fcontent%2Ftest%3Acontent_browsertests%2FSavePackageBrowserTest.Reload+VHash%3Ad83661216aa0a42d
+  raw_ptr<SaveFileManager, FlakyDanglingUntriaged> file_manager_ = nullptr;
 
   // DownloadManager owns the download::DownloadItem and handles history and UI.
-  raw_ptr<DownloadManagerImpl> download_manager_ = nullptr;
-  raw_ptr<download::DownloadItemImpl> download_ = nullptr;
+  // These dangling raw_ptrs occurred in:
+  // content_browsertests: SavePackageBrowserTest.Reload
+  // chttps://ci.chromium.org/ui/p/chromium/builders/try/linux-rel/1430369/test-results?q=ExactID%3Aninja%3A%2F%2Fcontent%2Ftest%3Acontent_browsertests%2FSavePackageBrowserTest.Reload+VHash%3Ad83661216aa0a42d
+  raw_ptr<DownloadManagerImpl, FlakyDanglingUntriaged> download_manager_ =
+      nullptr;
+  raw_ptr<download::DownloadItemImpl, FlakyDanglingUntriaged> download_ =
+      nullptr;
 
   // The URL of the page the user wants to save.
   const GURL page_url_;

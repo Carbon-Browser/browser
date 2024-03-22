@@ -278,16 +278,17 @@ void ApplyBlockElementCommand::RangeForParagraphSplittingTextNodesIfNeeded(
     // Avoid obtanining the start of next paragraph for start
     // TODO(yosin) We should use |PositionMoveType::CodePoint| for
     // |previousPositionOf()|.
-    if (start_style->PreserveNewline() && IsNewLineAtPosition(start) &&
+    if (start_style->ShouldPreserveBreaks() && IsNewLineAtPosition(start) &&
         !IsNewLineAtPosition(
             PreviousPositionOf(start, PositionMoveType::kCodeUnit)) &&
-        start.OffsetInContainerNode() > 0)
+        start.OffsetInContainerNode() > 0) {
       start = StartOfParagraph(CreateVisiblePosition(PreviousPositionOf(
                                    end, PositionMoveType::kCodeUnit)))
                   .DeepEquivalent();
+    }
 
     // If start is in the middle of a text node, split.
-    if (!start_style->CollapseWhiteSpace() &&
+    if (!start_style->ShouldCollapseWhiteSpaces() &&
         start.OffsetInContainerNode() > 0) {
       int start_offset = start.OffsetInContainerNode();
       auto* start_text = To<Text>(start.ComputeContainerNode());
@@ -313,7 +314,7 @@ void ApplyBlockElementCommand::RangeForParagraphSplittingTextNodesIfNeeded(
         ComputedStyleOfEnclosingTextNode(end_of_last_paragraph) &&
         end.AnchorNode() == end_of_last_paragraph.AnchorNode();
     // Include \n at the end of line if we're at an empty paragraph
-    if (end_style->PreserveNewline() && start == end &&
+    if (end_style->ShouldPreserveBreaks() && start == end &&
         end.OffsetInContainerNode() <
             static_cast<int>(To<Text>(end.ComputeContainerNode())->length())) {
       int end_offset = end.OffsetInContainerNode();
@@ -331,7 +332,7 @@ void ApplyBlockElementCommand::RangeForParagraphSplittingTextNodesIfNeeded(
 
     // If end is in the middle of a text node, split.
     if (end_style->UsedUserModify() != EUserModify::kReadOnly &&
-        !end_style->CollapseWhiteSpace() && end.OffsetInContainerNode() &&
+        end_style->ShouldPreserveWhiteSpaces() && end.OffsetInContainerNode() &&
         end.OffsetInContainerNode() <
             static_cast<int>(To<Text>(end.ComputeContainerNode())->length())) {
       auto* end_container = To<Text>(end.ComputeContainerNode());
@@ -377,17 +378,22 @@ ApplyBlockElementCommand::EndOfNextParagrahSplittingTextNodesIfNeeded(
 
   auto* const end_of_next_paragraph_text =
       To<Text>(end_of_next_paragraph_position.ComputeContainerNode());
-  if (!style->PreserveNewline() ||
+  if (style->ShouldCollapseBreaks() ||
       !end_of_next_paragraph_position.OffsetInContainerNode() ||
       !IsNewLineAtPosition(
-          Position::FirstPositionInNode(*end_of_next_paragraph_text)))
+          Position::FirstPositionInNode(*end_of_next_paragraph_text))) {
     return end_of_next_paragraph;
+  }
 
   // \n at the beginning of the text node immediately following the current
   // paragraph is trimmed by moveParagraphWithClones. If endOfNextParagraph was
   // pointing at this same text node, endOfNextParagraph will be shifted by one
   // paragraph. Avoid this by splitting "\n"
-  SplitTextNode(end_of_next_paragraph_text, 1);
+  if (end_of_next_paragraph_text->length() > 1) {
+    // To avoid empty `Text` node, `end_of_next_paragraph_text` should be
+    // longer than one. See http://crbug.com/1264470
+    SplitTextNode(end_of_next_paragraph_text, 1);
+  }
   GetDocument().UpdateStyleAndLayout(DocumentUpdateReason::kEditing);
   Text* const previous_text =
       DynamicTo<Text>(end_of_next_paragraph_text->previousSibling());

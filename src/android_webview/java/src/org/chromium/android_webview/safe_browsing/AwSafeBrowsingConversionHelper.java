@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -22,19 +22,24 @@ public final class AwSafeBrowsingConversionHelper {
     /** The resource was blocked for an unknown reason. */
     public static final int SAFE_BROWSING_THREAT_UNKNOWN =
             WebViewClient.SAFE_BROWSING_THREAT_UNKNOWN;
+
     /** The resource was blocked because it contains malware. */
     public static final int SAFE_BROWSING_THREAT_MALWARE =
             WebViewClient.SAFE_BROWSING_THREAT_MALWARE;
+
     /** The resource was blocked because it contains deceptive content. */
     public static final int SAFE_BROWSING_THREAT_PHISHING =
             WebViewClient.SAFE_BROWSING_THREAT_PHISHING;
+
     /** The resource was blocked because it contains unwanted software. */
     public static final int SAFE_BROWSING_THREAT_UNWANTED_SOFTWARE =
             WebViewClient.SAFE_BROWSING_THREAT_UNWANTED_SOFTWARE;
+
     /** The resource was blocked because it may trick the user into a billing agreement. */
     // TODO(ntfschr): replace this with the named constant when we roll the Q SDK
     // (http://crbug.com/887186).
     public static final int SAFE_BROWSING_THREAT_BILLING = 4;
+
     /** Boundary for Safe Browsing Threat values, used for UMA recording. */
     public static final int SAFE_BROWSING_THREAT_BOUNDARY = 5;
 

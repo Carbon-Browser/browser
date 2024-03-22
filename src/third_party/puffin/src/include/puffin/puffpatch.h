@@ -5,6 +5,7 @@
 #ifndef SRC_INCLUDE_PUFFIN_PUFFPATCH_H_
 #define SRC_INCLUDE_PUFFIN_PUFFPATCH_H_
 
+#include "base/files/file.h"
 #include "base/files/file_path.h"
 #include "puffin/common.h"
 #include "puffin/stream.h"
@@ -49,9 +50,11 @@ enum Status {
   P_SERIALIZATION_FAILED = 22,    //
   P_DESERIALIZATION_FAILED = 23,  //
   P_INPUT_NOT_RECOGNIZED = 24,    // Unrecognized input (not a crx)
+
+  P_UNABLE_TO_GENERATE_PUFFPATCH = 25,  // Generic failure generating patch.
 };
 
-// Applies the puffin patch to deflate stream |src| to create deflate stream
+// Applies the Puffin patch to deflate stream |src| to create deflate stream
 // |dst|. This function is used in the client and internally uses bspatch to
 // apply the patch. The input streams are of type |shared_ptr| because
 // |PuffPatch| needs to wrap these streams into another ones and we don't want
@@ -72,6 +75,10 @@ Status PuffPatch(UniqueStreamPtr src,
 Status ApplyPuffPatch(const base::FilePath& input_path,
                       const base::FilePath& patch_path,
                       const base::FilePath& output_path);
+
+Status ApplyPuffPatch(base::File input_file,
+                      base::File patch_file,
+                      base::File output_file);
 
 }  // namespace puffin
 

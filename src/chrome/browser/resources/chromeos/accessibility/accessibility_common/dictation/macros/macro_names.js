@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -99,6 +99,30 @@ export const MacroName = {
 
   // Move the cursor to the previous sentence.
   NAV_PREV_SENT: 26,
+
+  // Deletes all text in the input field.
+  DELETE_ALL_TEXT: 27,
+
+  // Moves the cursor to the start of the input field.
+  NAV_START_TEXT: 28,
+
+  // Moves the cursor to the end of the input field.
+  NAV_END_TEXT: 29,
+
+  // Select the previous word in the input field.
+  SELECT_PREV_WORD: 30,
+
+  // Select the next word in the input field.
+  SELECT_NEXT_WORD: 31,
+
+  // Select the next character in the input field.
+  SELECT_NEXT_CHAR: 32,
+
+  // Select the previous character in the input field.
+  SELECT_PREV_CHAR: 33,
+
+  // Repeats the last executed macro.
+  REPEAT: 34,
 
   // Any new actions should match with Voice Access's semantic tags.
 };

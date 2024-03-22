@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,7 +8,6 @@
 #include <tuple>
 #include <utility>
 
-#include "base/cxx17_backports.h"
 #include "base/strings/strcat.h"
 #include "base/strings/stringprintf.h"
 #include "ui/gfx/geometry/insets.h"
@@ -65,8 +64,8 @@ void NormalizedSize::SetToMax(int main, int cross) {
 }
 
 void NormalizedSize::SetToMin(int main, int cross) {
-  main_ = base::clamp(main, 0, main_);
-  cross_ = base::clamp(cross, 0, cross_);
+  main_ = std::clamp(main, 0, main_);
+  cross_ = std::clamp(cross, 0, cross_);
 }
 
 void NormalizedSize::SetToMax(const NormalizedSize& other) {

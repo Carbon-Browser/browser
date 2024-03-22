@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,8 +12,8 @@
 #include <string>
 #include <vector>
 
-#include "base/callback.h"
 #include "base/containers/flat_set.h"
+#include "base/functional/callback.h"
 #include "base/memory/weak_ptr.h"
 #include "base/observer_list.h"
 #include "base/synchronization/lock.h"
@@ -24,7 +24,9 @@
 #include "components/viz/test/test_context_support.h"
 #include "gpu/command_buffer/client/gles2_interface_stub.h"
 #include "gpu/command_buffer/client/shared_image_interface.h"
+#include "gpu/command_buffer/common/shared_image_capabilities.h"
 #include "gpu/config/gpu_feature_info.h"
+#include "gpu/ipc/client/shared_image_interface_proxy.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "third_party/skia/include/core/SkRefCnt.h"
 
@@ -41,35 +43,68 @@ class TestSharedImageInterface : public gpu::SharedImageInterface {
   TestSharedImageInterface();
   ~TestSharedImageInterface() override;
 
-  gpu::Mailbox CreateSharedImage(ResourceFormat format,
-                                 const gfx::Size& size,
-                                 const gfx::ColorSpace& color_space,
-                                 GrSurfaceOrigin surface_origin,
-                                 SkAlphaType alpha_type,
-                                 uint32_t usage,
-                                 gpu::SurfaceHandle surface_handle) override;
+  scoped_refptr<gpu::ClientSharedImage> CreateSharedImage(
+      SharedImageFormat format,
+      const gfx::Size& size,
+      const gfx::ColorSpace& color_space,
+      GrSurfaceOrigin surface_origin,
+      SkAlphaType alpha_type,
+      uint32_t usage,
+      base::StringPiece debug_label,
+      gpu::SurfaceHandle surface_handle) override;
 
-  gpu::Mailbox CreateSharedImage(ResourceFormat format,
-                                 const gfx::Size& size,
-                                 const gfx::ColorSpace& color_space,
-                                 GrSurfaceOrigin surface_origin,
-                                 SkAlphaType alpha_type,
-                                 uint32_t usage,
-                                 base::span<const uint8_t> pixel_data) override;
+  scoped_refptr<gpu::ClientSharedImage> CreateSharedImage(
+      SharedImageFormat format,
+      const gfx::Size& size,
+      const gfx::ColorSpace& color_space,
+      GrSurfaceOrigin surface_origin,
+      SkAlphaType alpha_type,
+      uint32_t usage,
+      base::StringPiece debug_label,
+      base::span<const uint8_t> pixel_data) override;
 
-  gpu::Mailbox CreateSharedImage(
+  scoped_refptr<gpu::ClientSharedImage> CreateSharedImage(
+      SharedImageFormat format,
+      const gfx::Size& size,
+      const gfx::ColorSpace& color_space,
+      GrSurfaceOrigin surface_origin,
+      SkAlphaType alpha_type,
+      uint32_t usage,
+      base::StringPiece debug_label,
+      gpu::SurfaceHandle surface_handle,
+      gfx::BufferUsage buffer_usage) override;
+
+  scoped_refptr<gpu::ClientSharedImage> CreateSharedImage(
+      SharedImageFormat format,
+      const gfx::Size& size,
+      const gfx::ColorSpace& color_space,
+      GrSurfaceOrigin surface_origin,
+      SkAlphaType alpha_type,
+      uint32_t usage,
+      base::StringPiece debug_label,
+      gpu::SurfaceHandle surface_handle,
+      gfx::BufferUsage buffer_usage,
+      gfx::GpuMemoryBufferHandle buffer_handle) override;
+
+  scoped_refptr<gpu::ClientSharedImage> CreateSharedImage(
+      SharedImageFormat format,
+      const gfx::Size& size,
+      const gfx::ColorSpace& color_space,
+      GrSurfaceOrigin surface_origin,
+      SkAlphaType alpha_type,
+      uint32_t usage,
+      base::StringPiece debug_label,
+      gfx::GpuMemoryBufferHandle buffer_handle) override;
+
+  scoped_refptr<gpu::ClientSharedImage> CreateSharedImage(
       gfx::GpuMemoryBuffer* gpu_memory_buffer,
       gpu::GpuMemoryBufferManager* gpu_memory_buffer_manager,
       gfx::BufferPlane plane,
       const gfx::ColorSpace& color_space,
       GrSurfaceOrigin surface_origin,
       SkAlphaType alpha_type,
-      uint32_t usage) override;
-
-  std::vector<gpu::Mailbox> CreateSharedImageVideoPlanes(
-      gfx::GpuMemoryBuffer* gpu_memory_buffer,
-      gpu::GpuMemoryBufferManager* gpu_memory_buffer_manager,
-      uint32_t usage) override;
+      uint32_t usage,
+      base::StringPiece debug_label) override;
 
   void UpdateSharedImage(const gpu::SyncToken& sync_token,
                          const gpu::Mailbox& mailbox) override;
@@ -77,10 +112,17 @@ class TestSharedImageInterface : public gpu::SharedImageInterface {
                          std::unique_ptr<gfx::GpuFence> acquire_fence,
                          const gpu::Mailbox& mailbox) override;
 
+  void AddReferenceToSharedImage(const gpu::SyncToken& sync_token,
+                                 const gpu::Mailbox& mailbox,
+                                 uint32_t usage) override;
+
   void DestroySharedImage(const gpu::SyncToken& sync_token,
                           const gpu::Mailbox& mailbox) override;
+  void DestroySharedImage(
+      const gpu::SyncToken& sync_token,
+      scoped_refptr<gpu::ClientSharedImage> client_shared_image) override;
 
-  SwapChainMailboxes CreateSwapChain(ResourceFormat format,
+  SwapChainMailboxes CreateSwapChain(SharedImageFormat format,
                                      const gfx::Size& size,
                                      const gfx::ColorSpace& color_space,
                                      GrSurfaceOrigin surface_origin,
@@ -90,12 +132,11 @@ class TestSharedImageInterface : public gpu::SharedImageInterface {
                         const gpu::Mailbox& mailbox) override;
 
 #if BUILDFLAG(IS_FUCHSIA)
-  void RegisterSysmemBufferCollection(gfx::SysmemBufferCollectionId id,
-                                      zx::channel token,
+  void RegisterSysmemBufferCollection(zx::eventpair service_handle,
+                                      zx::channel sysmem_token,
                                       gfx::BufferFormat format,
                                       gfx::BufferUsage usage,
                                       bool register_with_image_pipe) override;
-  void ReleaseSysmemBufferCollection(gfx::SysmemBufferCollectionId id) override;
 #endif  // BUILDFLAG(IS_FUCHSIA)
 
   gpu::SyncToken GenVerifiedSyncToken() override;
@@ -116,6 +157,9 @@ class TestSharedImageInterface : public gpu::SharedImageInterface {
   }
   bool CheckSharedImageExists(const gpu::Mailbox& mailbox) const;
 
+  const gpu::SharedImageCapabilities& GetCapabilities() override;
+  void SetCapabilities(const gpu::SharedImageCapabilities& caps);
+
  private:
   mutable base::Lock lock_;
 
@@ -124,6 +168,8 @@ class TestSharedImageInterface : public gpu::SharedImageInterface {
   gpu::SyncToken most_recent_generated_token_;
   gpu::SyncToken most_recent_destroy_token_;
   base::flat_set<gpu::Mailbox> shared_images_;
+
+  gpu::SharedImageCapabilities shared_image_capabilities_;
 };
 
 class TestContextProvider
@@ -131,18 +177,27 @@ class TestContextProvider
       public ContextProvider,
       public RasterContextProvider {
  public:
+  // Creates a context backed by TestGLES2Interface with no lock.
   static scoped_refptr<TestContextProvider> Create(
       std::string additional_extensions = std::string());
-  // Creates a worker context provider that can be used on any thread. This is
-  // equivalent to: Create(); BindToCurrentThread().
-  static scoped_refptr<TestContextProvider> CreateWorker();
-  static scoped_refptr<TestContextProvider> CreateWorker(
-      std::unique_ptr<TestContextSupport> support);
   static scoped_refptr<TestContextProvider> Create(
       std::unique_ptr<TestGLES2Interface> gl);
   static scoped_refptr<TestContextProvider> Create(
       std::unique_ptr<TestSharedImageInterface> sii);
   static scoped_refptr<TestContextProvider> Create(
+      std::unique_ptr<TestContextSupport> support);
+
+  // Creates a context backed by TestRasterInterface with no lock.
+  static scoped_refptr<TestContextProvider> CreateRaster();
+  static scoped_refptr<TestContextProvider> CreateRaster(
+      std::unique_ptr<TestRasterInterface> raster);
+  static scoped_refptr<TestContextProvider> CreateRaster(
+      std::unique_ptr<TestContextSupport> support);
+
+  // Creates a worker context provider that can be used on any thread. This is
+  // equivalent to: Create(); BindToCurrentSequence().
+  static scoped_refptr<TestContextProvider> CreateWorker();
+  static scoped_refptr<TestContextProvider> CreateWorker(
       std::unique_ptr<TestContextSupport> support);
 
   explicit TestContextProvider(std::unique_ptr<TestContextSupport> support,
@@ -161,7 +216,7 @@ class TestContextProvider
   // ContextProvider / RasterContextProvider implementation.
   void AddRef() const override;
   void Release() const override;
-  gpu::ContextResult BindToCurrentThread() override;
+  gpu::ContextResult BindToCurrentSequence() override;
   const gpu::Capabilities& ContextCapabilities() const override;
   const gpu::GpuFeatureInfo& GetGpuFeatureInfo() const override;
   gpu::gles2::GLES2Interface* ContextGL() override;
@@ -173,6 +228,7 @@ class TestContextProvider
   base::Lock* GetLock() override;
   void AddObserver(ContextLostObserver* obs) override;
   void RemoveObserver(ContextLostObserver* obs) override;
+  unsigned int GetGrGLTextureFormat(SharedImageFormat format) const override;
 
   TestGLES2Interface* TestContextGL();
   TestRasterInterface* GetTestRasterInterface();

@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,15 +9,14 @@ import android.content.Context;
 import android.content.Intent;
 
 import org.chromium.base.BundleUtils;
-import org.chromium.base.annotations.IdentifierNameString;
+import org.chromium.build.annotations.IdentifierNameString;
 import org.chromium.chrome.browser.base.SplitCompatIntentService;
 
 /** See {@link NotificationServiceImpl}. */
 public class NotificationService extends SplitCompatIntentService {
     private static final String TAG = NotificationService.class.getSimpleName();
 
-    @IdentifierNameString
-    private static String sImplClassName =
+    private static @IdentifierNameString String sImplClassName =
             "org.chromium.chrome.browser.notifications.NotificationServiceImpl";
 
     public NotificationService() {
@@ -31,8 +30,11 @@ public class NotificationService extends SplitCompatIntentService {
     public static class Receiver extends BroadcastReceiver {
         @Override
         public void onReceive(Context context, Intent intent) {
-            BroadcastReceiver receiver = (BroadcastReceiver) BundleUtils.newInstance(context,
-                    "org.chromium.chrome.browser.notifications.NotificationServiceImpl$Receiver");
+            BroadcastReceiver receiver =
+                    (BroadcastReceiver)
+                            BundleUtils.newInstance(
+                                    context,
+                                    "org.chromium.chrome.browser.notifications.NotificationServiceImpl$Receiver");
             receiver.onReceive(context, intent);
         }
     }

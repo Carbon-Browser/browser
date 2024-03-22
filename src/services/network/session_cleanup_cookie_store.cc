@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,10 +7,10 @@
 #include <list>
 #include <memory>
 
-#include "base/bind.h"
-#include "base/callback.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/memory/ref_counted.h"
 #include "base/task/sequenced_task_runner.h"
 #include "base/values.h"
@@ -25,15 +25,14 @@ namespace network {
 
 namespace {
 
-base::Value CookieStoreOriginFiltered(const std::string& origin,
-                                      bool is_https,
-                                      net::NetLogCaptureMode capture_mode) {
-  if (!net::NetLogCaptureIncludesSensitive(capture_mode))
-    return base::Value();
-  base::Value dict(base::Value::Type::DICTIONARY);
-  dict.SetStringKey("origin", origin);
-  dict.SetBoolKey("is_https", is_https);
-  return dict;
+base::Value::Dict CookieStoreOriginFiltered(
+    const std::string& origin,
+    bool is_https,
+    net::NetLogCaptureMode capture_mode) {
+  if (!net::NetLogCaptureIncludesSensitive(capture_mode)) {
+    return base::Value::Dict();
+  }
+  return base::Value::Dict().Set("origin", origin).Set("is_https", is_https);
 }
 
 }  // namespace

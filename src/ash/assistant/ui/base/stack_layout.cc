@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,6 +6,7 @@
 
 #include <numeric>
 
+#include "base/ranges/algorithm.h"
 #include "ui/views/view.h"
 
 namespace ash {
@@ -38,8 +39,8 @@ int StackLayout::GetPreferredHeightForWidth(const views::View* host,
   if (children.empty())
     return 0;
   std::vector<int> heights(children.size());
-  std::transform(
-      children.cbegin(), children.cend(), heights.begin(),
+  base::ranges::transform(
+      children, heights.begin(),
       [width](const views::View* v) { return v->GetHeightForWidth(width); });
   return *std::max_element(heights.cbegin(), heights.cend());
 }
@@ -55,8 +56,10 @@ void StackLayout::Layout(views::View* host) {
     int child_x = 0;
     uint32_t dimension = static_cast<uint32_t>(RespectDimension::kAll);
 
-    if (respect_dimension_map_.find(child) != respect_dimension_map_.end())
-      dimension = static_cast<uint32_t>(respect_dimension_map_[child]);
+    if (auto iter = respect_dimension_map_.find(child);
+        iter != respect_dimension_map_.end()) {
+      dimension = static_cast<uint32_t>(iter->second);
+    }
 
     if (dimension & static_cast<uint32_t>(RespectDimension::kWidth)) {
       child_width = std::min(child->GetPreferredSize().width(), host_width);

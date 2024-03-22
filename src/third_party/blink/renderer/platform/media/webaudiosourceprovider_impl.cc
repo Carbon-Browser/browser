@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,15 +7,17 @@
 #include <atomic>
 #include <utility>
 
-#include "base/bind.h"
 #include "base/check_op.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
 #include "base/memory/ptr_util.h"
+#include "base/memory/raw_ptr.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/notreached.h"
+#include "base/task/bind_post_task.h"
 #include "base/thread_annotations.h"
+#include "media/base/audio_glitch_info.h"
 #include "media/base/audio_timestamp_helper.h"
-#include "media/base/bind_to_current_loop.h"
 #include "media/base/media_log.h"
 #include "third_party/blink/renderer/platform/media/web_audio_source_provider_client.h"
 #include "third_party/blink/renderer/platform/wtf/functional.h"
@@ -47,13 +49,13 @@ class WebAudioSourceProviderImpl::TeeFilter
   // get a copy of the rendered audio by SetCopyAudioCallback().
   int Render(base::TimeDelta delay,
              base::TimeTicks delay_timestamp,
-             int prior_frames_skipped,
+             const media::AudioGlitchInfo& glitch_info,
              media::AudioBus* audio_bus) override {
     DCHECK(initialized());
     DCHECK_EQ(audio_bus->channels(), channels_);
 
-    const int num_rendered_frames = renderer_->Render(
-        delay, delay_timestamp, prior_frames_skipped, audio_bus);
+    const int num_rendered_frames =
+        renderer_->Render(delay, delay_timestamp, glitch_info, audio_bus);
 
     // Avoid taking the copy lock for the vast majority of cases.
     if (copy_required_) {
@@ -68,6 +70,9 @@ class WebAudioSourceProviderImpl::TeeFilter
           bus_copy->Zero();
         else
           audio_bus->CopyTo(bus_copy.get());
+
+        // TODO(fhernqvist): Propagate glitch info through here if the callback
+        // needs it.
         copy_audio_bus_callback_.Run(std::move(bus_copy),
                                      static_cast<uint32_t>(frames_delayed),
                                      sample_rate_);
@@ -96,7 +101,8 @@ class WebAudioSourceProviderImpl::TeeFilter
   bool is_tainted() const { return origin_tainted_.IsSet(); }
 
  private:
-  AudioRendererSink::RenderCallback* renderer_ = nullptr;
+  raw_ptr<AudioRendererSink::RenderCallback, DanglingUntriaged> renderer_ =
+      nullptr;
   int channels_ = 0;
   int sample_rate_ = 0;
 
@@ -116,10 +122,7 @@ WebAudioSourceProviderImpl::WebAudioSourceProviderImpl(
     scoped_refptr<media::SwitchableAudioRendererSink> sink,
     media::MediaLog* media_log,
     base::OnceClosure on_set_client_callback /* = base::OnceClosure()*/)
-    : volume_(1.0),
-      state_(kStopped),
-      client_(nullptr),
-      sink_(std::move(sink)),
+    : sink_(std::move(sink)),
       tee_filter_(new TeeFilter()),
       media_log_(media_log),
       on_set_client_callback_(std::move(on_set_client_callback)) {}
@@ -147,7 +150,7 @@ void WebAudioSourceProviderImpl::SetClient(
     // The client will now take control by calling provideInput() periodically.
     client_ = client;
 
-    set_format_cb_ = media::BindToCurrentLoop(WTF::BindRepeating(
+    set_format_cb_ = base::BindPostTaskToCurrentDefault(WTF::BindRepeating(
         &WebAudioSourceProviderImpl::OnSetFormat, weak_factory_.GetWeakPtr()));
 
     // If |tee_filter_| is Initialize()d - then run |set_format_cb_| to send
@@ -205,8 +208,10 @@ void WebAudioSourceProviderImpl::ProvideInput(
     return;
   }
 
+  // TODO(fhernqvist): If we need glitches propagated through WebAudio, plumb
+  // them through here.
   const int frames = tee_filter_->Render(
-      base::TimeDelta(), base::TimeTicks::Now(), 0, bus_wrapper_.get());
+      base::TimeDelta(), base::TimeTicks::Now(), {}, bus_wrapper_.get());
 
   // Zero out frames after rendering for tainted origins.
   if (tee_filter_->is_tainted()) {
@@ -297,9 +302,9 @@ void WebAudioSourceProviderImpl::GetOutputDeviceInfoAsync(
   // Just return empty hardware parameters. When a |client_| is attached, the
   // underlying audio renderer will prefer the media parameters. See
   // IsOptimizedForHardwareParameters() for more details.
-  media::BindToCurrentLoop(
-      WTF::Bind(std::move(info_cb),
-                media::OutputDeviceInfo(media::OUTPUT_DEVICE_STATUS_OK)))
+  base::BindPostTaskToCurrentDefault(
+      WTF::BindOnce(std::move(info_cb),
+                    media::OutputDeviceInfo(media::OUTPUT_DEVICE_STATUS_OK)))
       .Run();
 }
 
@@ -330,15 +335,21 @@ void WebAudioSourceProviderImpl::TaintOrigin() {
 void WebAudioSourceProviderImpl::SetCopyAudioCallback(CopyAudioCB callback) {
   DCHECK(!callback.is_null());
   tee_filter_->SetCopyAudioCallback(std::move(callback));
+  has_copy_audio_callback_ = true;
 }
 
 void WebAudioSourceProviderImpl::ClearCopyAudioCallback() {
   tee_filter_->SetCopyAudioCallback(CopyAudioCB());
+  has_copy_audio_callback_ = false;
 }
 
 int WebAudioSourceProviderImpl::RenderForTesting(media::AudioBus* audio_bus) {
-  return tee_filter_->Render(base::TimeDelta(), base::TimeTicks::Now(), 0,
+  return tee_filter_->Render(base::TimeDelta(), base::TimeTicks::Now(), {},
                              audio_bus);
+}
+
+bool WebAudioSourceProviderImpl::IsAudioBeingCaptured() const {
+  return has_copy_audio_callback_ || client_;
 }
 
 void WebAudioSourceProviderImpl::OnSetFormat() {

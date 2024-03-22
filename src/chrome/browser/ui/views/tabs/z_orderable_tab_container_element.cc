@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,6 +11,14 @@
 #include "chrome/browser/ui/views/tabs/tab_group_underline.h"
 #include "chrome/browser/ui/views/tabs/tab_style_views.h"
 #include "ui/views/view_utils.h"
+
+// static
+bool ZOrderableTabContainerElement::CanOrderView(views::View* view) {
+  return views::IsViewClass<Tab>(view) ||
+         views::IsViewClass<TabGroupHeader>(view) ||
+         views::IsViewClass<TabGroupUnderline>(view) ||
+         views::IsViewClass<TabGroupHighlight>(view);
+}
 
 // static
 float ZOrderableTabContainerElement::CalculateZValue(views::View* child) {
@@ -46,6 +54,6 @@ float ZOrderableTabContainerElement::CalculateZValue(views::View* child) {
   // The non-active tabs are painted next. They are ordered by their selected
   // or hovered state, which is animated and thus real-valued.
   const float tab_style_z_value =
-      tab ? tab->tab_style()->GetZValue() + 1.0f : 0.0f;
+      tab ? tab->tab_style_views()->GetZValue() + 1.0f : 0.0f;
   return z_value + tab_style_z_value;
 }

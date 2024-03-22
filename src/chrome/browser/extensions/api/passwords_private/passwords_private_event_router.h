@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -45,38 +45,33 @@ class PasswordsPrivateEventRouter : public KeyedService {
   void OnPasswordExceptionsListChanged(
       const std::vector<api::passwords_private::ExceptionEntry>& exceptions);
 
-  // Notifies listeners after fetching a plain-text password.
-  // |id| the id for the password entry being shown.
-  // |plaintext_password| The human-readable password.
-  void OnPlaintextPasswordFetched(int id,
-                                  const std::string& plaintext_password);
-
   // Notifies listeners after the passwords have been written to the export
   // destination.
+  // |file_path| In case of successful export, this will describe the path
+  // to the written file.
   // |folder_name| In case of failure to export, this will describe destination
   // we tried to write on.
   void OnPasswordsExportProgress(
       api::passwords_private::ExportProgressStatus status,
+      const std::string& file_path,
       const std::string& folder_name);
 
   // Notifies listeners about a (possible) change to the opt-in state for the
   // account-scoped password storage.
   void OnAccountStorageOptInStateChanged(bool opted_in);
 
-  // Notifies listeners about a change to the information about compromised
+  // Notifies listeners about a change to the information about insecure
   // credentials.
-  void OnCompromisedCredentialsChanged(
-      std::vector<api::passwords_private::InsecureCredential>
-          compromised_credentials);
-
-  // Notifies listeners about a change to the information about weak
-  // credentials.
-  void OnWeakCredentialsChanged(
-      std::vector<api::passwords_private::InsecureCredential> weak_credentials);
+  void OnInsecureCredentialsChanged(
+      std::vector<api::passwords_private::PasswordUiEntry>
+          insecure_credentials);
 
   // Notifies listeners about a change to the status of the password check.
   void OnPasswordCheckStatusChanged(
       const api::passwords_private::PasswordCheckStatus& status);
+
+  // Notifies listeners about the timeout for password manager access.
+  void OnPasswordManagerAuthTimeout();
 
  protected:
   explicit PasswordsPrivateEventRouter(content::BrowserContext* context);

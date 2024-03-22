@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -16,9 +16,11 @@
 #include "base/values.h"
 #include "build/chromeos_buildflags.h"
 #include "chrome/browser/profiles/profile.h"
+#include "chrome/browser/profiles/profile_manager.h"
 #include "chrome/browser/speech/extension_api/tts_engine_extension_api.h"
 #include "chrome/browser/speech/extension_api/tts_extension_api_constants.h"
 #include "content/public/browser/tts_controller.h"
+#include "content/public/browser/tts_platform.h"
 #include "extensions/browser/event_router.h"
 #include "extensions/browser/extension_function_registry.h"
 #include "extensions/browser/extension_host.h"
@@ -30,6 +32,10 @@
 #include "chrome/browser/speech/extension_api/tts_engine_extension_observer_chromeos.h"
 #include "chrome/common/extensions/extension_constants.h"
 #endif  // BUILDFLAG(IS_CHROMEOS_ASH)
+
+#if BUILDFLAG(IS_CHROMEOS_LACROS)
+#include "chrome/browser/speech/tts_client_lacros.h"
+#endif  // BUILDFLAG(IS_CHROMEOS_LACROS)
 
 namespace constants = tts_extension_api_constants;
 
@@ -300,12 +306,14 @@ ExtensionFunction::ResponseAction TtsSpeakFunction::Run() {
 
   std::unique_ptr<content::TtsUtterance> utterance;
   if (extension()) {
-    extensions::ExtensionHost* host =
+    extensions::ExtensionHost* extension_host =
         extensions::ProcessManager::Get(browser_context())
             ->GetBackgroundHostForExtension(extension()->id());
 
-    if (host && host->host_contents())
-      utterance = content::TtsUtterance::Create(host->host_contents());
+    if (extension_host && extension_host->host_contents()) {
+      utterance =
+          content::TtsUtterance::Create(extension_host->host_contents());
+    }
   }
 
   if (!utterance)
@@ -345,9 +353,34 @@ ExtensionFunction::ResponseAction TtsResumeFunction::Run() {
   return RespondNow(NoArguments());
 }
 
+void TtsIsSpeakingFunction::OnIsSpeakingComplete(bool speaking) {
+  Respond(WithArguments(speaking));
+}
+
 ExtensionFunction::ResponseAction TtsIsSpeakingFunction::Run() {
-  return RespondNow(OneArgument(
-      base::Value(content::TtsController::GetInstance()->IsSpeaking())));
+#if BUILDFLAG(IS_CHROMEOS_LACROS)
+  // Lacros tts support is behind an ash feature flag and pushed to Lacros via
+  // crosapi. The feature flag is disabled by default and can not be turned on
+  // in ash from lacros browser test. To enable lacros tts support for lacros
+  // browser test, we have to use a workaround to enable it for testing.
+  // TtsPlatformImplLacros::PlatformImplSupported() returns true if lacros
+  // tts support is enabled either by ash feature flag or by testing workaround.
+  // TODO(crbug/1422469): Remove the workaround for enable lacros tts support
+  // for testing and call tts_crosapi_util::ShouldEnableLacrosTtsSupport()
+  // instead.
+  if (content::TtsPlatform::GetInstance()->PlatformImplSupported()) {
+    content::BrowserContext* browser_context =
+        ProfileManager::GetPrimaryUserProfile();
+    TtsClientLacros::GetForBrowserContext(browser_context)
+        ->IsSpeaking(
+            base::BindOnce(&TtsIsSpeakingFunction::OnIsSpeakingComplete, this));
+
+    return RespondLater();
+  }
+#endif
+
+  return RespondNow(
+      WithArguments(content::TtsController::GetInstance()->IsSpeaking()));
 }
 
 ExtensionFunction::ResponseAction TtsGetVoicesFunction::Run() {
@@ -376,7 +409,7 @@ ExtensionFunction::ResponseAction TtsGetVoicesFunction::Run() {
     result_voices.Append(std::move(result_voice));
   }
 
-  return RespondNow(OneArgument(base::Value(std::move(result_voices))));
+  return RespondNow(WithArguments(std::move(result_voices)));
 }
 
 TtsAPI::TtsAPI(content::BrowserContext* context) {

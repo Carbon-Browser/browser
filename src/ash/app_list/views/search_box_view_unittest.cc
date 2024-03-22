@@ -1,11 +1,9 @@
-
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "ash/app_list/views/search_box_view.h"
 
-#include <cctype>
 #include <map>
 #include <memory>
 #include <string>
@@ -16,31 +14,36 @@
 #include "ash/app_list/model/search/test_search_result.h"
 #include "ash/app_list/test/app_list_test_helper.h"
 #include "ash/app_list/views/app_list_main_view.h"
+#include "ash/app_list/views/app_list_search_view.h"
 #include "ash/app_list/views/app_list_view.h"
 #include "ash/app_list/views/contents_view.h"
-#include "ash/app_list/views/privacy_container_view.h"
-#include "ash/app_list/views/productivity_launcher_search_view.h"
 #include "ash/app_list/views/result_selection_controller.h"
+#include "ash/app_list/views/search_box_view_delegate.h"
+#include "ash/app_list/views/search_result_list_view.h"
 #include "ash/app_list/views/search_result_page_view.h"
 #include "ash/constants/ash_features.h"
-#include "ash/public/cpp/app_list/app_list_color_provider.h"
 #include "ash/public/cpp/app_list/app_list_features.h"
 #include "ash/public/cpp/app_list/vector_icons/vector_icons.h"
-#include "ash/public/cpp/test/test_app_list_color_provider.h"
 #include "ash/search_box/search_box_constants.h"
-#include "ash/search_box/search_box_view_delegate.h"
 #include "ash/shell.h"
 #include "ash/strings/grit/ash_strings.h"
+#include "ash/style/ash_color_id.h"
+#include "ash/style/ash_color_mixer.h"
 #include "ash/style/ash_color_provider.h"
 #include "ash/test/ash_test_base.h"
-#include "base/callback_helpers.h"
+#include "base/containers/contains.h"
+#include "base/functional/callback_helpers.h"
+#include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/test/metrics/user_action_tester.h"
 #include "base/test/scoped_feature_list.h"
+#include "chromeos/constants/chromeos_features.h"
 #include "components/vector_icons/vector_icons.h"
+#include "third_party/abseil-cpp/absl/strings/ascii.h"
 #include "ui/base/ime/composition_text.h"
 #include "ui/base/l10n/l10n_util.h"
+#include "ui/color/color_provider_manager.h"
 #include "ui/compositor/layer.h"
 #include "ui/compositor/layer_animator.h"
 #include "ui/compositor/scoped_animation_duration_scale_mode.h"
@@ -73,11 +76,14 @@ bool IsValidSearchBoxAccessibilityHint(const std::u16string& hint) {
               IDS_APP_LIST_SEARCH_BOX_PLACEHOLDER_SETTINGS)),
       l10n_util::GetStringFUTF16(
           IDS_APP_LIST_SEARCH_BOX_PLACEHOLDER_TEMPLATE_ACCESSIBILITY_NAME_CLAMSHELL,
-          l10n_util::GetStringUTF16(IDS_APP_LIST_SEARCH_BOX_PLACEHOLDER_TABS))};
+          l10n_util::GetStringUTF16(IDS_APP_LIST_SEARCH_BOX_PLACEHOLDER_TABS)),
+      l10n_util::GetStringFUTF16(
+          IDS_APP_LIST_SEARCH_BOX_PLACEHOLDER_TEMPLATE_ACCESSIBILITY_NAME_CLAMSHELL,
+          l10n_util::GetStringUTF16(
+              IDS_APP_LIST_SEARCH_BOX_PLACEHOLDER_IMAGES))};
   // Check if the current accessibility text is one of the possible
   // options.
-  return std::find(begin(possible_a11y_text), end(possible_a11y_text), hint) !=
-         possible_a11y_text.end();
+  return base::Contains(possible_a11y_text, hint);
 }
 
 }  // namespace
@@ -104,7 +110,7 @@ class KeyPressCounterView : public ContentsView {
  private:
   // Overridden from views::View:
   bool OnKeyPressed(const ui::KeyEvent& key_event) override {
-    if (!::isalnum(static_cast<int>(key_event.key_code()))) {
+    if (!absl::ascii_isalnum(key_event.key_code())) {
       ++count_;
       return true;
     }
@@ -114,10 +120,11 @@ class KeyPressCounterView : public ContentsView {
 };
 
 class SearchBoxViewTest : public views::test::WidgetTest,
-                          public SearchBoxViewDelegate,
-                          public testing::WithParamInterface<bool> {
+                          public SearchBoxViewDelegate {
  public:
-  SearchBoxViewTest() = default;
+  SearchBoxViewTest() {
+    scoped_feature_list_.InitAndEnableFeature(chromeos::features::kJelly);
+  }
 
   SearchBoxViewTest(const SearchBoxViewTest&) = delete;
   SearchBoxViewTest& operator=(const SearchBoxViewTest&) = delete;
@@ -126,54 +133,38 @@ class SearchBoxViewTest : public views::test::WidgetTest,
 
   // Overridden from testing::Test:
   void SetUp() override {
-    scoped_feature_list_.InitWithFeatureState(features::kProductivityLauncher,
-                                              IsProductivityLauncherEnabled());
-
     views::test::WidgetTest::SetUp();
+
+    // Tests have an implicit dependency on the color providers.
+    ui::ColorProviderManager::Get().AppendColorProviderInitializer(
+        base::BindRepeating(AddCrosStylesColorMixer));
+    ui::ColorProviderManager::Get().AppendColorProviderInitializer(
+        base::BindRepeating(AddAshColorMixer));
 
     widget_ = CreateTopLevelPlatformWidget();
     widget_->SetBounds(gfx::Rect(0, 0, 300, 200));
 
     std::unique_ptr<SearchBoxView> view;
-    if (IsProductivityLauncherEnabled()) {
-      // Initialize SearchBoxView like clamshell productivity launcher.
-      view = std::make_unique<SearchBoxView>(this, &view_delegate_,
-                                             /*app_list_view=*/nullptr);
-    } else {
-      // Initialize SearchBoxView like peeking launcher.
-      app_list_view_ = new AppListView(&view_delegate_);
-      app_list_view_->InitView(GetContext());
-      view = std::make_unique<SearchBoxView>(this, &view_delegate_,
-                                             app_list_view_);
-    }
-    SearchBoxViewBase::InitParams params;
-    params.show_close_button_when_active = true;
-    params.create_background = true;
-    view->Init(params);
+    // Initialize SearchBoxView like clamshell productivity launcher.
+    view = std::make_unique<SearchBoxView>(this, &view_delegate_,
+                                           /*is_bubble_app_list=*/true);
+    view->InitializeForBubbleLauncher();
     view_ = widget_->GetContentsView()->AddChildView(std::move(view));
 
-    if (IsProductivityLauncherEnabled()) {
-      productivity_launcher_search_view_ =
-          widget_->GetContentsView()->AddChildView(
-              std::make_unique<ProductivityLauncherSearchView>(
-                  &view_delegate_, /*dialog_controller=*/nullptr, view_));
-    } else {
-      counter_view_ = widget_->GetContentsView()->AddChildView(
-          std::make_unique<KeyPressCounterView>(app_list_view_));
-      counter_view_->Init();
-      SetContentsView(counter_view_);
-    }
+    search_view_ = widget_->GetContentsView()->AddChildView(
+        std::make_unique<AppListSearchView>(
+            &view_delegate_, /*dialog_controller=*/nullptr, view_));
     widget_->Show();
   }
 
   void TearDown() override {
-    if (app_list_view_)
+    ui::ColorProviderManager::ResetForTesting();
+    if (app_list_view_) {
       app_list_view_->GetWidget()->Close();
+    }
     widget_->CloseNow();
     views::test::WidgetTest::TearDown();
   }
-
-  bool IsProductivityLauncherEnabled() const { return GetParam(); }
 
  protected:
   views::Widget* widget() { return widget_; }
@@ -189,20 +180,13 @@ class SearchBoxViewTest : public views::test::WidgetTest,
     view()->SetSearchBoxActive(active, type);
   }
 
-  void SetContentsView(ContentsView* contents_view) {
-    view()->set_contents_view(contents_view);
-    view()->SetResultSelectionController(
-        contents_view->search_result_page_view()
-            ->result_selection_controller());
-  }
-
   void KeyPress(ui::KeyboardCode key_code, bool is_shift_down = false) {
     ui::KeyEvent event(ui::ET_KEY_PRESSED, key_code,
                        is_shift_down ? ui::EF_SHIFT_DOWN : ui::EF_NONE);
     view()->search_box()->OnKeyEvent(&event);
     // Emulates the input method.
-    if (::isalnum(static_cast<int>(key_code))) {
-      char16_t character = ::tolower(static_cast<int>(key_code));
+    if (absl::ascii_isalnum(key_code)) {
+      char16_t character = absl::ascii_tolower(key_code);
       view()->search_box()->InsertText(
           std::u16string(1, character),
           ui::TextInputClient::InsertTextCursorBehavior::kMoveCursorAfterText);
@@ -213,9 +197,10 @@ class SearchBoxViewTest : public views::test::WidgetTest,
   void CreateSearchResult(ash::SearchResultDisplayType display_type,
                           double display_score,
                           const std::u16string& title,
-                          const std::u16string& details) {
+                          const std::u16string& details,
+                          const ash::AppListSearchResultCategory& category) {
     CreateSearchResultAt(results()->item_count(), display_type, display_score,
-                         title, details);
+                         title, details, category);
   }
 
   // Creates a SearchResult with the given parameters at the given index in
@@ -224,13 +209,15 @@ class SearchBoxViewTest : public views::test::WidgetTest,
                             ash::SearchResultDisplayType display_type,
                             double display_score,
                             const std::u16string& title,
-                            const std::u16string& details) {
+                            const std::u16string& details,
+                            const ash::AppListSearchResultCategory& category) {
     auto search_result = std::make_unique<TestSearchResult>();
     search_result->set_result_id(base::NumberToString(++last_result_id_));
     search_result->set_display_type(display_type);
     search_result->set_display_score(display_score);
     search_result->SetTitle(title);
     search_result->SetDetails(details);
+    search_result->SetCategory(category);
     search_result->set_best_match(true);
     results()->AddAt(index, std::move(search_result));
   }
@@ -238,122 +225,105 @@ class SearchBoxViewTest : public views::test::WidgetTest,
   SearchModel::SearchResults* results() { return GetSearchModel()->results(); }
 
   SearchResultBaseView* GetFirstResultView() {
-    if (IsProductivityLauncherEnabled()) {
-      return productivity_launcher_search_view_
-          ->result_container_views_for_test()[kBestMatchIndex]
-          ->GetFirstResultView();
-    }
-    return view()
-        ->contents_view()
-        ->search_result_page_view()
-        ->first_result_view();
+    return search_view_->result_container_views_for_test()[kBestMatchIndex]
+        ->GetFirstResultView();
   }
 
   ResultSelectionController* GetResultSelectionController() {
-    if (IsProductivityLauncherEnabled()) {
-      return productivity_launcher_search_view_
-          ->result_selection_controller_for_test();
-    }
-    return view()
-        ->contents_view()
-        ->search_result_page_view()
-        ->result_selection_controller();
+    return search_view_->result_selection_controller_for_test();
   }
 
   void OnSearchResultContainerResultsChanged() {
-    if (IsProductivityLauncherEnabled()) {
-      productivity_launcher_search_view_
-          ->OnSearchResultContainerResultsChanged();
-    }
-    view()
-        ->contents_view()
-        ->search_result_page_view()
-        ->OnSearchResultContainerResultsChanged();
+    search_view_->OnSearchResultContainerResultsChanged();
+  }
+
+  void SimulateQuery(const std::u16string& query) {
+    view()->search_box()->InsertText(
+        query,
+        ui::TextInputClient::InsertTextCursorBehavior::kMoveCursorAfterText);
   }
 
   // Overridden from SearchBoxViewDelegate:
-  void QueryChanged(SearchBoxViewBase* sender) override {}
+  void QueryChanged(const std::u16string& trimmed_query,
+                    bool initiated_by_user) override {
+    search_view_->UpdateForNewSearch(!trimmed_query.empty());
+  }
   void AssistantButtonPressed() override {}
-  void BackButtonPressed() override {}
   void CloseButtonPressed() override {}
   void ActiveChanged(SearchBoxViewBase* sender) override {}
   void OnSearchBoxKeyEvent(ui::KeyEvent* event) override {}
   bool CanSelectSearchResults() override { return true; }
+  bool HandleFocusMoveAboveSearchResults(const ui::KeyEvent& event) override {
+    return false;
+  }
 
-  AshColorProvider ash_color_provider_;
-  ProductivityLauncherSearchView* productivity_launcher_search_view_ = nullptr;
-  TestAppListColorProvider color_provider_;  // Needed by AppListView.
-  AppListTestViewDelegate view_delegate_;
-  views::Widget* widget_ = nullptr;
-  AppListView* app_list_view_ = nullptr;
-  SearchBoxView* view_ = nullptr;                // Owned by views hierarchy.
-  KeyPressCounterView* counter_view_ = nullptr;  // Owned by views hierarchy.
-  int last_result_id_ = 0;
   base::test::ScopedFeatureList scoped_feature_list_;
+  AshColorProvider ash_color_provider_;
+  raw_ptr<AppListSearchView, DanglingUntriaged | ExperimentalAsh> search_view_ =
+      nullptr;
+  AppListTestViewDelegate view_delegate_;
+  raw_ptr<views::Widget, DanglingUntriaged | ExperimentalAsh> widget_ = nullptr;
+  raw_ptr<AppListView, ExperimentalAsh> app_list_view_ = nullptr;
+  raw_ptr<SearchBoxView, DanglingUntriaged | ExperimentalAsh> view_ =
+      nullptr;  // Owned by views hierarchy.
+  raw_ptr<KeyPressCounterView, ExperimentalAsh> counter_view_ =
+      nullptr;  // Owned by views hierarchy.
+  int last_result_id_ = 0;
 };
 
-// Run search box view tests with and without productivity launcher enabled.
-INSTANTIATE_TEST_SUITE_P(All, SearchBoxViewTest, testing::Bool());
-
-TEST_P(SearchBoxViewTest, SearchBoxTextUsesAppListSearchBoxTextColor) {
+TEST_F(SearchBoxViewTest, SearchBoxTextUsesAppListSearchBoxTextColor) {
+  // With darklight mode enabled by default, search box text color should be the
+  // same with and without productivity launcher enabled.
   EXPECT_EQ(view()->search_box()->GetTextColor(),
-            AppListColorProvider::Get()->GetSearchBoxTextColor(
-                kDeprecatedSearchBoxTextDefaultColor));
+            view()->GetColorProvider()->GetColor(kColorAshTextColorPrimary));
 }
 
 // Tests that the close button is invisible by default.
-TEST_P(SearchBoxViewTest, CloseButtonInvisibleByDefault) {
-  EXPECT_FALSE(view()->close_button()->GetVisible());
+TEST_F(SearchBoxViewTest, CloseButtonInvisibleByDefault) {
+  EXPECT_FALSE(view()->filter_and_close_button_container()->GetVisible());
 }
 
 // Tests that the close button becomes visible after typing in the search box.
-TEST_P(SearchBoxViewTest, CloseButtonVisibleAfterTyping) {
+TEST_F(SearchBoxViewTest, CloseButtonVisibleAfterTyping) {
   KeyPress(ui::VKEY_A);
-  EXPECT_TRUE(view()->close_button()->GetVisible());
+  EXPECT_TRUE(view()->filter_and_close_button_container()->GetVisible());
+}
+
+// Tests that the filter button is not created if the image search feature is
+// disabled.
+TEST_F(SearchBoxViewTest, FilterButtonNotCreatedWithDisabledImageSearch) {
+  ASSERT_FALSE(features::IsProductivityLauncherImageSearchEnabled());
+  EXPECT_FALSE(view()->filter_button());
+
+  // The filter button is still not created after typing in the search box.
+  KeyPress(ui::VKEY_A);
+  EXPECT_FALSE(view()->filter_button());
 }
 
 // Tests that the close button is still visible after the search box is
 // activated (in zero state).
-TEST_P(SearchBoxViewTest, CloseButtonIVisibleInZeroStateSearchBox) {
+TEST_F(SearchBoxViewTest, CloseButtonVisibleInZeroStateSearchBox) {
   SetSearchBoxActive(true, ui::ET_MOUSE_PRESSED);
-  EXPECT_TRUE(view()->close_button()->GetVisible());
+  EXPECT_FALSE(view()->filter_and_close_button_container()->GetVisible());
 }
 
-// Tests that the search box is inactive by default.
-TEST_P(SearchBoxViewTest, SearchBoxInactiveByDefault) {
-  // ProductivityLauncher has the search box active by default. This is tested
-  // elsewhere.
-  if (IsProductivityLauncherEnabled())
-    return;
-
-  ASSERT_FALSE(view()->is_search_box_active());
-}
-
-TEST_P(SearchBoxViewTest, AccessibilityHintRemovedWhenSearchBoxActive) {
-  if (IsProductivityLauncherEnabled()) {
-    EXPECT_TRUE(IsValidSearchBoxAccessibilityHint(
-        view()->search_box()->GetAccessibleName()));
-    SetSearchBoxActive(true, ui::ET_MOUSE_PRESSED);
-    EXPECT_TRUE(IsValidSearchBoxAccessibilityHint(
-        view()->search_box()->GetAccessibleName()));
-  } else {
-    EXPECT_EQ(view()->search_box()->GetAccessibleName(),
-              l10n_util::GetStringUTF16(
-                  IDS_APP_LIST_SEARCH_BOX_ACCESSIBILITY_NAME_CLAMSHELL));
-    SetSearchBoxActive(
-        true, ui::ET_MOUSE_PRESSED);  // In the non-bubble launcher, when the
-                                      // search box is active there are no
-    // apps to navigate with arrow keys, so remove the accessibility hint.
-    EXPECT_EQ(view()->search_box()->GetAccessibleName(), u"");
-  }
+// TODO(crbug.com/1446550): Re-enable this test
+TEST_F(SearchBoxViewTest,
+       DISABLED_AccessibilityHintRemovedWhenSearchBoxActive) {
+  EXPECT_TRUE(IsValidSearchBoxAccessibilityHint(
+      view()->search_box()->GetAccessibleName()));
+  SetSearchBoxActive(true, ui::ET_MOUSE_PRESSED);
+  EXPECT_TRUE(IsValidSearchBoxAccessibilityHint(
+      view()->search_box()->GetAccessibleName()));
 }
 
 // Tests that the black Google icon is used for an inactive Google search.
-TEST_P(SearchBoxViewTest, SearchBoxInactiveSearchBoxGoogle) {
+TEST_F(SearchBoxViewTest, SearchBoxInactiveSearchBoxGoogle) {
   SetSearchEngineIsGoogle(true);
   SetSearchBoxActive(false, ui::ET_UNKNOWN);
   const gfx::ImageSkia expected_icon = gfx::CreateVectorIcon(
-      kGoogleBlackIcon, view()->GetSearchBoxIconSize(), kDefaultSearchboxColor);
+      kGoogleBlackIcon, view()->GetSearchBoxIconSize(),
+      view()->GetColorProvider()->GetColor(kColorAshButtonIconColor));
 
   const gfx::ImageSkia actual_icon = view()->search_icon()->GetImage();
 
@@ -362,12 +332,12 @@ TEST_P(SearchBoxViewTest, SearchBoxInactiveSearchBoxGoogle) {
 }
 
 // Tests that the colored Google icon is used for an active Google search.
-TEST_P(SearchBoxViewTest, SearchBoxActiveSearchEngineGoogle) {
+TEST_F(SearchBoxViewTest, SearchBoxActiveSearchEngineGoogle) {
   SetSearchEngineIsGoogle(true);
   SetSearchBoxActive(true, ui::ET_MOUSE_PRESSED);
   const gfx::ImageSkia expected_icon = gfx::CreateVectorIcon(
       vector_icons::kGoogleColorIcon, view()->GetSearchBoxIconSize(),
-      kDefaultSearchboxColor);
+      view()->GetColorProvider()->GetColor(kColorAshButtonIconColor));
 
   const gfx::ImageSkia actual_icon = view()->search_icon()->GetImage();
 
@@ -376,12 +346,12 @@ TEST_P(SearchBoxViewTest, SearchBoxActiveSearchEngineGoogle) {
 }
 
 // Tests that the non-Google icon is used for an inactive non-Google search.
-TEST_P(SearchBoxViewTest, SearchBoxInactiveSearchEngineNotGoogle) {
+TEST_F(SearchBoxViewTest, SearchBoxInactiveSearchEngineNotGoogle) {
   SetSearchEngineIsGoogle(false);
   SetSearchBoxActive(false, ui::ET_UNKNOWN);
   const gfx::ImageSkia expected_icon = gfx::CreateVectorIcon(
       kSearchEngineNotGoogleIcon, view()->GetSearchBoxIconSize(),
-      kDefaultSearchboxColor);
+      view()->GetColorProvider()->GetColor(kColorAshButtonIconColor));
 
   const gfx::ImageSkia actual_icon = view()->search_icon()->GetImage();
 
@@ -390,12 +360,12 @@ TEST_P(SearchBoxViewTest, SearchBoxInactiveSearchEngineNotGoogle) {
 }
 
 // Tests that the non-Google icon is used for an active non-Google search.
-TEST_P(SearchBoxViewTest, SearchBoxActiveSearchEngineNotGoogle) {
+TEST_F(SearchBoxViewTest, SearchBoxActiveSearchEngineNotGoogle) {
   SetSearchEngineIsGoogle(false);
   SetSearchBoxActive(true, ui::ET_UNKNOWN);
   const gfx::ImageSkia expected_icon = gfx::CreateVectorIcon(
       kSearchEngineNotGoogleIcon, view()->GetSearchBoxIconSize(),
-      kDefaultSearchboxColor);
+      view()->GetColorProvider()->GetColor(kColorAshButtonIconColor));
 
   const gfx::ImageSkia actual_icon = view()->search_icon()->GetImage();
 
@@ -405,18 +375,18 @@ TEST_P(SearchBoxViewTest, SearchBoxActiveSearchEngineNotGoogle) {
 
 // Tests that traversing search results is disabled while results are being
 // updated.
-TEST_P(SearchBoxViewTest, ChangeSelectionWhileResultsAreChanging) {
-  SetSearchBoxActive(true, ui::ET_UNKNOWN);
-  view()->search_box()->SetText(u"test");
+TEST_F(SearchBoxViewTest, ChangeSelectionWhileResultsAreChanging) {
+  SimulateQuery(u"test");
   CreateSearchResult(ash::SearchResultDisplayType::kList, 0.7, u"tester",
-                     std::u16string());
+                     std::u16string(), ash::AppListSearchResultCategory::kWeb);
   CreateSearchResult(ash::SearchResultDisplayType::kList, 0.5, u"testing",
-                     std::u16string());
+                     std::u16string(), ash::AppListSearchResultCategory::kWeb);
   base::RunLoop().RunUntilIdle();
 
   const SearchResultBaseView* selection =
       GetResultSelectionController()->selected_result();
 
+  ASSERT_TRUE(selection);
   EXPECT_EQ(GetFirstResultView(), selection);
   ASSERT_TRUE(selection->result());
   EXPECT_EQ(u"tester", selection->result()->title());
@@ -424,7 +394,8 @@ TEST_P(SearchBoxViewTest, ChangeSelectionWhileResultsAreChanging) {
   // Add a new result - the selection controller is updated asynchronously, so
   // the result is expected to remain the same until the loop is run.
   CreateSearchResultAt(0, ash::SearchResultDisplayType::kList, 1., u"test",
-                       std::u16string());
+                       std::u16string(),
+                       ash::AppListSearchResultCategory::kWeb);
   EXPECT_EQ(selection, GetResultSelectionController()->selected_result());
   EXPECT_EQ(u"tester", selection->result()->title());
 
@@ -451,13 +422,13 @@ TEST_P(SearchBoxViewTest, ChangeSelectionWhileResultsAreChanging) {
 
 // Tests that traversing search results is disabled while the result that would
 // be selected next is being removed from results.
-TEST_P(SearchBoxViewTest, ChangeSelectionWhileResultsAreBeingRemoved) {
-  SetSearchBoxActive(true, ui::ET_UNKNOWN);
-  view()->search_box()->SetText(u"test");
+TEST_F(SearchBoxViewTest, ChangeSelectionWhileResultsAreBeingRemoved) {
+  SimulateQuery(u"test");
+
   CreateSearchResult(ash::SearchResultDisplayType::kList, 0.7, u"tester",
-                     std::u16string());
+                     std::u16string(), ash::AppListSearchResultCategory::kWeb);
   CreateSearchResult(ash::SearchResultDisplayType::kList, 0.5, u"testing",
-                     std::u16string());
+                     std::u16string(), ash::AppListSearchResultCategory::kWeb);
   base::RunLoop().RunUntilIdle();
 
   const SearchResultBaseView* selection =
@@ -472,7 +443,7 @@ TEST_P(SearchBoxViewTest, ChangeSelectionWhileResultsAreBeingRemoved) {
   // the loop is run.
   results()->RemoveAll();
   CreateSearchResult(ash::SearchResultDisplayType::kList, 1., u"test",
-                     std::u16string());
+                     std::u16string(), ash::AppListSearchResultCategory::kWeb);
   EXPECT_EQ(selection, GetResultSelectionController()->selected_result());
   EXPECT_FALSE(selection->result());
 
@@ -493,13 +464,12 @@ TEST_P(SearchBoxViewTest, ChangeSelectionWhileResultsAreBeingRemoved) {
   EXPECT_FALSE(GetResultSelectionController()->selected_result());
 }
 
-TEST_P(SearchBoxViewTest, UserSelectionNotOverridenByNewResults) {
-  SetSearchBoxActive(true, ui::ET_UNKNOWN);
-  view()->search_box()->SetText(u"test");
+TEST_F(SearchBoxViewTest, UserSelectionNotOverridenByNewResults) {
+  SimulateQuery(u"test");
   CreateSearchResult(ash::SearchResultDisplayType::kList, 0.7, u"tester",
-                     std::u16string());
+                     std::u16string(), ash::AppListSearchResultCategory::kWeb);
   CreateSearchResult(ash::SearchResultDisplayType::kList, 0.5, u"testing",
-                     std::u16string());
+                     std::u16string(), ash::AppListSearchResultCategory::kWeb);
   base::RunLoop().RunUntilIdle();
 
   const SearchResultBaseView* selection =
@@ -517,7 +487,8 @@ TEST_P(SearchBoxViewTest, UserSelectionNotOverridenByNewResults) {
 
   // Add a new result - verify the selected result remains the same.
   CreateSearchResultAt(0, ash::SearchResultDisplayType::kList, 0.9, u"test1",
-                       std::u16string());
+                       std::u16string(),
+                       ash::AppListSearchResultCategory::kWeb);
   // Finish results update.
   base::RunLoop().RunUntilIdle();
 
@@ -526,7 +497,8 @@ TEST_P(SearchBoxViewTest, UserSelectionNotOverridenByNewResults) {
 
   // Add a new result at the end, and verify the selection stays the same.
   CreateSearchResult(ash::SearchResultDisplayType::kList, 0.2,
-                     u"testing almost", std::u16string());
+                     u"testing almost", std::u16string(),
+                     ash::AppListSearchResultCategory::kWeb);
   base::RunLoop().RunUntilIdle();
 
   selection = GetResultSelectionController()->selected_result();
@@ -554,21 +526,21 @@ TEST_P(SearchBoxViewTest, UserSelectionNotOverridenByNewResults) {
 
   // New result can override the default selection.
   CreateSearchResultAt(0, ash::SearchResultDisplayType::kList, 1.0, u"test",
-                       std::u16string());
+                       std::u16string(),
+                       ash::AppListSearchResultCategory::kWeb);
   base::RunLoop().RunUntilIdle();
 
   selection = GetResultSelectionController()->selected_result();
   EXPECT_EQ(u"test", selection->result()->title());
 }
 
-TEST_P(SearchBoxViewTest,
+TEST_F(SearchBoxViewTest,
        UserSelectionInNonDefaultContainerNotOverridenByNewResults) {
-  SetSearchBoxActive(true, ui::ET_UNKNOWN);
-  view()->search_box()->SetText(u"test");
+  SimulateQuery(u"test");
   CreateSearchResult(ash::SearchResultDisplayType::kList, 0.7, u"tester",
-                     std::u16string());
+                     std::u16string(), ash::AppListSearchResultCategory::kWeb);
   CreateSearchResult(ash::SearchResultDisplayType::kList, 0.5, u"testing",
-                     std::u16string());
+                     std::u16string(), ash::AppListSearchResultCategory::kWeb);
   base::RunLoop().RunUntilIdle();
 
   const SearchResultBaseView* selection =
@@ -584,22 +556,10 @@ TEST_P(SearchBoxViewTest,
   selection = GetResultSelectionController()->selected_result();
   EXPECT_EQ(u"testing", selection->result()->title());
 
-  // Tile containers are deprecated for productivity launcher.
-  if (!IsProductivityLauncherEnabled()) {
-    // Add a new result in a tile container - verify the selected result remains
-    // the same.
-    CreateSearchResultAt(0, ash::SearchResultDisplayType::kTile, 0.9,
-                         u"test tile", std::u16string());
-    // Finish results update.
-    base::RunLoop().RunUntilIdle();
-
-    selection = GetResultSelectionController()->selected_result();
-    EXPECT_EQ(u"testing", selection->result()->title());
-  }
-
   // Add a new result at the end, and verify the selection stays the same.
   CreateSearchResult(ash::SearchResultDisplayType::kList, 0.2,
-                     u"testing almost", std::u16string());
+                     u"testing almost", std::u16string(),
+                     ash::AppListSearchResultCategory::kWeb);
   base::RunLoop().RunUntilIdle();
 
   selection = GetResultSelectionController()->selected_result();
@@ -607,31 +567,25 @@ TEST_P(SearchBoxViewTest,
 
   // Remove the result before the selected one, and verify the selection remains
   // the same.
-  results()->RemoveAt(IsProductivityLauncherEnabled() ? 0 : 1);
+  results()->RemoveAt(0);
   base::RunLoop().RunUntilIdle();
 
   selection = GetResultSelectionController()->selected_result();
   EXPECT_EQ(u"testing", selection->result()->title());
 
   // Result should be reset if the selected result is removed.
-  results()->RemoveAt(IsProductivityLauncherEnabled() ? 0 : 1);
+  results()->RemoveAt(0);
   base::RunLoop().RunUntilIdle();
 
   // Tile results are not created when testing productivity launcher.
   selection = GetResultSelectionController()->selected_result();
-  if (IsProductivityLauncherEnabled()) {
-    EXPECT_EQ(u"testing almost", selection->result()->title());
 
-    // New result can override the default selection.
-    CreateSearchResultAt(0, ash::SearchResultDisplayType::kList, 1.0, u"test",
-                         std::u16string());
-  } else {
-    EXPECT_EQ(u"test tile", selection->result()->title());
+  EXPECT_EQ(u"testing almost", selection->result()->title());
 
-    // New result can override the default selection.
-    CreateSearchResultAt(0, ash::SearchResultDisplayType::kTile, 1.0, u"test",
-                         std::u16string());
-  }
+  // New result can override the default selection.
+  CreateSearchResultAt(0, ash::SearchResultDisplayType::kList, 1.0, u"test",
+                       std::u16string(),
+                       ash::AppListSearchResultCategory::kWeb);
   base::RunLoop().RunUntilIdle();
 
   selection = GetResultSelectionController()->selected_result();
@@ -640,13 +594,12 @@ TEST_P(SearchBoxViewTest,
 
 // Tests that the default selection is reset after resetting and reactivating
 // the search box.
-TEST_P(SearchBoxViewTest, ResetSelectionAfterResettingSearchBox) {
-  SetSearchBoxActive(true, ui::ET_UNKNOWN);
-  view()->search_box()->SetText(u"test");
+TEST_F(SearchBoxViewTest, ResetSelectionAfterResettingSearchBox) {
+  SimulateQuery(u"test");
   CreateSearchResult(ash::SearchResultDisplayType::kList, 0.7, u"test1",
-                     std::u16string());
+                     std::u16string(), ash::AppListSearchResultCategory::kWeb);
   CreateSearchResult(ash::SearchResultDisplayType::kList, 0.5, u"test2",
-                     std::u16string());
+                     std::u16string(), ash::AppListSearchResultCategory::kWeb);
   base::RunLoop().RunUntilIdle();
 
   auto* result_selection_controller = GetResultSelectionController();
@@ -679,22 +632,9 @@ TEST_P(SearchBoxViewTest, ResetSelectionAfterResettingSearchBox) {
   // Reset the search box.
   view()->ClearSearchAndDeactivateSearchBox();
   SetSearchBoxActive(true, ui::ET_UNKNOWN);
-
-  // Productivity launcher search results are not shown when the search box
-  // is empty. Tested elsewhere.
-  if (IsProductivityLauncherEnabled())
-    return;
-
-  OnSearchResultContainerResultsChanged();
-  // Selection should again reset on the first result, which is default.
-  selection = result_selection_controller->selected_result();
-  EXPECT_EQ(GetFirstResultView(), selection);
-  ASSERT_TRUE(selection->result());
-  EXPECT_EQ(u"test1", selection->result()->title());
-  EXPECT_TRUE(selection->is_default_result());
 }
 
-TEST_P(SearchBoxViewTest, NewSearchQueryActionRecordedWhenUserType) {
+TEST_F(SearchBoxViewTest, NewSearchQueryActionRecordedWhenUserType) {
   base::UserActionTester user_action_tester;
   // User starts to type a character in search box.
   KeyPress(ui::VKEY_A);
@@ -709,185 +649,6 @@ TEST_P(SearchBoxViewTest, NewSearchQueryActionRecordedWhenUserType) {
   KeyPress(ui::VKEY_BACK);
   KeyPress(ui::VKEY_C);
   EXPECT_EQ(2, user_action_tester.GetActionCount("AppList_SearchQueryStarted"));
-}
-
-TEST_P(SearchBoxViewTest, NavigateSuggestedContentInfo) {
-  // PrivacyContainerViews are deprecated for productivity launcher.
-  if (IsProductivityLauncherEnabled())
-    return;
-  // Create a new contents view that contains a suggested content info.
-  view_delegate()->SetShouldShowSuggestedContentInfo(true);
-  auto* contents_view = widget()->GetContentsView()->AddChildView(
-      std::make_unique<KeyPressCounterView>(app_list_view()));
-  contents_view->Init();
-  SetContentsView(contents_view);
-
-  PrivacyContainerView* const privacy_container_view =
-      contents_view->search_result_page_view()
-          ->GetPrivacyContainerViewForTest();
-  ASSERT_TRUE(privacy_container_view);
-
-  // Set up the search box.
-  SetSearchBoxActive(true, ui::ET_UNKNOWN);
-  CreateSearchResult(ash::SearchResultDisplayType::kList, 1.0, u"test",
-                     std::u16string());
-  base::RunLoop().RunUntilIdle();
-
-  ResultSelectionController* const selection_controller =
-      GetResultSelectionController();
-
-  // The privacy view should be selected by default.
-  const SearchResultBaseView* selection =
-      selection_controller->selected_result();
-  EXPECT_TRUE(selection);
-  EXPECT_TRUE(selection->is_default_result());
-  EXPECT_EQ(selection, privacy_container_view->GetResultViewAt(0));
-
-  // The privacy view should have one additional action.
-  KeyPress(ui::VKEY_TAB);
-  selection = selection_controller->selected_result();
-  EXPECT_EQ(selection, privacy_container_view->GetResultViewAt(0));
-
-  KeyPress(ui::VKEY_TAB);
-  selection = selection_controller->selected_result();
-  ASSERT_TRUE(selection->result());
-  EXPECT_EQ(selection->result()->title(), u"test");
-
-  // The privacy notice should also have two actions when navigating backwards.
-  KeyPress(ui::VKEY_TAB, /*is_shift_down=*/true);
-  selection = selection_controller->selected_result();
-  EXPECT_EQ(selection, privacy_container_view->GetResultViewAt(0));
-
-  KeyPress(ui::VKEY_TAB, /*is_shift_down=*/true);
-  selection = selection_controller->selected_result();
-  EXPECT_EQ(selection, privacy_container_view->GetResultViewAt(0));
-
-  KeyPress(ui::VKEY_TAB, /*is_shift_down=*/true);
-  selection = selection_controller->selected_result();
-  EXPECT_FALSE(selection);
-}
-
-TEST_P(SearchBoxViewTest, KeyboardEventClosesSuggestedContentInfo) {
-  // PrivacyContainerViews are deprecated for productivity launcher.
-  if (IsProductivityLauncherEnabled())
-    return;
-  // Create a new contents view that contains a suggested content info.
-  view_delegate()->SetShouldShowSuggestedContentInfo(true);
-  auto* contents_view = widget()->GetContentsView()->AddChildView(
-      std::make_unique<KeyPressCounterView>(app_list_view()));
-  contents_view->Init();
-  SetContentsView(contents_view);
-
-  PrivacyContainerView* const privacy_container_view =
-      contents_view->search_result_page_view()
-          ->GetPrivacyContainerViewForTest();
-  ASSERT_TRUE(privacy_container_view);
-
-  // Set up the search box.
-  SetSearchBoxActive(true, ui::ET_UNKNOWN);
-  CreateSearchResult(ash::SearchResultDisplayType::kList, 1.0, u"test",
-                     std::u16string());
-  base::RunLoop().RunUntilIdle();
-
-  EXPECT_EQ(contents_view->search_result_page_view()
-                ->result_selection_controller()
-                ->selected_result(),
-            privacy_container_view->GetResultViewAt(0));
-
-  // Navigate to the close button and press enter. The suggested content info
-  // should no longer be shown.
-  KeyPress(ui::VKEY_TAB);
-  KeyPress(ui::VKEY_RETURN);
-  EXPECT_FALSE(view_delegate()->ShouldShowSuggestedContentInfo());
-}
-
-TEST_P(SearchBoxViewTest, SuggestedContentActionNotOverriddenByNewResults) {
-  // PrivacyContainerView is being deprecated for Productivity Launcher.
-  if (IsProductivityLauncherEnabled())
-    return;
-  // Create a new contents view that contains a privacy notice.
-  view_delegate()->SetShouldShowSuggestedContentInfo(true);
-  auto* contents_view = widget()->GetContentsView()->AddChildView(
-      std::make_unique<KeyPressCounterView>(app_list_view()));
-  contents_view->Init();
-  SetContentsView(contents_view);
-
-  PrivacyContainerView* const privacy_container_view =
-      contents_view->search_result_page_view()
-          ->GetPrivacyContainerViewForTest();
-  ASSERT_TRUE(privacy_container_view);
-
-  // Set up the search box.
-  SetSearchBoxActive(true, ui::ET_UNKNOWN);
-  CreateSearchResult(ash::SearchResultDisplayType::kList, 1.0, u"test",
-                     std::u16string());
-  base::RunLoop().RunUntilIdle();
-
-  ResultSelectionController* const selection_controller =
-      contents_view->search_result_page_view()->result_selection_controller();
-  const SearchResultBaseView* selection =
-      selection_controller->selected_result();
-  EXPECT_EQ(selection, privacy_container_view->GetResultViewAt(0));
-
-  // The privacy view should have one additional action. Tab to the next privacy
-  // view action.
-  KeyPress(ui::VKEY_TAB);
-  selection = selection_controller->selected_result();
-  EXPECT_EQ(selection, privacy_container_view->GetResultViewAt(0));
-
-  // Create a new search result. The privacy view should have no actions
-  // remaining.
-  CreateSearchResult(ash::SearchResultDisplayType::kList, 0.5, u"testing",
-                     std::u16string());
-  base::RunLoop().RunUntilIdle();
-
-  KeyPress(ui::VKEY_TAB);
-  selection = selection_controller->selected_result();
-  ASSERT_TRUE(selection);
-  EXPECT_EQ(selection->result()->title(), u"test");
-}
-
-TEST_P(SearchBoxViewTest, SuggestedContentSelectionDoesNotChangeSearchBoxText) {
-  // PrivacyContainerView is being deprecated for Productivity Launcher.
-  if (IsProductivityLauncherEnabled())
-    return;
-  // Create a new contents view that contains a suggested content info.
-  view_delegate()->SetShouldShowSuggestedContentInfo(true);
-  auto* contents_view = widget()->GetContentsView()->AddChildView(
-      std::make_unique<KeyPressCounterView>(app_list_view()));
-  contents_view->Init();
-  SetContentsView(contents_view);
-
-  PrivacyContainerView* const privacy_container_view =
-      contents_view->search_result_page_view()
-          ->GetPrivacyContainerViewForTest();
-  ASSERT_TRUE(privacy_container_view);
-
-  // Set up the search box.
-  SetSearchBoxActive(true, ui::ET_UNKNOWN);
-  CreateSearchResult(ash::SearchResultDisplayType::kList, 1.0, u"test",
-                     std::u16string());
-  base::RunLoop().RunUntilIdle();
-
-  ResultSelectionController* const selection_controller =
-      contents_view->search_result_page_view()->result_selection_controller();
-  EXPECT_EQ(selection_controller->selected_result(),
-            privacy_container_view->GetResultViewAt(0));
-  EXPECT_TRUE(view()->search_box()->GetText().empty());
-
-  // Navigate to a search result and back to the privacy notice. The text should
-  // not be reset.
-  KeyPress(ui::VKEY_DOWN);
-  const SearchResultBaseView* selection =
-      selection_controller->selected_result();
-  ASSERT_TRUE(selection->result());
-  EXPECT_EQ(selection->result()->title(), u"test");
-  EXPECT_EQ(u"test", view()->search_box()->GetText());
-
-  KeyPress(ui::VKEY_UP);
-  EXPECT_EQ(selection_controller->selected_result(),
-            privacy_container_view->GetResultViewAt(0));
-  EXPECT_EQ(u"test", view()->search_box()->GetText());
 }
 
 class SearchBoxViewAssistantButtonTest : public SearchBoxViewTest {
@@ -906,32 +667,52 @@ class SearchBoxViewAssistantButtonTest : public SearchBoxViewTest {
   }
 };
 
-// Run search box view assistant button tests with and without productivity
-// launcher enabled.
-INSTANTIATE_TEST_SUITE_P(All,
-                         SearchBoxViewAssistantButtonTest,
-                         testing::Bool());
-
 // Tests that the assistant button is visible by default.
-TEST_P(SearchBoxViewAssistantButtonTest, AssistantButtonVisibleByDefault) {
-  EXPECT_TRUE(view()->assistant_button()->GetVisible());
+TEST_F(SearchBoxViewAssistantButtonTest, AssistantButtonVisibleByDefault) {
+  EXPECT_TRUE(view()->assistant_button_container()->GetVisible());
 }
 
 // Tests that the assistant button is invisible after typing in the search box,
 // and comes back when search box is empty.
-TEST_P(SearchBoxViewAssistantButtonTest,
+TEST_F(SearchBoxViewAssistantButtonTest,
        AssistantButtonChangeVisibilityWithTyping) {
   KeyPress(ui::VKEY_A);
-  EXPECT_FALSE(view()->assistant_button()->GetVisible());
+  EXPECT_FALSE(view()->assistant_button_container()->GetVisible());
 
-  // Assistant button is not showing up under zero state.
   KeyPress(ui::VKEY_BACK);
-  EXPECT_FALSE(view()->assistant_button()->GetVisible());
+  EXPECT_TRUE(view()->assistant_button_container()->GetVisible());
+}
+
+class SearchBoxViewFilterButtonTest : public SearchBoxViewTest {
+ public:
+  SearchBoxViewFilterButtonTest() {
+    scoped_feature_list_.Reset();
+    scoped_feature_list_.InitWithFeatures(
+        {chromeos::features::kJelly, features::kLauncherSearchControl}, {});
+  }
+  SearchBoxViewFilterButtonTest(const SearchBoxViewFilterButtonTest&) = delete;
+  SearchBoxViewFilterButtonTest& operator=(
+      const SearchBoxViewFilterButtonTest&) = delete;
+  ~SearchBoxViewFilterButtonTest() override = default;
+};
+
+// Tests that the filter button is invisible by default.
+TEST_F(SearchBoxViewFilterButtonTest, FilterButtonInvisibleByDefault) {
+  EXPECT_FALSE(view()->filter_button()->parent()->GetVisible());
+}
+
+// Tests that the filter button becomes visible after typing in the search box.
+TEST_F(SearchBoxViewFilterButtonTest, FilterButtonVisibleAfterTyping) {
+  KeyPress(ui::VKEY_A);
+  EXPECT_TRUE(view()->filter_button()->parent()->GetVisible());
 }
 
 class SearchBoxViewAutocompleteTest : public SearchBoxViewTest {
  public:
-  SearchBoxViewAutocompleteTest() = default;
+  SearchBoxViewAutocompleteTest() {
+    scoped_feature_list_.Reset();
+    scoped_feature_list_.InitAndEnableFeature(chromeos::features::kJelly);
+  }
   SearchBoxViewAutocompleteTest(const SearchBoxViewAutocompleteTest&) = delete;
   SearchBoxViewAutocompleteTest& operator=(
       const SearchBoxViewAutocompleteTest&) = delete;
@@ -944,143 +725,91 @@ class SearchBoxViewAutocompleteTest : public SearchBoxViewTest {
   // Sets up the test by creating a SearchResult and displaying an autocomplete
   // suggestion.
   void SetupAutocompleteBehaviorTest() {
-    // Add a search result with a non-empty title field.
-    CreateSearchResult(ash::SearchResultDisplayType::kList, 1.0,
-                       u"hello world!", std::u16string());
-    base::RunLoop().RunUntilIdle();
-
     // Send H, E to the SearchBoxView textfield, then trigger an autocomplete.
     KeyPress(ui::VKEY_H);
     KeyPress(ui::VKEY_E);
+    // Add a search result with a non-empty title field.
+    CreateSearchResult(ash::SearchResultDisplayType::kList, 1.0,
+                       u"hello world!", std::u16string(),
+                       ash::AppListSearchResultCategory::kWeb);
+    base::RunLoop().RunUntilIdle();
     ProcessAutocomplete();
   }
 };
 
-// Run search box view autocomplete tests with and without productivity launcher
-// enabled.
-INSTANTIATE_TEST_SUITE_P(All, SearchBoxViewAutocompleteTest, testing::Bool());
-
 // Tests that autocomplete suggestions are consistent with top SearchResult list
 // titles.
-TEST_P(SearchBoxViewAutocompleteTest,
+TEST_F(SearchBoxViewAutocompleteTest,
        SearchBoxAutocompletesTopListResultTitle) {
-  // Search result tile tests are not relevant for productivity launcher.
-  if (IsProductivityLauncherEnabled())
-    return;
-  // Add two SearchResults, one tile and one list result. Initialize their title
-  // field to a non-empty string.
-  CreateSearchResult(ash::SearchResultDisplayType::kList, 1.0, u"hello list",
-                     std::u16string());
-  CreateSearchResult(ash::SearchResultDisplayType::kTile, 0.5, u"hello tile",
-                     std::u16string());
+  SimulateQuery(u"he");
+
+  // Add two SearchResults. The higher ranked result should be selected by
+  // default and it's title should be autocompleted into the search box.
+  CreateSearchResult(ash::SearchResultDisplayType::kList, 2.0, u"hello list",
+                     std::u16string(), ash::AppListSearchResultCategory::kWeb);
+  CreateSearchResult(ash::SearchResultDisplayType::kList, 1.0, u"hello list2",
+                     std::u16string(), ash::AppListSearchResultCategory::kApps);
   base::RunLoop().RunUntilIdle();
 
-  // Send H, E to the SearchBoxView textfield, then trigger an autocomplete.
-  KeyPress(ui::VKEY_H);
-  KeyPress(ui::VKEY_E);
   ProcessAutocomplete();
+  EXPECT_EQ(view()->search_box()->GetText(), u"hello list");
+  EXPECT_EQ(view()->search_box()->GetSelectedText(), u"llo list");
 
-  EXPECT_EQ(view()->search_box()->GetText(), u"hello tile");
-  EXPECT_EQ(view()->search_box()->GetSelectedText(), u"llo tile");
-}
-
-// Tests that autocomplete suggestions are consistent with top SearchResult tile
-// titles.
-TEST_P(SearchBoxViewAutocompleteTest,
-       SearchBoxAutocompletesTopTileResultTitle) {
-  // Search result tile tests are not relevant for productivity launcher.
-  if (IsProductivityLauncherEnabled())
-    return;
-  // Add two SearchResults, one tile and one list result. Initialize their title
-  // field to a non-empty string.
-  CreateSearchResult(ash::SearchResultDisplayType::kTile, 1.0, u"hello tile",
-                     std::u16string());
-  CreateSearchResult(ash::SearchResultDisplayType::kList, 0.5, u"hello list",
-                     std::u16string());
-  base::RunLoop().RunUntilIdle();
-
-  // Send H, E to the SearchBoxView textfield, then trigger an autocomplete.
-  KeyPress(ui::VKEY_H);
-  KeyPress(ui::VKEY_E);
-  ProcessAutocomplete();
-  EXPECT_EQ(view()->search_box()->GetText(), u"hello tile");
-  EXPECT_EQ(view()->search_box()->GetSelectedText(), u"llo tile");
+  EXPECT_EQ("Websites", view()->GetSearchBoxGhostTextForTest());
+  KeyPress(ui::VKEY_DOWN);
+  EXPECT_EQ("Apps", view()->GetSearchBoxGhostTextForTest());
 }
 
 // Tests that autocomplete suggestions are consistent with top SearchResult list
 // details.
-TEST_P(SearchBoxViewAutocompleteTest,
+TEST_F(SearchBoxViewAutocompleteTest,
        SearchBoxAutocompletesTopListResultDetails) {
-  // Search result tile tests are not relevant for productivity launcher.
-  if (IsProductivityLauncherEnabled())
-    return;
-  // Add two SearchResults, one tile and one list result. The tile should
-  // display first, despite having a lower score. Initialize their details field
-  // to a non-empty string.
+  SimulateQuery(u"he");
+
+  // Add two SearchResults. The higher ranked result should be selected by
+  // default and it's title should be autocompleted into the search box.
+  CreateSearchResult(ash::SearchResultDisplayType::kList, 2.0, std::u16string(),
+                     u"hello list", ash::AppListSearchResultCategory::kWeb);
   CreateSearchResult(ash::SearchResultDisplayType::kList, 1.0, std::u16string(),
-                     u"hello list");
-  CreateSearchResult(ash::SearchResultDisplayType::kTile, 0.5, std::u16string(),
-                     u"hello tile");
+                     u"hello list2", ash::AppListSearchResultCategory::kApps);
   base::RunLoop().RunUntilIdle();
 
-  // Send H, E to the SearchBoxView textfield, then trigger an autocomplete.
-  KeyPress(ui::VKEY_H);
-  KeyPress(ui::VKEY_E);
   ProcessAutocomplete();
-  EXPECT_EQ(view()->search_box()->GetText(), u"hello tile");
-  EXPECT_EQ(view()->search_box()->GetSelectedText(), u"llo tile");
-}
+  EXPECT_EQ(view()->search_box()->GetText(), u"hello list");
+  EXPECT_EQ(view()->search_box()->GetSelectedText(), u"llo list");
 
-// Tests that autocomplete suggestions are consistent with top SearchResult tile
-// details.
-TEST_P(SearchBoxViewAutocompleteTest,
-       SearchBoxAutocompletesTopTileResultDetails) {
-  // Search result tile tests are not relevant for productivity launcher.
-  if (IsProductivityLauncherEnabled())
-    return;
-  // Add two SearchResults, one tile and one list result. Initialize their
-  // details field to a non-empty string.
-  CreateSearchResult(ash::SearchResultDisplayType::kTile, 1.0, std::u16string(),
-                     u"hello tile");
-  CreateSearchResult(ash::SearchResultDisplayType::kList, 0.5, std::u16string(),
-                     u"hello list");
-  base::RunLoop().RunUntilIdle();
-
-  // Send H, E to the SearchBoxView textfield, then trigger an autocomplete.
-  KeyPress(ui::VKEY_H);
-  KeyPress(ui::VKEY_E);
-  ProcessAutocomplete();
-  EXPECT_EQ(view()->search_box()->GetText(), u"hello tile");
-  EXPECT_EQ(view()->search_box()->GetSelectedText(), u"llo tile");
+  EXPECT_EQ("Websites", view()->GetSearchBoxGhostTextForTest());
+  KeyPress(ui::VKEY_DOWN);
+  EXPECT_EQ("Apps", view()->GetSearchBoxGhostTextForTest());
 }
 
 // Tests that SearchBoxView's textfield text does not autocomplete if the top
 // result title or details do not have a matching prefix.
-TEST_P(SearchBoxViewAutocompleteTest,
+TEST_F(SearchBoxViewAutocompleteTest,
        SearchBoxDoesNotAutocompleteWrongCharacter) {
+  // Send ABC to the SearchBoxView textfield, then trigger an autocomplete.
+  KeyPress(ui::VKEY_A);
+  KeyPress(ui::VKEY_B);
+  KeyPress(ui::VKEY_C);
   // Add a search result with non-empty details and title fields.
   CreateSearchResult(ash::SearchResultDisplayType::kList, 1.0, u"title",
-                     u"details");
+                     u"details", ash::AppListSearchResultCategory::kWeb);
   base::RunLoop().RunUntilIdle();
-
-  // Send Z to the SearchBoxView textfield, then trigger an autocomplete.
-  KeyPress(ui::VKEY_Z);
   ProcessAutocomplete();
   // The text should not be autocompleted.
-  EXPECT_EQ(view()->search_box()->GetText(), u"z");
+  EXPECT_EQ(view()->search_box()->GetText(), u"abc");
+
+  EXPECT_EQ("title - Websites", view()->GetSearchBoxGhostTextForTest());
 }
 
 // Tests that autocomplete suggestion will remain if next key in the suggestion
 // is typed.
-TEST_P(SearchBoxViewAutocompleteTest, SearchBoxAutocompletesAcceptsNextChar) {
+TEST_F(SearchBoxViewAutocompleteTest, SearchBoxAutocompletesAcceptsNextChar) {
+  SimulateQuery(u"he");
   // Add a search result with a non-empty title field.
   CreateSearchResult(ash::SearchResultDisplayType::kList, 1.0, u"hello world!",
-                     std::u16string());
+                     std::u16string(), ash::AppListSearchResultCategory::kWeb);
   base::RunLoop().RunUntilIdle();
-
-  // Send H, E to the SearchBoxView textfield, then trigger an autocomplete.
-  KeyPress(ui::VKEY_H);
-  KeyPress(ui::VKEY_E);
   ProcessAutocomplete();
 
   // After typing L, the highlighted text will be replaced by L.
@@ -1094,11 +823,13 @@ TEST_P(SearchBoxViewAutocompleteTest, SearchBoxAutocompletesAcceptsNextChar) {
   selected_text = view()->search_box()->GetSelectedText();
   EXPECT_EQ(view()->search_box()->GetText(), u"hello world!");
   EXPECT_EQ(u"lo world!", selected_text);
+
+  EXPECT_EQ("Websites", view()->GetSearchBoxGhostTextForTest());
 }
 
 // Tests that autocomplete suggestion is accepted and displayed in SearchModel
 // after clicking or tapping on the search box.
-TEST_P(SearchBoxViewAutocompleteTest, SearchBoxAcceptsAutocompleteForClick) {
+TEST_F(SearchBoxViewAutocompleteTest, SearchBoxAcceptsAutocompleteForClick) {
   SetupAutocompleteBehaviorTest();
 
   ui::MouseEvent mouse_event(ui::ET_MOUSE_PRESSED, gfx::Point(), gfx::Point(),
@@ -1110,13 +841,14 @@ TEST_P(SearchBoxViewAutocompleteTest, SearchBoxAcceptsAutocompleteForClick) {
   // AshTestBase in order to test events using EventGenerator instead.
   static_cast<views::TextfieldController*>(view())->HandleMouseEvent(
       view()->search_box(), mouse_event);
-  // Search box autocomplete suggestion is accepted, but it should not
-  // trigger another query, thus it is not reflected in Search Model.
+  // Search box autocomplete suggestion is accepted, and triggers another query.
   EXPECT_EQ(u"hello world!", view()->search_box()->GetText());
-  EXPECT_EQ(u"he", GetSearchModel()->search_box()->text());
+  EXPECT_EQ(u"hello world!", view()->current_query());
+  EXPECT_EQ(u"", view()->search_box()->GetSelectedText());
+  EXPECT_EQ("", view()->GetSearchBoxGhostTextForTest());
 }
 
-TEST_P(SearchBoxViewAutocompleteTest, SearchBoxAcceptsAutocompleteForTap) {
+TEST_F(SearchBoxViewAutocompleteTest, SearchBoxAcceptsAutocompleteForTap) {
   SetupAutocompleteBehaviorTest();
 
   ui::GestureEvent gesture_event(0, 0, 0, ui::EventTimeForNow(),
@@ -1129,23 +861,59 @@ TEST_P(SearchBoxViewAutocompleteTest, SearchBoxAcceptsAutocompleteForTap) {
   // EventGenerator instead.
   static_cast<views::TextfieldController*>(view())->HandleGestureEvent(
       view()->search_box(), gesture_event);
-  // Search box autocomplete suggestion is accepted, but it should not
-  // trigger another query, thus it is not reflected in Search Model.
+  // Search box autocomplete suggestion is accepted, and trigger updated query.
   EXPECT_EQ(u"hello world!", view()->search_box()->GetText());
-  EXPECT_EQ(u"he", GetSearchModel()->search_box()->text());
+  EXPECT_EQ(u"hello world!", view()->current_query());
+  EXPECT_EQ(u"", view()->search_box()->GetSelectedText());
+  EXPECT_EQ("", view()->GetSearchBoxGhostTextForTest());
+}
+
+TEST_F(SearchBoxViewAutocompleteTest, SearchBoxAcceptsAutocompleteForRightKey) {
+  SetupAutocompleteBehaviorTest();
+
+  KeyPress(ui::VKEY_RIGHT);
+
+  // Search box autocomplete suggestion is accepted, and trigger updated query.
+  EXPECT_EQ(u"hello world!", view()->search_box()->GetText());
+  EXPECT_EQ(u"hello world!", view()->current_query());
+  EXPECT_EQ(u"", view()->search_box()->GetSelectedText());
+  EXPECT_EQ("", view()->GetSearchBoxGhostTextForTest());
+
+  CreateSearchResult(ash::SearchResultDisplayType::kList, 0.5, u"hello world 1",
+                     std::u16string(), ash::AppListSearchResultCategory::kApps);
+  CreateSearchResult(ash::SearchResultDisplayType::kList, 0.5,
+                     u"hello world! 123", std::u16string(),
+                     ash::AppListSearchResultCategory::kWeb);
+  base::RunLoop().RunUntilIdle();
+
+  // Change selection to the non-default item, and verify the search box text is
+  // updated as expected.
+  KeyPress(ui::VKEY_DOWN);
+
+  EXPECT_EQ(u"hello world!", view()->search_box()->GetText());
+  EXPECT_EQ(u"hello world!", view()->current_query());
+  EXPECT_EQ(u"", view()->search_box()->GetSelectedText());
+  EXPECT_EQ("hello world 1 - Apps", view()->GetSearchBoxGhostTextForTest());
+
+  KeyPress(ui::VKEY_DOWN);
+
+  EXPECT_EQ(u"hello world! 123", view()->search_box()->GetText());
+  EXPECT_EQ(u"hello world!", view()->current_query());
+  EXPECT_EQ(u" 123", view()->search_box()->GetSelectedText());
+  EXPECT_EQ("Websites", view()->GetSearchBoxGhostTextForTest());
 }
 
 // Tests that autocomplete is not handled if IME is using composition text.
-TEST_P(SearchBoxViewAutocompleteTest, SearchBoxAutocompletesNotHandledForIME) {
-  // Add a search result with a non-empty title field.
-  CreateSearchResult(ash::SearchResultDisplayType::kList, 1.0, u"hello world!",
-                     std::u16string());
-  base::RunLoop().RunUntilIdle();
-
+TEST_F(SearchBoxViewAutocompleteTest, SearchBoxAutocompletesNotHandledForIME) {
   // Simulate uncomposited text. The autocomplete should be handled.
   KeyPress(ui::VKEY_H);
   KeyPress(ui::VKEY_E);
   view()->set_highlight_range_for_test(gfx::Range(2, 2));
+  // Add a search result with a non-empty title field.
+  CreateSearchResult(ash::SearchResultDisplayType::kList, 1.0, u"hello world!",
+                     std::u16string(), ash::AppListSearchResultCategory::kWeb);
+  base::RunLoop().RunUntilIdle();
+
   ProcessAutocomplete();
 
   std::u16string selected_text = view()->search_box()->GetSelectedText();
@@ -1163,15 +931,14 @@ TEST_P(SearchBoxViewAutocompleteTest, SearchBoxAutocompletesNotHandledForIME) {
   selected_text = view()->search_box()->GetSelectedText();
   EXPECT_EQ(view()->search_box()->GetText(), u"he");
   EXPECT_EQ(u"", selected_text);
+
+  EXPECT_EQ("", view()->GetSearchBoxGhostTextForTest());
 }
 
-// TODO(crbug.com/1216082): Refactor the above tests to use AshTestBase, then
-// parameterize them based on the ProductivityLauncher flag.
+// TODO(crbug.com/1216082): Refactor the above tests to use AshTestBase.
 class SearchBoxViewAppListBubbleTest : public AshTestBase {
  public:
-  SearchBoxViewAppListBubbleTest() {
-    scoped_features_.InitAndEnableFeature(features::kProductivityLauncher);
-  }
+  SearchBoxViewAppListBubbleTest() = default;
   ~SearchBoxViewAppListBubbleTest() override = default;
 
   static void AddSearchResult(const std::string& id,
@@ -1194,32 +961,7 @@ class SearchBoxViewAppListBubbleTest : public AshTestBase {
     search_result->SetTitle(title);
     search_results->Add(std::move(search_result));
   }
-
-  base::test::ScopedFeatureList scoped_features_;
 };
-
-TEST_F(SearchBoxViewAppListBubbleTest, AutocompleteAnswerCard) {
-  GetAppListTestHelper()->ShowAppList();
-
-  // Type "he".
-  PressAndReleaseKey(ui::VKEY_H);
-  PressAndReleaseKey(ui::VKEY_E);
-
-  // Simulate "hello" being returned as a search result.
-  AddAnswerCardResult("id", u"hello");
-  AddSearchResult("id", u"world");
-  base::RunLoop().RunUntilIdle();  // Allow observer tasks to run.
-
-  // The text autocompletes to "hello" and selects "llo".
-  SearchBoxView* view = GetAppListTestHelper()->GetBubbleSearchBoxView();
-  EXPECT_EQ(view->search_box()->GetText(), u"hello");
-  EXPECT_EQ(view->search_box()->GetSelectedText(), u"llo");
-
-  GetSearchModel()->DeleteAllResults();
-  base::RunLoop().RunUntilIdle();  // Allow observer tasks to run.
-  EXPECT_EQ(view->search_box()->GetText(), u"he");
-  EXPECT_EQ(view->search_box()->GetSelectedText(), u"");
-}
 
 TEST_F(SearchBoxViewAppListBubbleTest, AutocompleteCategoricalResult) {
   GetAppListTestHelper()->ShowAppList();
@@ -1241,6 +983,41 @@ TEST_F(SearchBoxViewAppListBubbleTest, AutocompleteCategoricalResult) {
   GetSearchModel()->DeleteAllResults();
   base::RunLoop().RunUntilIdle();  // Allow observer tasks to run.
   EXPECT_EQ(view->search_box()->GetText(), u"he");
+  EXPECT_EQ(view->search_box()->GetSelectedText(), u"");
+}
+
+TEST_F(SearchBoxViewAppListBubbleTest, DoNotAutocompleteWithMidQueryCursor) {
+  GetAppListTestHelper()->ShowAppList();
+
+  // Type "calculao".
+  PressAndReleaseKey(ui::VKEY_C);
+  PressAndReleaseKey(ui::VKEY_A);
+  PressAndReleaseKey(ui::VKEY_L);
+  PressAndReleaseKey(ui::VKEY_C);
+  PressAndReleaseKey(ui::VKEY_U);
+  PressAndReleaseKey(ui::VKEY_L);
+  PressAndReleaseKey(ui::VKEY_A);
+  PressAndReleaseKey(ui::VKEY_O);
+
+  // Simulate "calculator" being returned as a search result.
+  AddSearchResult("id", u"calculator");
+  base::RunLoop().RunUntilIdle();  // Allow observer tasks to run.
+
+  // The search box does not autocomplete.
+  SearchBoxView* view = GetAppListTestHelper()->GetBubbleSearchBoxView();
+  EXPECT_EQ(view->search_box()->GetText(), u"calculao");
+  EXPECT_EQ(view->search_box()->GetSelectedText(), u"");
+
+  PressAndReleaseKey(ui::VKEY_LEFT);
+  PressAndReleaseKey(ui::VKEY_T);
+
+  GetSearchModel()->DeleteAllResults();
+  base::RunLoop().RunUntilIdle();  // Allow observer tasks to run.
+  AddSearchResult("id", u"calculator");
+  base::RunLoop().RunUntilIdle();  // Allow observer tasks to run.
+
+  // The search box does not autocomplete.
+  EXPECT_EQ(view->search_box()->GetText(), u"calculato");
   EXPECT_EQ(view->search_box()->GetSelectedText(), u"");
 }
 
@@ -1281,11 +1058,25 @@ TEST_F(SearchBoxViewAppListBubbleTest, HasAccessibilityHintWhenActive) {
       view->search_box()->GetAccessibleName()));
 }
 
+class SearchBoxViewTabletTest : public AshTestBase {
+ public:
+  SearchBoxViewTabletTest() = default;
+  ~SearchBoxViewTabletTest() override = default;
+  void SetUp() override {
+    AshTestBase::SetUp();
+    Shell::Get()->tablet_mode_controller()->SetEnabledForTest(true);
+  }
+};
+
+// Tests that the search box is inactive by default.
+TEST_F(SearchBoxViewTabletTest, SearchBoxInactiveByDefault) {
+  ASSERT_FALSE(
+      GetAppListTestHelper()->GetSearchBoxView()->is_search_box_active());
+}
+
 class SearchBoxViewAnimationTest : public AshTestBase {
  public:
-  SearchBoxViewAnimationTest() {
-    scoped_features_.InitAndEnableFeature(features::kProductivityLauncher);
-  }
+  SearchBoxViewAnimationTest() = default;
   ~SearchBoxViewAnimationTest() override = default;
 
   void SetUp() override {
@@ -1298,7 +1089,6 @@ class SearchBoxViewAnimationTest : public AshTestBase {
   }
 
   std::unique_ptr<ui::ScopedAnimationDurationScaleMode> non_zero_duration_mode_;
-  base::test::ScopedFeatureList scoped_features_;
 };
 
 // Test that the search box image buttons fade in and out correctly when the
@@ -1308,24 +1098,25 @@ TEST_F(SearchBoxViewAnimationTest, SearchBoxImageButtonAnimations) {
 
   // Initially the assistant button should be shown, and the close button
   // hidden.
-  EXPECT_FALSE(search_box->close_button()->GetVisible());
-  EXPECT_TRUE(search_box->assistant_button()->GetVisible());
+  EXPECT_FALSE(search_box->filter_and_close_button_container()->GetVisible());
+  EXPECT_TRUE(search_box->assistant_button_container()->GetVisible());
 
   // Set search box to active state.
   search_box->SetSearchBoxActive(true, ui::ET_MOUSE_PRESSED);
 
   // Close button should be fading in.
-  EXPECT_TRUE(search_box->close_button()->GetVisible());
-  auto* close_animator = search_box->close_button()->layer()->GetAnimator();
+  EXPECT_TRUE(search_box->filter_and_close_button_container()->GetVisible());
+  auto* close_animator =
+      search_box->filter_and_close_button_container()->layer()->GetAnimator();
   ASSERT_TRUE(close_animator);
   EXPECT_TRUE(close_animator->IsAnimatingProperty(
       ui::LayerAnimationElement::AnimatableProperty::OPACITY));
   EXPECT_EQ(close_animator->GetTargetOpacity(), 1.0f);
 
   // Assistant button should be fading out.
-  EXPECT_TRUE(search_box->assistant_button()->GetVisible());
+  EXPECT_TRUE(search_box->assistant_button_container()->GetVisible());
   auto* assistant_animator =
-      search_box->assistant_button()->layer()->GetAnimator();
+      search_box->assistant_button_container()->layer()->GetAnimator();
   EXPECT_TRUE(assistant_animator->IsAnimatingProperty(
       ui::LayerAnimationElement::AnimatableProperty::OPACITY));
   EXPECT_EQ(assistant_animator->GetTargetOpacity(), 0.0f);
@@ -1334,13 +1125,13 @@ TEST_F(SearchBoxViewAnimationTest, SearchBoxImageButtonAnimations) {
   search_box->SetSearchBoxActive(false, ui::ET_MOUSE_PRESSED);
 
   // Close button should be fading out.
-  EXPECT_TRUE(search_box->close_button()->GetVisible());
+  EXPECT_TRUE(search_box->filter_and_close_button_container()->GetVisible());
   EXPECT_TRUE(close_animator->IsAnimatingProperty(
       ui::LayerAnimationElement::AnimatableProperty::OPACITY));
   EXPECT_EQ(close_animator->GetTargetOpacity(), 0.0f);
 
   // Assistant button should be fading in.
-  EXPECT_TRUE(search_box->assistant_button()->GetVisible());
+  EXPECT_TRUE(search_box->assistant_button_container()->GetVisible());
   ASSERT_TRUE(assistant_animator);
   EXPECT_TRUE(assistant_animator->IsAnimatingProperty(
       ui::LayerAnimationElement::AnimatableProperty::OPACITY));

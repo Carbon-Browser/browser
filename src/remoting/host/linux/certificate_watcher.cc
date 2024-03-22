@@ -1,18 +1,18 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "remoting/host/linux/certificate_watcher.h"
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/hash/hash.h"
 #include "base/location.h"
 #include "base/logging.h"
 #include "base/path_service.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/threading/thread_checker.h"
-#include "base/threading/thread_task_runner_handle.h"
 
 namespace remoting {
 
@@ -175,7 +175,7 @@ CertificateWatcher::CertificateWatcher(
     const base::RepeatingClosure& restart_action,
     scoped_refptr<base::SingleThreadTaskRunner> io_task_runner)
     : restart_action_(restart_action),
-      caller_task_runner_(base::ThreadTaskRunnerHandle::Get()),
+      caller_task_runner_(base::SingleThreadTaskRunner::GetCurrentDefault()),
       io_task_runner_(io_task_runner),
       delay_(base::Seconds(kReadDelayInSeconds)) {
   if (!base::PathService::Get(base::DIR_HOME, &cert_watch_path_)) {

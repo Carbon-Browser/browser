@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,7 +8,7 @@
 #include <map>
 #include <string>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/strings/string_piece.h"
 #include "extensions/renderer/bindings/api_binding_hooks_delegate.h"
 #include "v8/include/v8.h"
@@ -33,7 +33,7 @@ class APIBindingHooksTestDelegate : public APIBindingHooksDelegate {
   using RequestHandler = base::RepeatingCallback<APIBindingHooks::RequestResult(
       const APISignature*,
       v8::Local<v8::Context> context,
-      std::vector<v8::Local<v8::Value>>*,
+      v8::LocalVector<v8::Value>*,
       const APITypeReferenceMap&)>;
 
   using TemplateInitializer =
@@ -63,7 +63,7 @@ class APIBindingHooksTestDelegate : public APIBindingHooksDelegate {
       const std::string& method_name,
       const APISignature* signature,
       v8::Local<v8::Context> context,
-      std::vector<v8::Local<v8::Value>>* arguments,
+      v8::LocalVector<v8::Value>* arguments,
       const APITypeReferenceMap& refs) override;
   void InitializeTemplate(v8::Isolate* isolate,
                           v8::Local<v8::ObjectTemplate> object_template,

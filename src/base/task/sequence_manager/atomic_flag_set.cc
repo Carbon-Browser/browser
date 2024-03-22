@@ -1,14 +1,14 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "base/task/sequence_manager/atomic_flag_set.h"
 
+#include <bit>
 #include <utility>
 
-#include "base/bits.h"
-#include "base/callback.h"
 #include "base/check_op.h"
+#include "base/functional/callback.h"
 
 namespace base {
 namespace sequence_manager {
@@ -73,8 +73,9 @@ void AtomicFlagSet::AtomicFlag::ReleaseAtomicFlag() {
 
   // If |group_| has become empty delete it.
   if (group_->IsEmpty()) {
-    outer_->RemoveFromPartiallyFreeList(group_);
-    outer_->RemoveFromAllocList(group_);
+    auto ptr = group_.ExtractAsDangling();
+    outer_->RemoveFromPartiallyFreeList(ptr);
+    outer_->RemoveFromAllocList(ptr);
   }
 
   outer_ = nullptr;
@@ -150,7 +151,7 @@ int AtomicFlagSet::Group::FindFirstUnallocatedFlag() const {
 // static
 int AtomicFlagSet::Group::IndexOfFirstFlagSet(size_t flag) {
   DCHECK_NE(flag, 0u);
-  return bits::CountTrailingZeroBits(flag);
+  return std::countr_zero(flag);
 }
 
 void AtomicFlagSet::AddToAllocList(std::unique_ptr<Group> group) {

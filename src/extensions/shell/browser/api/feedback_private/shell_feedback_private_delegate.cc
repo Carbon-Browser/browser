@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -21,11 +21,11 @@ namespace extensions {
 ShellFeedbackPrivateDelegate::ShellFeedbackPrivateDelegate() = default;
 ShellFeedbackPrivateDelegate::~ShellFeedbackPrivateDelegate() = default;
 
-std::unique_ptr<base::DictionaryValue> ShellFeedbackPrivateDelegate::GetStrings(
+base::Value::Dict ShellFeedbackPrivateDelegate::GetStrings(
     content::BrowserContext* browser_context,
     bool from_crash) const {
   NOTIMPLEMENTED();
-  return nullptr;
+  return {};
 }
 
 void ShellFeedbackPrivateDelegate::FetchSystemInformation(
@@ -54,7 +54,7 @@ void ShellFeedbackPrivateDelegate::FetchExtraLogs(
 api::feedback_private::LandingPageType
 ShellFeedbackPrivateDelegate::GetLandingPageType(
     const feedback::FeedbackData& feedback_data) const {
-  return api::feedback_private::LANDING_PAGE_TYPE_NOLANDINGPAGE;
+  return api::feedback_private::LandingPageType::kNoLandingPage;
 }
 
 void ShellFeedbackPrivateDelegate::GetLacrosHistograms(
@@ -75,6 +75,12 @@ feedback::FeedbackUploader*
 ShellFeedbackPrivateDelegate::GetFeedbackUploaderForContext(
     content::BrowserContext* context) const {
   return feedback::FeedbackUploaderFactory::GetForBrowserContext(context);
+}
+
+void ShellFeedbackPrivateDelegate::OpenFeedback(
+    content::BrowserContext* context,
+    api::feedback_private::FeedbackSource source) const {
+  NOTIMPLEMENTED();
 }
 
 }  // namespace extensions

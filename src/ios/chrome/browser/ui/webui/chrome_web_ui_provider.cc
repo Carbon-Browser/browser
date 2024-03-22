@@ -1,13 +1,13 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "ios/components/webui/web_ui_provider.h"
 
 #include "components/sync/invalidations/sync_invalidations_service.h"
-#include "ios/chrome/browser/browser_state/chrome_browser_state.h"
-#include "ios/chrome/browser/sync/sync_invalidations_service_factory.h"
-#include "ios/chrome/browser/sync/sync_service_factory.h"
+#include "ios/chrome/browser/shared/model/browser_state/chrome_browser_state.h"
+#include "ios/chrome/browser/sync/model/sync_invalidations_service_factory.h"
+#include "ios/chrome/browser/sync/model/sync_service_factory.h"
 #include "ios/chrome/common/channel_info.h"
 
 namespace web_ui {

@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -46,6 +46,23 @@ class ShortcutsBackend : public RefcountedKeyedService,
  public:
   typedef std::multimap<std::u16string, const ShortcutsDatabase::Shortcut>
       ShortcutMap;
+
+  // Get either `contents`, `description`, or `description_class_for_shortcuts`
+  // (or their classifications) depending on the method called,
+  // `swap_contents_and_description`, and whether
+  // `description_class_for_shortcuts` is empty.
+  // TODO(manukh): Simplify these once `swap_contents_and_description` is
+  //   removed.
+  static const std::u16string& GetDescription(const AutocompleteMatch& match);
+  static const std::u16string& GetSwappedDescription(
+      const AutocompleteMatch& match);
+  static const ACMatchClassifications& GetDescriptionClass(
+      const AutocompleteMatch& match);
+  static const std::u16string& GetContents(const AutocompleteMatch& match);
+  static const std::u16string& GetSwappedContents(
+      const AutocompleteMatch& match);
+  static const ACMatchClassifications& GetContentsClass(
+      const AutocompleteMatch& match);
 
   // For unit testing, set |suppress_db| to true to prevent creation
   // of the database, in which case all operations are performed in memory only.
@@ -101,8 +118,6 @@ class ShortcutsBackend : public RefcountedKeyedService,
       scoped_refptr<ShortcutsBackend> backend,
       TestShortcutData* db,
       size_t db_size);
-  FRIEND_TEST_ALL_PREFIXES(ShortcutsBackendTest, EntitySuggestionTest);
-  FRIEND_TEST_ALL_PREFIXES(ShortcutsBackendTest, MatchCoreDescriptionTest);
 
   enum CurrentState {
     NOT_INITIALIZED,  // Backend created but not initialized.
@@ -151,7 +166,8 @@ class ShortcutsBackend : public RefcountedKeyedService,
   // Deletes all of the shortcuts.
   bool DeleteAllShortcuts();
 
-  raw_ptr<TemplateURLService> template_url_service_;
+  raw_ptr<TemplateURLService, AcrossTasksDanglingUntriaged>
+      template_url_service_;
   std::unique_ptr<SearchTermsData> search_terms_data_;
 
   CurrentState current_state_;

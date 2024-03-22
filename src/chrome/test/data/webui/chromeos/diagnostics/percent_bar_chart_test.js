@@ -1,20 +1,22 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 import 'chrome://diagnostics/percent_bar_chart.js';
+import 'chrome://webui-test/chromeos/mojo_webui_test_support.js';
 
-import {assertEquals, assertFalse, assertTrue} from '../../chai_assert.js';
-import {flushTasks} from '../../test_util.js';
+import {PercentBarChartElement} from 'chrome://diagnostics/percent_bar_chart.js';
+import {assertEquals, assertFalse, assertTrue} from 'chrome://webui-test/chromeos/chai_assert.js';
+import {flushTasks} from 'chrome://webui-test/polymer_test_util.js';
 
 import * as dx_utils from './diagnostics_test_utils.js';
 
-export function percentBarChartTestSuite() {
+suite('percentBarChartTestSuite', function() {
   /** @type {?PercentBarChartElement} */
   let percentBarChartElement = null;
 
   setup(() => {
-    document.body.innerHTML = '';
+    document.body.innerHTML = window.trustedTypes.emptyHTML;
   });
 
   teardown(() => {
@@ -50,12 +52,15 @@ export function percentBarChartTestSuite() {
     const max = 30;
     const percent = Math.round(100 * value / max);
     return initializePercentBarChart(header, value, max).then(() => {
-      const paperProgress = percentBarChartElement.$$('paper-progress');
+      const paperProgress =
+          percentBarChartElement.shadowRoot.querySelector('paper-progress');
       assertEquals(value, paperProgress.value);
       assertEquals(max, paperProgress.max);
 
       assertEquals(
-          header, percentBarChartElement.$$('#chartName').textContent.trim());
+          header,
+          percentBarChartElement.shadowRoot.querySelector('#chartName')
+              .textContent.trim());
     });
   });
 
@@ -64,8 +69,9 @@ export function percentBarChartTestSuite() {
     const value = 101;
     const max = 100;
     return initializePercentBarChart(header, value, max).then(() => {
-      const paperProgress = percentBarChartElement.$$('paper-progress');
+      const paperProgress =
+          percentBarChartElement.shadowRoot.querySelector('paper-progress');
       assertEquals(paperProgress.value, paperProgress.max);
     });
   });
-}
+});

@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,7 +6,6 @@
 #define CHROME_BROWSER_VR_UI_RENDERER_H_
 
 #include "base/memory/raw_ptr.h"
-#include "chrome/browser/vr/ui_input_manager.h"
 #include "chrome/browser/vr/vr_ui_export.h"
 #include "ui/gfx/geometry/rect_f.h"
 

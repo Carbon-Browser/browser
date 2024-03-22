@@ -4,26 +4,37 @@
       "name": "Scrolling background of LayoutView #document",
       "bounds": [1008, 1016],
       "contentsOpaque": true,
-      "backgroundColor": "#FFFFFF",
+      "backgroundColor": "#FFFFFF"
+    },
+    {
+      "name": "LayoutNGBlockFlow DIV id='target'",
+      "bounds": [585, 235],
       "invalidations": [
-        [8, 8, 1000, 1000]
+        [0, 0, 585, 235]
       ]
+    },
+    {
+      "name": "LayoutNGBlockFlow DIV id='target'",
+      "position": [8, 8],
+      "bounds": [1000, 1000],
+      "drawsContent": false
     },
     {
       "name": "HorizontalScrollbar",
       "position": [0, 235],
-      "bounds": [585, 15]
+      "bounds": [585, 15],
+      "contentsOpaque": true
     },
     {
       "name": "VerticalScrollbar",
       "position": [585, 0],
-      "bounds": [15, 235]
+      "bounds": [15, 235],
+      "contentsOpaque": true
     },
     {
       "name": "Scroll corner of LayoutView #document",
       "position": [585, 235],
       "bounds": [15, 15],
-      "contentsOpaqueForText": true,
       "invalidations": [
         [0, 0, 15, 15]
       ]
@@ -36,26 +47,37 @@
       "name": "Scrolling background of LayoutView #document",
       "bounds": [1008, 1016],
       "contentsOpaque": true,
-      "backgroundColor": "#FFFFFF",
+      "backgroundColor": "#FFFFFF"
+    },
+    {
+      "name": "LayoutNGBlockFlow DIV id='target'",
+      "bounds": [385, 235],
       "invalidations": [
-        [8, 8, 1000, 1000]
+        [0, 0, 385, 235]
       ]
+    },
+    {
+      "name": "LayoutNGBlockFlow DIV id='target'",
+      "position": [8, 8],
+      "bounds": [1000, 1000],
+      "drawsContent": false
     },
     {
       "name": "HorizontalScrollbar",
       "position": [0, 235],
-      "bounds": [385, 15]
+      "bounds": [385, 15],
+      "contentsOpaque": true
     },
     {
       "name": "VerticalScrollbar",
       "position": [385, 0],
-      "bounds": [15, 235]
+      "bounds": [15, 235],
+      "contentsOpaque": true
     },
     {
       "name": "Scroll corner of LayoutView #document",
       "position": [385, 235],
       "bounds": [15, 15],
-      "contentsOpaqueForText": true,
       "invalidations": [
         [0, 0, 15, 15]
       ]
@@ -68,26 +90,37 @@
       "name": "Scrolling background of LayoutView #document",
       "bounds": [1008, 1016],
       "contentsOpaque": true,
-      "backgroundColor": "#FFFFFF",
+      "backgroundColor": "#FFFFFF"
+    },
+    {
+      "name": "LayoutNGBlockFlow DIV id='target'",
+      "bounds": [385, 585],
       "invalidations": [
-        [8, 8, 1000, 1000]
+        [0, 0, 385, 585]
       ]
+    },
+    {
+      "name": "LayoutNGBlockFlow DIV id='target'",
+      "position": [8, 8],
+      "bounds": [1000, 1000],
+      "drawsContent": false
     },
     {
       "name": "HorizontalScrollbar",
       "position": [0, 585],
-      "bounds": [385, 15]
+      "bounds": [385, 15],
+      "contentsOpaque": true
     },
     {
       "name": "VerticalScrollbar",
       "position": [385, 0],
-      "bounds": [15, 585]
+      "bounds": [15, 585],
+      "contentsOpaque": true
     },
     {
       "name": "Scroll corner of LayoutView #document",
       "position": [385, 585],
       "bounds": [15, 15],
-      "contentsOpaqueForText": true,
       "invalidations": [
         [0, 0, 15, 15]
       ]
@@ -100,26 +133,37 @@
       "name": "Scrolling background of LayoutView #document",
       "bounds": [1008, 1016],
       "contentsOpaque": true,
-      "backgroundColor": "#FFFFFF",
+      "backgroundColor": "#FFFFFF"
+    },
+    {
+      "name": "LayoutNGBlockFlow DIV id='target'",
+      "bounds": [785, 585],
       "invalidations": [
-        [8, 8, 1000, 1000]
+        [0, 0, 785, 585]
       ]
+    },
+    {
+      "name": "LayoutNGBlockFlow DIV id='target'",
+      "position": [8, 8],
+      "bounds": [1000, 1000],
+      "drawsContent": false
     },
     {
       "name": "HorizontalScrollbar",
       "position": [0, 585],
-      "bounds": [785, 15]
+      "bounds": [785, 15],
+      "contentsOpaque": true
     },
     {
       "name": "VerticalScrollbar",
       "position": [785, 0],
-      "bounds": [15, 585]
+      "bounds": [15, 585],
+      "contentsOpaque": true
     },
     {
       "name": "Scroll corner of LayoutView #document",
       "position": [785, 585],
       "bounds": [15, 15],
-      "contentsOpaqueForText": true,
       "invalidations": [
         [0, 0, 15, 15]
       ]

@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -15,6 +15,8 @@
 #include "third_party/blink/renderer/platform/wtf/hash_map.h"
 #include "third_party/blink/renderer/platform/wtf/hash_set.h"
 #include "third_party/blink/renderer/platform/wtf/text/atomic_string_hash.h"
+
+#include <iosfwd>
 
 namespace blink {
 
@@ -58,7 +60,7 @@ class CORE_EXPORT StyleVariables {
   }
 
   using OptionalData = absl::optional<CSSVariableData*>;
-  using OptionalValue = absl::optional<Member<const CSSValue>>;
+  using OptionalValue = absl::optional<const CSSValue*>;
 
   OptionalValue GetValue(const AtomicString&) const;
   OptionalData GetData(const AtomicString&) const;
@@ -91,7 +93,13 @@ class CORE_EXPORT StyleVariables {
   // with a nullptr partner.
   mutable const StyleVariables* equality_cache_partner_ = nullptr;
   mutable bool equality_cached_result_;
+
+  friend CORE_EXPORT std::ostream& operator<<(std::ostream& stream,
+                                              const StyleVariables& variables);
 };
+
+CORE_EXPORT std::ostream& operator<<(std::ostream& stream,
+                                     const StyleVariables& variables);
 
 }  // namespace blink
 

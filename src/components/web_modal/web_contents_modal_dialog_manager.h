@@ -1,4 +1,4 @@
-// Copyright 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -100,7 +100,8 @@ class WEB_MODAL_EXPORT WebContentsModalDialogManager
   void WebContentsDestroyed() override;
 
   // Delegate for notifying our owner about stuff. Not owned by us.
-  raw_ptr<WebContentsModalDialogManagerDelegate> delegate_ = nullptr;
+  raw_ptr<WebContentsModalDialogManagerDelegate, AcrossTasksDanglingUntriaged>
+      delegate_ = nullptr;
 
   // All active dialogs.
   base::circular_deque<DialogState> child_dialogs_;
@@ -110,6 +111,10 @@ class WEB_MODAL_EXPORT WebContentsModalDialogManager
 
   // True while closing the dialogs on WebContents close.
   bool closing_all_dialogs_ = false;
+
+  // Optional closure to re-enable input events, if we're ignored them.
+  absl::optional<content::WebContents::ScopedIgnoreInputEvents>
+      scoped_ignore_input_events_;
 
   WEB_CONTENTS_USER_DATA_KEY_DECL();
 };

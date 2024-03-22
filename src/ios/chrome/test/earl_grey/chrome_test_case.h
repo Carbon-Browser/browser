@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -19,6 +19,9 @@ class EmbeddedTestServer;
 
 // Base class for all Chrome Earl Grey tests.
 @interface ChromeTestCase : BaseEarlGreyTestCase
+
+// Invoked upon end of each test method in a test case.
+- (void)tearDown NS_REQUIRES_SUPER;
 
 // Removes any UI elements that are present, to ensure it is in a clean state.
 + (void)removeAnyOpenMenusAndInfoBars;
@@ -47,9 +50,13 @@ class EmbeddedTestServer;
 // Turns mock authentication back on.
 - (void)enableMockAuthentication;
 
-// Returns YES if the test method name extracted from |selector| matches the
+// Returns YES if the test method name extracted from `selector` matches the
 // name of the currently running test method.
 - (BOOL)isRunningTest:(SEL)selector;
+
+// Forces reloading the current session by restarting the app. This restarts
+// the app with the same configuration as used by -setUp.
+- (void)triggerRestoreByRestartingApplication;
 
 // Configures the fixture for startup testing.
 + (void)testForStartup;

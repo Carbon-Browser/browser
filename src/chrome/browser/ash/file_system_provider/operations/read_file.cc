@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -21,14 +21,14 @@ namespace {
 
 // Convert |value| into |output|. If parsing fails, then returns a negative
 // value. Otherwise returns number of bytes written to the buffer.
-int CopyRequestValueToBuffer(std::unique_ptr<RequestValue> value,
+int CopyRequestValueToBuffer(const RequestValue& value,
                              scoped_refptr<net::IOBuffer> buffer,
                              int buffer_offset,
                              int buffer_length) {
   using extensions::api::file_system_provider_internal::
       ReadFileRequestedSuccess::Params;
 
-  const Params* params = value->read_file_success_params();
+  const Params* params = value.read_file_success_params();
   if (!params)
     return -1;
 
@@ -46,14 +46,14 @@ int CopyRequestValueToBuffer(std::unique_ptr<RequestValue> value,
 }  // namespace
 
 ReadFile::ReadFile(
-    extensions::EventRouter* event_router,
+    RequestDispatcher* dispatcher,
     const ProvidedFileSystemInfo& file_system_info,
     int file_handle,
     scoped_refptr<net::IOBuffer> buffer,
     int64_t offset,
     int length,
     ProvidedFileSystemInterface::ReadChunkReceivedCallback callback)
-    : Operation(event_router, file_system_info),
+    : Operation(dispatcher, file_system_info),
       file_handle_(file_handle),
       buffer_(buffer),
       offset_(offset),
@@ -84,11 +84,11 @@ bool ReadFile::Execute(int request_id) {
 }
 
 void ReadFile::OnSuccess(int /* request_id */,
-                         std::unique_ptr<RequestValue> result,
+                         const RequestValue& result,
                          bool has_more) {
   TRACE_EVENT0("file_system_provider", "ReadFile::OnSuccess");
-  const int copy_result = CopyRequestValueToBuffer(std::move(result), buffer_,
-                                                   current_offset_, length_);
+  const int copy_result =
+      CopyRequestValueToBuffer(result, buffer_, current_offset_, length_);
 
   if (copy_result < 0) {
     LOG(ERROR) << "Failed to parse a response for the read file operation.";
@@ -103,7 +103,7 @@ void ReadFile::OnSuccess(int /* request_id */,
 }
 
 void ReadFile::OnError(int /* request_id */,
-                       std::unique_ptr<RequestValue> /* result */,
+                       const RequestValue& /* result */,
                        base::File::Error error) {
   TRACE_EVENT0("file_system_provider", "ReadFile::OnError");
   callback_.Run(0 /* chunk_length */, false /* has_more */, error);

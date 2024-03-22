@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,7 +6,26 @@
  * @fileoverview Polymer element for displaying material design Update screen.
  */
 
-/* #js_imports_placeholder */
+import '//resources/polymer/v3_0/iron-icon/iron-icon.js';
+import '//resources/polymer/v3_0/paper-progress/paper-progress.js';
+import '//resources/polymer/v3_0/paper-styles/color.js';
+import '../../components/oobe_cr_lottie.js';
+import '../../components/oobe_icons.html.js';
+import '../../components/buttons/oobe_back_button.js';
+import '../../components/buttons/oobe_next_button.js';
+import '../../components/common_styles/oobe_dialog_host_styles.css.js';
+import '../../components/dialogs/oobe_adaptive_dialog.js';
+import '../../components/dialogs/oobe_loading_dialog.js';
+import '../../components/oobe_carousel.js';
+import '../../components/oobe_slide.js';
+
+import {html, mixinBehaviors, PolymerElement} from '//resources/polymer/v3_0/polymer/polymer_bundled.min.js';
+import {loadTimeData} from 'chrome://resources/js/load_time_data.js';
+
+import {LoginScreenBehavior, LoginScreenBehaviorInterface} from '../../components/behaviors/login_screen_behavior.js';
+import {MultiStepBehavior, MultiStepBehaviorInterface} from '../../components/behaviors/multi_step_behavior.js';
+import {OobeI18nBehavior, OobeI18nBehaviorInterface} from '../../components/behaviors/oobe_i18n_behavior.js';
+
 
 const USER_ACTION_ACCEPT_UPDATE_OVER_CELLUAR = 'update-accept-cellular';
 const USER_ACTION_REJECT_UPDATE_OVER_CELLUAR = 'update-reject-cellular';
@@ -42,6 +61,7 @@ const PERCENT_THRESHOLDS = [
  */
 const UpdateUIState = {
   CHECKING: 'checking',
+  CHECKING_SOFTWARE: 'checking-software',
   UPDATE: 'update',
   RESTART: 'restart',
   REBOOT: 'reboot',
@@ -56,9 +76,8 @@ const UpdateUIState = {
  * @implements {OobeI18nBehaviorInterface}
  * @implements {MultiStepBehaviorInterface}
  */
-const UpdateBase = Polymer.mixinBehaviors(
-    [OobeI18nBehavior, LoginScreenBehavior, MultiStepBehavior],
-    Polymer.Element);
+const UpdateBase = mixinBehaviors(
+    [OobeI18nBehavior, LoginScreenBehavior, MultiStepBehavior], PolymerElement);
 
 /**
  * @typedef {{
@@ -69,14 +88,22 @@ const UpdateBase = Polymer.mixinBehaviors(
 UpdateBase.$;
 
 /**
- * @polymer
+ * Data that is passed to the screen during onBeforeShow.
+ * @typedef {{
+ *   isOptOutEnabled: (boolean|undefined),
+ * }}
  */
+let UpdateScreenData;
+
+/** @polymer */
 class Update extends UpdateBase {
   static get is() {
     return 'update-element';
   }
 
-  /* #html_template_placeholder */
+  static get template() {
+    return html`{__html_template__}`;
+  }
 
   static get properties() {
     return {
@@ -117,6 +144,7 @@ class Update extends UpdateBase {
        */
       updateStatusMessagePercent: {
         type: String,
+        value: '',
       },
 
       /**
@@ -124,6 +152,7 @@ class Update extends UpdateBase {
        */
       updateStatusMessageTimeLeft: {
         type: String,
+        value: '',
       },
 
       /**
@@ -158,17 +187,30 @@ class Update extends UpdateBase {
         type: Boolean,
         value: false,
       },
+
+      /**
+       * Whether to show the loading UI different for
+       * checking update stage
+       */
+      isOobeSoftwareUpdateEnabled_: {
+        type: Boolean,
+        value() {
+          return loadTimeData.getBoolean('isOobeSoftwareUpdateEnabled');
+        },
+      },
     };
   }
 
-  constructor() {
-    super();
-    this.updateStatusMessagePercent = '';
-    this.updateStatusMessageTimeLeft = '';
+  static get observers() {
+    return ['playAnimation_(uiStep)'];
   }
 
   defaultUIStep() {
-    return UpdateUIState.CHECKING;
+    if (this.isOobeSoftwareUpdateEnabled_) {
+      return UpdateUIState.CHECKING_SOFTWARE;
+    } else {
+      return UpdateUIState.CHECKING;
+    }
   }
 
   get UI_STEPS() {
@@ -195,10 +237,12 @@ class Update extends UpdateBase {
 
   /**
    * Event handler that is invoked just before the screen is shown.
-   * @param {Object} data Screen init payload.
+   * @param {UpdateScreenData} data Screen init payload.
    */
   onBeforeShow(data) {
-    this.isOptOutEnabled = data['is_opt_out_enabled'];
+    if (data && 'isOptOutEnabled' in data) {
+      this.isOptOutEnabled = data['isOptOutEnabled'];
+    }
   }
 
   /**
@@ -238,7 +282,11 @@ class Update extends UpdateBase {
    * @param {UpdateUIState} value Current update state.
    */
   setUpdateState(value) {
-    this.setUIStep(value);
+    if (value === 'checking' && this.isOobeSoftwareUpdateEnabled_) {
+      this.setUIStep(UpdateUIState.CHECKING_SOFTWARE);
+    } else {
+      this.setUIStep(value);
+    }
   }
 
   /**
@@ -303,6 +351,14 @@ class Update extends UpdateBase {
     return this.i18n(
         isOptOutEnabled ? 'slideUpdateAdditionalSettingsText' :
                           'slideUpdateText');
+  }
+
+  /**
+   * @private
+   * @param {UpdateUIState} uiStep which UIState is shown now.
+   */
+  playAnimation_(uiStep) {
+    this.$.checkingAnimation.playing = (uiStep === UpdateUIState.CHECKING);
   }
 }
 

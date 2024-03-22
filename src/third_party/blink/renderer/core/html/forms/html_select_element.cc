@@ -42,6 +42,7 @@
 #include "third_party/blink/renderer/core/dom/element_traversal.h"
 #include "third_party/blink/renderer/core/dom/events/scoped_event_queue.h"
 #include "third_party/blink/renderer/core/dom/events/simulated_click_options.h"
+#include "third_party/blink/renderer/core/dom/focus_params.h"
 #include "third_party/blink/renderer/core/dom/node_computed_style.h"
 #include "third_party/blink/renderer/core/dom/node_lists_node_data.h"
 #include "third_party/blink/renderer/core/dom/node_traversal.h"
@@ -58,10 +59,10 @@
 #include "third_party/blink/renderer/core/html/parser/html_parser_idioms.h"
 #include "third_party/blink/renderer/core/html_names.h"
 #include "third_party/blink/renderer/core/inspector/console_message.h"
+#include "third_party/blink/renderer/core/layout/flex/layout_flexible_box.h"
 #include "third_party/blink/renderer/core/layout/hit_test_request.h"
 #include "third_party/blink/renderer/core/layout/hit_test_result.h"
-#include "third_party/blink/renderer/core/layout/layout_block_flow.h"
-#include "third_party/blink/renderer/core/layout/layout_object_factory.h"
+#include "third_party/blink/renderer/core/layout/layout_ng_block_flow.h"
 #include "third_party/blink/renderer/core/layout/layout_theme.h"
 #include "third_party/blink/renderer/core/page/chrome_client.h"
 #include "third_party/blink/renderer/core/page/page.h"
@@ -73,6 +74,8 @@
 #include "ui/base/ui_base_features.h"
 
 namespace blink {
+
+using mojom::blink::FormControlType;
 
 namespace {
 
@@ -87,10 +90,8 @@ bool CanAssignToSelectSlot(const Node& node) {
 
 }  // namespace
 
-// Upper limit of list_items_. According to the HTML standard, options larger
-// than this limit doesn't work well because |selectedIndex| IDL attribute is
-// signed.
-static const unsigned kMaxListItems = INT_MAX;
+// https://html.spec.whatwg.org/#dom-htmloptionscollection-length
+static const unsigned kMaxListItems = 100000;
 
 // Default size when the multiple attribute is present but size attribute is
 // absent.
@@ -113,7 +114,12 @@ HTMLSelectElement::HTMLSelectElement(Document& document)
 
 HTMLSelectElement::~HTMLSelectElement() = default;
 
-const AtomicString& HTMLSelectElement::FormControlType() const {
+FormControlType HTMLSelectElement::FormControlType() const {
+  return is_multiple_ ? FormControlType::kSelectMultiple
+                      : FormControlType::kSelectOne;
+}
+
+const AtomicString& HTMLSelectElement::FormControlTypeAsString() const {
   DEFINE_STATIC_LOCAL(const AtomicString, select_multiple, ("select-multiple"));
   DEFINE_STATIC_LOCAL(const AtomicString, select_one, ("select-one"));
   return is_multiple_ ? select_multiple : select_one;
@@ -147,7 +153,7 @@ bool HTMLSelectElement::HasPlaceholderLabelOption() const {
   if (!option_element)
     return false;
 
-  return option_element->value().IsEmpty();
+  return option_element->value().empty();
 }
 
 String HTMLSelectElement::validationMessage() const {
@@ -207,7 +213,7 @@ void HTMLSelectElement::SelectMultipleOptionsByPopup(
 
   select_type_->UpdateTextStyleAndContent();
   SetNeedsValidityCheck();
-  if (has_new_selection || !old_selection.IsEmpty()) {
+  if (has_new_selection || !old_selection.empty()) {
     DispatchInputEvent();
     DispatchChangeEvent();
   }
@@ -256,6 +262,7 @@ void HTMLSelectElement::add(
   }
 
   HTMLElement* before_element = nullptr;
+  ContainerNode* target_container = this;
   if (before) {
     switch (before->GetContentType()) {
       case V8UnionHTMLElementOrLong::ContentType::kHTMLElement:
@@ -263,11 +270,15 @@ void HTMLSelectElement::add(
         break;
       case V8UnionHTMLElementOrLong::ContentType::kLong:
         before_element = options()->item(before->GetAsLong());
+        if (before_element && before_element->parentNode()) {
+          target_container = before_element->parentNode();
+        }
         break;
     }
   }
 
-  InsertBefore(element_to_insert, before_element, exception_state);
+  target_container->InsertBefore(element_to_insert, before_element,
+                                 exception_state);
   SetNeedsValidityCheck();
 }
 
@@ -283,7 +294,7 @@ String HTMLSelectElement::Value() const {
 }
 
 void HTMLSelectElement::setValueForBinding(const String& value) {
-  if (GetAutofillState() != WebAutofillState::kAutofilled) {
+  if (!IsAutofilled()) {
     SetValue(value);
   } else {
     String old_value = this->Value();
@@ -323,7 +334,9 @@ void HTMLSelectElement::SetValue(const String& value,
 
 void HTMLSelectElement::SetAutofillValue(const String& value,
                                          WebAutofillState autofill_state) {
+  auto interacted_state = interacted_state_;
   SetValue(value, true, autofill_state);
+  interacted_state_ = interacted_state;
 }
 
 String HTMLSelectElement::SuggestedValue() const {
@@ -398,11 +411,11 @@ bool HTMLSelectElement::CanSelectAll() const {
 }
 
 LayoutObject* HTMLSelectElement::CreateLayoutObject(
-    const ComputedStyle& style,
-    LegacyLayout legacy_layout) {
-  if (UsesMenuList())
-    return LayoutObjectFactory::CreateFlexibleBox(*this, style, legacy_layout);
-  return LayoutObjectFactory::CreateBlockFlow(*this, style, legacy_layout);
+    const ComputedStyle& style) {
+  if (UsesMenuList()) {
+    return MakeGarbageCollected<LayoutFlexibleBox>(this);
+  }
+  return MakeGarbageCollected<LayoutNGBlockFlow>(this);
 }
 
 HTMLCollection* HTMLSelectElement::selectedOptions() {
@@ -428,12 +441,12 @@ void HTMLSelectElement::OptionElementChildrenChanged(
 
 void HTMLSelectElement::AccessKeyAction(
     SimulatedClickCreationScope creation_scope) {
-  Focus();
+  Focus(FocusParams(FocusTrigger::kUserGesture));
   DispatchSimulatedClick(nullptr, creation_scope);
 }
 
-Element* HTMLSelectElement::namedItem(const AtomicString& name) {
-  return options()->namedItem(name);
+HTMLOptionElement* HTMLSelectElement::namedItem(const AtomicString& name) {
+  return To<HTMLOptionElement>(options()->namedItem(name));
 }
 
 HTMLOptionElement* HTMLSelectElement::item(unsigned index) {
@@ -444,15 +457,17 @@ void HTMLSelectElement::SetOption(unsigned index,
                                   HTMLOptionElement* option,
                                   ExceptionState& exception_state) {
   int diff = index - length();
-  // We should check |index >= maxListItems| first to avoid integer overflow.
-  if (index >= kMaxListItems ||
-      GetListItems().size() + diff + 1 > kMaxListItems) {
+  // If we are adding options, we should check |index > maxListItems| first to
+  // avoid integer overflow.
+  if (index > length() && (index >= kMaxListItems ||
+                           GetListItems().size() + diff + 1 > kMaxListItems)) {
     GetDocument().AddConsoleMessage(MakeGarbageCollected<ConsoleMessage>(
         mojom::ConsoleMessageSource::kJavaScript,
         mojom::ConsoleMessageLevel::kWarning,
-        String::Format("Blocked to expand the option list and set an option at "
-                       "index=%u.  The maximum list length is %u.",
-                       index, kMaxListItems)));
+        String::Format(
+            "Unable to expand the option list and set an option at index=%u. "
+            "The maximum allowed list length is %u.",
+            index, kMaxListItems)));
     return;
   }
   auto* element =
@@ -481,14 +496,16 @@ void HTMLSelectElement::SetOption(unsigned index,
 
 void HTMLSelectElement::setLength(unsigned new_len,
                                   ExceptionState& exception_state) {
-  // We should check |newLen > maxListItems| first to avoid integer overflow.
-  if (new_len > kMaxListItems ||
-      GetListItems().size() + new_len - length() > kMaxListItems) {
+  // If we are adding options, we should check |index > maxListItems| first to
+  // avoid integer overflow.
+  if (new_len > length() &&
+      (new_len > kMaxListItems ||
+       GetListItems().size() + new_len - length() > kMaxListItems)) {
     GetDocument().AddConsoleMessage(MakeGarbageCollected<ConsoleMessage>(
         mojom::ConsoleMessageSource::kJavaScript,
         mojom::ConsoleMessageLevel::kWarning,
-        String::Format("Blocked to expand the option list to %u items.  The "
-                       "maximum list length is %u.",
+        String::Format("Unable to expand the option list to length %u. "
+                       "The maximum allowed list length is %u.",
                        new_len, kMaxListItems)));
     return;
   }
@@ -729,15 +746,13 @@ void HTMLSelectElement::OptionSelectionStateChanged(HTMLOptionElement* option,
 
 void HTMLSelectElement::ChildrenChanged(const ChildrenChange& change) {
   HTMLFormControlElementWithState::ChildrenChanged(change);
-  if (change.type == ChildrenChangeType::kElementInserted) {
-    if (auto* option = DynamicTo<HTMLOptionElement>(change.sibling_changed)) {
-      OptionInserted(*option, option->Selected());
-    } else if (auto* optgroup =
-                   DynamicTo<HTMLOptGroupElement>(change.sibling_changed)) {
-      for (auto& child_option :
-           Traversal<HTMLOptionElement>::ChildrenOf(*optgroup))
-        OptionInserted(child_option, child_option.Selected());
+  if (change.type ==
+      ChildrenChangeType::kFinishedBuildingDocumentFragmentTree) {
+    for (Node& node : NodeTraversal::ChildrenOf(*this)) {
+      ElementInserted(node);
     }
+  } else if (change.type == ChildrenChangeType::kElementInserted) {
+    ElementInserted(*change.sibling_changed);
   } else if (change.type == ChildrenChangeType::kElementRemoved) {
     if (auto* option = DynamicTo<HTMLOptionElement>(change.sibling_changed)) {
       OptionRemoved(*option);
@@ -764,6 +779,17 @@ bool HTMLSelectElement::ChildrenChangedAllChildrenRemovedNeedsList() const {
   return true;
 }
 
+void HTMLSelectElement::ElementInserted(Node& node) {
+  if (auto* option = DynamicTo<HTMLOptionElement>(&node)) {
+    OptionInserted(*option, option->Selected());
+  } else if (auto* optgroup = DynamicTo<HTMLOptGroupElement>(&node)) {
+    for (auto& child_option :
+         Traversal<HTMLOptionElement>::ChildrenOf(*optgroup)) {
+      OptionInserted(child_option, child_option.Selected());
+    }
+  }
+}
+
 void HTMLSelectElement::OptionInserted(HTMLOptionElement& option,
                                        bool option_is_selected) {
   DCHECK_EQ(option.OwnerSelectElement(), this);
@@ -786,7 +812,7 @@ void HTMLSelectElement::OptionInserted(HTMLOptionElement& option,
       .GetFrame()
       ->GetPage()
       ->GetChromeClient()
-      .SelectFieldOptionsChanged(*this);
+      .SelectOrSelectListFieldOptionsChanged(*this);
 }
 
 void HTMLSelectElement::OptionRemoved(HTMLOptionElement& option) {
@@ -813,7 +839,7 @@ void HTMLSelectElement::OptionRemoved(HTMLOptionElement& option) {
       .GetFrame()
       ->GetPage()
       ->GetChromeClient()
-      .SelectFieldOptionsChanged(*this);
+      .SelectOrSelectListFieldOptionsChanged(*this);
 }
 
 void HTMLSelectElement::OptGroupInsertedOrRemoved(
@@ -870,7 +896,7 @@ void HTMLSelectElement::SelectOption(HTMLOptionElement* element,
   SetAutofillState(element ? autofill_state : WebAutofillState::kNotFilled);
 }
 
-void HTMLSelectElement::DispatchFocusEvent(
+bool HTMLSelectElement::DispatchFocusEvent(
     Element* old_focused_element,
     mojom::blink::FocusType type,
     InputDeviceCapabilities* source_capabilities) {
@@ -878,8 +904,8 @@ void HTMLSelectElement::DispatchFocusEvent(
   // dispatching change events during blur event dispatch.
   if (UsesMenuList())
     select_type_->SaveLastSelection();
-  HTMLFormControlElementWithState::DispatchFocusEvent(old_focused_element, type,
-                                                      source_capabilities);
+  return HTMLFormControlElementWithState::DispatchFocusEvent(
+      old_focused_element, type, source_capabilities);
 }
 
 void HTMLSelectElement::DispatchBlurEvent(
@@ -1035,7 +1061,7 @@ void HTMLSelectElement::ParseMultipleAttribute(const AtomicString& value) {
 
 void HTMLSelectElement::AppendToFormData(FormData& form_data) {
   const AtomicString& name = GetName();
-  if (name.IsEmpty())
+  if (name.empty())
     return;
 
   for (auto* const option : GetOptionList()) {
@@ -1090,8 +1116,9 @@ void HTMLSelectElement::DefaultEventHandler(Event& event) {
     return;
 
   if (event.type() == event_type_names::kClick ||
-      event.type() == event_type_names::kChange) {
-    user_has_edited_the_field_ = true;
+      event.type() == event_type_names::kChange ||
+      event.type() == event_type_names::kKeydown) {
+    SetUserHasEditedTheField();
   }
 
   if (IsDisabledFormControl()) {
@@ -1146,7 +1173,8 @@ String HTMLSelectElement::OptionAtIndex(int index) const {
 
 void HTMLSelectElement::TypeAheadFind(const KeyboardEvent& event) {
   int index = type_ahead_.HandleEvent(
-      event, TypeAhead::kMatchPrefix | TypeAhead::kCycleFirstChar);
+      event, event.charCode(),
+      TypeAhead::kMatchPrefix | TypeAhead::kCycleFirstChar);
   if (index < 0)
     return;
   SelectOption(OptionAtListIndex(index), kDeselectOtherOptionsFlag |
@@ -1416,12 +1444,11 @@ void HTMLSelectElement::ResetTypeAheadSessionForTesting() {
   type_ahead_.ResetSession();
 }
 
-void HTMLSelectElement::CloneNonAttributePropertiesFrom(
-    const Element& source,
-    CloneChildrenFlag flag) {
+void HTMLSelectElement::CloneNonAttributePropertiesFrom(const Element& source,
+                                                        NodeCloningData& data) {
   const auto& source_element = static_cast<const HTMLSelectElement&>(source);
-  user_has_edited_the_field_ = source_element.user_has_edited_the_field_;
-  HTMLFormControlElement::CloneNonAttributePropertiesFrom(source, flag);
+  interacted_state_ = source_element.interacted_state_;
+  HTMLFormControlElement::CloneNonAttributePropertiesFrom(source, data);
 }
 
 void HTMLSelectElement::ChangeRendering() {
@@ -1439,6 +1466,85 @@ void HTMLSelectElement::ChangeRendering() {
 
 const ComputedStyle* HTMLSelectElement::OptionStyle() const {
   return select_type_->OptionStyle();
+}
+
+// Show the option list for this select element.
+// https://html.spec.whatwg.org/multipage/input.html#dom-select-showpicker
+void HTMLSelectElement::showPicker(ExceptionState& exception_state) {
+  Document& document = GetDocument();
+  LocalFrame* frame = document.GetFrame();
+  // In cross-origin iframes it should throw a "SecurityError" DOMException
+  if (frame) {
+    if (!frame->IsSameOrigin()) {
+      exception_state.ThrowSecurityError(
+          "showPicker() called from cross-origin iframe.");
+      return;
+    }
+  }
+
+  if (IsDisabledFormControl()) {
+    exception_state.ThrowDOMException(DOMExceptionCode::kInvalidStateError,
+                                      "showPicker() cannot "
+                                      "be used on immutable controls.");
+    return;
+  }
+
+  if (!LocalFrame::HasTransientUserActivation(frame)) {
+    exception_state.ThrowDOMException(DOMExceptionCode::kNotAllowedError,
+                                      "showPicker() requires a user gesture.");
+    return;
+  }
+
+  select_type_->ShowPicker();
+}
+
+bool HTMLSelectElement::HandleInvokeInternal(HTMLElement& invoker,
+                                             AtomicString& action) {
+  if (HTMLElement::HandleInvokeInternal(invoker, action)) {
+    return true;
+  }
+
+  if (!RuntimeEnabledFeatures::HTMLInvokeActionsV2Enabled()) {
+    return false;
+  }
+
+  // Step 3. If action is an ASCII case-insensitive match for showPicker ...
+  // Early return instead of doing this in step 3.
+  if (!EqualIgnoringASCIICase(action, keywords::kShowPicker)) {
+    return false;
+  }
+
+  // Step 1. If this is not mutable, then return.
+  if (IsDisabledFormControl()) {
+    return false;
+  }
+
+  // Step 2. If this's relevant settings object's origin is not same origin with
+  // this's relevant settings object's top-level origin, [...], then return.
+  Document& document = GetDocument();
+  LocalFrame* frame = document.GetFrame();
+  if (frame && !frame->IsSameOrigin()) {
+    String message = "Select cannot be invoked from cross-origin iframe.";
+    document.AddConsoleMessage(MakeGarbageCollected<ConsoleMessage>(
+        mojom::ConsoleMessageSource::kJavaScript,
+        mojom::ConsoleMessageLevel::kWarning, message));
+    return false;
+  }
+
+  // If this's relevant global object does not have transient
+  // activation, then return.
+  if (!LocalFrame::HasTransientUserActivation(frame)) {
+    String message = "Select cannot be invoked without a user gesture.";
+    document.AddConsoleMessage(MakeGarbageCollected<ConsoleMessage>(
+        mojom::ConsoleMessageSource::kJavaScript,
+        mojom::ConsoleMessageLevel::kWarning, message));
+    return false;
+  }
+
+  // Step 3. ... show the picker, if applicable, for this.
+  select_type_->ShowPicker();
+
+  return true;
 }
 
 }  // namespace blink

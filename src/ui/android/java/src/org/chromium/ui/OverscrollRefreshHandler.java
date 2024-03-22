@@ -1,14 +1,12 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 package org.chromium.ui;
 
-import org.chromium.base.annotations.CalledByNative;
+import org.jni_zero.CalledByNative;
 
-/**
- * Simple interface allowing customized response to an overscrolling pull input.
- */
+/** Simple interface allowing customized response to an overscrolling pull input. */
 public interface OverscrollRefreshHandler {
     /**
      * Signals the start of an overscrolling pull.
@@ -39,9 +37,7 @@ public interface OverscrollRefreshHandler {
     @CalledByNative
     public void release(boolean allowRefresh);
 
-    /**
-     * Reset the active pull state.
-     */
+    /** Reset the active pull state. */
     @CalledByNative
     public void reset();
 

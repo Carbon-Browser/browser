@@ -1,17 +1,16 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "device/fido/virtual_fido_device.h"
 
-#include <algorithm>
 #include <tuple>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/containers/cxx20_erase.h"
+#include "base/containers/cxx20_erase_vector.h"
 #include "base/logging.h"
 #include "base/rand_util.h"
+#include "base/ranges/algorithm.h"
 #include "base/strings/string_number_conversions.h"
 #include "components/cbor/values.h"
 #include "components/cbor/writer.h"
@@ -19,8 +18,10 @@
 #include "crypto/ec_signature_creator.h"
 #include "crypto/openssl_util.h"
 #include "device/fido/fido_parsing_utils.h"
+#include "device/fido/large_blob.h"
 #include "device/fido/p256_public_key.h"
 #include "device/fido/public_key.h"
+#include "net/cert/x509_util.h"
 #include "third_party/boringssl/src/include/openssl/bn.h"
 #include "third_party/boringssl/src/include/openssl/bytestring.h"
 #include "third_party/boringssl/src/include/openssl/ec.h"
@@ -370,6 +371,27 @@ VirtualFidoDevice::State::State()
 }
 VirtualFidoDevice::State::~State() = default;
 
+void VirtualFidoDevice::State::AddObserver(Observer* observer) {
+  observers_.AddObserver(observer);
+}
+
+void VirtualFidoDevice::State::RemoveObserver(Observer* observer) {
+  observers_.RemoveObserver(observer);
+}
+
+void VirtualFidoDevice::State::NotifyCredentialCreated(
+    const Credential& credential) {
+  for (Observer& observer : observers_) {
+    observer.OnCredentialCreated(credential);
+  }
+}
+
+void VirtualFidoDevice::State::NotifyAssertion(const Credential& credential) {
+  for (Observer& observer : observers_) {
+    observer.OnAssertion(credential);
+  }
+}
+
 bool VirtualFidoDevice::State::InjectRegistration(
     base::span<const uint8_t> credential_id,
     RegistrationData registration) {
@@ -382,7 +404,10 @@ bool VirtualFidoDevice::State::InjectRegistration(
 bool VirtualFidoDevice::State::InjectRegistration(
     base::span<const uint8_t> credential_id,
     const std::string& relying_party_id) {
-  return InjectRegistration(credential_id, RegistrationData(relying_party_id));
+  RegistrationData registration(relying_party_id);
+  registration.backup_eligible = default_backup_eligibility;
+  registration.backup_state = default_backup_state;
+  return InjectRegistration(credential_id, std::move(registration));
 }
 
 bool VirtualFidoDevice::State::InjectResidentKey(
@@ -408,6 +433,8 @@ bool VirtualFidoDevice::State::InjectResidentKey(
   registration.is_resident = true;
   registration.rp = std::move(rp);
   registration.user = std::move(user);
+  registration.backup_eligible = default_backup_eligibility;
+  registration.backup_state = default_backup_state;
 
   bool was_inserted;
   std::tie(std::ignore, was_inserted) = registrations.emplace(
@@ -434,24 +461,31 @@ bool VirtualFidoDevice::State::InjectResidentKey(
       credential_id, PublicKeyCredentialRpEntity(std::move(relying_party_id)),
       PublicKeyCredentialUserEntity(fido_parsing_utils::Materialize(user_id),
                                     std::move(user_name),
-                                    std::move(user_display_name),
-                                    /*icon_url=*/absl::nullopt));
+                                    std::move(user_display_name)));
 }
 
 absl::optional<LargeBlob> VirtualFidoDevice::State::GetLargeBlob(
     const RegistrationData& credential) {
+  if (credential.large_blob) {
+    return credential.large_blob;
+  }
   if (!credential.large_blob_key) {
     return absl::nullopt;
   }
   LargeBlobArrayReader reader;
   reader.Append(large_blob);
-  absl::optional<std::vector<LargeBlobData>> large_blob_array =
+  absl::optional<cbor::Value::ArrayValue> large_blob_array =
       reader.Materialize();
   if (!large_blob_array) {
     return absl::nullopt;
   }
-  for (const auto& data : *large_blob_array) {
-    absl::optional<LargeBlob> blob = data.Decrypt(*credential.large_blob_key);
+  for (const cbor::Value& blob_cbor : *large_blob_array) {
+    absl::optional<LargeBlobData> data = LargeBlobData::Parse(blob_cbor);
+    if (!data.has_value()) {
+      continue;
+    }
+
+    absl::optional<LargeBlob> blob = data->Decrypt(*credential.large_blob_key);
     if (blob) {
       return blob;
     }
@@ -463,23 +497,34 @@ void VirtualFidoDevice::State::InjectLargeBlob(RegistrationData* credential,
                                                LargeBlob blob) {
   LargeBlobArrayReader reader;
   reader.Append(large_blob);
-  std::vector<LargeBlobData> large_blob_array =
-      reader.Materialize().value_or(std::vector<LargeBlobData>());
+  cbor::Value::ArrayValue large_blob_array =
+      reader.Materialize().value_or(cbor::Value::ArrayValue());
 
   if (credential->large_blob_key) {
-    base::EraseIf(large_blob_array, [&credential](const LargeBlobData& blob) {
-      return blob.Decrypt(*credential->large_blob_key).has_value();
-    });
+    base::EraseIf(
+        large_blob_array, [&credential](const cbor::Value& blob_cbor) {
+          absl::optional<LargeBlobData> blob = LargeBlobData::Parse(blob_cbor);
+          return blob && blob->Decrypt(*credential->large_blob_key).has_value();
+        });
   } else {
     credential->large_blob_key.emplace();
     base::RandBytes(credential->large_blob_key->data(),
                     credential->large_blob_key->size());
   }
 
-  large_blob_array.insert(
-      large_blob_array.end(),
-      LargeBlobData(*credential->large_blob_key, std::move(blob)));
-  LargeBlobArrayWriter writer(large_blob_array);
+  large_blob_array.emplace_back(
+      LargeBlobData(*credential->large_blob_key, std::move(blob)).AsCBOR());
+  LargeBlobArrayWriter writer(std::move(large_blob_array));
+  large_blob = writer.Pop(writer.size()).bytes;
+}
+
+void VirtualFidoDevice::State::InjectOpaqueLargeBlob(cbor::Value blob) {
+  LargeBlobArrayReader reader;
+  reader.Append(large_blob);
+  cbor::Value::ArrayValue large_blob_array =
+      reader.Materialize().value_or(cbor::Value::ArrayValue());
+  large_blob_array.emplace_back(std::move(blob));
+  LargeBlobArrayWriter writer(std::move(large_blob_array));
   large_blob = writer.Pop(writer.size()).bytes;
 }
 
@@ -527,7 +572,7 @@ VirtualFidoDevice::GenerateAttestationCertificate(
   uint8_t transport_bit;
   switch (DeviceTransport()) {
     case FidoTransportProtocol::kBluetoothLowEnergy:
-    case FidoTransportProtocol::kCloudAssistedBluetoothLowEnergy:
+    case FidoTransportProtocol::kHybrid:
       transport_bit = 1;
       break;
     case FidoTransportProtocol::kUsbHumanInterfaceDevice:
@@ -565,8 +610,8 @@ VirtualFidoDevice::GenerateAttestationCertificate(
       {kBasicContraintsOID, /*critical=*/true, kBasicContraintsContents},
   };
   if (include_transports) {
-    extensions.push_back(
-        {kTransportTypesOID, /*critical=*/false, kTransportTypesContents});
+    extensions.emplace_back(kTransportTypesOID, /*critical=*/false,
+                            kTransportTypesContents);
   }
 
   // https://w3c.github.io/webauthn/#sctn-packed-attestation-cert-requirements
@@ -602,11 +647,12 @@ void VirtualFidoDevice::StoreNewKey(
 
   // Store the registration. Because the key handle is the hashed public key we
   // just generated, no way this should already be registered.
-  bool did_insert = false;
-  std::tie(std::ignore, did_insert) = mutable_state()->registrations.emplace(
+  auto result = mutable_state()->registrations.emplace(
       fido_parsing_utils::Materialize(key_handle),
       std::move(registration_data));
-  DCHECK(did_insert);
+  DCHECK(result.second);
+  mutable_state()->NotifyCredentialCreated(
+      std::make_pair(key_handle, &result.first->second));
 }
 
 VirtualFidoDevice::RegistrationData* VirtualFidoDevice::FindRegistrationData(
@@ -617,9 +663,8 @@ VirtualFidoDevice::RegistrationData* VirtualFidoDevice::FindRegistrationData(
   if (it == mutable_state()->registrations.end())
     return nullptr;
 
-  if (!std::equal(application_parameter.begin(), application_parameter.end(),
-                  it->second.application_parameter.begin(),
-                  it->second.application_parameter.end())) {
+  if (!base::ranges::equal(application_parameter,
+                           it->second.application_parameter)) {
     return nullptr;
   }
 

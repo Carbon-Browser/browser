@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,8 +8,8 @@
 #include <string>
 #include <utility>
 
-#include "base/bind.h"
 #include "base/check_op.h"
+#include "base/functional/bind.h"
 #include "base/notreached.h"
 #include "net/base/ip_endpoint.h"
 #include "net/base/net_errors.h"
@@ -93,9 +93,6 @@ class WebSocketStreamSocket final : public StreamSocket {
     return wrapped_socket_->NetLog();
   }
   bool WasEverUsed() const override { return wrapped_socket_->WasEverUsed(); }
-  bool WasAlpnNegotiated() const override {
-    return wrapped_socket_->WasAlpnNegotiated();
-  }
   NextProto GetNegotiatedProtocol() const override {
     return wrapped_socket_->GetNegotiatedProtocol();
   }
@@ -212,7 +209,8 @@ int TransportConnectSubJob::DoEndpointLockComplete() {
   if (auto* factory = parent_job_->socket_performance_watcher_factory();
       factory != nullptr) {
     socket_performance_watcher = factory->CreateSocketPerformanceWatcher(
-        SocketPerformanceWatcherFactory::PROTOCOL_TCP, one_address);
+        SocketPerformanceWatcherFactory::PROTOCOL_TCP,
+        CurrentAddress().address());
   }
 
   const NetLogWithSource& net_log = parent_job_->net_log();
@@ -221,6 +219,13 @@ int TransportConnectSubJob::DoEndpointLockComplete() {
           one_address, std::move(socket_performance_watcher),
           parent_job_->network_quality_estimator(), net_log.net_log(),
           net_log.source());
+
+  net_log.AddEvent(NetLogEventType::TRANSPORT_CONNECT_JOB_CONNECT_ATTEMPT, [&] {
+    base::Value::Dict dict;
+    dict.Set("address", CurrentAddress().ToString());
+    transport_socket_->NetLog().source().AddToEventParameters(dict);
+    return dict;
+  });
 
   // If `websocket_endpoint_lock_manager_` is non-null, this class now owns an
   // endpoint lock. Wrap `socket` in a `WebSocketStreamSocket` to take ownership

@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,11 +13,9 @@
 #include "base/memory/weak_ptr.h"
 #include "base/process/process_metrics.h"
 #include "base/strings/string_number_conversions.h"
-#include "base/threading/sequenced_task_runner_handle.h"
 #include "base/time/time.h"
 #include "chromeos/ash/components/memory/memory.h"
 #include "chromeos/ash/components/memory/swap_configuration.h"
-#include "chromeos/dbus/dbus_thread_manager.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace ash::memory {

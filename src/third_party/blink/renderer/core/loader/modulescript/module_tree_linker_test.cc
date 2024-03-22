@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -50,7 +50,7 @@ class TestModuleTreeClient final : public ModuleTreeClient {
   }
 
   bool WasNotifyFinished() const { return was_notify_finished_; }
-  ModuleScript* GetModuleScript() { return module_script_; }
+  ModuleScript* GetModuleScript() { return module_script_.Get(); }
 
  private:
   bool was_notify_finished_ = false;

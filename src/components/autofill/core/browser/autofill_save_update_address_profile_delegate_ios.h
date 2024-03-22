@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,7 @@
 
 #include <memory>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "components/autofill/core/browser/autofill_client.h"
 #include "components/autofill/core/browser/data_model/autofill_profile.h"
 #include "components/autofill/core/browser/data_model/autofill_profile_comparator.h"
@@ -23,7 +23,9 @@ class AutofillSaveUpdateAddressProfileDelegateIOS
   AutofillSaveUpdateAddressProfileDelegateIOS(
       const AutofillProfile& profile,
       const AutofillProfile* original_profile,
+      absl::optional<std::u16string> user_email,
       const std::string& locale,
+      AutofillClient::SaveAddressProfilePromptOptions options,
       AutofillClient::AddressProfileSavePromptCallback callback);
   AutofillSaveUpdateAddressProfileDelegateIOS(
       const AutofillSaveUpdateAddressProfileDelegateIOS&) = delete;
@@ -48,6 +50,9 @@ class AutofillSaveUpdateAddressProfileDelegateIOS
   // Returns the subtitle text to be displayed in the save/update banner.
   std::u16string GetDescription() const;
 
+  // Returns the profile description shown in the migration prompt.
+  std::u16string GetProfileDescriptionForMigrationPrompt() const;
+
   // Returns subtitle for the update modal.
   std::u16string GetSubtitle();
 
@@ -65,12 +70,21 @@ class AutofillSaveUpdateAddressProfileDelegateIOS
   void EditDeclined();
   void MessageTimeout();
   void MessageDeclined();
+  void AutoDecline();
+  virtual bool Never();
 
   // Updates |profile_| |type| value to |value|.
   void SetProfileInfo(const ServerFieldType& type, const std::u16string& value);
+  void SetProfile(AutofillProfile* profile);
 
   const AutofillProfile* GetProfile() const;
   const AutofillProfile* GetOriginalProfile() const;
+
+  // Getter and Setter for `is_infobar_visible_`.
+  bool is_infobar_visible() const { return is_infobar_visible_; }
+  void set_is_infobar_visible(bool is_infobar_visible) {
+    is_infobar_visible_ = is_infobar_visible;
+  }
 
   // ConfirmInfoBarDelegate
   int GetIconId() const override;
@@ -80,6 +94,18 @@ class AutofillSaveUpdateAddressProfileDelegateIOS
   bool Accept() override;
   bool Cancel() override;
   bool EqualsDelegate(infobars::InfoBarDelegate* delegate) const override;
+
+  bool IsMigrationToAccount() const { return is_migration_to_account_; }
+
+  absl::optional<std::u16string> UserAccountEmail() const {
+    return user_email_;
+  }
+
+  // Returns true if the profile's source is
+  // `AutofillProfile::Source::kAccount`.
+  bool IsProfileAnAccountProfile() const {
+    return profile_.source() == autofill::AutofillProfile::Source::kAccount;
+  }
 
 #if defined(UNIT_TEST)
   // Getter for |user_decision_|. Used for the testing purposes.
@@ -110,6 +136,15 @@ class AutofillSaveUpdateAddressProfileDelegateIOS
   // The callback to run once the user makes a decision.
   AutofillClient::AddressProfileSavePromptCallback
       address_profile_save_prompt_callback_;
+
+  // True if the either of banner or modal is visible currently.
+  bool is_infobar_visible_ = false;
+
+  // Denotes if an account migration prompt should be shown.
+  bool is_migration_to_account_;
+
+  // Denotes the email address of the syncing account.
+  absl::optional<std::u16string> user_email_;
 
   // Records the last user decision based on the interactions with the
   // banner/modal to be sent with |address_profile_save_prompt_callback_|.

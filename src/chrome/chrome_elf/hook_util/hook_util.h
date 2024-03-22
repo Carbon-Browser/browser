@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,19 +7,7 @@
 
 #include <windows.h>
 
-namespace sandbox {
-class ServiceResolverThunk;
-}
-
 namespace elf_hook {
-
-//------------------------------------------------------------------------------
-// System Service hooking support
-//------------------------------------------------------------------------------
-
-// Creates a |ServiceResolverThunk| based on the OS version. Ownership of the
-// resulting thunk is passed to the caller.
-sandbox::ServiceResolverThunk* HookSystemService(bool relaxed);
 
 //------------------------------------------------------------------------------
 // Import Address Table hooking support

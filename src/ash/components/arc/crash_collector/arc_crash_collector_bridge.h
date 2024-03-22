@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,6 +8,7 @@
 #include <string>
 
 #include "ash/components/arc/mojom/crash_collector.mojom.h"
+#include "base/memory/raw_ptr.h"
 #include "components/keyed_service/core/keyed_service.h"
 #include "mojo/public/mojom/base/time.mojom.h"
 
@@ -41,7 +42,7 @@ class ArcCrashCollectorBridge : public KeyedService,
   // mojom::CrashCollectorHost overrides.
   void DumpCrash(const std::string& type,
                  mojo::ScopedHandle pipe,
-                 absl::optional<base::TimeDelta> uptime) override;
+                 std::optional<base::TimeDelta> uptime) override;
   void DumpNativeCrash(const std::string& exec_name,
                        int32_t pid,
                        int64_t timestamp,
@@ -51,17 +52,20 @@ class ArcCrashCollectorBridge : public KeyedService,
       const std::string& device,
       const std::string& board,
       const std::string& cpu_abi,
-      const absl::optional<std::string>& fingerprint) override;
+      const std::optional<std::string>& fingerprint) override;
+
+  static void EnsureFactoryBuilt();
 
  private:
   std::vector<std::string> CreateCrashReporterArgs();
 
-  ArcBridgeService* const arc_bridge_service_;  // Owned by ArcServiceManager.
+  const raw_ptr<ArcBridgeService, ExperimentalAsh>
+      arc_bridge_service_;  // Owned by ArcServiceManager.
 
   std::string device_;
   std::string board_;
   std::string cpu_abi_;
-  absl::optional<std::string> fingerprint_;
+  std::optional<std::string> fingerprint_;
 };
 
 }  // namespace arc

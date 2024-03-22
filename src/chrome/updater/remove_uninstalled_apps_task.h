@@ -1,18 +1,18 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CHROME_UPDATER_REMOVE_UNINSTALLED_APPS_TASK_H_
 #define CHROME_UPDATER_REMOVE_UNINSTALLED_APPS_TASK_H_
 
+#include <optional>
 #include <string>
 
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
 #include "base/memory/ref_counted.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/sequence_checker.h"
 #include "chrome/updater/updater_scope.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace base {
 class FilePath;
@@ -38,8 +38,8 @@ class RemoveUninstalledAppsTask
   friend class base::RefCountedThreadSafe<RemoveUninstalledAppsTask>;
   virtual ~RemoveUninstalledAppsTask();
 
-  absl::optional<int> GetUnregisterReason(const std::string& app_id,
-                                          const base::FilePath& ecp) const;
+  std::optional<int> GetUnregisterReason(const std::string& app_id,
+                                         const base::FilePath& ecp) const;
 
   SEQUENCE_CHECKER(sequence_checker_);
   scoped_refptr<Configurator> config_;

@@ -1,11 +1,11 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef ANDROID_WEBVIEW_BROWSER_GFX_TASK_QUEUE_WEBVIEW_H_
 #define ANDROID_WEBVIEW_BROWSER_GFX_TASK_QUEUE_WEBVIEW_H_
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/task/single_thread_task_runner.h"
 
@@ -14,6 +14,8 @@ namespace android_webview {
 // In WebView, there is a single task queue that runs all tasks instead of
 // thread task runners. This is the class actually scheduling and running tasks
 // for WebView. This is used by both CommandBuffer and SkiaDDL.
+//
+// Lifetime: Singleton
 class TaskQueueWebView {
  public:
   // Static method that makes sure this is only one copy of this class.
@@ -35,16 +37,14 @@ class TaskQueueWebView {
   // Called by TaskForwardingSequence.
   virtual void ScheduleOrRetainTask(base::OnceClosure task) = 0;
 
-  // Called by DeferredGpuCommandService to schedule delayed tasks.
-  // This should not be called when kVizForWebView is enabled.
+  // Called to schedule delayed tasks.
   virtual void ScheduleIdleTask(base::OnceClosure task) = 0;
 
-  // Called by both DeferredGpuCommandService and
-  // SkiaOutputSurfaceDisplayContext to post task to client thread.
-  void ScheduleClientTask(base::OnceClosure task) {
-    GetClientTaskRunner()->PostTask(FROM_HERE, std::move(task));
-  }
+  // Used to post task to client thread.
   virtual scoped_refptr<base::TaskRunner> GetClientTaskRunner() = 0;
+
+  // Uniti tests can switch render thread.
+  virtual void ResetRenderThreadForTesting() = 0;
 
  protected:
   virtual ~TaskQueueWebView() = default;

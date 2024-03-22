@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,9 @@
 
 #include <stdint.h>
 
+#include <array>
 #include <memory>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -47,6 +49,8 @@ enum IPAddressAttributes {
   IP_ADDRESS_ATTRIBUTE_DETACHED = 1 << 5,
 };
 
+using Eui48MacAddress = std::array<uint8_t, 6>;
+
 // struct that is used by GetNetworkList() to represent a network
 // interface.
 struct NET_EXPORT NetworkInterface {
@@ -57,7 +61,8 @@ struct NET_EXPORT NetworkInterface {
                    NetworkChangeNotifier::ConnectionType type,
                    const IPAddress& address,
                    uint32_t prefix_length,
-                   int ip_address_attributes);
+                   int ip_address_attributes,
+                   std::optional<Eui48MacAddress> mac_address = std::nullopt);
   NetworkInterface(const NetworkInterface& other);
   ~NetworkInterface();
 
@@ -68,6 +73,7 @@ struct NET_EXPORT NetworkInterface {
   IPAddress address;
   uint32_t prefix_length;
   int ip_address_attributes;  // Combination of |IPAddressAttributes|.
+  std::optional<Eui48MacAddress> mac_address;
 };
 
 typedef std::vector<NetworkInterface> NetworkInterfaceList;

@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,13 +7,16 @@
 
 #import <UIKit/UIKit.h>
 
-#import "ios/chrome/browser/ui/table_view/cells/table_view_item.h"
+#import "ios/chrome/browser/shared/ui/table_view/cells/table_view_item.h"
 
 // Item to display the name of the parent folder of a bookmark node.
 @interface BookmarkParentFolderItem : TableViewItem
 
 // The title of the bookmark folder it represents.
 @property(nonatomic, copy) NSString* title;
+
+// Whether a slashed cloud should be displayed
+@property(nonatomic, assign) BOOL shouldDisplayCloudSlashIcon;
 
 @end
 
@@ -22,6 +25,9 @@
 
 // Label that displays the item's title.
 @property(nonatomic, readonly, strong) UILabel* parentFolderNameLabel;
+
+// A view containing a slashed cloud icon; at the end of the subview stack.
+@property(nonatomic, strong) UIView* cloudSlashedView;
 
 @end
 

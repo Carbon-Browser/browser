@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -187,10 +187,10 @@ var testSerial = function() {
   };
 
   var onGetControlSignals = function(options) {
-    chrome.test.assertTrue(typeof options.dcd != 'undefined', "No DCD set");
-    chrome.test.assertTrue(typeof options.cts != 'undefined', "No CTS set");
-    chrome.test.assertTrue(typeof options.ri != 'undefined', "No RI set");
-    chrome.test.assertTrue(typeof options.dsr != 'undefined', "No DSR set");
+    chrome.test.assertNe('undefined', typeof options.dcd, "No DCD set");
+    chrome.test.assertNe('undefined', typeof options.cts, "No CTS set");
+    chrome.test.assertNe('undefined', typeof options.ri, "No RI set");
+    chrome.test.assertNe('undefined', typeof options.dsr, "No DSR set");
     doNextOperation();
   };
 

@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -15,7 +15,8 @@ import org.chromium.components.module_installer.builder.ModuleInterface;
  *
  * Use {@link CableAuthenticatorInstaller} to access this module from outside of this package.
  */
-@ModuleInterface(module = "cablev2_authenticator",
+@ModuleInterface(
+        module = "cablev2_authenticator",
         impl = "org.chromium.chrome.modules.cablev2_authenticator.ModuleImpl")
 public interface Module {
     /** Returns a {@link Fragment} that contains the authenticator UI. */

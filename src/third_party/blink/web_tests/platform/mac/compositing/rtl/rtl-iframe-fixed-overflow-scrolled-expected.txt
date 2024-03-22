@@ -7,27 +7,17 @@
       "backgroundColor": "#FFFFFF"
     },
     {
+      "name": "LayoutIFrame (positioned) IFRAME",
+      "bounds": [400, 400],
+      "drawsContent": false
+    },
+    {
       "name": "Scrolling background of LayoutView #document",
       "position": [15, 0],
       "bounds": [1000, 1000],
       "contentsOpaque": true,
       "backgroundColor": "#FFFFFF",
       "transform": 1
-    },
-    {
-      "name": "HorizontalScrollbar",
-      "position": [15, 385],
-      "bounds": [385, 15]
-    },
-    {
-      "name": "VerticalScrollbar",
-      "bounds": [15, 385]
-    },
-    {
-      "name": "Scroll corner of LayoutView #document",
-      "position": [0, 385],
-      "bounds": [15, 15],
-      "contentsOpaqueForText": true
     },
     {
       "name": "LayoutNGBlockFlow (positioned) DIV class='positioned indicator'",
@@ -42,6 +32,22 @@
       "contentsOpaque": true,
       "backgroundColor": "#008000",
       "transform": 3
+    },
+    {
+      "name": "HorizontalScrollbar",
+      "position": [15, 385],
+      "bounds": [385, 15],
+      "contentsOpaque": true
+    },
+    {
+      "name": "VerticalScrollbar",
+      "bounds": [15, 385],
+      "contentsOpaque": true
+    },
+    {
+      "name": "Scroll corner of LayoutView #document",
+      "position": [0, 385],
+      "bounds": [15, 15]
     }
   ],
   "transforms": [

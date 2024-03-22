@@ -1,4 +1,4 @@
-// Copyright (c) 2011 The Chromium Authors. All rights reserved.
+// Copyright 2011 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -191,6 +191,7 @@ std::string SHA1HashString(StringPiece str) {
 
 void SHA1HashBytes(const unsigned char* data, size_t len, unsigned char* hash) {
   SHA1Context context;
+  context.Init();
   context.Update(data, len);
   context.Final();
 

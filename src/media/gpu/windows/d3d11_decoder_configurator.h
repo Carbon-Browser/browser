@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -37,6 +37,7 @@ class MEDIA_GPU_EXPORT D3D11DecoderConfigurator {
       const gpu::GpuDriverBugWorkarounds& workarounds,
       const VideoDecoderConfig& config,
       uint8_t bit_depth,
+      VideoChromaSampling chroma_sampling,
       MediaLog* media_log,
       bool use_shared_handle);
 

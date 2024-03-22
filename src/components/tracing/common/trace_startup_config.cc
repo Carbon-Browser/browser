@@ -1,4 +1,4 @@
-// Copyright (c) 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -91,10 +91,6 @@ TraceStartupConfig::TraceStartupConfig() {
     DCHECK(IsEnabled());
     DCHECK(!IsTracingStartupForDuration());
     DCHECK_EQ(SessionOwner::kBackgroundTracing, session_owner_);
-    CHECK(GetResultFile().empty());
-  } else if (EnableFromATrace()) {
-    DCHECK(IsEnabled());
-    DCHECK_EQ(SessionOwner::kSystemTracing, session_owner_);
     CHECK(GetResultFile().empty());
   }
 }
@@ -210,8 +206,10 @@ bool TraceStartupConfig::EnableFromCommandLine() {
           base::trace_event::MemoryDumpManager::kTraceCategory)) {
     base::trace_event::TraceConfig::MemoryDumpConfig memory_config;
     memory_config.triggers.push_back(
-        {10000, base::trace_event::MemoryDumpLevelOfDetail::DETAILED,
-         base::trace_event::MemoryDumpType::PERIODIC_INTERVAL});
+        {10000, base::trace_event::MemoryDumpLevelOfDetail::kDetailed,
+         base::trace_event::MemoryDumpType::kPeriodicInterval});
+    memory_config.allowed_dump_modes.insert(
+        base::trace_event::MemoryDumpLevelOfDetail::kDetailed);
     trace_config_.ResetMemoryDumpConfig(memory_config);
   }
 
@@ -219,24 +217,6 @@ bool TraceStartupConfig::EnableFromCommandLine() {
 
   is_enabled_ = true;
   return true;
-}
-
-bool TraceStartupConfig::EnableFromATrace() {
-#if BUILDFLAG(IS_ANDROID)
-  auto atrace_config =
-      base::trace_event::TraceLog::GetInstance()->TakeATraceStartupConfig();
-  if (!atrace_config)
-    return false;
-  trace_config_ = *atrace_config;
-  is_enabled_ = true;
-  // We only support ATrace-initiated startup tracing together with the system
-  // service, because DevTools and background tracing generally use Chrome
-  // command line flags to control startup tracing instead of ATrace.
-  session_owner_ = SessionOwner::kSystemTracing;
-  return true;
-#else   // BUILDFLAG(IS_ANDROID)
-  return false;
-#endif  // !BUILDFLAG(IS_ANDROID)
 }
 
 bool TraceStartupConfig::EnableFromConfigFile() {
@@ -300,33 +280,31 @@ bool TraceStartupConfig::EnableFromBackgroundTracing() {
 
 bool TraceStartupConfig::ParseTraceConfigFileContent(
     const std::string& content) {
-  std::unique_ptr<base::Value> value(base::JSONReader::ReadDeprecated(content));
+  absl::optional<base::Value> value(base::JSONReader::Read(content));
   if (!value || !value->is_dict())
     return false;
 
-  std::unique_ptr<base::DictionaryValue> dict(
-      static_cast<base::DictionaryValue*>(value.release()));
+  auto& dict = value->GetDict();
 
-  base::DictionaryValue* trace_config_dict = nullptr;
-  if (!dict->GetDictionary(kTraceConfigParam, &trace_config_dict))
+  auto* trace_config_dict = dict.FindDict(kTraceConfigParam);
+  if (!trace_config_dict)
     return false;
 
-  trace_config_ = base::trace_event::TraceConfig(*trace_config_dict);
+  trace_config_ = base::trace_event::TraceConfig(std::move(*trace_config_dict));
 
   startup_duration_in_seconds_ =
-      dict->FindIntKey(kStartupDurationParam).value_or(0);
+      dict.FindInt(kStartupDurationParam).value_or(0);
 
   if (startup_duration_in_seconds_ < 0)
     startup_duration_in_seconds_ = 0;
 
-  std::string result_file_or_dir_str;
-  if (dict->GetString(kResultFileParam, &result_file_or_dir_str)) {
-    result_file_ = base::FilePath::FromUTF8Unsafe(result_file_or_dir_str);
-  } else if (dict->GetString(kResultDirectoryParam, &result_file_or_dir_str)) {
-    result_file_ = base::FilePath::FromUTF8Unsafe(result_file_or_dir_str);
+  if (auto* result_file = dict.FindString(kResultFileParam)) {
+    result_file_ = base::FilePath::FromUTF8Unsafe(*result_file);
+  } else if (auto* result_dir = dict.FindString(kResultDirectoryParam)) {
+    result_file_ = base::FilePath::FromUTF8Unsafe(*result_dir);
     // Java time to get an int instead of a double.
     result_file_ = result_file_.AppendASCII(
-        base::NumberToString(base::Time::Now().ToJavaTime()) +
+        base::NumberToString(base::Time::Now().InMillisecondsSinceUnixEpoch()) +
         "_chrometrace.log");
   }
 

@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,32 +14,6 @@
 #include "testing/gtest/include/gtest/gtest.h"
 
 namespace ui_devtools {
-
-class FakeUIElement : public UIElement {
- public:
-  FakeUIElement(UIElementDelegate* ui_element_delegate)
-      : UIElement(UIElementType::ROOT, ui_element_delegate, nullptr) {}
-
-  ~FakeUIElement() override {}
-  void GetBounds(gfx::Rect* bounds) const override { *bounds = bounds_; }
-  void SetBounds(const gfx::Rect& bounds) override { bounds_ = bounds; }
-  void GetVisible(bool* visible) const override { *visible = visible_; }
-  void SetVisible(bool visible) override { visible_ = visible; }
-  std::vector<std::string> GetAttributes() const override { return {}; }
-  std::pair<gfx::NativeWindow, gfx::Rect> GetNodeWindowAndScreenBounds()
-      const override {
-    return {};
-  }
-  bool visible() const { return visible_; }
-  gfx::Rect bounds() const { return bounds_; }
-  void AddSource(std::string path, int line) {
-    UIElement::AddSource(path, line);
-  }
-
- private:
-  gfx::Rect bounds_;
-  bool visible_;
-};
 
 class FakeDOMAgent : public DOMAgent {
  public:

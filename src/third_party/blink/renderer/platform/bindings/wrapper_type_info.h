@@ -88,6 +88,7 @@ struct PLATFORM_EXPORT WrapperTypeInfo final {
     kIdlCallbackInterface,
     kIdlBufferSourceType,
     kIdlObservableArray,
+    kIdlAsyncOrSyncIterator,
     kCustomWrappableKind,
   };
 
@@ -118,8 +119,10 @@ struct PLATFORM_EXPORT WrapperTypeInfo final {
   //
   // - kIdlInterface: v8::FunctionTemplate of interface object
   // - kIdlNamespace: v8::ObjectTemplate of namespace object
-  // - kIdlCallbackInterface: v8::FunctionTemplate of legacy callback interface
-  //       object
+  // - kIdlCallbackInterface: v8::FunctionTemplate of legacy callback
+  //       interface object
+  // - kIdlAsyncOrSyncIterator: v8::FunctionTemplate of default (asynchronous
+  //       or synchronous) iterator object
   // - kCustomWrappableKind: v8::FunctionTemplate
   v8::Local<v8::Template> GetV8ClassTemplate(
       v8::Isolate* isolate,
@@ -160,6 +163,13 @@ struct PLATFORM_EXPORT WrapperTypeInfo final {
   unsigned                              // ActiveScriptWrappableInheritance
       active_script_wrappable_inheritance : 1;
   unsigned idl_definition_kind : 3;  // IdlDefinitionKind
+
+  // This is a special case only used by V8WindowProperties::WrapperTypeInfo().
+  // WindowProperties is part of Window's prototype object's prototype chain,
+  // but not part of Window's interface object prototype chain. When this bit is
+  // set, V8PerContextData::ConstructorForTypeSlowCase() skips over this type
+  // when constructing the interface object's prototype chain.
+  bool is_skipped_in_interface_object_prototype_chain : 1;
 };
 
 template <typename T, int offset>
@@ -174,6 +184,14 @@ inline T* GetInternalField(v8::Local<v8::Object> wrapper) {
   DCHECK_LT(offset, wrapper->InternalFieldCount());
   return reinterpret_cast<T*>(
       wrapper->GetAlignedPointerFromInternalField(offset));
+}
+
+template <typename T, int offset>
+inline T* GetInternalField(v8::Isolate* isolate,
+                           v8::Local<v8::Object> wrapper) {
+  DCHECK_LT(offset, wrapper->InternalFieldCount());
+  return reinterpret_cast<T*>(
+      wrapper->GetAlignedPointerFromInternalField(isolate, offset));
 }
 
 template <typename T, int offset>
@@ -192,6 +210,12 @@ inline ScriptWrappable* ToScriptWrappable(
 
 inline ScriptWrappable* ToScriptWrappable(v8::Local<v8::Object> wrapper) {
   return GetInternalField<ScriptWrappable, kV8DOMWrapperObjectIndex>(wrapper);
+}
+
+inline ScriptWrappable* ToScriptWrappable(v8::Isolate* isolate,
+                                          v8::Local<v8::Object> wrapper) {
+  return GetInternalField<ScriptWrappable, kV8DOMWrapperObjectIndex>(isolate,
+                                                                     wrapper);
 }
 
 inline ScriptWrappable* ToScriptWrappable(v8::Object* wrapper) {

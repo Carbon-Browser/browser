@@ -1,20 +1,21 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import 'chrome://resources/cr_elements/cr_button/cr_button.m.js';
-import 'chrome://resources/cr_elements/cr_checkbox/cr_checkbox.m.js';
-import 'chrome://resources/cr_elements/shared_vars_css.m.js';
+import 'chrome://resources/cr_elements/cr_button/cr_button.js';
+import 'chrome://resources/cr_elements/cr_checkbox/cr_checkbox.js';
+import 'chrome://resources/cr_elements/cr_shared_vars.css.js';
 import 'chrome://resources/polymer/v3_0/iron-icon/iron-icon.js';
-import 'chrome://resources/cr_elements/icons.m.js';
+import 'chrome://resources/cr_elements/icons.html.js';
 import './strings.m.js';
 import './signin_shared.css.js';
 import './signin_vars.css.js';
+import './tangible_sync_style_shared.css.js';
 
-import {CrButtonElement} from 'chrome://resources/cr_elements/cr_button/cr_button.m.js';
-import {I18nMixin} from 'chrome://resources/js/i18n_mixin.js';
-import {loadTimeData} from 'chrome://resources/js/load_time_data.m.js';
-import {WebUIListenerMixin} from 'chrome://resources/js/web_ui_listener_mixin.js';
+import {CrButtonElement} from 'chrome://resources/cr_elements/cr_button/cr_button.js';
+import {I18nMixin} from 'chrome://resources/cr_elements/i18n_mixin.js';
+import {WebUiListenerMixin} from 'chrome://resources/cr_elements/web_ui_listener_mixin.js';
+import {loadTimeData} from 'chrome://resources/js/load_time_data.js';
 import {PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 
 import {getTemplate} from './enterprise_profile_welcome_app.html.js';
@@ -42,7 +43,7 @@ export interface EnterpriseProfileWelcomeAppElement {
 }
 
 const EnterpriseProfileWelcomeAppElementBase =
-    WebUIListenerMixin(I18nMixin(PolymerElement));
+    WebUiListenerMixin(I18nMixin(PolymerElement));
 
 export class EnterpriseProfileWelcomeAppElement extends
     EnterpriseProfileWelcomeAppElementBase {
@@ -72,6 +73,12 @@ export class EnterpriseProfileWelcomeAppElement extends
       /** The detailed info about enterprise management */
       enterpriseInfo_: String,
 
+      /**
+       * Whether this page is being shown as a dialog.
+       *
+       * Reflected as an attribute to allow configuring variables and styles at
+       * the element host level.
+       */
       isModalDialog_: {
         type: Boolean,
         reflectToAttribute: true,
@@ -82,7 +89,6 @@ export class EnterpriseProfileWelcomeAppElement extends
 
       showLinkDataCheckbox_: {
         type: String,
-        reflectToAttribute: true,
         value() {
           return loadTimeData.getBoolean('showLinkDataCheckbox');
         },
@@ -129,7 +135,7 @@ export class EnterpriseProfileWelcomeAppElement extends
   override ready() {
     super.ready();
 
-    this.addWebUIListener(
+    this.addWebUiListener(
         'on-profile-info-changed',
         (info: EnterpriseProfileInfo) => this.setProfileInfo_(info));
     this.enterpriseProfileWelcomeBrowserProxy_.initialized().then(
@@ -153,9 +159,6 @@ export class EnterpriseProfileWelcomeAppElement extends
   }
 
   private setProfileInfo_(info: EnterpriseProfileInfo) {
-    // <if expr="not chromeos_lacros">
-    this.style.setProperty('--header-background-color', info.backgroundColor);
-    // </if>
     this.pictureUrl_ = info.pictureUrl;
     this.showEnterpriseBadge_ = info.showEnterpriseBadge;
     this.title_ = info.title;
@@ -164,6 +167,18 @@ export class EnterpriseProfileWelcomeAppElement extends
     this.defaultProceedLabel_ = info.proceedLabel;
     this.proceedLabel_ = this.defaultProceedLabel_;
     this.showCancelButton_ = info.showCancelButton;
+    this.linkData_ = info.checkLinkDataCheckboxByDefault;
+  }
+
+  /**
+   * Returns either "dialog" or an empty string.
+   *
+   * The returned value is intended to be added as a class on the root tags of
+   * the element. Some styles from `tangible_sync_style_shared.css` rely on the
+   * presence of this "dialog" class.
+   */
+  private getMaybeDialogClass_() {
+    return this.isModalDialog_ ? 'dialog' : '';
   }
 }
 

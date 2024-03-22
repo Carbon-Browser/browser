@@ -1,11 +1,11 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/ash/attestation/tpm_challenge_key_with_timeout.h"
 
 #include "base/memory/ptr_util.h"
-#include "base/threading/sequenced_task_runner_handle.h"
+#include "base/task/sequenced_task_runner.h"
 
 namespace ash {
 namespace attestation {
@@ -17,17 +17,18 @@ TpmChallengeKeyWithTimeout::~TpmChallengeKeyWithTimeout() {
 
 void TpmChallengeKeyWithTimeout::BuildResponse(
     base::TimeDelta timeout,
-    AttestationKeyType key_type,
+    ::attestation::VerifiedAccessFlow flow_type,
     Profile* profile,
     TpmChallengeKeyCallback callback,
     const std::string& challenge,
     bool register_key,
+    ::attestation::KeyType key_crypto_type,
     const std::string& key_name_for_spkac,
     const absl::optional<std::string>& signals) {
   DCHECK(!callback_);
   callback_ = std::move(callback);
 
-  base::SequencedTaskRunnerHandle::Get()->PostDelayedTask(
+  base::SequencedTaskRunner::GetCurrentDefault()->PostDelayedTask(
       FROM_HERE,
       base::BindOnce(&TpmChallengeKeyWithTimeout::ResolveCallback,
                      weak_factory_.GetWeakPtr(),
@@ -37,10 +38,10 @@ void TpmChallengeKeyWithTimeout::BuildResponse(
 
   challenger_ = TpmChallengeKeyFactory::Create();
   challenger_->BuildResponse(
-      key_type, profile,
+      flow_type, profile,
       base::BindOnce(&TpmChallengeKeyWithTimeout::ResolveCallback,
                      weak_factory_.GetWeakPtr()),
-      challenge, register_key, key_name_for_spkac, signals);
+      challenge, register_key, key_crypto_type, key_name_for_spkac, signals);
 }
 
 void TpmChallengeKeyWithTimeout::ResolveCallback(

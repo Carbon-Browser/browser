@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -26,9 +26,7 @@ class PromoCodeAccessoryInfoView extends LinearLayout {
     private ChipView mPromoCode;
     private TextView mDetailsText;
 
-    /**
-     * Constructor for inflating from XML.
-     */
+    /** Constructor for inflating from XML. */
     public PromoCodeAccessoryInfoView(Context context, AttributeSet attrs) {
         super(context, attrs);
     }

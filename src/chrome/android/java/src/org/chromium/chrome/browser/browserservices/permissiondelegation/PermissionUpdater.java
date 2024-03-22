@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,9 +9,7 @@ import android.net.Uri;
 
 import org.chromium.base.Log;
 import org.chromium.base.PackageManagerUtils;
-import org.chromium.base.metrics.TimingMetric;
 import org.chromium.chrome.browser.ChromeApplicationImpl;
-import org.chromium.chrome.browser.browserservices.metrics.BrowserServicesTimingMetrics;
 import org.chromium.components.embedder_support.util.Origin;
 
 import javax.inject.Inject;
@@ -32,7 +30,8 @@ public class PermissionUpdater {
     private final LocationPermissionUpdater mLocationPermissionUpdater;
 
     @Inject
-    public PermissionUpdater(InstalledWebappPermissionManager permissionManager,
+    public PermissionUpdater(
+            InstalledWebappPermissionManager permissionManager,
             NotificationPermissionUpdater notificationPermissionUpdater,
             LocationPermissionUpdater locationPermissionUpdater) {
         mPermissionManager = permissionManager;
@@ -49,17 +48,17 @@ public class PermissionUpdater {
      * the Notification and Location delegation state for that origin if the package handles
      * browsable intents for the origin; otherwise, it does nothing.
      */
-    public void onOriginVerified(Origin origin, String packageName) {
+    public void onOriginVerified(Origin origin, String url, String packageName) {
         // If the client doesn't handle browsable Intents for the URL, we don't do anything special
         // for the origin.
-        if (!appHandlesBrowsableIntent(packageName, origin.uri())) {
+        if (!appHandlesBrowsableIntent(packageName, Uri.parse(url))) {
             Log.d(TAG, "Package does not handle Browsable Intents for the origin.");
             return;
         }
 
         mPermissionManager.addDelegateApp(origin, packageName);
 
-        mNotificationPermissionUpdater.onOriginVerified(origin, packageName);
+        mNotificationPermissionUpdater.onOriginVerified(origin, url, packageName);
     }
 
     public void onWebApkLaunch(Origin origin, String packageName) {
@@ -78,14 +77,11 @@ public class PermissionUpdater {
         browsableIntent.setAction(Intent.ACTION_VIEW);
         browsableIntent.addCategory(Intent.CATEGORY_BROWSABLE);
 
-        try (TimingMetric unused = TimingMetric.mediumUptime(
-                     BrowserServicesTimingMetrics.BROWSABLE_INTENT_RESOLUTION_TIME)) {
-            return PackageManagerUtils.resolveActivity(browsableIntent, 0) != null;
-        }
+        return PackageManagerUtils.resolveActivity(browsableIntent, 0) != null;
     }
 
-    void getLocationPermission(Origin origin, long callback) {
-        mLocationPermissionUpdater.checkPermission(origin, callback);
+    void getLocationPermission(Origin origin, String lastCommittedUrl, long callback) {
+        mLocationPermissionUpdater.checkPermission(origin, lastCommittedUrl, callback);
     }
 
     void requestNotificationPermission(Origin origin, String lastCommittedUrl, long callback) {

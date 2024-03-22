@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -38,10 +38,10 @@ class ServicesDelegateAndroid : public ServicesDelegate {
       DelayedAnalysisCallback callback) override;
   void AddDownloadManager(content::DownloadManager* download_manager) override;
 
-  void StartOnIOThread(
+  void StartOnSBThread(
       scoped_refptr<network::SharedURLLoaderFactory> browser_url_loader_factory,
       const V4ProtocolConfig& v4_config) override;
-  void StopOnIOThread(bool shutdown) override;
+  void StopOnSBThread(bool shutdown) override;
 
   void CreateTelemetryService(Profile* profile) override;
   void RemoveTelemetryService(Profile* profile) override;

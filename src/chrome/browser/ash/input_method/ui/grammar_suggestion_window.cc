@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -57,7 +57,7 @@ GrammarSuggestionWindow::GrammarSuggestionWindow(gfx::NativeView parent,
           AssistiveWindowButton{
               .id = ui::ime::ButtonId::kSuggestion,
               .window_type =
-                  ui::ime::AssistiveWindowType::kGrammarSuggestion})));
+                  ash::ime::AssistiveWindowType::kGrammarSuggestion})));
   suggestion_button_->SetBackground(nullptr);
   suggestion_button_->SetFocusBehavior(views::View::FocusBehavior::NEVER);
   suggestion_button_->SetVisible(true);
@@ -68,7 +68,7 @@ GrammarSuggestionWindow::GrammarSuggestionWindow(gfx::NativeView parent,
           base::Unretained(delegate_),
           AssistiveWindowButton{
               .id = ui::ime::ButtonId::kIgnoreSuggestion,
-              .window_type = ui::ime::AssistiveWindowType::kGrammarSuggestion,
+              .window_type = ash::ime::AssistiveWindowType::kGrammarSuggestion,
           })));
   ignore_button_->SetImageHorizontalAlignment(views::ImageButton::ALIGN_CENTER);
   ignore_button_->SetImageVerticalAlignment(views::ImageButton::ALIGN_MIDDLE);
@@ -99,9 +99,9 @@ void GrammarSuggestionWindow::OnThemeChanged() {
       views::CreateEmptyBorder(views::LayoutProvider::Get()->GetInsetsMetric(
           views::INSETS_VECTOR_IMAGE_BUTTON)));
 
-  ignore_button_->SetImage(
+  ignore_button_->SetImageModel(
       views::Button::ButtonState::STATE_NORMAL,
-      gfx::CreateVectorIcon(
+      ui::ImageModel::FromVectorIcon(
           views::kCloseIcon,
           ResolveSemanticColor(cros_styles::ColorName::kTextColorPrimary)));
 

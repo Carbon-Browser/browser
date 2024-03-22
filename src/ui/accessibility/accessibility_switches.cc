@@ -1,4 +1,4 @@
-// Copyright (c) 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -28,6 +28,11 @@ const char kEnableExperimentalAccessibilityLanguageDetection[] =
 const char kEnableExperimentalAccessibilityLanguageDetectionDynamic[] =
     "enable-experimental-accessibility-language-detection-dynamic";
 
+// Switches accessibility extensions to use extensions manifest v3 while the
+// migration is still in progress.
+const char kEnableExperimentalAccessibilityManifestV3[] =
+    "enable-experimental-accessibility-manifest-v3";
+
 // Enables in progress Switch Access features for text input.
 const char kEnableExperimentalAccessibilitySwitchAccessText[] =
     "enable-experimental-accessibility-switch-access-text";
@@ -54,21 +59,6 @@ bool IsExperimentalAccessibilitySwitchAccessTextEnabled() {
 bool IsMagnifierDebugDrawRectEnabled() {
   return base::CommandLine::ForCurrentProcess()->HasSwitch(
       ::switches::kEnableMagnifierDebugDrawRect);
-}
-
-#if BUILDFLAG(IS_WIN)
-// Enables UI Automation platform API in addition to the IAccessible API.
-const char kEnableExperimentalUIAutomation[] =
-    "enable-experimental-ui-automation";
-#endif
-
-bool IsExperimentalAccessibilityPlatformUIAEnabled() {
-#if BUILDFLAG(IS_WIN)
-  return base::CommandLine::ForCurrentProcess()->HasSwitch(
-      ::switches::kEnableExperimentalUIAutomation);
-#else
-  return false;
-#endif
 }
 
 // Optionally disable AXMenuList, which makes the internal pop-up menu

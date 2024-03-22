@@ -1,17 +1,17 @@
-<!-- Copyright 2020 The Chromium Authors. All rights reserved.
+<!-- Copyright 2020 The Chromium Authors
      Use of this source code is governed by a BSD-style license that can be
      found in the LICENSE file. -->
 
 <template>
   <div id="page-container">
-    <v-dialog />
+    <v-dialog/>
     <div id="title-and-graph-container">
       <div
           id="title-and-metadata">
         <div
             id="title"
             class="md-headline">
-          Clank Dependency Viewer - Class Graph
+          <a href="/">Clank Dependency Viewer</a>  - Class Graph
         </div>
         <div
             id="graph-metadata-info">
@@ -156,7 +156,8 @@ const ClassGraphPage = {
 
   /**
    * Various references to objects used across the entire class page.
-   * @typedef {Object} ClassPageData
+   *
+   * @typedef {object} ClassPageData
    * @property {PageModel} pageModel The data store for the page.
    * @property {!ClassDisplaySettingsData} displaySettingsData Additional data
    *   store for the graph's display settings.

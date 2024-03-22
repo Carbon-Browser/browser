@@ -1,11 +1,11 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CONTENT_BROWSER_XR_SERVICE_XR_DEVICE_SERVICE_H_
 #define CONTENT_BROWSER_XR_SERVICE_XR_DEVICE_SERVICE_H_
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "content/common/content_export.h"
 #include "device/vr/public/mojom/isolated_xr_service.mojom.h"
 #include "mojo/public/cpp/bindings/remote.h"

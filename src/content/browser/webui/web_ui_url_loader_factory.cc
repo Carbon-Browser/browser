@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,12 +7,14 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
+#include "base/containers/span.h"
 #include "base/debug/crash_logging.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
 #include "base/memory/ref_counted_memory.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/numerics/safe_conversions.h"
+#include "base/ranges/algorithm.h"
 #include "base/strings/string_piece.h"
 #include "base/task/single_thread_task_runner.h"
 #include "base/task/thread_pool.h"
@@ -87,7 +89,7 @@ void ReadData(
     } else {
       temp_str = ui::ReplaceTemplateExpressions(input, *replacements);
     }
-    bytes = base::RefCountedString::TakeString(&temp_str);
+    bytes = base::MakeRefCounted<base::RefCountedString>(std::move(temp_str));
   }
 
   // The use of MojoCreateDataPipeOptions below means we'll be using uint32_t
@@ -132,7 +134,8 @@ void ReadData(
   CHECK_GE(num_bytes, output_size);
   CHECK_LE(output_offset + output_size, bytes->size());
 
-  memcpy(buffer, bytes->front() + output_offset, output_size);
+  base::ranges::copy(base::span(*bytes).subspan(output_offset, output_size),
+                     static_cast<char*>(buffer));
   result = pipe_producer_handle->EndWriteData(output_size);
   CHECK_EQ(result, MOJO_RESULT_OK);
 
@@ -145,8 +148,8 @@ void ReadData(
   mojo::Remote<network::mojom::URLLoaderClient> client(
       std::move(client_remote));
 
-  client->OnReceiveResponse(std::move(headers),
-                            std::move(pipe_consumer_handle));
+  client->OnReceiveResponse(std::move(headers), std::move(pipe_consumer_handle),
+                            absl::nullopt);
 
   network::URLLoaderCompletionStatus status(net::OK);
   status.encoded_data_length = output_size;
@@ -170,7 +173,7 @@ void DataAvailable(
   TRACE_EVENT0("ui", "WebUIURLLoader::DataAvailable");
   // Since the bytes are from the memory mapped resource file, copying the
   // data can lead to disk access. Needs to be posted to a SequencedTaskRunner
-  // as Mojo requires a SequencedTaskRunnerHandle in scope.
+  // as Mojo requires a SequencedTaskRunner::CurrentDefaultHandle in scope.
   base::ThreadPool::CreateSequencedTaskRunner(
       {base::TaskPriority::USER_BLOCKING, base::MayBlock(),
        base::TaskShutdownBehavior::SKIP_ON_SHUTDOWN})
@@ -399,7 +402,7 @@ class WebUIURLLoaderFactory : public network::SelfDeletingURLLoaderFactory {
         scheme_(scheme),
         allowed_hosts_(std::move(allowed_hosts)) {}
 
-  raw_ptr<BrowserContext> browser_context_;
+  raw_ptr<BrowserContext, AcrossTasksDanglingUntriaged> browser_context_;
   int const frame_tree_node_id_;
   const std::string scheme_;
   const base::flat_set<std::string> allowed_hosts_;  // if empty all allowed.

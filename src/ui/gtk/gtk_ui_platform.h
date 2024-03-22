@@ -1,19 +1,23 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef UI_GTK_GTK_UI_PLATFORM_H_
 #define UI_GTK_GTK_UI_PLATFORM_H_
 
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
 #include "ui/events/event.h"
 #include "ui/gfx/native_widget_types.h"
 #include "ui/gtk/gtk_compat.h"
 
-using GdkKeymap = struct _GdkKeymap;
 using GtkWindow = struct _GtkWindow;
 using GtkWidget = struct _GtkWidget;
 using GdkWindow = struct _GdkWindow;
+
+namespace ui {
+class LinuxInputMethodContext;
+class LinuxInputMethodContextDelegate;
+}  // namespace ui
 
 namespace gtk {
 
@@ -52,6 +56,14 @@ class GtkUiPlatform {
   // Presents |window|, doing all the necessary platform-specific operations
   // needed, if any.
   virtual void ShowGtkWindow(GtkWindow* window) = 0;
+
+  // Creates a new IME context or may return nullptr.
+  virtual std::unique_ptr<ui::LinuxInputMethodContext> CreateInputMethodContext(
+      ui::LinuxInputMethodContextDelegate* delegate) const = 0;
+
+  // If true, the device scale factor should be multiplied by the font scale. If
+  // false, the font size should be multiplied by the font scale.
+  virtual bool IncludeFontScaleInDeviceScale() const = 0;
 };
 
 }  // namespace gtk

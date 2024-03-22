@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,9 +9,7 @@ import org.chromium.ui.modelutil.PropertyModel.ReadableIntPropertyKey;
 import org.chromium.ui.modelutil.PropertyModel.ReadableObjectPropertyKey;
 import org.chromium.ui.modelutil.PropertyModel.WritableBooleanPropertyKey;
 
-/**
- * Data properties for the password manager illustration modal dialog.
- */
+/** Data properties for the password manager illustration modal dialog. */
 class PasswordManagerDialogProperties {
     // Callback handling clicks on the help button. If present, the button will be shown.
     static final ReadableObjectPropertyKey<Runnable> HELP_BUTTON_CALLBACK =

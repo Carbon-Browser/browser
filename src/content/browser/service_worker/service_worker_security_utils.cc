@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,7 +14,7 @@ namespace service_worker_security_utils {
 
 bool OriginCanRegisterServiceWorkerFromJavascript(const GURL& url) {
   // WebUI service workers are always registered in C++.
-  if (url.SchemeIs(kChromeUIUntrustedScheme))
+  if (url.SchemeIs(kChromeUIUntrustedScheme) || url.SchemeIs(kChromeUIScheme))
     return false;
 
   return OriginCanAccessServiceWorkers(url);

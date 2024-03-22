@@ -1,4 +1,4 @@
-// Copyright (c) 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,8 +12,8 @@
 #include <utility>
 #include <vector>
 
-#include "base/callback.h"
 #include "base/files/file_path.h"
+#include "base/functional/callback.h"
 #include "base/gtest_prod_util.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
@@ -104,9 +104,9 @@ class ProfileResetter : public content::BrowsingDataRemover::Observer {
   // Callback for when TemplateURLService has loaded.
   void OnTemplateURLServiceLoaded();
 
-  const raw_ptr<Profile> profile_;
+  const raw_ptr<Profile, DanglingUntriaged> profile_;
   std::unique_ptr<BrandcodedDefaultSettings> master_settings_;
-  raw_ptr<TemplateURLService> template_url_service_;
+  raw_ptr<TemplateURLService, DanglingUntriaged> template_url_service_;
 
   // Flags of a Resetable indicating which reset operations we are still waiting
   // for.

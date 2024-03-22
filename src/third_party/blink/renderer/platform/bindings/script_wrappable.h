@@ -54,25 +54,86 @@ class PLATFORM_EXPORT ScriptWrappable
     : public GarbageCollected<ScriptWrappable>,
       public NameClient {
  public:
+  // This is a type dispatcher from ScriptWrappable* to a subtype, optimized for
+  // use cases that perform downcasts multiple times. If you perform a downcast
+  // only once, ScriptWrappable::DowncastTo or ScriptWrappable::ToMostDerived
+  // would be a better choice.
+  class TypeDispatcher final {
+    STACK_ALLOCATED();
+
+   public:
+    // The input parameter `script_wrappable` must not be null.
+    explicit TypeDispatcher(ScriptWrappable* script_wrappable)
+        : script_wrappable_(script_wrappable),
+          wrapper_type_info_(script_wrappable->GetWrapperTypeInfo()) {}
+    ~TypeDispatcher() = default;
+
+    TypeDispatcher(const TypeDispatcher&) = delete;
+    TypeDispatcher& operator=(const TypeDispatcher&) = delete;
+
+    // Downcasts the ScriptWrappable to the given template parameter type or
+    // nullptr if the ScriptWrappable doesn't implement the given type. The
+    // inheritance is checked with WrapperTypeInfo, i.e. the check is based on
+    // the IDL definitions in *.idl files, not based on C++ class inheritance.
+    template <typename T>
+    T* DowncastTo() {
+      if (wrapper_type_info_->IsSubclass(T::GetStaticWrapperTypeInfo()))
+        return static_cast<T*>(script_wrappable_);
+      return nullptr;
+    }
+
+    // Downcasts the ScriptWrappable to the given template parameter type iff
+    // the ScriptWrappable implements the type as the most derived class (i.e.
+    // the ScriptWrappable does _not_ implement a subtype of the given type).
+    // Otherwise, returns nullptr. The inheritance is checked with
+    // WrapperTypeInfo, i.e. the check is based on the IDL definitions in *.idl
+    // files, not based on C++ class inheritance.
+    template <typename T>
+    T* ToMostDerived() {
+      if (wrapper_type_info_ == T::GetStaticWrapperTypeInfo())
+        return static_cast<T*>(script_wrappable_);
+      return nullptr;
+    }
+
+   private:
+    ScriptWrappable* script_wrappable_ = nullptr;
+    const WrapperTypeInfo* wrapper_type_info_ = nullptr;
+  };
+
   ScriptWrappable(const ScriptWrappable&) = delete;
   ScriptWrappable& operator=(const ScriptWrappable&) = delete;
   ~ScriptWrappable() override = default;
-
-  // The following methods may override lifetime of ScriptWrappable objects when
-  // needed. In particular if `HasPendingActivity()` returns true *and* the
-  // child type also inherits from `ActiveScriptWrappable`, the objects will not
-  // be reclaimed by the GC, even if they are otherwise unreachable.
-  //
-  // Note: These methods are queried during garbage collection and *must not*
-  // allocate any new objects.
-  virtual bool HasPendingActivity() const { return false; }
 
   const char* NameInHeapSnapshot() const override;
 
   virtual void Trace(Visitor*) const;
 
+  // Downcasts this instance to the given template parameter type or nullptr if
+  // this instance doesn't implement the given type. The inheritance is checked
+  // with WrapperTypeInfo, i.e. the check is based on the IDL definitions in
+  // *.idl files, not based on C++ class inheritance.
   template <typename T>
-  T* ToImpl() {
+  T* DowncastTo() {
+    if (GetWrapperTypeInfo()->IsSubclass(T::GetStaticWrapperTypeInfo()))
+      return static_cast<T*>(this);
+    return nullptr;
+  }
+
+  // Downcasts this instance to the given template parameter type iff this
+  // instance implements the type as the most derived class (i.e. this instance
+  // does _not_ implement a subtype of the given type). Otherwise, returns
+  // nullptr. The inheritance is checked with WrapperTypeInfo, i.e. the check is
+  // based on the IDL definitions in *.idl files, not based on C++ class
+  // inheritance.
+  template <typename T>
+  T* ToMostDerived() {
+    if (GetWrapperTypeInfo() == T::GetStaticWrapperTypeInfo())
+      return static_cast<T*>(this);
+    return nullptr;
+  }
+
+  template <typename T>
+  T* ToImpl() {  // DEPRECATED
     // All ScriptWrappables are managed by the Blink GC heap; check that
     // |T| is a garbage collected type.
     static_assert(
@@ -131,16 +192,20 @@ class PLATFORM_EXPORT ScriptWrappable
   }
 
   bool SetReturnValue(v8::ReturnValue<v8::Value> return_value) {
-    return_value.Set(main_world_wrapper_);
-    return ContainsWrapper();
+    const bool contains_wrapper = ContainsWrapper();
+    if (contains_wrapper) {
+      return_value.SetNonEmpty(main_world_wrapper_);
+    }
+    return contains_wrapper;
   }
 
-  bool ContainsWrapper() const { return !main_world_wrapper_.IsEmpty(); }
 
  protected:
   ScriptWrappable() = default;
 
  private:
+  bool ContainsWrapper() const { return !main_world_wrapper_.IsEmpty(); }
+
   v8::Local<v8::Object> MainWorldWrapper(v8::Isolate* isolate) const {
     return main_world_wrapper_.Get(isolate);
   }

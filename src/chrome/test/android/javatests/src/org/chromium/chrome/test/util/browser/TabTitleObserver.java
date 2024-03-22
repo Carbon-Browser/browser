@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 package org.chromium.chrome.test.util.browser;
@@ -30,11 +30,12 @@ public class TabTitleObserver extends EmptyTabObserver {
     public TabTitleObserver(final Tab tab, final String expectedTitle) {
         mExpectedTitle = expectedTitle;
         mCallback = new CallbackHelper();
-        TestThreadUtils.runOnUiThreadBlocking(() -> {
-            if (!notifyCallbackIfTitleMatches(tab)) {
-                tab.addObserver(TabTitleObserver.this);
-            }
-        });
+        TestThreadUtils.runOnUiThreadBlocking(
+                () -> {
+                    if (!notifyCallbackIfTitleMatches(tab)) {
+                        tab.addObserver(TabTitleObserver.this);
+                    }
+                });
     }
 
     /**

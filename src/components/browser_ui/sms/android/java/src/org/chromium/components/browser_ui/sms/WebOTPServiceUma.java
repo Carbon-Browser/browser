@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,9 +11,7 @@ import org.chromium.base.metrics.RecordHistogram;
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 
-/**
- * Helper Class for WebOTP Service UMA Collection.
- */
+/** Helper Class for WebOTP Service UMA Collection. */
 public final class WebOTPServiceUma {
     // Note: these values must match the WebOTPServiceInfobar enum in enums.xml.
     // Only add new values at the end, right before NUM_ENTRIES.

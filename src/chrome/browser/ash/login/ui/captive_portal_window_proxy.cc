@@ -1,14 +1,17 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/ash/login/ui/captive_portal_window_proxy.h"
+#include "base/memory/raw_ptr.h"
 
-#include "base/metrics/histogram_macros.h"
+#include "base/task/single_thread_task_runner.h"
 #include "chrome/browser/ash/login/ui/captive_portal_view.h"
 #include "chrome/browser/themes/custom_theme_supplier.h"
 #include "chrome/browser/themes/theme_service.h"
-#include "chrome/browser/ui/webui/chromeos/internet_detail_dialog.h"
+#include "chrome/browser/ui/webui/ash/internet_detail_dialog.h"
+#include "chromeos/ash/components/network/network_handler.h"
+#include "chromeos/ash/components/network/network_state_handler.h"
 #include "components/constrained_window/constrained_window_views.h"
 #include "components/web_modal/web_contents_modal_dialog_host.h"
 #include "components/web_modal/web_contents_modal_dialog_manager.h"
@@ -31,11 +34,11 @@ class CaptivePortalWidget : public views::Widget {
 
   // views::Widget:
   const ui::ThemeProvider* GetThemeProvider() const override;
-  ui::ColorProviderManager::ThemeInitializerSupplier* GetCustomTheme()
+  ui::ColorProviderKey::ThemeInitializerSupplier* GetCustomTheme()
       const override;
 
  private:
-  Profile* profile_;
+  raw_ptr<Profile, ExperimentalAsh> profile_;
 };
 
 CaptivePortalWidget::CaptivePortalWidget(Profile* profile)
@@ -45,7 +48,7 @@ const ui::ThemeProvider* CaptivePortalWidget::GetThemeProvider() const {
   return &ThemeService::GetThemeProviderForProfile(profile_);
 }
 
-ui::ColorProviderManager::ThemeInitializerSupplier*
+ui::ColorProviderKey::ThemeInitializerSupplier*
 CaptivePortalWidget::GetCustomTheme() const {
   return ThemeService::GetThemeSupplierForProfile(profile_);
 }
@@ -71,9 +74,8 @@ views::Widget* CreateWindowAsFramelessChild(
 }  // namespace
 
 CaptivePortalWindowProxy::CaptivePortalWindowProxy(
-    Delegate* delegate,
     content::WebContents* web_contents)
-    : delegate_(delegate), web_contents_(web_contents) {
+    : web_contents_(web_contents) {
   DCHECK_EQ(STATE_IDLE, GetState());
 }
 
@@ -86,27 +88,36 @@ CaptivePortalWindowProxy::~CaptivePortalWindowProxy() {
   CHECK(!IsInObserverList());
 }
 
-void CaptivePortalWindowProxy::ShowIfRedirected() {
-  if (GetState() != STATE_IDLE)
+void CaptivePortalWindowProxy::ShowIfRedirected(
+    const std::string& network_name) {
+  if (GetState() != STATE_IDLE) {
     return;
-  InitCaptivePortalView();
+  }
+  InitCaptivePortalView(network_name);
   DCHECK_EQ(STATE_WAITING_FOR_REDIRECTION, GetState());
 }
 
-void CaptivePortalWindowProxy::Show() {
+void CaptivePortalWindowProxy::Show(const std::string& network_name) {
   if (InternetDetailDialog::IsShown()) {
     // InternetDetailDialog is being shown, don't cover it.
-    Close();
+    // Close window asynchronously to prevent `CaptivePortalView` reset in the
+    // middle of the `NavigationControllerImpl::NotifyNavigationEntryCommitted`
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
+        FROM_HERE, base::BindOnce(&CaptivePortalWindowProxy::Close,
+                                  weak_factory_.GetWeakPtr()));
     return;
   }
 
-  if (GetState() == STATE_DISPLAYED)  // Dialog is already shown, do nothing.
+  // Dialog is already shown, do nothing.
+  if (GetState() == STATE_DISPLAYED) {
     return;
+  }
 
-  for (auto& observer : observers_)
+  for (auto& observer : observers_) {
     observer.OnBeforeCaptivePortalShown();
+  }
 
-  InitCaptivePortalView();
+  InitCaptivePortalView(network_name);
 
   std::unique_ptr<views::WidgetDelegate> delegate =
       captive_portal_view_->MakeWidgetDelegate();
@@ -126,14 +137,13 @@ void CaptivePortalWindowProxy::Close() {
   if (GetState() == STATE_DISPLAYED)
     widget_->Close();
   captive_portal_view_.reset();
-  captive_portal_view_for_testing_ = nullptr;
 }
 
-void CaptivePortalWindowProxy::OnRedirected() {
+void CaptivePortalWindowProxy::OnRedirected(const std::string& network_name) {
   if (GetState() == STATE_WAITING_FOR_REDIRECTION) {
-    Show();
+    Show(network_name);
   }
-  delegate_->OnPortalDetected();
+  NetworkHandler::Get()->network_state_handler()->RequestPortalDetection();
 }
 
 void CaptivePortalWindowProxy::OnOriginalURLLoaded() {
@@ -160,12 +170,13 @@ void CaptivePortalWindowProxy::OnWidgetDestroyed(views::Widget* widget) {
     observer.OnAfterCaptivePortalHidden();
 }
 
-void CaptivePortalWindowProxy::InitCaptivePortalView() {
+void CaptivePortalWindowProxy::InitCaptivePortalView(
+    const std::string& network_name) {
   DCHECK(GetState() == STATE_IDLE ||
          GetState() == STATE_WAITING_FOR_REDIRECTION);
   if (!captive_portal_view_.get()) {
-    captive_portal_view_ = std::make_unique<CaptivePortalView>(profile_, this);
-    captive_portal_view_for_testing_ = captive_portal_view_.get();
+    captive_portal_view_ =
+        std::make_unique<CaptivePortalView>(profile_, this, network_name);
   }
 
   captive_portal_view_->StartLoad();

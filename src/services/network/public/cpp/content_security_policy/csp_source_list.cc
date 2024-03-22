@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -24,9 +24,11 @@ bool AllowFromSources(const GURL& url,
                       bool has_followed_redirect,
                       bool is_opaque_fenced_frame) {
   for (const auto& source : sources) {
-    if (CheckCSPSource(*source, url, self_source, has_followed_redirect,
-                       is_opaque_fenced_frame))
+    if (CheckCSPSource(*source, url, self_source,
+                       CSPSourceContext::ContentSecurityPolicy,
+                       has_followed_redirect, is_opaque_fenced_frame)) {
       return true;
+    }
   }
   return false;
 }
@@ -192,13 +194,13 @@ bool UrlSourceListSubsumes(
 
 }  // namespace
 
-bool CheckCSPSourceList(mojom::CSPDirectiveName directive_name,
-                        const mojom::CSPSourceList& source_list,
-                        const GURL& url,
-                        const mojom::CSPSource& self_source,
-                        bool has_followed_redirect,
-                        bool is_response_check,
-                        bool is_opaque_fenced_frame) {
+CSPCheckResult CheckCSPSourceList(mojom::CSPDirectiveName directive_name,
+                                  const mojom::CSPSourceList& source_list,
+                                  const GURL& url,
+                                  const mojom::CSPSource& self_source,
+                                  bool has_followed_redirect,
+                                  bool is_response_check,
+                                  bool is_opaque_fenced_frame) {
   if (is_opaque_fenced_frame)
     DCHECK_EQ(directive_name, mojom::CSPDirectiveName::FencedFrameSrc);
 
@@ -206,7 +208,7 @@ bool CheckCSPSourceList(mojom::CSPDirectiveName directive_name,
   // the response is received.
   if (directive_name == mojom::CSPDirectiveName::NavigateTo &&
       source_list.allow_response_redirects && !is_response_check) {
-    return true;
+    return CSPCheckResult::Allowed();
   }
 
   // Wildcards match network schemes ('http', 'https', 'ftp', 'ws', 'wss'), and
@@ -220,22 +222,35 @@ bool CheckCSPSourceList(mojom::CSPDirectiveName directive_name,
   // fenced frames can map to non-https potentially trustworthy urls to avoid
   // privacy leak.
   if (source_list.allow_star) {
-    if (url.SchemeIsHTTPOrHTTPS() || url.SchemeIsWSOrWSS() ||
-        url.SchemeIs("ftp")) {
-      return true;
+    if (url.SchemeIsHTTPOrHTTPS()) {
+      return CSPCheckResult::Allowed();
     }
     if (!self_source.scheme.empty() && url.SchemeIs(self_source.scheme))
-      return true;
+      return CSPCheckResult::Allowed();
   }
 
   if (source_list.allow_self &&
-      CheckCSPSource(self_source, url, self_source, has_followed_redirect,
-                     is_opaque_fenced_frame)) {
-    return true;
+      CheckCSPSource(self_source, url, self_source,
+                     CSPSourceContext::ContentSecurityPolicy,
+                     has_followed_redirect, is_opaque_fenced_frame)) {
+    return CSPCheckResult::Allowed();
   }
 
-  return AllowFromSources(url, source_list.sources, self_source,
-                          has_followed_redirect, is_opaque_fenced_frame);
+  if (AllowFromSources(url, source_list.sources, self_source,
+                       has_followed_redirect, is_opaque_fenced_frame)) {
+    return CSPCheckResult::Allowed();
+  }
+
+  if (source_list.allow_star) {
+    if (url.SchemeIsWSOrWSS()) {
+      return CSPCheckResult::AllowedOnlyIfWildcardMatchesWs();
+    }
+    if (url.SchemeIs("ftp")) {
+      return CSPCheckResult::AllowedOnlyIfWildcardMatchesFtp();
+    }
+  }
+
+  return CSPCheckResult::Blocked();
 }
 
 bool CSPSourceListSubsumes(

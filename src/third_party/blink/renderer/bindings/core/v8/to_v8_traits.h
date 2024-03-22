@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,6 +11,8 @@
 #include "third_party/blink/renderer/bindings/core/v8/native_value_traits_impl.h"
 #include "third_party/blink/renderer/platform/bindings/dom_data_store.h"
 #include "third_party/blink/renderer/platform/bindings/v8_binding.h"
+#include "third_party/blink/renderer/platform/heap/collection_support/heap_deque.h"
+#include "third_party/blink/renderer/platform/wtf/type_traits.h"
 #include "v8/include/v8.h"
 
 namespace blink {
@@ -68,6 +70,15 @@ struct ToV8Traits<IDLBoolean> {
   [[nodiscard]] static v8::MaybeLocal<v8::Value> ToV8(ScriptState* script_state,
                                                       bool value) {
     return v8::Boolean::New(script_state->GetIsolate(), value);
+  }
+};
+
+// Bigint
+template <>
+struct ToV8Traits<IDLBigint> {
+  [[nodiscard]] static v8::MaybeLocal<v8::Value> ToV8(ScriptState* script_state,
+                                                      const BigInt& bigint) {
+    return bigint.ToV8(script_state->GetContext());
   }
 };
 
@@ -213,7 +224,7 @@ struct ToV8Traits<IDLPromise> {
 namespace bindings {
 
 // Helper function for ScriptWrappable
-inline v8::MaybeLocal<v8::Value> ToV8HelperScriptWrappable(
+[[nodiscard]] inline v8::MaybeLocal<v8::Value> ToV8HelperScriptWrappable(
     ScriptState* script_state,
     ScriptWrappable* script_wrappable) {
   CHECK(script_wrappable);
@@ -227,7 +238,7 @@ inline v8::MaybeLocal<v8::Value> ToV8HelperScriptWrappable(
 }
 
 // For optimization
-inline v8::MaybeLocal<v8::Value> ToV8HelperScriptWrappable(
+[[nodiscard]] inline v8::MaybeLocal<v8::Value> ToV8HelperScriptWrappable(
     v8::Isolate* isolate,
     ScriptWrappable* script_wrappable,
     v8::Local<v8::Object> creation_context_object) {
@@ -326,7 +337,7 @@ struct ToV8Traits<
   // TODO(crbug.com/1184543): Remove this overload.
   [[nodiscard]] static v8::MaybeLocal<v8::Value> ToV8(ScriptState* script_state,
                                                       const String& value) {
-    DCHECK(!value.IsEmpty());
+    DCHECK(!value.empty());
     return V8String(script_state->GetIsolate(), value);
   }
 
@@ -334,7 +345,7 @@ struct ToV8Traits<
   [[nodiscard]] static v8::MaybeLocal<v8::Value> ToV8(
       ScriptState* script_state,
       const AtomicString& value) {
-    DCHECK(!value.IsEmpty());
+    DCHECK(!value.empty());
     return V8String(script_state->GetIsolate(), value);
   }
 };
@@ -358,14 +369,6 @@ struct ToV8Traits<NotShared<T>> {
       return v8::Null(script_state->GetIsolate());
     return ToV8Traits<T>::ToV8(script_state, value);
   }
-
-  // TODO(canonmukai): Remove this overload.
-  [[nodiscard]] static v8::MaybeLocal<v8::Value> ToV8(
-      ScriptState* script_state,
-      const ScriptValue& script_value) {
-    DCHECK(!script_value.IsEmpty());
-    return ToV8Traits<IDLAny>::ToV8(script_state, script_value);
-  }
 };
 
 // MaybeShared
@@ -382,65 +385,60 @@ struct ToV8Traits<MaybeShared<T>> {
 namespace bindings {
 
 // Helper function for IDLSequence
-template <typename ElementIDLType, typename VectorType>
-inline v8::MaybeLocal<v8::Value> ToV8HelperSequence(ScriptState* script_state,
-                                                    const VectorType& vector) {
-  v8::Isolate* isolate = script_state->GetIsolate();
-  v8::Local<v8::Array> array;
-  {
-    v8::Context::Scope context_scope(script_state->GetContext());
-    array = v8::Array::New(isolate, base::checked_cast<int>(vector.size()));
-  }
-  v8::Local<v8::Context> context = script_state->GetContext();
-  uint32_t index = 0;
-  typename VectorType::const_iterator end = vector.end();
-  for (typename VectorType::const_iterator iter = vector.begin(); iter != end;
-       ++iter) {
-    v8::Local<v8::Value> v8_value;
-    if (!ToV8Traits<ElementIDLType>::ToV8(script_state, *iter)
-             .ToLocal(&v8_value)) {
-      return v8::MaybeLocal<v8::Value>();
+template <typename ElementIDLType, typename ContainerType>
+[[nodiscard]] inline v8::MaybeLocal<v8::Value> ToV8HelperSequence(
+    ScriptState* script_state,
+    const ContainerType& sequence) {
+  auto current_it = sequence.begin();
+  const auto end_it = sequence.end();
+  const auto callback = [&current_it, end_it, script_state]() {
+    DCHECK(end_it != current_it);
+    std::ignore = end_it;
+    if constexpr (WTF::IsAnyMemberType<decltype(*current_it)>::value) {
+      return ToV8Traits<ElementIDLType>::ToV8(script_state,
+                                              (current_it++)->Get());
+    } else {
+      return ToV8Traits<ElementIDLType>::ToV8(script_state, *(current_it++));
     }
-    bool is_property_created;
-    if (!array->CreateDataProperty(context, index++, v8_value)
-             .To(&is_property_created) ||
-        !is_property_created) {
-      return v8::Local<v8::Value>();
-    }
-  }
-  return array;
+  };
+  return v8::Array::New(script_state->GetContext(),
+                        base::checked_cast<size_t>(sequence.size()), callback)
+      .template As<v8::Value>();
 }
 
-// Helper function for IDLSequence in the case using reinterpret_cast
-// In order to reduce code size, avoids template instantiation of
-// ToV8HelperSequence<T> where T is a subclass of bindings::DictionaryBase or
-// ScriptWrappable. Since these base classes are the leftmost base class,
+// Helper function for IDLSequence in order to reduce code size. This avoids
+// template instantiation of ToV8HelperSequence<T> where T is a subclass of
+// bindings::DictionaryBase, bindings::UnionBase, or ScriptWrappable.
+// Since these base classes are the leftmost base class,
 // HeapVector<Member<TheBase>> has the same binary representation with
 // HeapVector<Member<T>>. We leverage this fact to reduce the APK size.
 //
 // This hack reduces the APK size by 4 Kbytes as of 2021 March.
 template <typename BaseClassOfT, typename T>
-inline v8::MaybeLocal<v8::Value> ToV8HelperSequenceWithMemberUpcast(
-    ScriptState* script_state,
-    const HeapVector<Member<T>>* vector) {
+[[nodiscard]] inline v8::MaybeLocal<v8::Value>
+ToV8HelperSequenceWithMemberUpcast(ScriptState* script_state,
+                                   const HeapVector<Member<T>>& sequence) {
+  static_assert(std::is_base_of_v<BaseClassOfT, T>);
   return ToV8HelperSequence<BaseClassOfT>(
       script_state,
-      *reinterpret_cast<const HeapVector<Member<BaseClassOfT>>*>(vector));
+      *reinterpret_cast<const HeapVector<Member<BaseClassOfT>>*>(&sequence));
 }
 
 template <typename BaseClassOfT, typename T>
-inline v8::MaybeLocal<v8::Value> ToV8HelperSequenceWithMemberUpcast(
-    ScriptState* script_state,
-    const HeapVector<Member<const T>>* vector) {
+[[nodiscard]] inline v8::MaybeLocal<v8::Value>
+ToV8HelperSequenceWithMemberUpcast(ScriptState* script_state,
+                                   const HeapDeque<Member<T>>& sequence) {
+  static_assert(std::is_base_of_v<BaseClassOfT, T>);
   return ToV8HelperSequence<BaseClassOfT>(
       script_state,
-      *reinterpret_cast<const HeapVector<Member<BaseClassOfT>>*>(vector));
+      *reinterpret_cast<const HeapDeque<Member<BaseClassOfT>>*>(&sequence));
 }
 
 // Helper function for IDLRecord
-template <typename ValueIDLType, typename VectorType>
-inline v8::MaybeLocal<v8::Value> ToV8HelperRecord(ScriptState* script_state,
-                                                  const VectorType& vector) {
+template <typename ValueIDLType, typename ContainerType>
+[[nodiscard]] inline v8::MaybeLocal<v8::Value> ToV8HelperRecord(
+    ScriptState* script_state,
+    const ContainerType& record) {
   v8::Isolate* isolate = script_state->GetIsolate();
   v8::Local<v8::Object> object;
   {
@@ -448,22 +446,37 @@ inline v8::MaybeLocal<v8::Value> ToV8HelperRecord(ScriptState* script_state,
     object = v8::Object::New(isolate);
   }
   v8::Local<v8::Context> context = script_state->GetContext();
-  typename VectorType::const_iterator end = vector.end();
-  for (typename VectorType::const_iterator iter = vector.begin(); iter != end;
-       ++iter) {
+  typename ContainerType::const_iterator end = record.end();
+  for (typename ContainerType::const_iterator iter = record.begin();
+       iter != end; ++iter) {
     v8::Local<v8::Value> v8_value;
-    if (!ToV8Traits<ValueIDLType>::ToV8(script_state, iter->second)
-             .ToLocal(&v8_value)) {
+    v8::MaybeLocal<v8::Value> maybe_v8_value;
+    if constexpr (WTF::IsAnyMemberType<decltype(iter->second)>::value) {
+      maybe_v8_value =
+          ToV8Traits<ValueIDLType>::ToV8(script_state, iter->second.Get());
+    } else {
+      maybe_v8_value =
+          ToV8Traits<ValueIDLType>::ToV8(script_state, iter->second);
+    }
+    if (!maybe_v8_value.ToLocal(&v8_value)) {
       return v8::MaybeLocal<v8::Value>();
     }
     bool is_property_created;
     if (!object
              ->CreateDataProperty(context, V8AtomicString(isolate, iter->first),
                                   v8_value)
-             .To(&is_property_created) ||
-        !is_property_created) {
-      return v8::Local<v8::Value>();
+             .To(&is_property_created)) {
+      return {};
     }
+    // `!is_property_created` at this point means that the property wasn't
+    // created although v8::Object::CreateDataProperty has succeeded. ---
+    // it must not happen because the object has just been created newly, so
+    // there must be no existing property with the same property name.
+    //
+    // Note that we must not return v8::Nothing because CreateDataProperty
+    // didn't throw (the convention is that v8::Nothing comes with an
+    // exception).
+    CHECK(is_property_created);
   }
   return object;
 }
@@ -479,28 +492,12 @@ struct ToV8Traits<
       ScriptState* script_state,
       const HeapVector<Member<T>>& value) {
     return bindings::ToV8HelperSequenceWithMemberUpcast<
-        bindings::DictionaryBase>(script_state, &value);
-  }
-
-  [[nodiscard]] static v8::MaybeLocal<v8::Value> ToV8(
-      ScriptState* script_state,
-      const HeapVector<Member<const T>>& value) {
-    return bindings::ToV8HelperSequenceWithMemberUpcast<
-        bindings::DictionaryBase>(script_state, &value);
-  }
-
-  [[nodiscard]] static v8::MaybeLocal<v8::Value> ToV8(
-      ScriptState* script_state,
-      const HeapVector<Member<T>>* value) {
-    DCHECK(value);
-    return bindings::ToV8HelperSequenceWithMemberUpcast<
         bindings::DictionaryBase>(script_state, value);
   }
 
   [[nodiscard]] static v8::MaybeLocal<v8::Value> ToV8(
       ScriptState* script_state,
-      const HeapVector<Member<const T>>* value) {
-    DCHECK(value);
+      const HeapVector<Member<const T>>& value) {
     return bindings::ToV8HelperSequenceWithMemberUpcast<
         bindings::DictionaryBase>(script_state, value);
   }
@@ -508,7 +505,7 @@ struct ToV8Traits<
   // TODO(crbug.com/1185046): Remove this overload.
   [[nodiscard]] static v8::MaybeLocal<v8::Value> ToV8(
       ScriptState* script_state,
-      const Vector<v8::Local<v8::Value>>& value) {
+      const v8::LocalVector<v8::Value>& value) {
     return bindings::ToV8HelperSequence<IDLAny>(script_state, value);
   }
 };
@@ -521,28 +518,19 @@ struct ToV8Traits<
       ScriptState* script_state,
       const HeapVector<Member<T>>& value) {
     return bindings::ToV8HelperSequenceWithMemberUpcast<ScriptWrappable>(
-        script_state, &value);
+        script_state, value);
   }
 
   [[nodiscard]] static v8::MaybeLocal<v8::Value> ToV8(
       ScriptState* script_state,
       const HeapVector<Member<const T>>& value) {
     return bindings::ToV8HelperSequenceWithMemberUpcast<ScriptWrappable>(
-        script_state, &value);
-  }
-
-  [[nodiscard]] static v8::MaybeLocal<v8::Value> ToV8(
-      ScriptState* script_state,
-      const HeapVector<Member<T>>* value) {
-    DCHECK(value);
-    return bindings::ToV8HelperSequenceWithMemberUpcast<ScriptWrappable>(
         script_state, value);
   }
 
   [[nodiscard]] static v8::MaybeLocal<v8::Value> ToV8(
       ScriptState* script_state,
-      const HeapVector<Member<const T>>* value) {
-    DCHECK(value);
+      const HeapDeque<Member<T>>& value) {
     return bindings::ToV8HelperSequenceWithMemberUpcast<ScriptWrappable>(
         script_state, value);
   }
@@ -556,28 +544,12 @@ struct ToV8Traits<
       ScriptState* script_state,
       const HeapVector<Member<T>>& value) {
     return bindings::ToV8HelperSequenceWithMemberUpcast<bindings::UnionBase>(
-        script_state, &value);
-  }
-
-  [[nodiscard]] static v8::MaybeLocal<v8::Value> ToV8(
-      ScriptState* script_state,
-      const HeapVector<Member<const T>>& value) {
-    return bindings::ToV8HelperSequenceWithMemberUpcast<bindings::UnionBase>(
-        script_state, &value);
-  }
-
-  [[nodiscard]] static v8::MaybeLocal<v8::Value> ToV8(
-      ScriptState* script_state,
-      const HeapVector<Member<T>>* value) {
-    DCHECK(value);
-    return bindings::ToV8HelperSequenceWithMemberUpcast<bindings::UnionBase>(
         script_state, value);
   }
 
   [[nodiscard]] static v8::MaybeLocal<v8::Value> ToV8(
       ScriptState* script_state,
-      const HeapVector<Member<const T>>* value) {
-    DCHECK(value);
+      const HeapVector<Member<const T>>& value) {
     return bindings::ToV8HelperSequenceWithMemberUpcast<bindings::UnionBase>(
         script_state, value);
   }
@@ -589,63 +561,23 @@ struct ToV8Traits<
     std::enable_if_t<!std::is_base_of<bindings::DictionaryBase, T>::value &&
                      !std::is_base_of<ScriptWrappable, T>::value &&
                      !std::is_base_of<bindings::UnionBase, T>::value>> {
-  template <typename VectorType>
-  [[nodiscard]] static v8::MaybeLocal<v8::Value> ToV8(ScriptState* script_state,
-                                                      const VectorType& value) {
+  template <typename ContainerType>
+  [[nodiscard]] static v8::MaybeLocal<v8::Value> ToV8(
+      ScriptState* script_state,
+      const ContainerType& value) {
     return bindings::ToV8HelperSequence<T>(script_state, value);
-  }
-
-  template <typename VectorType>
-  [[nodiscard]] static v8::MaybeLocal<v8::Value> ToV8(ScriptState* script_state,
-                                                      const VectorType* value) {
-    DCHECK(value);
-    return bindings::ToV8HelperSequence<T>(script_state, *value);
-  }
-
-  template <typename VectorType>
-  [[nodiscard]] static v8::MaybeLocal<v8::Value> ToV8(ScriptState* script_state,
-                                                      VectorType* value) {
-    DCHECK(value);
-    return bindings::ToV8HelperSequence<T>(script_state, *value);
   }
 };
 
 // IDLArray
 template <typename T>
 struct ToV8Traits<IDLArray<T>> {
-  template <typename VectorType>
-  [[nodiscard]] static v8::MaybeLocal<v8::Value> ToV8(ScriptState* script_state,
-                                                      const VectorType& value) {
+  template <typename ContainerType>
+  [[nodiscard]] static v8::MaybeLocal<v8::Value> ToV8(
+      ScriptState* script_state,
+      const ContainerType& value) {
     v8::Local<v8::Value> v8_value;
     if (!ToV8Traits<IDLSequence<T>>::ToV8(script_state, value)
-             .ToLocal(&v8_value)) {
-      return v8::MaybeLocal<v8::Value>();
-    }
-    v8_value.As<v8::Object>()->SetIntegrityLevel(script_state->GetContext(),
-                                                 v8::IntegrityLevel::kFrozen);
-    return v8_value;
-  }
-
-  template <typename VectorType>
-  [[nodiscard]] static v8::MaybeLocal<v8::Value> ToV8(ScriptState* script_state,
-                                                      const VectorType* value) {
-    DCHECK(value);
-    v8::Local<v8::Value> v8_value;
-    if (!ToV8Traits<IDLSequence<T>>::ToV8(script_state, *value)
-             .ToLocal(&v8_value)) {
-      return v8::MaybeLocal<v8::Value>();
-    }
-    v8_value.As<v8::Object>()->SetIntegrityLevel(script_state->GetContext(),
-                                                 v8::IntegrityLevel::kFrozen);
-    return v8_value;
-  }
-
-  template <typename VectorType>
-  [[nodiscard]] static v8::MaybeLocal<v8::Value> ToV8(ScriptState* script_state,
-                                                      VectorType* value) {
-    DCHECK(value);
-    v8::Local<v8::Value> v8_value;
-    if (!ToV8Traits<IDLSequence<T>>::ToV8(script_state, *value)
              .ToLocal(&v8_value)) {
       return v8::MaybeLocal<v8::Value>();
     }
@@ -657,7 +589,7 @@ struct ToV8Traits<IDLArray<T>> {
   // TODO(crbug.com/1185046): Remove this overload.
   [[nodiscard]] static v8::MaybeLocal<v8::Value> ToV8(
       ScriptState* script_state,
-      const Vector<v8::Local<v8::Value>>& value) {
+      const v8::LocalVector<v8::Value>& value) {
     v8::Local<v8::Value> v8_value;
     if (!ToV8Traits<IDLSequence<IDLAny>>::ToV8(script_state, value)
              .ToLocal(&v8_value)) {
@@ -677,13 +609,6 @@ struct ToV8Traits<IDLRecord<K, V>> {
       ScriptState* script_state,
       const typename IDLRecord<K, V>::ImplType& value) {
     return bindings::ToV8HelperRecord<V>(script_state, value);
-  }
-
-  [[nodiscard]] static v8::MaybeLocal<v8::Value> ToV8(
-      ScriptState* script_state,
-      const typename IDLRecord<K, V>::ImplType* value) {
-    DCHECK(value);
-    return bindings::ToV8HelperRecord<V>(script_state, *value);
   }
 };
 
@@ -851,15 +776,6 @@ struct ToV8Traits<IDLNullable<NotShared<T>>> {
       return v8::Null(script_state->GetIsolate());
     return ToV8Traits<NotShared<T>>::ToV8(script_state, value);
   }
-
-  // TODO(canonmukai): Remove this overload.
-  [[nodiscard]] static v8::MaybeLocal<v8::Value> ToV8(
-      ScriptState* script_state,
-      const ScriptValue& script_value) {
-    if (script_value.IsEmpty())
-      return v8::Null(script_state->GetIsolate());
-    return ToV8Traits<NotShared<T>>::ToV8(script_state, script_value);
-  }
 };
 
 // Nullable MaybeShared
@@ -889,7 +805,7 @@ struct ToV8Traits<IDLNullable<IDLSequence<T>>> {
       const typename IDLSequence<T>::ImplType* value) {
     if (!value)
       return v8::Null(script_state->GetIsolate());
-    return ToV8Traits<IDLSequence<T>>::ToV8(script_state, value);
+    return ToV8Traits<IDLSequence<T>>::ToV8(script_state, *value);
   }
 };
 
@@ -909,7 +825,7 @@ struct ToV8Traits<IDLNullable<IDLArray<T>>> {
       const typename IDLArray<T>::ImplType* value) {
     if (!value)
       return v8::Null(script_state->GetIsolate());
-    return ToV8Traits<IDLArray<T>>::ToV8(script_state, value);
+    return ToV8Traits<IDLArray<T>>::ToV8(script_state, *value);
   }
 };
 
@@ -929,7 +845,7 @@ struct ToV8Traits<IDLNullable<IDLRecord<K, V>>> {
       const typename IDLRecord<K, V>::ImplType* value) {
     if (!value)
       return v8::Null(script_state->GetIsolate());
-    return ToV8Traits<IDLRecord<K, V>>::ToV8(script_state, value);
+    return ToV8Traits<IDLRecord<K, V>>::ToV8(script_state, *value);
   }
 };
 
@@ -943,24 +859,12 @@ struct ToV8Traits<IDLNullable<IDLDate>> {
     if (!date)
       return v8::Null(script_state->GetIsolate());
     return v8::Date::New(script_state->GetContext(),
-                         date->ToJsTimeIgnoringNull())
+                         date->InMillisecondsFSinceUnixEpochIgnoringNull())
         .ToLocalChecked();
   }
 };
 
 // Union types
-
-namespace bindings {
-
-// Helper function for Union
-template <typename T>
-inline v8::MaybeLocal<v8::Value> ToV8HelperUnion(ScriptState* script_state,
-                                                 const T& value) {
-  return ToV8(value, script_state->GetContext()->Global(),
-              script_state->GetIsolate());
-}
-
-}  // namespace bindings
 
 template <typename T>
 struct ToV8Traits<

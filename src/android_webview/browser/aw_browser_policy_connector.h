@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,6 +11,7 @@ namespace android_webview {
 
 // Sets up and keeps the browser-global policy objects such as the PolicyService
 // and the platform-specific PolicyProvider.
+// Lifetime: Singleton
 class AwBrowserPolicyConnector : public policy::BrowserPolicyConnectorBase {
  public:
   AwBrowserPolicyConnector();

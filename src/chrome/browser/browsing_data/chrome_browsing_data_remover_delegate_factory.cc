@@ -1,10 +1,10 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/browsing_data/chrome_browsing_data_remover_delegate_factory.h"
 
-#include "base/memory/singleton.h"
+#include "base/no_destructor.h"
 #include "build/build_config.h"
 #include "chrome/browser/autofill/personal_data_manager_factory.h"
 #include "chrome/browser/browsing_data/chrome_browsing_data_remover_delegate.h"
@@ -12,13 +12,13 @@
 #include "chrome/browser/domain_reliability/service_factory.h"
 #include "chrome/browser/history/history_service_factory.h"
 #include "chrome/browser/history/web_history_service_factory.h"
-#include "chrome/browser/password_manager/password_store_factory.h"
+#include "chrome/browser/password_manager/account_password_store_factory.h"
+#include "chrome/browser/password_manager/profile_password_store_factory.h"
 #include "chrome/browser/preloading/prefetch/no_state_prefetch/no_state_prefetch_manager_factory.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/search_engines/template_url_service_factory.h"
 #include "chrome/browser/sessions/tab_restore_service_factory.h"
 #include "chrome/browser/web_data_service_factory.h"
-#include "components/keyed_service/content/browser_context_dependency_manager.h"
 #include "content/public/browser/browser_context.h"
 #include "extensions/buildflags/buildflags.h"
 
@@ -40,7 +40,8 @@
 // static
 ChromeBrowsingDataRemoverDelegateFactory*
 ChromeBrowsingDataRemoverDelegateFactory::GetInstance() {
-  return base::Singleton<ChromeBrowsingDataRemoverDelegateFactory>::get();
+  static base::NoDestructor<ChromeBrowsingDataRemoverDelegateFactory> instance;
+  return instance.get();
 }
 
 // static
@@ -52,9 +53,14 @@ ChromeBrowsingDataRemoverDelegateFactory::GetForProfile(Profile* profile) {
 
 ChromeBrowsingDataRemoverDelegateFactory::
     ChromeBrowsingDataRemoverDelegateFactory()
-    : BrowserContextKeyedServiceFactory(
+    : ProfileKeyedServiceFactory(
           "BrowsingDataRemover",
-          BrowserContextDependencyManager::GetInstance()) {
+          ProfileSelections::Builder()
+              .WithRegular(ProfileSelection::kOwnInstance)
+              // TODO(crbug.com/1418376): Check if this service is needed in
+              // Guest mode.
+              .WithGuest(ProfileSelection::kOwnInstance)
+              .Build()) {
   DependsOn(autofill::PersonalDataManagerFactory::GetInstance());
 #if BUILDFLAG(IS_ANDROID)
 #if BUILDFLAG(ENABLE_FEED_V2)
@@ -63,7 +69,8 @@ ChromeBrowsingDataRemoverDelegateFactory::
 #endif  // BUILDFLAG(IS_ANDROID)
   DependsOn(HistoryServiceFactory::GetInstance());
   DependsOn(HostContentSettingsMapFactory::GetInstance());
-  DependsOn(PasswordStoreFactory::GetInstance());
+  DependsOn(ProfilePasswordStoreFactory::GetInstance());
+  DependsOn(AccountPasswordStoreFactory::GetInstance());
   DependsOn(prerender::NoStatePrefetchManagerFactory::GetInstance());
   DependsOn(TabRestoreServiceFactory::GetInstance());
   DependsOn(TemplateURLServiceFactory::GetInstance());
@@ -84,19 +91,13 @@ ChromeBrowsingDataRemoverDelegateFactory::
 }
 
 ChromeBrowsingDataRemoverDelegateFactory::
-    ~ChromeBrowsingDataRemoverDelegateFactory() {}
+    ~ChromeBrowsingDataRemoverDelegateFactory() = default;
 
-content::BrowserContext*
-ChromeBrowsingDataRemoverDelegateFactory::GetBrowserContextToUse(
+std::unique_ptr<KeyedService>
+ChromeBrowsingDataRemoverDelegateFactory::BuildServiceInstanceForBrowserContext(
     content::BrowserContext* context) const {
   // For guest profiles the browsing data is in the OTR profile.
   Profile* profile = static_cast<Profile*>(context);
   DCHECK(!profile->IsGuestSession() || profile->IsOffTheRecord());
-
-  return profile;
-}
-
-KeyedService* ChromeBrowsingDataRemoverDelegateFactory::BuildServiceInstanceFor(
-    content::BrowserContext* context) const {
-  return new ChromeBrowsingDataRemoverDelegate(context);
+  return std::make_unique<ChromeBrowsingDataRemoverDelegate>(context);
 }

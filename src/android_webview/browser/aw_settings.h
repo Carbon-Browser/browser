@@ -1,4 +1,4 @@
-// Copyright (c) 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -17,8 +17,10 @@ struct WebPreferences;
 
 namespace android_webview {
 
+class AwContentsOriginMatcher;
 class AwRenderViewHostExt;
 
+// Lifetime: WebView
 class AwSettings : public content::WebContentsObserver {
  public:
   // GENERATED_JAVA_ENUM_PACKAGE: org.chromium.android_webview.settings
@@ -35,11 +37,28 @@ class AwSettings : public content::WebContentsObserver {
     PREFER_MEDIA_QUERY_OVER_FORCE_DARK = 2,
   };
 
-  // GENERATED_JAVA_ENUM_PACKAGE: org.chromium.android_webview.settings
   enum RequestedWithHeaderMode {
     NO_HEADER = 0,
     APP_PACKAGE_NAME = 1,
     CONSTANT_WEBVIEW = 2,
+  };
+
+  enum MixedContentMode {
+    MIXED_CONTENT_ALWAYS_ALLOW = 0,
+    MIXED_CONTENT_NEVER_ALLOW = 1,
+    MIXED_CONTENT_COMPATIBILITY_MODE = 2,
+    COUNT,
+  };
+
+  // These values are persisted to logs. Entries should not be renumbered and
+  // numeric values should never be reused.
+  // GENERATED_JAVA_ENUM_PACKAGE: org.chromium.android_webview.settings
+  enum AttributionBehavior {
+    DISABLED = 0,
+    APP_SOURCE_AND_WEB_TRIGGER = 1,
+    WEB_SOURCE_AND_WEB_TRIGGER = 2,
+    APP_SOURCE_AND_APP_TRIGGER = 3,
+    kMaxValue = APP_SOURCE_AND_APP_TRIGGER,
   };
 
   static AwSettings* FromWebContents(content::WebContents* web_contents);
@@ -52,8 +71,12 @@ class AwSettings : public content::WebContentsObserver {
   AwSettings(JNIEnv* env, jobject obj, content::WebContents* web_contents);
   ~AwSettings() override;
 
+  bool GetAllowFileAccessFromFileURLs();
+  bool GetJavaScriptEnabled();
   bool GetJavaScriptCanOpenWindowsAutomatically();
   bool GetAllowThirdPartyCookies();
+  MixedContentMode GetMixedContentMode();
+  AttributionBehavior GetAttributionBehavior();
 
   // Called from Java. Methods with "Locked" suffix require that the settings
   // access lock is held during their execution.
@@ -78,10 +101,10 @@ class AwSettings : public content::WebContentsObserver {
   void UpdateWebkitPreferencesLocked(
       JNIEnv* env,
       const base::android::JavaParamRef<jobject>& obj);
-  void UpdateFormDataPreferencesLocked(
+  void UpdateRendererPreferencesLocked(
       JNIEnv* env,
       const base::android::JavaParamRef<jobject>& obj);
-  void UpdateRendererPreferencesLocked(
+  void UpdateJavaScriptPolicyLocked(
       JNIEnv* env,
       const base::android::JavaParamRef<jobject>& obj);
   void UpdateCookiePolicyLocked(
@@ -93,11 +116,19 @@ class AwSettings : public content::WebContentsObserver {
   void UpdateAllowFileAccessLocked(
       JNIEnv* env,
       const base::android::JavaParamRef<jobject>& obj);
+  void UpdateMixedContentModeLocked(
+      JNIEnv* env,
+      const base::android::JavaParamRef<jobject>& obj);
+  void UpdateAttributionBehaviorLocked(
+      JNIEnv* env,
+      const base::android::JavaParamRef<jobject>& obj);
 
   void PopulateWebPreferences(blink::web_pref::WebPreferences* web_prefs);
   bool GetAllowFileAccess();
   bool IsForceDarkApplied(JNIEnv* env,
                           const base::android::JavaParamRef<jobject>& obj);
+  bool PrefersDarkFromTheme(JNIEnv* env,
+                            const base::android::JavaParamRef<jobject>& obj);
 
   void SetEnterpriseAuthenticationAppLinkPolicyEnabled(
       JNIEnv* env,
@@ -110,6 +141,12 @@ class AwSettings : public content::WebContentsObserver {
     return enterprise_authentication_app_link_policy_enabled_;
   }
 
+  base::android::ScopedJavaLocalRef<jobjectArray>
+  UpdateXRequestedWithAllowListOriginMatcher(
+      JNIEnv* env,
+      const base::android::JavaParamRef<jobjectArray>& rules);
+  scoped_refptr<AwContentsOriginMatcher> xrw_allowlist_matcher();
+
  private:
   AwRenderViewHostExt* GetAwRenderViewHostExt();
   void UpdateEverything();
@@ -119,11 +156,19 @@ class AwSettings : public content::WebContentsObserver {
                              content::RenderViewHost* new_host) override;
   void WebContentsDestroyed() override;
 
-  bool renderer_prefs_initialized_;
-  bool javascript_can_open_windows_automatically_;
-  bool allow_third_party_cookies_;
-  bool allow_file_access_;
-  bool enterprise_authentication_app_link_policy_enabled_;
+  bool renderer_prefs_initialized_{false};
+  bool javascript_enabled_{false};
+  bool javascript_can_open_windows_automatically_{false};
+  bool allow_third_party_cookies_{false};
+  bool allow_file_access_{false};
+  bool allow_file_access_from_file_urls_{false};
+  // TODO(b/222053757,ayushsha): Change this policy to be by
+  // default false from next Android version(Maybe Android U).
+  bool enterprise_authentication_app_link_policy_enabled_{true};
+  MixedContentMode mixed_content_mode_;
+  AttributionBehavior attribution_behavior_;
+
+  scoped_refptr<AwContentsOriginMatcher> xrw_allowlist_matcher_;
 
   JavaObjectWeakGlobalRef aw_settings_;
 };

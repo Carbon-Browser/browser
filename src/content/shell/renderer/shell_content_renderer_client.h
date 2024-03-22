@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,6 +12,11 @@
 #include "content/public/common/alternative_error_page_override_info.mojom-forward.h"
 #include "content/public/renderer/content_renderer_client.h"
 #include "media/mojo/buildflags.h"
+
+namespace blink {
+class URLLoaderThrottleProvider;
+enum class URLLoaderThrottleProviderType;
+}  // namespace blink
 
 namespace web_cache {
 class WebCacheImpl;
@@ -46,9 +51,16 @@ class ShellContentRendererClient : public ContentRendererClient {
   void DidInitializeWorkerContextOnWorkerThread(
       v8::Local<v8::Context> context) override;
 
+  std::unique_ptr<blink::URLLoaderThrottleProvider>
+  CreateURLLoaderThrottleProvider(
+      blink::URLLoaderThrottleProviderType provider_type) override;
+
 #if BUILDFLAG(ENABLE_MOJO_CDM)
   void GetSupportedKeySystems(media::GetSupportedKeySystemsCB cb) override;
 #endif
+
+  std::unique_ptr<blink::WebPrescientNetworking> CreatePrescientNetworking(
+      RenderFrame* render_frame) override;
 
  private:
   std::unique_ptr<web_cache::WebCacheImpl> web_cache_impl_;

@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -25,18 +25,18 @@
 
 #if BUILDFLAG(IS_CHROMEOS) || BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_WIN) || \
     BUILDFLAG(IS_FUCHSIA)
+#include <optional>
 #include "base/environment.h"
 #include "base/files/file_path.h"
 #include "base/scoped_native_library.h"
 #include "base/threading/thread_restrictions.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #endif
 
 namespace {
 
-typedef void (*MojoGetSystemThunksFunction)(MojoSystemThunks64* thunks);
+typedef void (*MojoGetSystemThunksFunction)(MojoSystemThunks2* thunks);
 
-MojoSystemThunks64 g_thunks;
+MojoSystemThunks2 g_thunks;
 
 MojoResult NotImplemented(const char* name) {
   if (g_thunks.size > 0) {
@@ -54,9 +54,9 @@ MojoResult NotImplemented(const char* name) {
 
 }  // namespace
 
-#define INVOKE_THUNK(name, ...)                      \
-  offsetof(MojoSystemThunks64, name) < g_thunks.size \
-      ? g_thunks.name(__VA_ARGS__)                   \
+#define INVOKE_THUNK(name, ...)                     \
+  offsetof(MojoSystemThunks2, name) < g_thunks.size \
+      ? g_thunks.name(__VA_ARGS__)                  \
       : NotImplemented(#name)
 
 namespace mojo {
@@ -69,7 +69,7 @@ class CoreLibraryInitializer {
   CoreLibraryInitializer() = default;
   CoreLibraryInitializer(const CoreLibraryInitializer&) = delete;
   CoreLibraryInitializer& operator=(const CoreLibraryInitializer&) = delete;
-  ~CoreLibraryInitializer() = default;
+  ~CoreLibraryInitializer() = delete;
 
   MojoResult LoadLibrary(base::FilePath library_path) {
 #if BUILDFLAG(IS_CHROMEOS) || BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_WIN) || \
@@ -144,7 +144,7 @@ class CoreLibraryInitializer {
  private:
 #if BUILDFLAG(IS_CHROMEOS) || BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_WIN) || \
     BUILDFLAG(IS_FUCHSIA)
-  absl::optional<base::ScopedNativeLibrary> library_;
+  std::optional<base::ScopedNativeLibrary> library_;
 #endif
 };
 
@@ -153,16 +153,14 @@ class CoreLibraryInitializer {
 extern "C" {
 
 MojoResult MojoInitialize(const struct MojoInitializeOptions* options) {
-  static base::NoDestructor<mojo::CoreLibraryInitializer,
-                            base::AllowForTriviallyDestructibleType>
-      initializer;
+  static base::NoDestructor<mojo::CoreLibraryInitializer> initializer;
 
-  base::StringPiece library_path_utf8;
+  std::string_view library_path_utf8;
   if (options) {
     if (!MOJO_IS_STRUCT_FIELD_PRESENT(options, mojo_core_path_length))
       return MOJO_RESULT_INVALID_ARGUMENT;
-    library_path_utf8 = base::StringPiece(options->mojo_core_path,
-                                          options->mojo_core_path_length);
+    library_path_utf8 = std::string_view(options->mojo_core_path,
+                                         options->mojo_core_path_length);
   }
 
   MojoResult load_result = initializer->LoadLibrary(
@@ -861,9 +859,7 @@ MojoSystemThunks32 g_thunks_32 = {
     MojoSetDefaultProcessErrorHandler,
 };
 
-}  // extern "C"
-
-const MojoSystemThunks64* MojoEmbedderGetSystemThunks64() {
+const MojoSystemThunks2* MojoEmbedderGetSystemThunks2() {
   return &g_thunks;
 }
 
@@ -871,7 +867,7 @@ const MojoSystemThunks32* MojoEmbedderGetSystemThunks32() {
   return &g_thunks_32;
 }
 
-void MojoEmbedderSetSystemThunks(const MojoSystemThunks64* thunks) {
+void MojoEmbedderSetSystemThunks(const MojoSystemThunks2* thunks) {
   // Assume embedders will always use matching versions of the Mojo Core and
   // public APIs.
   DCHECK_EQ(thunks->size, sizeof(g_thunks));
@@ -884,3 +880,5 @@ void MojoEmbedderSetSystemThunks(const MojoSystemThunks64* thunks) {
 
   g_thunks = *thunks;
 }
+
+}  // extern "C"

@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,7 +10,6 @@
 #include <string>
 
 #include "base/cancelable_callback.h"
-#include "base/memory/weak_ptr.h"
 #include "base/values.h"
 #include "ios/web/js_messaging/web_frame_internal.h"
 #include "ios/web/public/js_messaging/web_frame.h"
@@ -48,15 +47,13 @@ class WebFrameImpl : public WebFrame,
   std::string GetFrameId() const override;
   bool IsMainFrame() const override;
   GURL GetSecurityOrigin() const override;
-  bool CanCallJavaScriptFunction() const override;
   BrowserState* GetBrowserState() override;
 
+  bool CallJavaScriptFunction(const std::string& name,
+                              const base::Value::List& parameters) override;
   bool CallJavaScriptFunction(
       const std::string& name,
-      const std::vector<base::Value>& parameters) override;
-  bool CallJavaScriptFunction(
-      const std::string& name,
-      const std::vector<base::Value>& parameters,
+      const base::Value::List& parameters,
       base::OnceCallback<void(const base::Value*)> callback,
       base::TimeDelta timeout) override;
 
@@ -70,11 +67,11 @@ class WebFrameImpl : public WebFrame,
   // WebFrameContentWorldAPI:
   bool CallJavaScriptFunctionInContentWorld(
       const std::string& name,
-      const std::vector<base::Value>& parameters,
+      const base::Value::List& parameters,
       JavaScriptContentWorld* content_world) override;
   bool CallJavaScriptFunctionInContentWorld(
       const std::string& name,
-      const std::vector<base::Value>& parameters,
+      const base::Value::List& parameters,
       JavaScriptContentWorld* content_world,
       base::OnceCallback<void(const base::Value*)> callback,
       base::TimeDelta timeout) override;
@@ -83,14 +80,14 @@ class WebFrameImpl : public WebFrame,
   void WebStateDestroyed(web::WebState* web_state) override;
 
  private:
-  // Calls the JavaScript function |name| in the frame context in the same
-  // manner as the inherited CallJavaScriptFunction functions. |content_world|
+  // Calls the JavaScript function `name` in the frame context in the same
+  // manner as the inherited CallJavaScriptFunction functions. `content_world`
   // is optional, but if specified, the function will be executed within that
-  // world. If |reply_with_result| is true, the return value of executing the
-  // function will be sent back to the receiver with |CompleteRequest()|.
+  // world. If `reply_with_result` is true, the return value of executing the
+  // function will be sent back to the receiver with `CompleteRequest()`.
   bool CallJavaScriptFunctionInContentWorld(
       const std::string& name,
-      const std::vector<base::Value>& parameters,
+      const base::Value::List& parameters,
       JavaScriptContentWorld* content_world,
       bool reply_with_result);
 
@@ -98,7 +95,7 @@ class WebFrameImpl : public WebFrame,
   void DetachFromWebState();
 
   // A structure to store the callbacks associated with the
-  // |CallJavaScriptFunction| requests.
+  // `CallJavaScriptFunction` requests.
   typedef base::CancelableOnceCallback<void(void)> TimeoutCallback;
   struct RequestCallbacks {
     RequestCallbacks(base::OnceCallback<void(const base::Value*)> completion,
@@ -108,17 +105,17 @@ class WebFrameImpl : public WebFrame,
     std::unique_ptr<TimeoutCallback> timeout_callback;
   };
 
-  // Calls the JavaScript function |name| in the web state. If |content_world|
-  // is specified, the function will be executed within |content_world|. If
-  // |reply_with_result| is true, the return value of executing the function
+  // Calls the JavaScript function `name` in the web state. If `content_world`
+  // is specified, the function will be executed within `content_world`. If
+  // `reply_with_result` is true, the return value of executing the function
   // will be sent back to the receiver.
   bool ExecuteJavaScriptFunction(JavaScriptContentWorld* content_world,
                                  const std::string& name,
-                                 const std::vector<base::Value>& parameters,
+                                 const base::Value::List& parameters,
                                  int message_id,
                                  bool reply_with_result);
 
-  // Converts the given callback into a |ExecuteJavaScriptCallbackWithError|
+  // Converts the given callback into a `ExecuteJavaScriptCallbackWithError`
   // callback. This function improves code sharing by being a bridge
   // between the various ExecuteJavaScript() functions.
   ExecuteJavaScriptCallbackWithError ExecuteJavaScriptCallbackAdapter(
@@ -127,22 +124,22 @@ class WebFrameImpl : public WebFrame,
   // execution of the given arbitrary JavaScript string.
   void LogScriptWarning(NSString* script, NSError* error);
 
-  // Runs the request associated with the message with id |message_id|. The
-  // completion callback, if any, associated with |message_id| will be called
-  // with |result|.
+  // Runs the request associated with the message with id `message_id`. The
+  // completion callback, if any, associated with `message_id` will be called
+  // with `result`.
   void CompleteRequest(int message_id, const base::Value* result);
-  // Calls the completion block of |request_callbacks| with |result| value and
-  // removes the callbacks from |pending_requests|.
+  // Calls the completion block of `request_callbacks` with `result` value and
+  // removes the callbacks from `pending_requests`.
   void CompleteRequest(std::unique_ptr<RequestCallbacks> request_callbacks,
                        const base::Value* result);
 
-  // Cancels the request associated with the message with id |message_id|. The
-  // completion callback, if any, associated with |message_id| will be called
+  // Cancels the request associated with the message with id `message_id`. The
+  // completion callback, if any, associated with `message_id` will be called
   // with a null result value. Note that the JavaScript will still run to
   // completion, but any future response will be ignored.
   void CancelRequest(int message_id);
-  // Performs |CancelRequest| on all outstanding request callbacks in
-  // |pending_requests_|.
+  // Performs `CancelRequest` on all outstanding request callbacks in
+  // `pending_requests_`.
   void CancelPendingRequests();
 
   // The JavaScript requests awating a reply.
@@ -162,8 +159,6 @@ class WebFrameImpl : public WebFrame,
   GURL security_origin_;
   // The associated web state.
   web::WebState* web_state_ = nullptr;
-
-  base::WeakPtrFactory<WebFrameImpl> weak_ptr_factory_;
 };
 
 }  // namespace web

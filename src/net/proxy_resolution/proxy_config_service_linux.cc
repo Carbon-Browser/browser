@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,11 +13,11 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
 #include "base/files/file_descriptor_watcher_posix.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
 #include "base/files/scoped_file.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
 #include "base/memory/ptr_util.h"
 #include "base/memory/raw_ptr.h"
@@ -41,6 +41,8 @@
 #endif  // defined(USE_GIO)
 
 namespace net {
+
+class ScopedAllowBlockingForSettingGetter : public base::ScopedAllowBlocking {};
 
 namespace {
 
@@ -260,7 +262,7 @@ class SettingGetterImplGSettings
         ShutDown();
       } else {
         LOG(WARNING) << "~SettingGetterImplGSettings: leaking gsettings client";
-        client_ = nullptr;
+        client_.ExtractAsDangling();
       }
     }
     DCHECK(!client_);
@@ -276,7 +278,7 @@ class SettingGetterImplGSettings
     DCHECK(!task_runner_.get());
 
     if (!g_settings_schema_source_lookup(g_settings_schema_source_get_default(),
-                                         kProxyGSettingsSchema, FALSE) ||
+                                         kProxyGSettingsSchema, TRUE) ||
         !(client_ = g_settings_new(kProxyGSettingsSchema))) {
       // It's not clear whether/when this can return NULL.
       LOG(ERROR) << "Unable to create a gsettings client";
@@ -296,11 +298,11 @@ class SettingGetterImplGSettings
     if (client_) {
       DCHECK(task_runner_->RunsTasksInCurrentSequence());
       // This also disables gsettings notifications.
-      g_object_unref(socks_client_);
-      g_object_unref(ftp_client_);
-      g_object_unref(https_client_);
-      g_object_unref(http_client_);
-      g_object_unref(client_);
+      g_object_unref(socks_client_.ExtractAsDangling());
+      g_object_unref(ftp_client_.ExtractAsDangling());
+      g_object_unref(https_client_.ExtractAsDangling());
+      g_object_unref(http_client_.ExtractAsDangling());
+      g_object_unref(client_.ExtractAsDangling());
       // We only need to null client_ because it's the only one that we check.
       client_ = nullptr;
       task_runner_ = nullptr;
@@ -488,7 +490,7 @@ bool SettingGetterImplGSettings::CheckVersion(
 
   GSettings* client = nullptr;
   if (g_settings_schema_source_lookup(g_settings_schema_source_get_default(),
-                                      kProxyGSettingsSchema, FALSE)) {
+                                      kProxyGSettingsSchema, TRUE)) {
     client = g_settings_new(kProxyGSettingsSchema);
   }
   if (!client) {
@@ -520,7 +522,7 @@ class SettingGetterImplKDE : public ProxyConfigServiceLinux::SettingGetter {
       : debounce_timer_(std::make_unique<base::OneShotTimer>()),
         env_var_getter_(env_var_getter) {
     // This has to be called on the UI thread (http://crbug.com/69057).
-    base::ThreadRestrictions::ScopedAllowIO allow_io;
+    ScopedAllowBlockingForSettingGetter allow_blocking;
 
     // Derive the location(s) of the kde config dir from the environment.
     std::string home;
@@ -533,13 +535,12 @@ class SettingGetterImplKDE : public ProxyConfigServiceLinux::SettingGetter {
       if (!env_var_getter->GetVar(base::env_vars::kHome, &home))
         // User has no $HOME? Give up. Later we'll report the failure.
         return;
-      if (base::nix::GetDesktopEnvironment(env_var_getter) ==
-          base::nix::DESKTOP_ENVIRONMENT_KDE3) {
+      auto desktop = base::nix::GetDesktopEnvironment(env_var_getter);
+      if (desktop == base::nix::DESKTOP_ENVIRONMENT_KDE3) {
         // KDE3 always uses .kde for its configuration.
         base::FilePath kde_path = base::FilePath(home).Append(".kde");
         kde_config_dirs_.emplace_back(KDEHomeToConfigPath(kde_path));
-      } else if (base::nix::GetDesktopEnvironment(env_var_getter) ==
-                 base::nix::DESKTOP_ENVIRONMENT_KDE4) {
+      } else if (desktop == base::nix::DESKTOP_ENVIRONMENT_KDE4) {
         // Some distributions patch KDE4 to use .kde4 instead of .kde, so that
         // both can be installed side-by-side. Sadly they don't all do this, and
         // they don't always do this: some distributions have started switching
@@ -571,7 +572,8 @@ class SettingGetterImplKDE : public ProxyConfigServiceLinux::SettingGetter {
         } else {
           kde_config_dirs_.emplace_back(KDEHomeToConfigPath(kde3_path));
         }
-      } else {
+      } else if (desktop == base::nix::DESKTOP_ENVIRONMENT_KDE5 ||
+                 desktop == base::nix::DESKTOP_ENVIRONMENT_KDE6) {
         // KDE 5 migrated to ~/.config for storing kioslaverc.
         kde_config_dirs_.emplace_back(base::FilePath(home).Append(".config"));
 
@@ -611,7 +613,7 @@ class SettingGetterImplKDE : public ProxyConfigServiceLinux::SettingGetter {
   bool Init(const scoped_refptr<base::SingleThreadTaskRunner>& glib_task_runner)
       override {
     // This has to be called on the UI thread (http://crbug.com/69057).
-    base::ThreadRestrictions::ScopedAllowIO allow_io;
+    ScopedAllowBlockingForSettingGetter allow_blocking;
     DCHECK_LT(inotify_fd_, 0);
     inotify_fd_ = inotify_init();
     if (inotify_fd_ < 0) {
@@ -1246,10 +1248,12 @@ ProxyConfigServiceLinux::Delegate::Delegate(
     case base::nix::DESKTOP_ENVIRONMENT_KDE3:
     case base::nix::DESKTOP_ENVIRONMENT_KDE4:
     case base::nix::DESKTOP_ENVIRONMENT_KDE5:
+    case base::nix::DESKTOP_ENVIRONMENT_KDE6:
       setting_getter_ =
           std::make_unique<SettingGetterImplKDE>(env_var_getter_.get());
       break;
     case base::nix::DESKTOP_ENVIRONMENT_XFCE:
+    case base::nix::DESKTOP_ENVIRONMENT_LXQT:
     case base::nix::DESKTOP_ENVIRONMENT_OTHER:
       break;
   }

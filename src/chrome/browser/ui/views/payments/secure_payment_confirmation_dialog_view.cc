@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,6 @@
 #include "base/metrics/histogram_functions.h"
 #include "chrome/app/vector_icons/vector_icons.h"
 #include "chrome/browser/ui/views/chrome_layout_provider.h"
-#include "chrome/browser/ui/views/chrome_typography.h"
 #include "chrome/browser/ui/views/payments/payment_request_views_util.h"
 #include "chrome/browser/ui/views/payments/secure_payment_confirmation_views_util.h"
 #include "components/constrained_window/constrained_window_views.h"
@@ -27,6 +26,7 @@
 #include "ui/views/layout/box_layout_view.h"
 #include "ui/views/layout/layout_provider.h"
 #include "ui/views/layout/table_layout.h"
+#include "ui/views/style/typography.h"
 
 namespace payments {
 namespace {
@@ -115,10 +115,6 @@ void SecurePaymentConfirmationDialogView::ShowDialog(
 
   constrained_window::ShowWebModalDialogViews(this, web_contents);
 
-  // observer_for_test_ is used in views browsertests.
-  if (observer_for_test_)
-    observer_for_test_->OnDialogOpened();
-
   // ui_observer_for_test_ is used in platform browsertests.
   if (ui_observer_for_test_)
     ui_observer_for_test_->OnUIDisplayed();
@@ -151,7 +147,7 @@ void SecurePaymentConfirmationDialogView::OnDialogClosed() {
   // WebAuthn dialog after clicking 'Verify', or when the user chooses to
   // opt-out. We should only run the cancellation callback in the former case;
   // in the latter the opt-out callback will trigger from OnOptOutClicked.
-  if (!opt_out_clicked_) {
+  if (!model_->opt_out_clicked()) {
     std::move(cancel_callback_).Run();
     RecordAuthenticationDialogResult(
         SecurePaymentConfirmationAuthenticationDialogResult::kClosed);
@@ -163,8 +159,6 @@ void SecurePaymentConfirmationDialogView::OnDialogClosed() {
 }
 
 void SecurePaymentConfirmationDialogView::OnOptOutClicked() {
-  opt_out_clicked_ = true;
-
   if (observer_for_test_) {
     observer_for_test_->OnOptOutClicked();
   }
@@ -195,20 +189,26 @@ void SecurePaymentConfirmationDialogView::OnModelUpdated() {
   UpdateLabelView(DialogViewID::INSTRUMENT_VALUE, model_->instrument_value());
 
   // Update the instrument icon only if it's changed
-  if (model_->instrument_icon() &&
-      (model_->instrument_icon() != instrument_icon_ ||
-       model_->instrument_icon()->getGenerationID() !=
-           instrument_icon_generation_id_)) {
-    instrument_icon_generation_id_ =
-        model_->instrument_icon()->getGenerationID();
-    gfx::ImageSkia image =
-        gfx::ImageSkia::CreateFrom1xBitmap(*model_->instrument_icon())
-            .DeepCopy();
-
-    static_cast<views::ImageView*>(
-        GetViewByID(static_cast<int>(DialogViewID::INSTRUMENT_ICON)))
-        ->SetImage(image);
+  if (model_->instrument_icon()) {
+    auto* image_view = static_cast<views::ImageView*>(
+        GetViewByID(static_cast<int>(DialogViewID::INSTRUMENT_ICON)));
+    if (model_->instrument_icon() != instrument_icon_ ||
+        model_->instrument_icon()->getGenerationID() !=
+            instrument_icon_generation_id_) {
+      instrument_icon_generation_id_ =
+          model_->instrument_icon()->getGenerationID();
+      gfx::ImageSkia image =
+          gfx::ImageSkia::CreateFrom1xBitmap(*model_->instrument_icon())
+              .DeepCopy();
+      image_view->SetImage(ui::ImageModel::FromImageSkia(image));
+    }
+    if (model_->instrument_icon()->drawsNothing()) {
+      image_view->SetImage(ui::ImageModel::FromVectorIcon(
+          kCreditCardIcon, ui::kColorDialogForeground,
+          kSecurePaymentConfirmationInstrumentIconDefaultWidthPx));
+    }
   }
+
   instrument_icon_ = model_->instrument_icon();
 
   UpdateLabelView(DialogViewID::TOTAL_LABEL, model_->total_label());
@@ -378,7 +378,7 @@ std::unique_ptr<views::View> SecurePaymentConfirmationDialogView::CreateRowView(
 
   std::unique_ptr<views::Label> label_text = std::make_unique<views::Label>(
       label, views::style::CONTEXT_DIALOG_BODY_TEXT,
-      ChromeTextStyle::STYLE_EMPHASIZED_SECONDARY);
+      views::style::STYLE_EMPHASIZED_SECONDARY);
   label_text->SetHorizontalAlignment(gfx::ALIGN_TO_HEAD);
   label_text->SetLineHeight(kDescriptionLineHeight);
   label_text->SetID(static_cast<int>(label_id));
@@ -418,21 +418,6 @@ std::unique_ptr<views::View> SecurePaymentConfirmationDialogView::CreateRowView(
   row->AddChildView(std::move(value_text));
 
   return row;
-}
-
-void SecurePaymentConfirmationDialogView::OnThemeChanged() {
-  View::OnThemeChanged();
-  // If we're using the default credit card icon, it is able to respond
-  // to theme changes (e.g., dark mode). Caller-provided icons are not
-  // responsive.
-  if (instrument_icon_ && instrument_icon_->drawsNothing()) {
-    static_cast<views::ImageView*>(
-        GetViewByID(static_cast<int>(DialogViewID::INSTRUMENT_ICON)))
-        ->SetImage(gfx::CreateVectorIcon(
-            kCreditCardIcon,
-            kSecurePaymentConfirmationInstrumentIconDefaultWidthPx,
-            GetColorProvider()->GetColor(ui::kColorDialogForeground)));
-  }
 }
 
 BEGIN_METADATA(SecurePaymentConfirmationDialogView, views::DialogDelegateView)

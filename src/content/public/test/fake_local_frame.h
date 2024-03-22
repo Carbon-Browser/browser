@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 //
@@ -12,6 +12,8 @@
 #include "build/build_config.h"
 #include "mojo/public/cpp/bindings/associated_receiver_set.h"
 #include "mojo/public/cpp/bindings/pending_associated_receiver.h"
+#include "net/http/http_connection_info.h"
+#include "services/network/public/mojom/load_timing_info.mojom.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/blink/public/common/associated_interfaces/associated_interface_provider.h"
 #include "third_party/blink/public/common/messaging/transferable_message.h"
@@ -64,20 +66,16 @@ class FakeLocalFrame : public blink::mojom::LocalFrame {
   void EnableViewSourceMode() override;
   void Focus() override;
   void ClearFocusedElement() override;
-  void GetResourceSnapshotForWebBundle(
-      mojo::PendingReceiver<data_decoder::mojom::ResourceSnapshotForWebBundle>
-          receiver) override;
   void CopyImageAt(const gfx::Point& window_point) override;
   void SaveImageAt(const gfx::Point& window_point) override;
   void ReportBlinkFeatureUsage(
       const std::vector<blink::mojom::WebFeature>&) override;
   void RenderFallbackContent() override;
-  void RenderFallbackContentWithResourceTiming(
-      blink::mojom::ResourceTimingInfoPtr,
-      const std::string& server_timing_value) override;
   void BeforeUnload(bool is_reload, BeforeUnloadCallback callback) override;
   void MediaPlayerActionAt(const gfx::Point& location,
                            blink::mojom::MediaPlayerActionPtr action) override;
+  void RequestVideoFrameAt(const gfx::Point& window_point,
+                           RequestVideoFrameAtCallback callback) override;
   void PluginActionAt(const gfx::Point& location,
                       blink::mojom::PluginActionType action) override;
   void InsertAbpElemhideStylesheet(const std::string& stylesheet) override;
@@ -148,7 +146,35 @@ class FakeLocalFrame : public blink::mojom::LocalFrame {
   void GetOpenGraphMetadata(
       base::OnceCallback<void(blink::mojom::OpenGraphMetadataPtr)>) override;
   void SetNavigationApiHistoryEntriesForRestore(
-      blink::mojom::NavigationApiHistoryEntryArraysPtr entry_arrays) override;
+      blink::mojom::NavigationApiHistoryEntryArraysPtr entry_arrays,
+      blink::mojom::NavigationApiEntryRestoreReason restore_reason) override;
+  void NotifyNavigationApiOfDisposedEntries(
+      const std::vector<std::string>& keys) override;
+  void TraverseCancelled(const std::string& navigation_api_key,
+                         blink::mojom::TraverseCancelledReason reason) override;
+  void DispatchNavigateEventForCrossDocumentTraversal(
+      const GURL&,
+      const std::string& page_state,
+      bool is_browser_initiated) override;
+  void SnapshotDocumentForViewTransition(
+      SnapshotDocumentForViewTransitionCallback callback) override;
+  void AddResourceTimingEntryForFailedSubframeNavigation(
+      const ::blink::FrameToken& subframe_token,
+      const GURL& initial_url,
+      base::TimeTicks start_time,
+      base::TimeTicks redirect_time,
+      base::TimeTicks request_start,
+      base::TimeTicks response_start,
+      uint32_t response_code,
+      const std::string& mime_type,
+      const net::LoadTimingInfo& load_timing_info,
+      net::HttpConnectionInfo connection_info,
+      const std::string& alpn_negotiated_protocol,
+      bool is_secure_transport,
+      bool is_validated,
+      const std::string& normalized_server_timing,
+      const ::network::URLLoaderCompletionStatus& completion_status) override;
+  void RequestFullscreenDocumentElement() override;
 
  private:
   void BindFrameHostReceiver(mojo::ScopedInterfaceEndpointHandle handle);

@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -24,7 +24,7 @@ class TestM1SensorsReader : public power_metrics::M1SensorsReader {
  public:
   TestM1SensorsReader()
       : power_metrics::M1SensorsReader(
-            base::ScopedCFTypeRef<IOHIDEventSystemClientRef>()) {}
+            base::apple::ScopedCFTypeRef<IOHIDEventSystemClientRef>()) {}
 
   void set_temperatures(TemperaturesCelsius temperatures) {
     temperatures_ = temperatures;

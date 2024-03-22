@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,10 +6,12 @@
 
 #include <errno.h>
 #include <sync/sync.h>
+
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
+#include "base/containers/contains.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
 #include "base/posix/eintr_wrapper.h"
 #include "base/task/thread_pool.h"
@@ -28,7 +30,7 @@ namespace {
 // We currently wait for the fences serially, but it's possible
 // that merging the fences and waiting on the merged fence fd
 // is more efficient. We should revisit once we have more info.
-ui::DrmOverlayPlaneList WaitForPlaneFences(ui::DrmOverlayPlaneList planes) {
+DrmOverlayPlaneList WaitForPlaneFences(DrmOverlayPlaneList planes) {
   for (const auto& plane : planes) {
     if (plane.gpu_fence)
       plane.gpu_fence->Wait();
@@ -53,7 +55,7 @@ bool HardwareDisplayPlaneManagerLegacy::Commit(CommitRequest commit_request,
 
   bool status = true;
   for (const auto& crtc_request : commit_request) {
-    if (crtc_request.should_enable()) {
+    if (crtc_request.should_enable_crtc()) {
       // Overlays are not supported in legacy hence why we're only looking at
       // the primary plane.
       uint32_t fb_id = DrmOverlayPlane::GetPrimaryPlane(crtc_request.overlays())
@@ -122,11 +124,9 @@ bool HardwareDisplayPlaneManagerLegacy::Commit(
 bool HardwareDisplayPlaneManagerLegacy::DisableOverlayPlanes(
     HardwareDisplayPlaneList* plane_list) {
   // We're never going to ship legacy pageflip with overlays enabled.
-  DCHECK(std::find_if(plane_list->old_plane_list.begin(),
-                      plane_list->old_plane_list.end(),
-                      [](HardwareDisplayPlane* plane) {
-                        return plane->type() == DRM_PLANE_TYPE_OVERLAY;
-                      }) == plane_list->old_plane_list.end());
+  DCHECK(!base::Contains(plane_list->old_plane_list,
+                         static_cast<uint32_t>(DRM_PLANE_TYPE_OVERLAY),
+                         &HardwareDisplayPlane::type));
   return true;
 }
 
@@ -206,7 +206,7 @@ bool HardwareDisplayPlaneManagerLegacy::IsCompatible(
     HardwareDisplayPlane* plane,
     const DrmOverlayPlane& overlay,
     uint32_t crtc_id) const {
-  if (plane->type() == DRM_PLANE_TYPE_CURSOR ||
+  if (plane->in_use() || plane->type() == DRM_PLANE_TYPE_CURSOR ||
       !plane->CanUseForCrtcId(crtc_id))
     return false;
 

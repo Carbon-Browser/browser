@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,10 +9,6 @@
 
 namespace vr {
 
-class AudioDelegate;
-class KeyboardDelegate;
-class PlatformInputHandler;
-class TextInputDelegate;
 class UiBrowserInterface;
 class UiInterface;
 struct UiInitialState;
@@ -37,10 +33,6 @@ class UiFactory {
 
   virtual std::unique_ptr<UiInterface> Create(
       UiBrowserInterface* browser,
-      PlatformInputHandler* content_input_forwarder,
-      std::unique_ptr<KeyboardDelegate> keyboard_delegate,
-      std::unique_ptr<TextInputDelegate> text_input_delegate,
-      std::unique_ptr<AudioDelegate> audio_delegate,
       const UiInitialState& ui_initial_state) = 0;
 };
 

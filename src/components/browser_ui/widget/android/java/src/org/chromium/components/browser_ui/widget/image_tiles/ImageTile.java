@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -33,7 +33,8 @@ public class ImageTile {
     public boolean equals(@Nullable Object obj) {
         if (!(obj instanceof ImageTile)) return false;
         ImageTile other = (ImageTile) obj;
-        return TextUtils.equals(id, other.id) && TextUtils.equals(displayTitle, other.displayTitle)
+        return TextUtils.equals(id, other.id)
+                && TextUtils.equals(displayTitle, other.displayTitle)
                 && TextUtils.equals(accessibilityText, other.accessibilityText);
     }
 }

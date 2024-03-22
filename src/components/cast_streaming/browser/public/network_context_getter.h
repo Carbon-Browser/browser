@@ -1,11 +1,11 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef COMPONENTS_CAST_STREAMING_BROWSER_PUBLIC_NETWORK_CONTEXT_GETTER_H_
 #define COMPONENTS_CAST_STREAMING_BROWSER_PUBLIC_NETWORK_CONTEXT_GETTER_H_
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 
 namespace network {
 namespace mojom {

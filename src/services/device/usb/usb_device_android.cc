@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,9 +10,9 @@
 
 #include "base/android/build_info.h"
 #include "base/android/jni_string.h"
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/task/single_thread_task_runner.h"
 #include "services/device/usb/jni_headers/ChromeUsbDevice_jni.h"
 #include "services/device/usb/usb_configuration_android.h"
 #include "services/device/usb/usb_descriptors.h"
@@ -36,10 +36,6 @@ scoped_refptr<UsbDeviceAndroid> UsbDeviceAndroid::Create(
   auto* build_info = base::android::BuildInfo::GetInstance();
   ScopedJavaLocalRef<jobject> wrapper =
       Java_ChromeUsbDevice_create(env, usb_device);
-
-  uint16_t device_version = 0;
-  if (build_info->sdk_int() >= base::android::SDK_VERSION_MARSHMALLOW)
-    device_version = Java_ChromeUsbDevice_getDeviceVersion(env, wrapper);
 
   std::u16string manufacturer_string;
   ScopedJavaLocalRef<jstring> manufacturer_jstring =
@@ -71,7 +67,8 @@ scoped_refptr<UsbDeviceAndroid> UsbDeviceAndroid::Create(
       Java_ChromeUsbDevice_getDeviceSubclass(env, wrapper),
       Java_ChromeUsbDevice_getDeviceProtocol(env, wrapper),
       Java_ChromeUsbDevice_getVendorId(env, wrapper),
-      Java_ChromeUsbDevice_getProductId(env, wrapper), device_version,
+      Java_ChromeUsbDevice_getProductId(env, wrapper),
+      Java_ChromeUsbDevice_getDeviceVersion(env, wrapper),
       manufacturer_string, product_string, serial_number, wrapper));
 }
 
@@ -80,7 +77,7 @@ void UsbDeviceAndroid::RequestPermission(ResultCallback callback) {
     request_permission_callbacks_.push_back(std::move(callback));
     service_->RequestDevicePermission(j_object_);
   } else {
-    base::ThreadTaskRunnerHandle::Get()->PostTask(
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE, base::BindOnce(std::move(callback), permission_granted_));
   }
 }
@@ -96,7 +93,7 @@ void UsbDeviceAndroid::Open(OpenCallback callback) {
       handles().push_back(device_handle.get());
     }
   }
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE, base::BindOnce(std::move(callback), device_handle));
 }
 

@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,10 +11,10 @@
 #include "ash/drag_drop/toplevel_window_drag_delegate.h"
 #include "ash/shell.h"
 #include "ash/wm/window_util.h"
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/run_loop.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/threading/hang_watcher.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "ui/aura/client/capture_client.h"
 #include "ui/aura/client/drag_drop_client_observer.h"
 #include "ui/aura/client/drag_drop_delegate.h"
@@ -82,7 +82,7 @@ void DropIfAllowed(const ui::OSExchangeData* drag_data,
 
   if (ui::DataTransferPolicyController::HasInstance()) {
     ui::DataTransferPolicyController::Get()->DropIfAllowed(
-        drag_data->GetSource(), &drag_info.data_endpoint, std::move(drop_cb));
+        drag_data, &drag_info.data_endpoint, std::move(drop_cb));
   } else {
     std::move(drop_cb).Run();
   }
@@ -124,6 +124,10 @@ DragDropController::~DragDropController() {
   drag_image_widget_.reset();
 }
 
+bool DragDropController::IsDragDropCompleted() {
+  return drag_drop_completed_;
+}
+
 DragOperation DragDropController::StartDragAndDrop(
     std::unique_ptr<ui::OSExchangeData> data,
     aura::Window* root_window,
@@ -134,7 +138,7 @@ DragOperation DragDropController::StartDragAndDrop(
   if (!enabled_ || IsDragDropInProgress())
     return DragOperation::kNone;
 
-  drop_weak_factory_.InvalidateWeakPtrs();
+  weak_factory_.InvalidateWeakPtrs();
 
   const ui::OSExchangeDataProvider* provider = &data->provider();
   // We do not support touch drag/drop without a drag image, unless it is a tab
@@ -171,11 +175,17 @@ DragOperation DragDropController::StartDragAndDrop(
     }
   }
 
+  // |drag_source_window_| and |pending_long_tap_| could be non-null if a new
+  // drag starts while cancel animation or forwarding long tap event is ongoing.
+  // In this case, forwarding long tap event is aborted and related state should
+  // be cleaned up.
+  CleanupPendingLongTap();
+
   drag_source_window_ = source_window;
   if (drag_source_window_)
     drag_source_window_->AddObserver(this);
-  pending_long_tap_.reset();
 
+  drag_drop_completed_ = false;
   drag_data_ = std::move(data);
   allowed_operations_ = allowed_operations;
   current_drag_info_ = aura::client::DragUpdateInfo();
@@ -183,13 +193,16 @@ DragOperation DragDropController::StartDragAndDrop(
   start_location_ = screen_location;
   current_location_ = screen_location;
 
+  // Ends cancel animation if it's in progress.
+  // This should happen before setting drag image because it refers to the drag
+  // image.
+  if (cancel_animation_)
+    cancel_animation_->End();
+  cancel_animation_.reset();
+
   SetDragImage(provider->GetDragImage(), provider->GetDragImageOffset());
 
   drag_window_ = nullptr;
-
-  // Ends cancel animation if it's in progress.
-  if (cancel_animation_)
-    cancel_animation_->End();
 
   for (aura::client::DragDropClientObserver& observer : observers_)
     observer.OnDragStarted();
@@ -204,8 +217,10 @@ DragOperation DragDropController::StartDragAndDrop(
     DCHECK(!tab_drag_drop_delegate_);
     tab_drag_drop_delegate_ = std::make_unique<TabDragDropDelegate>(
         root_window, drag_source_window_, start_location_);
-    static_cast<DragImageView*>(drag_image_widget_->GetContentsView())
-        ->SetTouchDragOperationHintOff();
+    if (drag_image_widget_) {
+      static_cast<DragImageView*>(drag_image_widget_->GetContentsView())
+          ->SetTouchDragOperationHintOff();
+    }
     // Avoid taking capture twice.
     if (is_touch_source && !touch_capture_attempted) {
       touch_capture_attempted = true;
@@ -246,16 +261,15 @@ DragOperation DragDropController::StartDragAndDrop(
     }
   }
 
-  if (!cancel_animation_.get() || !cancel_animation_->is_animating() ||
-      !pending_long_tap_.get()) {
-    // If drag cancel animation is running, this cleanup is done when the
-    // animation completes.
-    if (drag_source_window_) {
-      // A check to catch an UAF issue like crbug.com/1282480 on non asan build.
-      DCHECK(!drag_source_window_->is_destroying());
-      drag_source_window_->RemoveObserver(this);
-    }
-    drag_source_window_ = nullptr;
+  if (!will_forward_long_tap_) {
+    // If drag cancel animation or long tap event forwarding is running, this
+    // cleanup is done when the long tap event forwarding is done, or when a new
+    // drag is started.
+
+    // A check to catch an UAF issue like crbug.com/1282480 on non asan build.
+    DCHECK(!drag_source_window_ || !drag_source_window_->is_destroying());
+
+    CleanupPendingLongTap();
   }
 
   return operation_;
@@ -263,8 +277,15 @@ DragOperation DragDropController::StartDragAndDrop(
 
 void DragDropController::SetDragImage(const gfx::ImageSkia& image,
                                       const gfx::Vector2d& image_offset) {
+  if (image.size().IsEmpty()) {
+    drag_image_widget_.reset();
+    drag_image_final_bounds_for_cancel_animation_ = gfx::Rect();
+    drag_image_offset_ = gfx::Vector2d();
+    return;
+  }
+
   auto source = current_drag_event_source_;
-  auto* source_window = drag_source_window_;
+  auto* source_window = drag_source_window_.get();
 
   float drag_image_scale = 1;
   int drag_image_vertical_offset = 0;
@@ -275,10 +296,8 @@ void DragDropController::SetDragImage(const gfx::ImageSkia& image,
   drag_image_final_bounds_for_cancel_animation_ =
       gfx::Rect(start_location_ - image_offset, image.size());
 
-  if (!drag_image_widget_) {
-    drag_image_widget_ =
-        DragImageView::Create(source_window->GetRootWindow(), source);
-  }
+  drag_image_widget_ =
+      DragImageView::Create(source_window->GetRootWindow(), source);
 
   DragImageView* drag_image =
       static_cast<DragImageView*>(drag_image_widget_->GetContentsView());
@@ -469,7 +488,7 @@ void DragDropController::OnGestureEvent(ui::GestureEvent* event) {
             static_cast<aura::Window*>(capture_delegate_->capture_window()),
             static_cast<aura::Window*>(drag_source_window_));
       } else {
-        pending_long_tap_ = ui::Event::Clone(*event);
+        pending_long_tap_ = event->Clone();
       }
       DoDragCancel(kTouchCancelAnimationDuration);
       break;
@@ -566,12 +585,11 @@ void DragDropController::DragUpdate(aura::Window* target,
 
   gfx::Point root_location_in_screen = event.root_location();
   ::wm::ConvertPointToScreen(target->GetRootWindow(), &root_location_in_screen);
+  current_location_ = root_location_in_screen;
 
-  DCHECK(drag_image_widget_);
-  DragImageView* drag_image =
-      static_cast<DragImageView*>(drag_image_widget_->GetContentsView());
-  if (drag_image->GetVisible()) {
-    current_location_ = root_location_in_screen;
+  if (drag_image_widget_) {
+    DragImageView* drag_image =
+        static_cast<DragImageView*>(drag_image_widget_->GetContentsView());
     drag_image->SetScreenPosition(root_location_in_screen - drag_image_offset_);
     drag_image->SetTouchDragOperation(drag_info.drag_operation);
   }
@@ -601,15 +619,20 @@ void DragDropController::Drop(aura::Window* target,
       aura::client::GetDragDropDelegate(target);
 
   aura::client::DragDropDelegate::DropCallback delegate_drop_cb =
-      base::DoNothing();
+      base::NullCallback();
 
   ui::DropTargetEvent e(*drag_data_.get(), event.location_f(),
                         event.root_location_f(), allowed_operations_);
   e.set_flags(event.flags());
   ui::Event::DispatcherApi(&e).set_target(target);
 
-  if (delegate)
+  for (aura::client::DragDropClientObserver& observer : observers_) {
+    observer.OnDragCompleted(e);
+  }
+
+  if (delegate) {
     delegate_drop_cb = delegate->GetDropCallback(e);
+  }
 
   base::ScopedClosureRunner drag_cancel(base::BindOnce(
       &DragDropController::DragCancel, weak_factory_.GetWeakPtr()));
@@ -620,28 +643,15 @@ void DragDropController::Drop(aura::Window* target,
   const bool is_tab_drag_drop = (tab_drag_drop_delegate_.get() != nullptr);
 
   DCHECK_EQ(drag_window_, target);
-  aura::WindowTracker window_tracker({drag_window_, drag_window_->parent()});
 
   DropIfAllowed(
       drag_data_.get(), current_drag_info_,
       base::BindOnce(&DragDropController::PerformDrop,
-                     drop_weak_factory_.GetWeakPtr(), drop_location_in_screen,
-                     e, std::move(drag_data_), std::move(delegate_drop_cb),
+                     weak_factory_.GetWeakPtr(), drop_location_in_screen, e,
+                     std::move(drag_data_), std::move(delegate_drop_cb),
                      std::move(tab_drag_drop_delegate_),
                      std::move(drag_cancel)));
 
-  // During the drop, the event target (or its ancestors) might have
-  // been destroyed, eg by the client reaction. Adapt the DropTargetEvent
-  // accordingly.
-  //
-  // TODO(https://crbug.com/1160925): Avoid nested RunLoop in exo
-  // DataDevice::GetDropCallback() - remove the block below when it is fixed.
-  if (!window_tracker.Contains(drag_window_) ||
-      !window_tracker.Contains(drag_window_->parent()))
-    ui::Event::DispatcherApi(&e).set_target(nullptr);
-
-  for (aura::client::DragDropClientObserver& observer : observers_)
-    observer.OnDragCompleted(e);
   Cleanup();
 
   // Tab drag-n-drop should never be async.
@@ -664,21 +674,8 @@ void DragDropController::AnimationEnded(const gfx::Animation* animation) {
   cancel_animation_.reset();
   cancel_animation_notifier_.reset();
 
-  // By the time we finish animation, another drag/drop session may have
-  // started. We do not want to destroy the drag image in that case.
-  if (!IsDragDropInProgress())
-    drag_image_widget_.reset();
-  if (pending_long_tap_) {
-    // If not in a nested run loop, we can forward the long tap right now.
-    if (nested_loop_disabled_for_testing_) {
-      ForwardPendingLongTap();
-    } else {
-      // See comment about this in OnGestureEvent().
-      base::ThreadTaskRunnerHandle::Get()->PostTask(
-          FROM_HERE, base::BindOnce(&DragDropController::ForwardPendingLongTap,
-                                    weak_factory_.GetWeakPtr()));
-    }
-  }
+  drag_image_widget_.reset();
+  ScheduleForwardPendingLongTap();
 }
 
 void DragDropController::DoDragCancel(
@@ -696,18 +693,20 @@ void DragDropController::DoDragCancel(
   if (toplevel_window_drag_delegate_)
     toplevel_window_drag_delegate_->OnToplevelWindowDragCancelled();
 
-  for (aura::client::DragDropClientObserver& observer : observers_)
+  for (aura::client::DragDropClientObserver& observer : observers_) {
     observer.OnDragCancelled();
+  }
   Cleanup();
 
-  // If the drop is async, then |drag_image_widget_| is already reset.
-  if (drag_image_widget_)
-    StartCanceledAnimation(drag_cancel_animation_duration);
+  StartCanceledAnimation(drag_cancel_animation_duration);
+
   if (quit_closure_)
     std::move(quit_closure_).Run();
 }
 
 void DragDropController::AnimationProgressed(const gfx::Animation* animation) {
+  DCHECK(drag_image_widget_);
+
   gfx::Rect current_bounds = animation->CurrentValueBetween(
       drag_image_initial_bounds_for_cancel_animation_,
       drag_image_final_bounds_for_cancel_animation_);
@@ -728,7 +727,17 @@ void DragDropController::OnDisplayConfigurationChanging() {
 
 void DragDropController::StartCanceledAnimation(
     base::TimeDelta animation_duration) {
-  DCHECK(drag_image_widget_);
+  DCHECK(!cancel_animation_);
+  DCHECK(!will_forward_long_tap_);
+
+  if (pending_long_tap_)
+    will_forward_long_tap_ = true;
+
+  if (!drag_image_widget_) {
+    ScheduleForwardPendingLongTap();
+    return;
+  }
+
   DragImageView* drag_image =
       static_cast<DragImageView*>(drag_image_widget_->GetContentsView());
   drag_image->SetTouchDragOperationHintOff();
@@ -743,16 +752,30 @@ void DragDropController::StartCanceledAnimation(
   cancel_animation_->Start();
 }
 
+void DragDropController::ScheduleForwardPendingLongTap() {
+  if (!pending_long_tap_)
+    return;
+
+  // If not in a nested run loop, we can forward the long tap right now.
+  if (nested_loop_disabled_for_testing_) {
+    ForwardPendingLongTap();
+    return;
+  }
+
+  // See comment about this in OnGestureEvent().
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
+      FROM_HERE, base::BindOnce(&DragDropController::ForwardPendingLongTap,
+                                weak_factory_.GetWeakPtr()));
+}
+
 void DragDropController::ForwardPendingLongTap() {
   if (drag_source_window_ && drag_source_window_->delegate()) {
     drag_source_window_->delegate()->OnGestureEvent(
         pending_long_tap_->AsGestureEvent());
     DispatchGestureEndToWindow(drag_source_window_);
   }
-  pending_long_tap_.reset();
-  if (drag_source_window_)
-    drag_source_window_->RemoveObserver(this);
-  drag_source_window_ = nullptr;
+
+  CleanupPendingLongTap();
 }
 
 void DragDropController::Cleanup() {
@@ -761,18 +784,27 @@ void DragDropController::Cleanup() {
     drag_source_window_->ReleaseCapture();
   }
 
-  // Do not remove observer `the drag_window_1 is same as `drag_source_window_`.
+  // Do not remove observer if `drag_window_` is the same as
+  // `drag_source_window_`.
   // `drag_source_window_` is still necessary to process long tab and the
   // observer will be reset when `drag_source_window_` is destroyed.
   if (drag_window_ && drag_window_ != drag_source_window_)
     drag_window_->RemoveObserver(this);
   drag_window_ = nullptr;
-
+  drag_drop_completed_ = true;
   drag_data_.reset();
   allowed_operations_ = 0;
   tab_drag_drop_delegate_.reset();
   touch_drag_drop_delegate_.reset();
   capture_delegate_ = nullptr;
+}
+
+void DragDropController::CleanupPendingLongTap() {
+  pending_long_tap_.reset();
+  will_forward_long_tap_ = false;
+  if (drag_source_window_)
+    drag_source_window_->RemoveObserver(this);
+  drag_source_window_ = nullptr;
 }
 
 void DragDropController::PerformDrop(
@@ -781,19 +813,22 @@ void DragDropController::PerformDrop(
     std::unique_ptr<ui::OSExchangeData> drag_data,
     aura::client::DragDropDelegate::DropCallback drop_cb,
     std::unique_ptr<TabDragDropDelegate> tab_drag_drop_delegate,
-    base::ScopedClosureRunner drag_cancel) {
+    base::ScopedClosureRunner cancel_drag_callback) {
   // Event copy constructor dooesn't copy the target. That's why we set it here.
   // DragDropController observes the `drag_window_`, so if it's destroyed, the
   // target will be set to nullptr.
   ui::Event::DispatcherApi(&event).set_target(drag_window_);
 
   ui::OSExchangeData copied_data(drag_data->provider().Clone());
-  if (drop_cb) {
-    std::move(drop_cb).Run(std::move(drag_data), operation_);
+  if (!!drop_cb) {
+    std::move(drop_cb).Run(
+        std::move(drag_data), operation_,
+        drag_image_widget_
+            ? ::wm::RecreateLayers(drag_image_widget_->GetNativeWindow())
+            : nullptr);
   }
 
   if (operation_ == DragOperation::kNone && tab_drag_drop_delegate) {
-    DCHECK(drag_image_widget_);
     // Release the ownership of object so that it can delete itself.
     tab_drag_drop_delegate.release()->DropAndDeleteSelf(drop_location_in_screen,
                                                         copied_data);
@@ -812,7 +847,13 @@ void DragDropController::PerformDrop(
   if (toplevel_window_drag_delegate_) {
     operation_ = toplevel_window_drag_delegate_->OnToplevelWindowDragDropped();
   }
-  drag_cancel.ReplaceClosure(base::DoNothing());
+
+  for (aura::client::DragDropClientObserver& observer : observers_) {
+    observer.OnDropCompleted(operation_);
+  }
+
+  // Drop completed, so no need to cancel the drop.
+  std::ignore = cancel_drag_callback.Release();
 }
 
 void DragDropController::CancelIfInProgress() {

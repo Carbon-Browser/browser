@@ -1,11 +1,12 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef THIRD_PARTY_BLINK_PUBLIC_PLATFORM_RESOURCE_LOAD_INFO_NOTIFIER_WRAPPER_H_
 #define THIRD_PARTY_BLINK_PUBLIC_PLATFORM_RESOURCE_LOAD_INFO_NOTIFIER_WRAPPER_H_
 
-#include "base/threading/thread_checker.h"
+#include "base/sequence_checker.h"
+#include "base/task/single_thread_task_runner.h"
 #include "build/build_config.h"
 #include "net/base/request_priority.h"
 #include "services/network/public/mojom/fetch_api.mojom-shared.h"
@@ -62,7 +63,7 @@ class BLINK_PLATFORM_EXPORT ResourceLoadInfoNotifierWrapper {
   void NotifyResourceLoadCanceled(int net_error);
 
  private:
-  THREAD_CHECKER(thread_checker_);
+  SEQUENCE_CHECKER(sequence_checker_);
 
   // |weak_wrapper_resource_load_info_notifier_| should only be dereferenced on
   // the same thread as |task_runner_| runs on.

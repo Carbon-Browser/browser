@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -20,9 +20,7 @@ import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 
-/**
- * Unit tests for the {@link Policies} annotations
- */
+/** Unit tests for the {@link Policies} annotations */
 @RunWith(BlockJUnit4ClassRunner.class)
 public class PoliciesTest {
     @Test
@@ -58,7 +56,8 @@ public class PoliciesTest {
 
         // Annotations can be removed
         method = SomeClass.class.getDeclaredMethod("someMethodThatTilRecentlyHadNi");
-        assertThat(Policies.getPolicies(method).keySet(),
+        assertThat(
+                Policies.getPolicies(method).keySet(),
                 is(makeSet("Ekke Ekke Ekke Ekke Ptangya Zoooooooom Boing Ni")));
     }
 

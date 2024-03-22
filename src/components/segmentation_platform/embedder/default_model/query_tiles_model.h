@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,23 +9,26 @@
 
 namespace segmentation_platform {
 
+struct Config;
+
 // Segmentation query tiles model provider. Provides a default model and
 // metadata for the query tiles optimization target.
-class QueryTilesModel : public ModelProvider {
+class QueryTilesModel : public DefaultModelProvider {
  public:
   QueryTilesModel();
   ~QueryTilesModel() override = default;
 
   // Disallow copy/assign.
-  QueryTilesModel(QueryTilesModel&) = delete;
-  QueryTilesModel& operator=(QueryTilesModel&) = delete;
+  QueryTilesModel(const QueryTilesModel&) = delete;
+  QueryTilesModel& operator=(const QueryTilesModel&) = delete;
+
+  static std::unique_ptr<Config> GetConfig();
 
   // ModelProvider implementation.
-  void InitAndFetchModel(
-      const ModelUpdatedCallback& model_updated_callback) override;
-  void ExecuteModelWithInput(const std::vector<float>& inputs,
+  std::unique_ptr<ModelConfig> GetModelConfig() override;
+
+  void ExecuteModelWithInput(const ModelProvider::Request& inputs,
                              ExecutionCallback callback) override;
-  bool ModelAvailable() override;
 };
 
 }  // namespace segmentation_platform

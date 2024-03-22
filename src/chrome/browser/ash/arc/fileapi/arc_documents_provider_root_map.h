@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,6 +12,7 @@
 #include <vector>
 
 #include "base/files/file_path.h"
+#include "base/memory/raw_ptr.h"
 #include "components/keyed_service/core/keyed_service.h"
 
 class Profile;
@@ -48,12 +49,9 @@ class ArcDocumentsProviderRootMap : public KeyedService {
   // Returns an instance for the browser context associated with ARC, or nullptr
   // if ARC is not allowed.
   // TODO(nya): Remove this function when we support multi-user ARC. For now,
-  // it is okay to call this function only from chromeos::FileSystemBackend and
+  // it is okay to call this function only from ash::FileSystemBackend and
   // its delegates.
   static ArcDocumentsProviderRootMap* GetForArcBrowserContext();
-
-  // Checks if a given document provider root is read only or not.
-  static bool IsDocumentProviderRootReadOnly();
 
   // Looks up a root corresponding to |url|.
   // |path| is set to the remaining path part of |url|.
@@ -88,7 +86,7 @@ class ArcDocumentsProviderRootMap : public KeyedService {
   // |runner_| outlives |this| and ArcDocumentsProviderRoot instances in |map_|
   // as this service has explicit dependency on ArcFileSystemOperationRunner in
   // the BrowserContextKeyedServiceFactory dependency graph.
-  ArcFileSystemOperationRunner* const runner_;
+  const raw_ptr<ArcFileSystemOperationRunner, ExperimentalAsh> runner_;
 
   // Key is (authority, root_document_id).
   using Key = std::pair<std::string, std::string>;

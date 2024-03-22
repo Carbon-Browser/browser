@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,7 +8,7 @@
 
 #import <MaterialComponents/MaterialSnackbar.h>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
 #include "base/strings/sys_string_conversions.h"
 #include "remoting/client/audio/audio_playback_stream.h"
@@ -28,10 +28,6 @@
 #include "remoting/ios/session/remoting_client_session_delegate.h"
 #include "remoting/protocol/session.h"
 #include "remoting/protocol/video_renderer.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 NSString* const kHostSessionStatusChanged = @"kHostSessionStatusChanged";
 NSString* const kHostSessionPinProvided = @"kHostSessionPinProvided";
@@ -328,10 +324,10 @@ fetchSecretWithPairingSupported:(BOOL)pairingSupported
                << ":" << message;
 }
 
-- (void)setHostResolution:(CGSize)dipsResolution scale:(int)scale {
+- (void)setHostResolution:(CGSize)resolutionPixels scale:(int)scale {
   if (_session) {
-    _session->SendClientResolution(dipsResolution.width, dipsResolution.height,
-                                   scale);
+    _session->SendClientResolution(resolutionPixels.width,
+                                   resolutionPixels.height, scale);
   }
 }
 

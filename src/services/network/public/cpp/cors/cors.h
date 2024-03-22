@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,6 +9,7 @@
 #include <vector>
 
 #include "base/component_export.h"
+#include "base/types/expected.h"
 #include "net/http/http_request_headers.h"
 #include "services/network/public/cpp/cors/cors_error_status.h"
 #include "services/network/public/mojom/cors.mojom-shared.h"
@@ -50,6 +51,10 @@ COMPONENT_EXPORT(NETWORK_CPP)
 extern const char kAccessControlRequestMethod[];
 COMPONENT_EXPORT(NETWORK_CPP)
 extern const char kAccessControlRequestPrivateNetwork[];
+COMPONENT_EXPORT(NETWORK_CPP)
+extern const char kPrivateNetworkDeviceId[];
+COMPONENT_EXPORT(NETWORK_CPP)
+extern const char kPrivateNetworkDeviceName[];
 
 }  // namespace header_names
 
@@ -68,7 +73,7 @@ enum class AccessCheckResult {
 // Performs a CORS access check on the response parameters.
 // This implements https://fetch.spec.whatwg.org/#concept-cors-check
 COMPONENT_EXPORT(NETWORK_CPP)
-absl::optional<CorsErrorStatus> CheckAccess(
+base::expected<void, CorsErrorStatus> CheckAccess(
     const GURL& response_url,
     const absl::optional<std::string>& allow_origin_header,
     const absl::optional<std::string>& allow_credentials_header,
@@ -77,7 +82,7 @@ absl::optional<CorsErrorStatus> CheckAccess(
 
 // Performs a CORS access check and reports result and error.
 COMPONENT_EXPORT(NETWORK_CPP)
-absl::optional<CorsErrorStatus> CheckAccessAndReportMetrics(
+base::expected<void, CorsErrorStatus> CheckAccessAndReportMetrics(
     const GURL& response_url,
     const absl::optional<std::string>& allow_origin_header,
     const absl::optional<std::string>& allow_credentials_header,
@@ -128,11 +133,6 @@ std::vector<std::string> PrivilegedNoCorsHeaderNames();
 // Checks forbidden method in the fetch spec.
 // See https://fetch.spec.whatwg.org/#forbidden-method.
 COMPONENT_EXPORT(NETWORK_CPP) bool IsForbiddenMethod(const std::string& name);
-
-// https://fetch.spec.whatwg.org/#ok-status aka a successful 2xx status code,
-// https://tools.ietf.org/html/rfc7231#section-6.3 . We opt to use the Fetch
-// term in naming the predicate.
-COMPONENT_EXPORT(NETWORK_CPP) bool IsOkStatus(int status);
 
 // Returns true if |type| is a response type which makes a response
 // CORS-same-origin. See https://html.spec.whatwg.org/C/#cors-same-origin.

@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,6 +6,7 @@
 
 #include <algorithm>
 
+#include "base/trace_event/typed_macros.h"
 #include "third_party/blink/renderer/core/execution_context/execution_context.h"
 #include "third_party/blink/renderer/modules/webaudio/audio_node_input.h"
 #include "third_party/blink/renderer/modules/webaudio/audio_node_output.h"
@@ -17,7 +18,7 @@
 #include "third_party/blink/renderer/platform/audio/audio_utilities.h"
 #include "third_party/blink/renderer/platform/audio/denormal_disabler.h"
 #include "third_party/blink/renderer/platform/audio/hrtf_database_loader.h"
-#include "third_party/blink/renderer/platform/scheduler/public/thread.h"
+#include "third_party/blink/renderer/platform/scheduler/public/non_main_thread.h"
 #include "third_party/blink/renderer/platform/wtf/cross_thread_copier_base.h"
 #include "third_party/blink/renderer/platform/wtf/cross_thread_functional.h"
 
@@ -95,6 +96,10 @@ void OfflineAudioDestinationHandler::StartRendering() {
   DCHECK(shared_render_target_);
   DCHECK(render_thread_task_runner_);
 
+  TRACE_EVENT(TRACE_DISABLED_BY_DEFAULT("webaudio.audionode"),
+              "OfflineAudioDestinationHandler::StartRendering", "this",
+              reinterpret_cast<void*>(this));
+
   // Rendering was not started. Starting now.
   if (!is_rendering_started_) {
     is_rendering_started_ = true;
@@ -158,6 +163,9 @@ void OfflineAudioDestinationHandler::StartOfflineRendering() {
 
 void OfflineAudioDestinationHandler::DoOfflineRendering() {
   DCHECK(!IsMainThread());
+  TRACE_EVENT(TRACE_DISABLED_BY_DEFAULT("webaudio.audionode"),
+              "OfflineAudioDestinationHandler::DoOfflineRendering", "this",
+              reinterpret_cast<void*>(this));
 
   unsigned number_of_channels = shared_render_target_->numberOfChannels();
   Vector<float*> destinations;
@@ -339,7 +347,7 @@ void OfflineAudioDestinationHandler::PrepareTaskRunnerForRendering() {
   } else {
     if (!render_thread_) {
       // The context started from the non-AudioWorklet mode.
-      render_thread_ = Thread::CreateThread(
+      render_thread_ = NonMainThread::CreateThread(
           ThreadCreationParams(ThreadType::kOfflineAudioRenderThread));
       render_thread_task_runner_ = render_thread_->GetTaskRunner();
     }

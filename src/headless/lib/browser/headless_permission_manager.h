@@ -1,11 +1,11 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef HEADLESS_LIB_BROWSER_HEADLESS_PERMISSION_MANAGER_H_
 #define HEADLESS_LIB_BROWSER_HEADLESS_PERMISSION_MANAGER_H_
 
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
 #include "base/memory/raw_ptr.h"
 #include "content/public/browser/permission_controller_delegate.h"
 
@@ -15,6 +15,7 @@ enum class PermissionType;
 
 namespace content {
 class BrowserContext;
+struct PermissionResult;
 }
 
 namespace headless {
@@ -30,18 +31,9 @@ class HeadlessPermissionManager : public content::PermissionControllerDelegate {
   ~HeadlessPermissionManager() override;
 
   // PermissionManager implementation.
-  void RequestPermission(
-      blink::PermissionType permission,
-      content::RenderFrameHost* render_frame_host,
-      const GURL& requesting_origin,
-      bool user_gesture,
-      base::OnceCallback<void(blink::mojom::PermissionStatus)> callback)
-      override;
   void RequestPermissions(
-      const std::vector<blink::PermissionType>& permission,
       content::RenderFrameHost* render_frame_host,
-      const GURL& requesting_origin,
-      bool user_gesture,
+      const content::PermissionRequestDescription& request_description,
       base::OnceCallback<
           void(const std::vector<blink::mojom::PermissionStatus>&)> callback)
       override;
@@ -49,9 +41,8 @@ class HeadlessPermissionManager : public content::PermissionControllerDelegate {
                        const GURL& requesting_origin,
                        const GURL& embedding_origin) override;
   void RequestPermissionsFromCurrentDocument(
-      const std::vector<blink::PermissionType>& permissions,
       content::RenderFrameHost* render_frame_host,
-      bool user_gesture,
+      const content::PermissionRequestDescription& request_description,
       base::OnceCallback<
           void(const std::vector<blink::mojom::PermissionStatus>&)> callback)
       override;
@@ -59,6 +50,10 @@ class HeadlessPermissionManager : public content::PermissionControllerDelegate {
       blink::PermissionType permission,
       const GURL& requesting_origin,
       const GURL& embedding_origin) override;
+  content::PermissionResult GetPermissionResultForOriginWithoutContext(
+      blink::PermissionType permission,
+      const url::Origin& requesting_origin,
+      const url::Origin& embedding_origin) override;
   blink::mojom::PermissionStatus GetPermissionStatusForCurrentDocument(
       blink::PermissionType permission,
       content::RenderFrameHost* render_frame_host) override;
@@ -66,6 +61,10 @@ class HeadlessPermissionManager : public content::PermissionControllerDelegate {
       blink::PermissionType permission,
       content::RenderProcessHost* render_process_host,
       const GURL& worker_origin) override;
+  blink::mojom::PermissionStatus GetPermissionStatusForEmbeddedRequester(
+      blink::PermissionType permission,
+      content::RenderFrameHost* render_frame_host,
+      const url::Origin& overridden_origin) override;
   SubscriptionId SubscribePermissionStatusChange(
       blink::PermissionType permission,
       content::RenderProcessHost* render_process_host,

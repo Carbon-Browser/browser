@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,23 +11,9 @@
 
 namespace quick_answers {
 
-const char kRuleSetPath[] = "unitConversionResult.conversions";
-const char kSourceUnitPath[] = "unitConversionResult.sourceUnit";
-const char kSourceAmountPath[] = "unitConversionResult.sourceAmount";
-const char kDestAmountPath[] = "unitConversionResult.destAmount";
-const char kDestTextPath[] =
-    "unitConversionResult.destination.valueAndUnit.rawText";
-
-const char kCategoryPath[] = "category";
-const char kConversionRateAPath[] = "conversionToSiA";
-const char kResultValueTemplate[] = "%.3f";
-const char kNamePath[] = "name";
-const char kUnitsPath[] = "units";
-
-constexpr char kPoundName[] = "Pound";
-
 // TODO(b/182389513): Handle the proper plural case for the display text.
 std::string GetUnitDisplayText(const std::string& name) {
+  static constexpr char kPoundName[] = "Pound";
   constexpr auto kUnitDisplayTextMap =
       base::MakeFixedFlatMap<base::StringPiece, int>(
           {{kPoundName, IDS_UNIT_CONVERSION_POUND_DISPLAY_TEXT}});

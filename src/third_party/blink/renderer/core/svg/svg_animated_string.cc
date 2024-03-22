@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -20,7 +20,7 @@ void SVGAnimatedString::setBaseVal(const V8UnionStringOrTrustedScriptURL* value,
                                    ExceptionState& exception_state) {
   DCHECK(value);
 
-  // https://w3c.github.io/webappsec-trusted-types/dist/spec/#integration-with-svg
+  // https://w3c.github.io/trusted-types/dist/spec/#integration-with-svg
   String string;
   switch (value->GetContentType()) {
     case V8UnionStringOrTrustedScriptURL::ContentType::kString:

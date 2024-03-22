@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -15,7 +15,9 @@ enum class AutofillProgressDialogType {
   // This progress dialog type applies to Android only.
   kAndroidFIDOProgressDialog = 1,
   // Used when unmasking virtual cards.
-  kVirtualCardUnmaskProgressDialog = 2
+  kVirtualCardUnmaskProgressDialog = 2,
+  // Used when conducting a risk-based check for masked server card.
+  kServerCardUnmaskProgressDialog = 3
 };
 
 }  // namespace autofill

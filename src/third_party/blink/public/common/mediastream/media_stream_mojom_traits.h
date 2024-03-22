@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -23,6 +23,10 @@ struct BLINK_COMMON_EXPORT StructTraits<blink::mojom::MediaStreamDeviceDataView,
 
   static const std::string& id(const blink::MediaStreamDevice& device) {
     return device.id;
+  }
+
+  static int64_t display_id(const blink::MediaStreamDevice& device) {
+    return device.display_id;
   }
 
   static const media::VideoFacingMode& video_facing(
@@ -66,10 +70,6 @@ struct BLINK_COMMON_EXPORT StructTraits<blink::mojom::MediaStreamDeviceDataView,
 template <>
 struct BLINK_COMMON_EXPORT
     StructTraits<blink::mojom::TrackControlsDataView, blink::TrackControls> {
-  static bool requested(const blink::TrackControls& controls) {
-    return controls.requested;
-  }
-
   static const blink::mojom::MediaStreamType& stream_type(
       const blink::TrackControls& controls) {
     return controls.stream_type;
@@ -104,8 +104,18 @@ struct BLINK_COMMON_EXPORT
     return controls.disable_local_echo;
   }
 
+  static bool suppress_local_audio_playback(
+      const blink::StreamControls& controls) {
+    return controls.suppress_local_audio_playback;
+  }
+
   static bool exclude_system_audio(const blink::StreamControls& controls) {
     return controls.exclude_system_audio;
+  }
+
+  static bool exclude_self_browser_surface(
+      const blink::StreamControls& controls) {
+    return controls.exclude_self_browser_surface;
   }
 
   static bool request_pan_tilt_zoom_permission(
@@ -115,6 +125,21 @@ struct BLINK_COMMON_EXPORT
 
   static bool request_all_screens(const blink::StreamControls& controls) {
     return controls.request_all_screens;
+  }
+
+  static blink::mojom::PreferredDisplaySurface preferred_display_surface(
+      const blink::StreamControls& controls) {
+    return controls.preferred_display_surface;
+  }
+
+  static bool dynamic_surface_switching_requested(
+      const blink::StreamControls& controls) {
+    return controls.dynamic_surface_switching_requested;
+  }
+
+  static bool exclude_monitor_type_surfaces(
+      const blink::StreamControls& controls) {
+    return controls.exclude_monitor_type_surfaces;
   }
 
   static bool Read(blink::mojom::StreamControlsDataView input,

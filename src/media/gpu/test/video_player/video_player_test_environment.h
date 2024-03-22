@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -16,7 +16,7 @@
 namespace media {
 namespace test {
 
-class Video;
+class VideoBitstream;
 
 // Test environment for video decode tests. Performs setup and teardown once for
 // the entire test run.
@@ -36,12 +36,12 @@ class VideoPlayerTestEnvironment : public VideoTestEnvironment {
       bool linear_output,
       const base::FilePath& output_folder = base::FilePath(),
       const FrameOutputConfig& frame_output_config = FrameOutputConfig(),
-      const std::vector<base::Feature>& enabled_features = {},
-      const std::vector<base::Feature>& disabled_features = {});
+      const std::vector<base::test::FeatureRef>& enabled_features = {},
+      const std::vector<base::test::FeatureRef>& disabled_features = {});
   ~VideoPlayerTestEnvironment() override;
 
   // Get the video the tests will be ran on.
-  const media::test::Video* Video() const;
+  const media::test::VideoBitstream* Video() const;
   // Check whether frame validation is enabled.
   bool IsValidatorEnabled() const;
   // Get the validator type.
@@ -62,16 +62,16 @@ class VideoPlayerTestEnvironment : public VideoTestEnvironment {
 
  private:
   VideoPlayerTestEnvironment(
-      std::unique_ptr<media::test::Video> video,
+      std::unique_ptr<media::test::VideoBitstream> video,
       ValidatorType validator_type,
       const DecoderImplementation implementation,
       bool linear_output,
       const base::FilePath& output_folder,
       const FrameOutputConfig& frame_output_config,
-      const std::vector<base::Feature>& enabled_features,
-      const std::vector<base::Feature>& disabled_features);
+      const std::vector<base::test::FeatureRef>& enabled_features,
+      const std::vector<base::test::FeatureRef>& disabled_features);
 
-  const std::unique_ptr<media::test::Video> video_;
+  const std::unique_ptr<media::test::VideoBitstream> video_;
   const ValidatorType validator_type_;
   const DecoderImplementation implementation_;
   const bool linear_output_;

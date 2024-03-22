@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,14 +7,15 @@
 #include <set>
 #include <utility>
 
-#include "base/bind.h"
 #include "base/command_line.h"
+#include "base/functional/bind.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/supports_user_data.h"
 #include "base/trace_event/optional_trace_event.h"
 #include "content/browser/devtools/devtools_instrumentation.h"
 #include "content/browser/navigation_or_document_handle.h"
+#include "content/browser/navigation_subresource_loader_params.h"
 #include "content/browser/renderer_host/navigation_entry_impl.h"
 #include "content/browser/renderer_host/render_frame_host_impl.h"
 #include "content/browser/ssl/ssl_error_handler.h"
@@ -54,6 +55,7 @@ enum class MixedContentType {
 };
 
 void OnAllowCertificate(SSLErrorHandler* handler,
+                        StoragePartition* storage_partition,
                         SSLHostStateDelegate* state_delegate,
                         bool record_decision,
                         CertificateRequestResultType decision) {
@@ -71,9 +73,9 @@ void OnAllowCertificate(SSLErrorHandler* handler,
       // ContinueRequest() gets posted to a different thread. Calling
       // AllowCert() first ensures deterministic ordering.
       if (record_decision && state_delegate) {
-        state_delegate->AllowCert(
-            handler->request_url().host(), *handler->ssl_info().cert.get(),
-            handler->cert_error(), handler->web_contents());
+        state_delegate->AllowCert(handler->request_url().host(),
+                                  *handler->ssl_info().cert.get(),
+                                  handler->cert_error(), storage_partition);
       }
       handler->ContinueRequest();
       return;
@@ -99,15 +101,6 @@ class SSLManagerSet : public base::SupportsUserData::Data {
  private:
   std::set<SSLManager*> set_;
 };
-
-void LogMixedContentMetrics(MixedContentType type,
-                            ukm::SourceId source_id,
-                            ukm::UkmRecorder* recorder) {
-  UMA_HISTOGRAM_ENUMERATION("SSL.MixedContentShown2", type);
-  ukm::builders::SSL_MixedContentShown2(source_id)
-      .SetType(static_cast<int64_t>(type))
-      .Record(recorder);
-}
 
 }  // namespace
 
@@ -231,23 +224,16 @@ void SSLManager::DidDisplayMixedContent() {
   if (entry && entry->GetURL().SchemeIsCryptographic() &&
       entry->GetSSL().certificate) {
     RenderFrameHostImpl* main_frame = controller_->frame_tree().GetMainFrame();
-    ukm::SourceId source_id = main_frame->GetPageUkmSourceId();
-    LogMixedContentMetrics(MixedContentType::kOptionallyBlockableMixedContent,
-                           source_id, ukm::UkmRecorder::Get());
+    WebContents* contents = WebContents::FromRenderFrameHost(main_frame);
+    if (contents) {
+      GetContentClient()->browser()->OnDisplayInsecureContent(contents);
+    }
   }
   UpdateLastCommittedEntry(SSLStatus::DISPLAYED_INSECURE_CONTENT, 0);
 }
 
 void SSLManager::DidContainInsecureFormAction() {
   OPTIONAL_TRACE_EVENT0("content", "SSLManager::DidContainInsecureFormAction");
-  NavigationEntryImpl* entry = controller_->GetLastCommittedEntry();
-  if (entry && entry->GetURL().SchemeIsCryptographic() &&
-      entry->GetSSL().certificate) {
-    RenderFrameHostImpl* main_frame = controller_->frame_tree().GetMainFrame();
-    ukm::SourceId source_id = main_frame->GetPageUkmSourceId();
-    LogMixedContentMetrics(MixedContentType::kMixedForm, source_id,
-                           ukm::UkmRecorder::Get());
-  }
   UpdateLastCommittedEntry(SSLStatus::DISPLAYED_FORM_WITH_INSECURE_ACTION, 0);
 }
 
@@ -257,16 +243,6 @@ void SSLManager::DidDisplayContentWithCertErrors() {
     return;
 
   if (entry->GetURL().SchemeIsCryptographic() && entry->GetSSL().certificate) {
-    // Only record information about subresources with cert errors if the
-    // main page is HTTPS with a valid certificate.
-    if (!net::IsCertStatusError(entry->GetSSL().cert_status)) {
-      RenderFrameHostImpl* main_frame =
-          controller_->frame_tree().GetMainFrame();
-      ukm::SourceId source_id = main_frame->GetPageUkmSourceId();
-      LogMixedContentMetrics(
-          MixedContentType::kOptionallyBlockableWithCertErrors, source_id,
-          ukm::UkmRecorder::Get());
-    }
     UpdateLastCommittedEntry(SSLStatus::DISPLAYED_CONTENT_WITH_CERT_ERRORS, 0);
   }
 }
@@ -275,13 +251,6 @@ void SSLManager::DidRunMixedContent(const GURL& security_origin) {
   NavigationEntryImpl* entry = controller_->GetLastCommittedEntry();
   if (!entry)
     return;
-
-  if (entry->GetURL().SchemeIsCryptographic() && entry->GetSSL().certificate) {
-    RenderFrameHostImpl* main_frame = controller_->frame_tree().GetMainFrame();
-    ukm::SourceId source_id = main_frame->GetPageUkmSourceId();
-    LogMixedContentMetrics(MixedContentType::kBlockableMixedContent, source_id,
-                           ukm::UkmRecorder::Get());
-  }
 
   SiteInstance* site_instance = entry->site_instance();
   if (!site_instance)
@@ -302,16 +271,6 @@ void SSLManager::DidRunContentWithCertErrors(const GURL& security_origin) {
   NavigationEntryImpl* entry = controller_->GetLastCommittedEntry();
   if (!entry)
     return;
-
-  // Only record information about subresources with cert errors if the
-  // main page is HTTPS with a valid certificate.
-  if (entry->GetURL().SchemeIsCryptographic() && entry->GetSSL().certificate &&
-      !net::IsCertStatusError(entry->GetSSL().cert_status)) {
-    RenderFrameHostImpl* main_frame = controller_->frame_tree().GetMainFrame();
-    ukm::SourceId source_id = main_frame->GetPageUkmSourceId();
-    LogMixedContentMetrics(MixedContentType::kBlockableWithCertErrors,
-                           source_id, ukm::UkmRecorder::Get());
-  }
 
   SiteInstance* site_instance = entry->site_instance();
   if (!site_instance)
@@ -343,7 +302,8 @@ void SSLManager::OnCertError(std::unique_ptr<SSLErrorHandler> handler) {
   } else if (ssl_host_state_delegate_) {
     judgment = ssl_host_state_delegate_->QueryPolicy(
         handler->request_url().host(), *handler->ssl_info().cert.get(),
-        handler->cert_error(), handler->web_contents());
+        handler->cert_error(),
+        controller_->frame_tree().GetMainFrame()->GetStoragePartition());
   } else {
     judgment = SSLHostStateDelegate::DENIED;
   }
@@ -357,21 +317,30 @@ void SSLManager::OnCertError(std::unique_ptr<SSLErrorHandler> handler) {
   OnCertErrorInternal(std::move(handler));
 }
 
-void SSLManager::DidStartResourceResponse(
+bool SSLManager::HasAllowExceptionForAnyHost() {
+  if (!ssl_host_state_delegate_) {
+    return false;
+  }
+  return ssl_host_state_delegate_->HasAllowExceptionForAnyHost(
+      controller_->frame_tree().GetMainFrame()->GetStoragePartition());
+}
+
+bool SSLManager::DidStartResourceResponse(
     const url::SchemeHostPort& final_response_url,
     bool has_certificate_errors) {
   const std::string& scheme = final_response_url.scheme();
   const std::string& host = final_response_url.host();
 
-  if (!GURL::SchemeIsCryptographic(scheme) || has_certificate_errors)
-    return;
-
+  if (!GURL::SchemeIsCryptographic(scheme) || has_certificate_errors) {
+    return false;
+  }
   // If the scheme is https: or wss and the cert did not have any errors, revoke
   // any previous decisions that have occurred.
   if (!ssl_host_state_delegate_ ||
       !ssl_host_state_delegate_->HasAllowException(
-          host, controller_->DeprecatedGetWebContents())) {
-    return;
+          host,
+          controller_->frame_tree().GetMainFrame()->GetStoragePartition())) {
+    return false;
   }
 
   // If there's no certificate error, a good certificate has been seen, so
@@ -379,6 +348,7 @@ void SSLManager::DidStartResourceResponse(
   // certificates. This intentionally does not apply to cached resources
   // (see https://crbug.com/634553 for an explanation).
   ssl_host_state_delegate_->RevokeUserAllowExceptions(host);
+  return true;
 }
 
 void SSLManager::OnCertErrorInternal(std::unique_ptr<SSLErrorHandler> handler) {
@@ -390,9 +360,10 @@ void SSLManager::OnCertErrorInternal(std::unique_ptr<SSLErrorHandler> handler) {
   bool fatal = handler->fatal();
 
   base::RepeatingCallback<void(bool, content::CertificateRequestResultType)>
-      callback = base::BindRepeating(&OnAllowCertificate,
-                                     base::Owned(handler.release()),
-                                     ssl_host_state_delegate_);
+      callback = base::BindRepeating(
+          &OnAllowCertificate, base::Owned(handler.release()),
+          controller_->frame_tree().GetMainFrame()->GetStoragePartition(),
+          ssl_host_state_delegate_);
 
   if (devtools_instrumentation::HandleCertificateError(
           web_contents, cert_error, request_url,
@@ -464,7 +435,7 @@ bool SSLManager::UpdateEntry(NavigationEntryImpl* entry,
 void SSLManager::UpdateLastCommittedEntry(int add_content_status_flags,
                                           int remove_content_status_flags) {
   NavigationEntryImpl* entry;
-  if (controller_->frame_tree().type() == FrameTree::Type::kFencedFrame) {
+  if (controller_->frame_tree().is_fenced_frame()) {
     // Only the primary frame tree's NavigationEntries are exposed outside of
     // content, so the primary frame tree's NavigationController needs to
     // represent an aggregate view of the security state of its inner frame

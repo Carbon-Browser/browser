@@ -1,9 +1,13 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/ash/printing/ppd_provider_factory.h"
 
+#include <string>
+
+#include "ash/constants/ash_switches.h"
+#include "base/command_line.h"
 #include "base/files/file_path.h"
 #include "base/time/default_clock.h"
 #include "chrome/browser/browser_process.h"
@@ -26,21 +30,41 @@ network::mojom::URLLoaderFactory* GetURLLoaderFactory() {
       ->GetURLLoaderFactory();
 }
 
+chromeos::PpdIndexChannel ToPpdIndexChannel(const std::string& channel) {
+  if (channel == ash::switches::kPrintingPpdChannelStaging) {
+    return chromeos::PpdIndexChannel::kStaging;
+  }
+  if (channel == ash::switches::kPrintingPpdChannelDev) {
+    return chromeos::PpdIndexChannel::kDev;
+  }
+  if (channel == ash::switches::kPrintingPpdChannelLocalhost) {
+    return chromeos::PpdIndexChannel::kLocalhost;
+  }
+  return chromeos::PpdIndexChannel::kProduction;
+}
+
 }  // namespace
 
 scoped_refptr<chromeos::PpdProvider> CreatePpdProvider(Profile* profile) {
-  base::FilePath ppd_cache_path =
-      profile->GetPath().Append(FILE_PATH_LITERAL("PPDCache"));
+  const chromeos::PpdIndexChannel channel = ToPpdIndexChannel(
+      base::CommandLine::ForCurrentProcess()->GetSwitchValueASCII(
+          ash::switches::kPrintingPpdChannel));
+
+  const bool use_localhost_as_root =
+      (channel == chromeos::PpdIndexChannel::kLocalhost);
+  base::FilePath ppd_cache_path = profile->GetPath().Append(
+      use_localhost_as_root ? FILE_PATH_LITERAL("PPDCacheLocalhost")
+                            : FILE_PATH_LITERAL("PPDCache"));
 
   auto provider_config_cache = chromeos::PrinterConfigCache::Create(
       base::DefaultClock::GetInstance(),
-      base::BindRepeating(&GetURLLoaderFactory));
+      base::BindRepeating(&GetURLLoaderFactory), use_localhost_as_root);
 
   auto manager_config_cache = chromeos::PrinterConfigCache::Create(
       base::DefaultClock::GetInstance(),
-      base::BindRepeating(&GetURLLoaderFactory));
+      base::BindRepeating(&GetURLLoaderFactory), use_localhost_as_root);
   auto metadata_manager = chromeos::PpdMetadataManager::Create(
-      g_browser_process->GetApplicationLocale(),
+      g_browser_process->GetApplicationLocale(), channel,
       base::DefaultClock::GetInstance(), std::move(manager_config_cache));
 
   return chromeos::PpdProvider::Create(

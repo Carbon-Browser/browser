@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -50,6 +50,21 @@ STATIC_ASSERT_ENUM_MATCH(DOLBYVISION_PROFILE9);
 STATIC_ASSERT_ENUM_MATCH(AV1PROFILE_PROFILE_MAIN);
 STATIC_ASSERT_ENUM_MATCH(AV1PROFILE_PROFILE_HIGH);
 STATIC_ASSERT_ENUM_MATCH(AV1PROFILE_PROFILE_PRO);
+STATIC_ASSERT_ENUM_MATCH(VVCPROFILE_MAIN10);
+STATIC_ASSERT_ENUM_MATCH(VVCPROFILE_MAIN12);
+STATIC_ASSERT_ENUM_MATCH(VVCPROFILE_MAIN12_INTRA);
+STATIC_ASSERT_ENUM_MATCH(VVCPROIFLE_MULTILAYER_MAIN10);
+STATIC_ASSERT_ENUM_MATCH(VVCPROFILE_MAIN10_444);
+STATIC_ASSERT_ENUM_MATCH(VVCPROFILE_MAIN12_444);
+STATIC_ASSERT_ENUM_MATCH(VVCPROFILE_MAIN16_444);
+STATIC_ASSERT_ENUM_MATCH(VVCPROFILE_MAIN12_444_INTRA);
+STATIC_ASSERT_ENUM_MATCH(VVCPROFILE_MAIN16_444_INTRA);
+STATIC_ASSERT_ENUM_MATCH(VVCPROFILE_MULTILAYER_MAIN10_444);
+STATIC_ASSERT_ENUM_MATCH(VVCPROFILE_MAIN10_STILL_PICTURE);
+STATIC_ASSERT_ENUM_MATCH(VVCPROFILE_MAIN12_STILL_PICTURE);
+STATIC_ASSERT_ENUM_MATCH(VVCPROFILE_MAIN10_444_STILL_PICTURE);
+STATIC_ASSERT_ENUM_MATCH(VVCPROFILE_MAIN12_444_STILL_PICTURE);
+STATIC_ASSERT_ENUM_MATCH(VVCPROFILE_MAIN16_444_STILL_PICTURE);
 STATIC_ASSERT_ENUM_MATCH(VIDEO_CODEC_PROFILE_MAX);
 
 // static
@@ -139,6 +154,7 @@ GpuVideoAcceleratorUtil::ConvertGpuToMediaEncodeProfiles(
     profile.max_framerate_denominator = gpu_profile.max_framerate_denominator;
     // If VBR is supported in the future, remove this hard-coding of CBR.
     profile.rate_control_modes = media::VideoEncodeAccelerator::kConstantMode;
+    profile.is_software_codec = gpu_profile.is_software_codec;
     profiles.push_back(profile);
   }
   return profiles;
@@ -157,6 +173,7 @@ GpuVideoAcceleratorUtil::ConvertMediaToGpuEncodeProfiles(
     profile.max_resolution = media_profile.max_resolution;
     profile.max_framerate_numerator = media_profile.max_framerate_numerator;
     profile.max_framerate_denominator = media_profile.max_framerate_denominator;
+    profile.is_software_codec = media_profile.is_software_codec;
     profiles.push_back(profile);
   }
   return profiles;

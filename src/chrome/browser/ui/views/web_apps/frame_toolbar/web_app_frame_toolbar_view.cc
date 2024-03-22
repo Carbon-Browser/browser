@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -26,8 +26,7 @@
 #include "ui/views/view_utils.h"
 #include "ui/views/window/hit_test_utils.h"
 
-WebAppFrameToolbarView::WebAppFrameToolbarView(views::Widget* widget,
-                                               BrowserView* browser_view)
+WebAppFrameToolbarView::WebAppFrameToolbarView(BrowserView* browser_view)
     : browser_view_(browser_view) {
   DCHECK(browser_view_);
   DCHECK(web_app::AppBrowserController::IsWebApp(browser_view_->browser()));
@@ -66,9 +65,8 @@ WebAppFrameToolbarView::WebAppFrameToolbarView(views::Widget* widget,
                                views::MaximumFlexSizeRule::kUnbounded)
           .WithOrder(3));
 
-  right_container_ =
-      AddChildView(std::make_unique<WebAppToolbarButtonContainer>(
-          widget, browser_view, this));
+  right_container_ = AddChildView(
+      std::make_unique<WebAppToolbarButtonContainer>(browser_view, this));
   right_container_->SetProperty(
       views::kFlexBehaviorKey,
       views::FlexSpecification(right_container_->GetFlexRule()).WithOrder(1));
@@ -85,6 +83,8 @@ WebAppFrameToolbarView::WebAppFrameToolbarView(views::Widget* widget,
 
   if (browser_view_->IsWindowControlsOverlayEnabled())
     OnWindowControlsOverlayEnabledChanged();
+  if (browser_view_->AppUsesBorderlessMode())
+    UpdateBorderlessModeEnabled();
 }
 
 WebAppFrameToolbarView::~WebAppFrameToolbarView() = default;
@@ -135,31 +135,33 @@ std::pair<int, int> WebAppFrameToolbarView::LayoutInContainer(
     int trailing_x,
     int y,
     int available_height) {
+  gfx::Rect center_bounds = LayoutInContainer(gfx::Rect(
+      leading_x, y, base::ClampSub(trailing_x, leading_x), available_height));
+  return std::pair<int, int>(center_bounds.x(), center_bounds.right());
+}
+
+gfx::Rect WebAppFrameToolbarView::LayoutInContainer(gfx::Rect available_space) {
   DCHECK(!browser_view_->IsWindowControlsOverlayEnabled());
 
-  SetVisible(available_height > 0);
-
-  if (available_height == 0) {
+  SetVisible(!available_space.IsEmpty());
+  if (available_space.IsEmpty()) {
     SetSize(gfx::Size());
-    return std::pair<int, int>(0, 0);
+    return gfx::Rect();
   }
 
-  gfx::Size preferred_size = GetPreferredSize();
-  const int width = std::max(trailing_x - leading_x, 0);
-  const int height = preferred_size.height();
-  DCHECK_LE(height, available_height);
-  SetBounds(leading_x, y, width, available_height);
+  DCHECK_LE(GetPreferredSize().height(), available_space.height());
+  SetBoundsRect(available_space);
   Layout();
 
-  if (!center_container_->GetVisible())
-    return std::pair<int, int>(0, 0);
+  if (!center_container_->GetVisible()) {
+    return gfx::Rect();
+  }
 
   // Bounds for remaining inner space, in parent container coordinates.
   gfx::Rect center_bounds = center_container_->bounds();
   DCHECK(center_bounds.x() == 0 || left_container_);
   center_bounds.Offset(bounds().OffsetFromOrigin());
-
-  return std::pair<int, int>(center_bounds.x(), center_bounds.right());
+  return center_bounds;
 }
 
 void WebAppFrameToolbarView::LayoutForWindowControlsOverlay(
@@ -242,7 +244,7 @@ SidePanelToolbarButton* WebAppFrameToolbarView::GetSidePanelButton() {
 }
 
 AvatarToolbarButton* WebAppFrameToolbarView::GetAvatarToolbarButton() {
-  return nullptr;
+  return right_container_ ? right_container_->avatar_button() : nullptr;
 }
 
 ToolbarButton* WebAppFrameToolbarView::GetBackButton() {
@@ -255,6 +257,10 @@ ReloadButton* WebAppFrameToolbarView::GetReloadButton() {
 
 IntentChipButton* WebAppFrameToolbarView::GetIntentChipButton() {
   return nullptr;
+}
+
+DownloadToolbarButtonView* WebAppFrameToolbarView::GetDownloadButton() {
+  return right_container_ ? right_container_->download_button() : nullptr;
 }
 
 bool WebAppFrameToolbarView::DoesIntersectRect(const View* target,
@@ -293,6 +299,18 @@ void WebAppFrameToolbarView::OnWindowControlsOverlayEnabledChanged() {
     DestroyLayer();
     views::SetHitTestComponent(this, static_cast<int>(HTNOWHERE));
   }
+  right_container_->extensions_container()->WindowControlsOverlayEnabledChanged(
+      browser_view_->IsWindowControlsOverlayEnabled());
+}
+
+void WebAppFrameToolbarView::UpdateBorderlessModeEnabled() {
+  bool is_borderless_mode_enabled = browser_view_->IsBorderlessModeEnabled();
+
+  // The toolbar is hidden and not set to null, because there are many features
+  // that depend on the toolbar and would not work without it. For example all
+  // the shortcut commands (e.g. Ctrl+F, zoom) rely on the menu button (child of
+  // toolbar) so when these are hidden, the shortcuts will still work.
+  SetVisible(!is_borderless_mode_enabled);
 }
 
 void WebAppFrameToolbarView::SetWindowControlsOverlayToggleVisible(
@@ -344,8 +362,6 @@ void WebAppFrameToolbarView::UpdateChildrenColor(bool color_changed) {
   const SkColor foreground_color = paint_as_active_
                                        ? *active_foreground_color_
                                        : *inactive_foreground_color_;
-  if (left_container_)
-    left_container_->SetIconColor(foreground_color);
   const SkColor background_color = paint_as_active_
                                        ? *active_background_color_
                                        : *inactive_background_color_;

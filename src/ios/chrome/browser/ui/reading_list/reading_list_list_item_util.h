@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -16,11 +16,8 @@
 NSString* GetReadingListCellAccessibilityLabel(
     NSString* title,
     NSString* subtitle,
-    ReadingListUIDistillationStatus distillation_status);
-
-// Returns the string to use for the distillation size label of reading list
-// cells.
-NSString* GetReadingListCellDistillationSizeText(int64_t distillation_size);
+    ReadingListUIDistillationStatus distillation_status,
+    BOOL showCloudSlashIcon);
 
 // Returns the string to use to display the distillation date in reading list
 // cells.  The date is in microseconds since Jan 1st 1970.

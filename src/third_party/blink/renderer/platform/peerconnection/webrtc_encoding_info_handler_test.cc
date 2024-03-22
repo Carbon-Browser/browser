@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,8 +8,9 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
-#include "base/callback.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
+#include "base/memory/raw_ptr.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "third_party/blink/public/platform/web_string.h"
@@ -128,7 +129,8 @@ class WebrtcEncodingInfoHandlerTests : public ::testing::Test {
 
  protected:
   std::vector<webrtc::AudioCodecSpec> kSupportedAudioCodecs;
-  MockVideoEncoderFactory* mock_video_encoder_factory_;
+  raw_ptr<MockVideoEncoderFactory, DanglingUntriaged>
+      mock_video_encoder_factory_;
   std::unique_ptr<webrtc::VideoEncoderFactory> video_encoder_factory_;
   rtc::scoped_refptr<webrtc::AudioEncoderFactory> audio_encoder_factory_;
 };

@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,11 +12,12 @@
 #include <utility>
 #include <vector>
 
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/sequence_checker.h"
 #include "base/strings/utf_string_conversions.h"
+#include "base/uuid.h"
 #include "chrome/browser/sync/test/integration/await_match_status_change_checker.h"
 #include "chrome/browser/sync/test/integration/fake_server_match_status_checker.h"
 #include "chrome/browser/sync/test/integration/multi_client_status_change_checker.h"
@@ -26,17 +27,13 @@
 #include "components/bookmarks/browser/bookmark_test_util.h"
 #include "components/sync/engine/loopback_server/loopback_server_entity.h"
 #include "components/sync/engine/nigori/cryptographer.h"
-#include "components/sync/test/fake_server/fake_server.h"
+#include "components/sync/test/fake_server.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "third_party/skia/include/core/SkColor.h"
 #include "url/gurl.h"
 
 class BookmarkUndoService;
 class GURL;
-
-namespace base {
-class GUID;
-}  // namespace base
 
 namespace bookmarks {
 class BookmarkModel;
@@ -48,9 +45,9 @@ class Image;
 
 namespace bookmarks_helper {
 
-MATCHER_P(HasGuid, expected_guid, "") {
+MATCHER_P(HasUuid, expected_uuid, "") {
   const bookmarks::BookmarkNode* actual_node = arg;
-  return actual_node->guid() == expected_guid;
+  return actual_node->uuid() == expected_uuid;
 }
 
 // Helping matchers to check the hierarchy of bookmarks. All matchers work with
@@ -177,7 +174,9 @@ void SetTitle(int profile,
 enum FaviconSource { FROM_UI, FROM_SYNC };
 
 // Sets the |icon_url| and |image| data for the favicon for |node| in the
-// bookmark model for |profile|.
+// bookmark model for |profile|. Waits until the favicon is loaded, but does so
+// comparing the icon URL and hence is unreliable if the same icon URL has been
+// used before.
 void SetFavicon(int profile,
                 const bookmarks::BookmarkNode* node,
                 const GURL& icon_url,
@@ -268,8 +267,8 @@ bool HasNodeWithURL(int profile, const GURL& url);
                                                     const std::string& title);
 
 // Returns whether there exists a BookmarkNode in the bookmark model of
-// profile |profile| whose GUID matches |guid|.
-bool ContainsBookmarkNodeWithGUID(int profile, const base::GUID& guid);
+// profile |profile| whose UUID matches `uuid`.
+bool ContainsBookmarkNodeWithUuid(int profile, const base::Uuid& uuid);
 
 // Creates a favicon of |color| with image reps of the platform's supported
 // scale factors (eg MacOS) in addition to 1x.
@@ -321,7 +320,8 @@ class AnyBookmarkChangeObserver : public bookmarks::BookmarkModelObserver {
                          size_t new_index) override;
   void BookmarkNodeAdded(bookmarks::BookmarkModel* model,
                          const bookmarks::BookmarkNode* parent,
-                         size_t index) override;
+                         size_t index,
+                         bool added_by_user) override;
   void OnWillRemoveBookmarks(bookmarks::BookmarkModel* model,
                              const bookmarks::BookmarkNode* parent,
                              size_t old_index,
@@ -424,7 +424,7 @@ class SingleBookmarkModelStatusChangeChecker
 
  private:
   const int profile_index_;
-  raw_ptr<bookmarks::BookmarkModel> bookmark_model_;
+  const raw_ptr<bookmarks::BookmarkModel> bookmark_model_;
 };
 
 // Generic status change checker that waits until a predicate as defined by
@@ -435,7 +435,7 @@ class SingleBookmarksModelMatcherChecker
   using Matcher = testing::Matcher<std::vector<const bookmarks::BookmarkNode*>>;
 
   SingleBookmarksModelMatcherChecker(int profile_index, const Matcher& matcher);
-  ~SingleBookmarksModelMatcherChecker();
+  ~SingleBookmarksModelMatcherChecker() override;
 
   // StatusChangeChecker implementation.
   bool IsExitConditionSatisfied(std::ostream* os) final;
@@ -524,20 +524,20 @@ class BookmarksUrlChecker : public SingleBookmarkModelStatusChangeChecker {
   const int expected_count_;
 };
 
-// Checker used to block until there exists a bookmark with the given GUID.
-class BookmarksGUIDChecker : public SingleBookmarksModelMatcherChecker {
+// Checker used to block until there exists a bookmark with the given UUID.
+class BookmarksUuidChecker : public SingleBookmarksModelMatcherChecker {
  public:
-  BookmarksGUIDChecker(int profile, const base::GUID& guid);
-  ~BookmarksGUIDChecker() override;
+  BookmarksUuidChecker(int profile, const base::Uuid& uuid);
+  ~BookmarksUuidChecker() override;
 };
 
 // Waits until the fake server has the similar structure of bookmarks like the
-// bookmark model. The checker verifies that all nodes have the same GUID,
+// bookmark model. The checker verifies that all nodes have the same UUID,
 // title, URL, parent and order. It doesn't check favicons and any other fields.
 // Note that this class is not enough to verify test's result as it only waits
 // for the state when the bookmark model has the same structure on the server.
 // It doesn't check their content and the expected number of bookmarks. The fake
-// server must have entities with unique GUIDs.
+// server must have entities with unique UUIDs.
 class BookmarkModelMatchesFakeServerChecker
     : public SingleClientStatusChangeChecker {
  public:
@@ -551,11 +551,11 @@ class BookmarkModelMatchesFakeServerChecker
   std::map<std::string, sync_pb::SyncEntity>
   GetServerPermanentBookmarksGroupedBySyncId() const;
 
-  // Fills in |server_bookmarks_by_guid| with all non-permanent entities stored
-  // on the server. All entities must have unique GUID in specifics. Returns
+  // Fills in |server_bookmarks_by_uuid| with all non-permanent entities stored
+  // on the server. All entities must have unique UUID in specifics. Returns
   // false if there are duplicate entities on the server.
-  bool GetServerBookmarksByUniqueGUID(std::map<base::GUID, sync_pb::SyncEntity>*
-                                          server_bookmarks_by_guid) const;
+  bool GetServerBookmarksByUniqueUuid(std::map<base::Uuid, sync_pb::SyncEntity>*
+                                          server_bookmarks_by_uuid) const;
 
   // Check that a permanent parent node of given |node| is the same as for the
   // matching |server_entity|.
@@ -567,13 +567,13 @@ class BookmarkModelMatchesFakeServerChecker
   // matching server entity.
   bool CheckParentNode(
       const bookmarks::BookmarkNode* node,
-      const std::map<base::GUID, sync_pb::SyncEntity>& server_bookmarks_by_guid,
+      const std::map<base::Uuid, sync_pb::SyncEntity>& server_bookmarks_by_uuid,
       std::ostream* os) const;
 
-  // Return ordered GUIDs of server entities grouped by their parents.
-  std::map<std::string, std::vector<base::GUID>>
-  GetServerGuidsGroupedByParentSyncId(
-      const std::map<base::GUID, sync_pb::SyncEntity>& server_bookmarks_by_guid)
+  // Return ordered UUIDs of server entities grouped by their parents.
+  std::map<std::string, std::vector<base::Uuid>>
+  GetServerUuidsGroupedByParentSyncId(
+      const std::map<base::Uuid, sync_pb::SyncEntity>& server_bookmarks_by_uuid)
       const;
 
   const raw_ptr<fake_server::FakeServer> fake_server_;

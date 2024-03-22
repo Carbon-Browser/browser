@@ -1,5 +1,4 @@
-
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -18,11 +17,11 @@
 #include "chrome/common/chrome_paths.h"
 #include "chrome/test/base/in_process_browser_test.h"
 #include "chromeos/crosapi/cpp/keystore_service_util.h"
-#include "chromeos/crosapi/mojom/cert_database.mojom.h"
+#include "chromeos/crosapi/mojom/keystore_service.mojom.h"
 #include "chromeos/lacros/lacros_service.h"
 #include "chromeos/lacros/lacros_test_helper.h"
 #include "components/version_info/version_info.h"
-#include "content/public/browser/browser_task_traits.h"
+#include "content/public/browser/browser_thread.h"
 #include "content/public/browser/storage_partition.h"
 #include "content/public/test/browser_test.h"
 #include "net/cert/cert_database.h"
@@ -37,7 +36,7 @@
 // NOTE: Tests in this file modify the certificate store. That is potentially a
 // lasting side effect that can affect other tests.
 // * To prevent interference with tests that are run in parallel, these tests
-// are a part of lacros_chrome_browsertests_run_in_series test suite.
+// are a part of lacros_chrome_browsertests test suite.
 // * To prevent interference with following tests, they try to clean up all the
 // side effects themself, e.g. if a test adds a cert, it is also responsible for
 // deleting it.
@@ -51,12 +50,6 @@ constexpr char kRootCaCert[] = "root_ca_cert.pem";
 // A PEM-encoded certificate which was signed by the Authority specified in
 // |kRootCaCert|.
 constexpr char kServerCert[] = "ok_cert.pem";
-
-bool IsMojoCertDatabaseVersionAtLeast(int required_version) {
-  DCHECK(chromeos::LacrosService::Get());
-  return (chromeos::LacrosService::Get()->GetInterfaceVersion(
-              crosapi::mojom::CertDatabase::Uuid_) >= required_version);
-}
 
 base::FilePath GetTestCertsPath() {
   base::FilePath test_data_dir;
@@ -181,9 +174,11 @@ void DeleteCaCert(Profile* profile) {
 [[nodiscard]] std::vector<uint8_t> GenerateClientCertForPublicKey(
     const std::vector<uint8_t>& public_key_spki) {
   net::CertBuilder issuer(/*orig_cert=*/nullptr, /*issuer=*/nullptr);
+  issuer.GenerateRSAKey();
   auto cert_builder =
       net::CertBuilder::FromSubjectPublicKeyInfo(public_key_spki, &issuer);
-  cert_builder->SetSignatureAlgorithmRsaPkca1(net::DigestAlgorithm::Sha256);
+  cert_builder->SetSignatureAlgorithm(
+      bssl::SignatureAlgorithm::kRsaPkcs1Sha256);
   cert_builder->SetValidity(base::Time::Now(),
                             base::Time::Now() + base::Days(30));
 
@@ -205,7 +200,7 @@ class ScopedCertDatabaseObserver : public net::CertDatabase::Observer {
     net::CertDatabase::GetInstance()->RemoveObserver(this);
   }
 
-  void OnCertDBChanged() override {
+  void OnClientCertStoreChanged() override {
     notifications_received_++;
     run_loop_.Quit();
   }
@@ -277,14 +272,6 @@ IN_PROC_BROWSER_TEST_F(CertDbInitializerTest, ImmediatelyAfterLaunch) {
 // Tests that when Ash imports a new certificate, Lacros receives a
 // notification about it.
 IN_PROC_BROWSER_TEST_F(CertDbInitializerTest, CertsChangedNotificationFromAsh) {
-  if (!IsMojoCertDatabaseVersionAtLeast(
-          crosapi::mojom::CertDatabase::
-              kAddAshCertDatabaseObserverMinVersion) &&
-      !chromeos::IsAshVersionAtLeastForTesting(base::Version({101, 0, 4917}))) {
-    LOG(WARNING) << "Ash is too old, skipping the test.";
-    return;
-  }
-
   auto& keystore_crosapi = chromeos::LacrosService::Get()
                                ->GetRemote<crosapi::mojom::KeystoreService>();
 

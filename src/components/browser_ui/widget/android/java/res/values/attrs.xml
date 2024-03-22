@@ -1,7 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Copyright 2019 The Chromium Authors. All rights reserved.
-     Use of this source code is governed by a BSD-style license that can be
-     found in the LICENSE file. -->
+<!--
+Copyright 2019 The Chromium Authors
+Use of this source code is governed by a BSD-style license that can be
+found in the LICENSE file.
+-->
 
 <resources>
     <declare-styleable name="BoundedLinearLayout">
@@ -21,16 +23,6 @@
         </attr>
         <attr name="dualControlLayoutVerticalPadding" format="dimension"/>
         <attr name="dualControlLayoutHorizontalPadding" format="dimension"/>
-    </declare-styleable>
-
-    <declare-styleable name="ListMenuButton">
-        <attr name="menuMaxWidth" format="reference|dimension" />
-        <attr name="menuVerticalOverlapAnchor" format="boolean" />
-        <attr name="menuHorizontalOverlapAnchor" format="boolean" />
-        <!-- Used to specify if a menu button is positioned at the start or at
-        the end of a layout so the correct menu popup anim file can be applied.
-        The default is set to true -->
-        <attr name="menuPositionedAtEnd" format="boolean" />
     </declare-styleable>
 
     <declare-styleable name="AsyncImageView">
@@ -115,4 +107,26 @@
         <attr name="rippleColor"/>
         <attr name="verticalInset"/>
     </declare-styleable>
+
+    <declare-styleable name="MaterialCardViewNoShadow">
+        <attr name="cornerRadius" format="dimension"/>
+        <attr name="cardElevation" format="reference|dimension"/>
+    </declare-styleable>
+
+    <declare-styleable name="FadingEdgeScrollView">
+        <attr name="topEdgeVisibility" format="enum">
+            <enum name="none" value="0" />
+            <enum name="fading" value="1" />
+            <enum name="hard" value="2" />
+        </attr>
+        <attr name="bottomEdgeVisibility" format="enum">
+            <enum name="none" value="0" />
+            <enum name="fading" value="1" />
+            <enum name="hard" value="2" />
+        </attr>
+    </declare-styleable>
+
+    <!-- Surface color resources. See https://crbug.com/1410537. -->
+    <attr name="tileViewIconBackgroundModern" format="reference"/>
+    <attr name="cardElevation" format="reference|dimension"/>
 </resources>

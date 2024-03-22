@@ -1,19 +1,20 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/ash/plugin_vm/plugin_vm_features.h"
 
-#include "ash/components/settings/cros_settings_names.h"
-#include "ash/components/tpm/install_attributes.h"
 #include "base/feature_list.h"
 #include "base/system/sys_info.h"
+#include "chrome/browser/ash/guest_os/virtual_machines/virtual_machines_util.h"
 #include "chrome/browser/ash/plugin_vm/plugin_vm_pref_names.h"
 #include "chrome/browser/ash/plugin_vm/plugin_vm_util.h"
 #include "chrome/browser/ash/profiles/profile_helper.h"
 #include "chrome/browser/ash/settings/cros_settings.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/common/chrome_features.h"
+#include "chromeos/ash/components/install_attributes/install_attributes.h"
+#include "chromeos/ash/components/settings/cros_settings_names.h"
 #include "components/prefs/pref_service.h"
 #include "components/user_manager/user.h"
 
@@ -46,7 +47,7 @@ ProfileSupported CheckProfileSupported(const Profile* profile) {
     return ProfileSupported::kErrorEphemeral;
   }
 
-  if (!ash::ProfileHelper::IsRegularProfile(profile)) {
+  if (!ash::ProfileHelper::IsUserProfile(profile)) {
     VLOG(1) << "non-regular profile is not supported";
     // If this happens, the profile is for something like the sign in screen or
     // lock screen. Return a generic error code because the user will not be
@@ -78,6 +79,11 @@ PolicyConfigured CheckPolicyConfigured(const Profile* profile) {
       ash::ProfileHelper::Get()->GetUserByProfile(profile);
   if (user == nullptr || !user->IsAffiliated()) {
     return PolicyConfigured::kErrorUserNotAffiliated;
+  }
+
+  // Check that VirtualMachines are allowed by policy.
+  if (!virtual_machines::AreVirtualMachinesAllowedByPolicy()) {
+    return PolicyConfigured::kErrorVirtualMachinesNotAllowed;
   }
 
   // Check that PluginVm is allowed to run by policy.
@@ -148,6 +154,8 @@ std::string PluginVmFeatures::IsAllowedDiagnostics::GetTopError() const {
       return "VMs are disallowed by policy";
     case PolicyConfigured::kErrorLicenseNotSetUp:
       return "License for the product is not set up in policy";
+    case PolicyConfigured::kErrorVirtualMachinesNotAllowed:
+      return "No Virtual Machines are allowed on this device";
   }
 
   return "";

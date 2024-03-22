@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,21 +11,24 @@ import android.os.UserManager;
 
 import androidx.annotation.VisibleForTesting;
 
+import org.jni_zero.NativeMethods;
+ 
 import org.chromium.base.ContextUtils;
-import org.chromium.base.annotations.NativeMethods;
+import org.chromium.base.ResettersForTesting;
+import org.chromium.base.shared_preferences.SharedPreferencesManager;
+import org.chromium.chrome.browser.metrics.ChangeMetricsReportingStateCalledFrom;
 import org.chromium.chrome.browser.metrics.UmaSessionStats;
 import org.chromium.chrome.browser.preferences.ChromePreferenceKeys;
-import org.chromium.chrome.browser.preferences.SharedPreferencesManager;
-import org.chromium.chrome.browser.util.ChromeAccessibilityUtil;
+import org.chromium.chrome.browser.preferences.ChromeSharedPreferences;
 import org.chromium.components.signin.AccountManagerFacade;
 import org.chromium.components.signin.AccountManagerFacadeProvider;
 import org.chromium.components.signin.AccountUtils;
+import org.chromium.ui.accessibility.AccessibilityState;
 
 /** Provides first run related utility functions. */
 public class FirstRunUtils {
     private static Boolean sHasGoogleAccountAuthenticator;
     private static final int DEFAULT_SKIP_TOS_EXIT_DELAY_MS = 1000;
-    private static final int A11Y_DELAY_FACTOR = 2;
 
     private static boolean sDisableDelayOnExitFreForTest;
 
@@ -34,7 +37,7 @@ public class FirstRunUtils {
      * Must be called after native initialization.
      */
     public static void cacheFirstRunPrefs() {
-        SharedPreferencesManager javaPrefs = SharedPreferencesManager.getInstance();
+        SharedPreferencesManager javaPrefs = ChromeSharedPreferences.getInstance();
         // Set both Java and native prefs if any of the three indicators indicate ToS has been
         // accepted. This needed because:
         //   - Old versions only set native pref, so this syncs Java pref.
@@ -46,7 +49,7 @@ public class FirstRunUtils {
         boolean isFirstRunComplete = FirstRunStatus.getFirstRunFlowComplete();
         if (javaPrefValue || nativePrefValue || isFirstRunComplete) {
             if (!javaPrefValue) {
-                javaPrefs.writeBoolean(ChromePreferenceKeys.FIRST_RUN_CACHED_TOS_ACCEPTED, true);
+                javaPrefs.writeBoolean(ChromePreferenceKeys.FIRST_RUN_CACHED_TOS_ACCEPTED, false);
             }
             if (!nativePrefValue) {
                 setEulaAccepted();
@@ -60,18 +63,20 @@ public class FirstRunUtils {
     public static boolean didAcceptTermsOfService() {
         // Note: Does not check FirstRunUtils.isFirstRunEulaAccepted() because this may be called
         // before native is initialized.
-        return SharedPreferencesManager.getInstance().readBoolean(
-                ChromePreferenceKeys.FIRST_RUN_CACHED_TOS_ACCEPTED, false);
+        return ChromeSharedPreferences.getInstance()
+                .readBoolean(ChromePreferenceKeys.FIRST_RUN_CACHED_TOS_ACCEPTED, false);
     }
 
     /**
      * Sets the EULA/Terms of Services state as "ACCEPTED".
-     * @param allowCrashUpload True if the user allows to upload crash dumps and collect stats.
+     * @param allowMetricsAndCrashUploading True if the user allows to upload crash dumps and
+     *         collect stats.
      */
-    static void acceptTermsOfService(boolean allowCrashUpload) {
-        UmaSessionStats.changeMetricsReportingConsent(allowCrashUpload);
-        SharedPreferencesManager.getInstance().writeBoolean(
-                ChromePreferenceKeys.FIRST_RUN_CACHED_TOS_ACCEPTED, true);
+    static void acceptTermsOfService(boolean allowMetricsAndCrashUploading) {
+        UmaSessionStats.changeMetricsReportingConsent(
+                allowMetricsAndCrashUploading, ChangeMetricsReportingStateCalledFrom.UI_FIRST_RUN);
+        ChromeSharedPreferences.getInstance()
+                .writeBoolean(ChromePreferenceKeys.FIRST_RUN_CACHED_TOS_ACCEPTED, false);
         setEulaAccepted();
     }
 
@@ -99,16 +104,16 @@ public class FirstRunUtils {
 
     @VisibleForTesting
     static boolean hasGoogleAccounts() {
-        return !AccountUtils
-                        .getAccountsIfFulfilledOrEmpty(
-                                AccountManagerFacadeProvider.getInstance().getAccounts())
-                        .isEmpty();
+        return !AccountUtils.getCoreAccountInfosIfFulfilledOrEmpty(
+                        AccountManagerFacadeProvider.getInstance().getCoreAccountInfos())
+                .isEmpty();
     }
 
     @SuppressLint("InlinedApi")
     private static boolean hasSyncPermissions() {
-        UserManager manager = (UserManager) ContextUtils.getApplicationContext().getSystemService(
-                Context.USER_SERVICE);
+        UserManager manager =
+                (UserManager)
+                        ContextUtils.getApplicationContext().getSystemService(Context.USER_SERVICE);
         Bundle userRestrictions = manager.getUserRestrictions();
         return !userRestrictions.getBoolean(UserManager.DISALLOW_MODIFY_ACCOUNTS, false);
     }
@@ -120,9 +125,7 @@ public class FirstRunUtils {
         return FirstRunUtilsJni.get().getFirstRunEulaAccepted();
     }
 
-    /**
-     * Sets the preference that signals when the user has accepted the EULA.
-     */
+    /** Sets the preference that signals when the user has accepted the EULA. */
     @VisibleForTesting(otherwise = VisibleForTesting.PACKAGE_PRIVATE)
     public static void setEulaAccepted() {
         FirstRunUtilsJni.get().setEulaAccepted();
@@ -137,31 +140,30 @@ public class FirstRunUtils {
 
     /**
      * The the number of ms delay before exiting FRE with policy. By default the delay would be
-     * {@link #DEFAULT_SKIP_TOS_EXIT_DELAY_MS}, while in a11y mode it will be extended by a factor
-     * of {@link #A11Y_DELAY_FACTOR}. This is intended to avoid screen reader being interrupted, but
-     * it is likely not going to work perfectly for all languages.
+     * {@link #DEFAULT_SKIP_TOS_EXIT_DELAY_MS}, but we will get the recommended timeout from the
+     * AccessibilityState, which calculates a time based on currently running accessibility
+     * services and OS-level system settings.
      *
      * @return The number of ms delay before exiting FRE with policy.
      */
     public static int getSkipTosExitDelayMs() {
         if (sDisableDelayOnExitFreForTest) return 0;
 
-        int durationMs = DEFAULT_SKIP_TOS_EXIT_DELAY_MS;
-        if (ChromeAccessibilityUtil.get().isTouchExplorationEnabled()) {
-            durationMs *= A11Y_DELAY_FACTOR;
-        }
-        return durationMs;
+        return AccessibilityState.getRecommendedTimeoutMillis(
+                DEFAULT_SKIP_TOS_EXIT_DELAY_MS, DEFAULT_SKIP_TOS_EXIT_DELAY_MS);
     }
 
-    @VisibleForTesting
     public static void setDisableDelayOnExitFreForTest(boolean isDisable) {
         sDisableDelayOnExitFreForTest = isDisable;
+        ResettersForTesting.register(() -> sDisableDelayOnExitFreForTest = false);
     }
 
     @NativeMethods
     public interface Natives {
         boolean getFirstRunEulaAccepted();
+
         void setEulaAccepted();
+
         boolean getCctTosDialogEnabled();
     }
 }

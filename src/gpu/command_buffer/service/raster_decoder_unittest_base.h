@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -16,7 +16,6 @@
 
 #include "base/memory/raw_ptr.h"
 #include "base/test/task_environment.h"
-#include "components/viz/common/resources/resource_format.h"
 #include "gpu/command_buffer/client/client_test_helper.h"
 #include "gpu/command_buffer/common/raster_cmd_format.h"
 #include "gpu/command_buffer/service/decoder_client.h"
@@ -35,13 +34,7 @@
 #include "ui/gl/gl_surface_stub.h"
 #include "ui/gl/gl_version_info.h"
 
-namespace gpu {
-
-namespace gles2 {
-class MockCopyTextureResourceManager;
-}  // namespace gles2
-
-namespace raster {
+namespace gpu::raster {
 
 class RasterDecoderTestBase : public ::testing::TestWithParam<bool>,
                               public DecoderClient {
@@ -50,7 +43,9 @@ class RasterDecoderTestBase : public ::testing::TestWithParam<bool>,
   ~RasterDecoderTestBase() override;
 
   void OnConsoleMessage(int32_t id, const std::string& message) override;
-  void CacheShader(const std::string& key, const std::string& shader) override;
+  void CacheBlob(gpu::GpuDiskCacheType type,
+                 const std::string& key,
+                 const std::string& blob) override;
   void OnFenceSyncRelease(uint64_t release) override;
   void OnDescheduleUntilFinished() override;
   void OnRescheduleAfterFinished() override;
@@ -192,8 +187,6 @@ class RasterDecoderTestBase : public ::testing::TestWithParam<bool>,
   SharedImageManager shared_image_manager_;
   MemoryTypeTracker memory_tracker_;
   base::test::SingleThreadTaskEnvironment task_environment_;
-  raw_ptr<gles2::MockCopyTextureResourceManager>
-      copy_texture_manager_;  // not owned
   raw_ptr<gl::GLDisplay> display_ = nullptr;
 };
 
@@ -205,7 +198,6 @@ class RasterDecoderManualInitTest : public RasterDecoderTestBase {
   void SetUp() override {}
 };
 
-}  // namespace raster
-}  // namespace gpu
+}  // namespace gpu::raster
 
 #endif  // GPU_COMMAND_BUFFER_SERVICE_RASTER_DECODER_UNITTEST_BASE_H_

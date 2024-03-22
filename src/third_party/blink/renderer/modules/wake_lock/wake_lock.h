@@ -1,11 +1,11 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef THIRD_PARTY_BLINK_RENDERER_MODULES_WAKE_LOCK_WAKE_LOCK_H_
 #define THIRD_PARTY_BLINK_RENDERER_MODULES_WAKE_LOCK_WAKE_LOCK_H_
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/gtest_prod_util.h"
 #include "third_party/blink/public/mojom/permissions/permission.mojom-blink.h"
 #include "third_party/blink/renderer/bindings/core/v8/script_promise.h"
@@ -72,7 +72,7 @@ class MODULES_EXPORT WakeLock final : public ScriptWrappable,
   // https://w3c.github.io/screen-wake-lock/#dfn-activelocks
   // An ordered map of wake lock types to a list of WakeLockSentinel objects
   // associated with this Document.
-  Member<WakeLockManager> managers_[kWakeLockTypeCount];
+  Member<WakeLockManager> managers_[V8WakeLockType::kEnumSize];
 
   FRIEND_TEST_ALL_PREFIXES(WakeLockSentinelTest, ContextDestruction);
   FRIEND_TEST_ALL_PREFIXES(WakeLockTest, RequestWakeLockGranted);

@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -60,6 +60,14 @@ class CONTENT_EXPORT SiteIsolationPolicy {
   // Returns true if the OriginAgentCluster header will be respected.
   static bool IsOriginAgentClusterEnabled();
 
+  // Returns whether defaulting to origin-keyed agent cluster (without
+  // necessarily an origin-keyed process) is enabled.
+  // OriginAgentClusters are enabled by default if kOriginIsolationHeader and
+  // kOriginAgentClusterDefaultEnabled are enabled, and if there is no
+  // enterprise policy forbidding it.
+  static bool AreOriginAgentClustersEnabledByDefault(
+      BrowserContext* browser_context);
+
   // Returns true if Cross-Origin-Opener-Policy headers may be used as
   // heuristics for turning on site isolation.
   static bool IsSiteIsolationForCOOPEnabled();
@@ -68,19 +76,12 @@ class CONTENT_EXPORT SiteIsolationPolicy {
   // persisted across restarts.
   static bool ShouldPersistIsolatedCOOPSites();
 
-  // Returns true when site isolation is turned on for <webview> guests.
-  static bool IsSiteIsolationForGuestsEnabled();
-
   // Applies isolated origins from all available sources, including the
   // command-line switch, field trials, enterprise policy, and the embedder.
   // See also AreIsolatedOriginsEnabled. These origins apply globally to the
   // whole browser in all profiles.  This should be called once on browser
   // startup.
   static void ApplyGlobalIsolatedOrigins();
-
-  // Returns true if the application isolation level is enabled.
-  // This must be called on the UI thread.
-  static bool IsApplicationIsolationLevelEnabled();
 
   // Returns true if the given URL should be assigned the application isolation
   // level.
@@ -92,6 +93,10 @@ class CONTENT_EXPORT SiteIsolationPolicy {
   // Forces other methods in this class to reread flag values instead of using
   // their cached value.
   static void DisableFlagCachingForTesting();
+
+  // Returns true when process-isolation of fenced frames from their embedders
+  // is enabled.
+  static bool IsProcessIsolationForFencedFramesEnabled();
 
  private:
   SiteIsolationPolicy();  // Not instantiable.

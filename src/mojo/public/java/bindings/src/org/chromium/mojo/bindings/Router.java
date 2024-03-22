@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,9 +13,7 @@ import org.chromium.mojo.system.MessagePipeHandle;
  */
 public interface Router extends MessageReceiverWithResponder, HandleOwner<MessagePipeHandle> {
 
-    /**
-     * Start listening for incoming messages.
-     */
+    /** Start listening for incoming messages. */
     public void start();
 
     /**
@@ -24,8 +22,6 @@ public interface Router extends MessageReceiverWithResponder, HandleOwner<Messag
      */
     public void setIncomingMessageReceiver(MessageReceiverWithResponder incomingMessageReceiver);
 
-    /**
-     * Set the handle that will be notified of errors on the message pipe.
-     */
+    /** Set the handle that will be notified of errors on the message pipe. */
     public void setErrorHandler(ConnectionErrorHandler errorHandler);
 }

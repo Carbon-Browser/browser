@@ -28,9 +28,10 @@
 #define THIRD_PARTY_BLINK_RENDERER_PLATFORM_IMAGE_DECODERS_IMAGE_FRAME_H_
 
 #include "base/check_op.h"
+#include "base/memory/raw_ptr.h"
 #include "base/notreached.h"
 #include "base/time/time.h"
-#include "third_party/blink/public/platform/web_vector.h"
+#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/blink/renderer/platform/platform_export.h"
 #include "third_party/blink/renderer/platform/wtf/allocator/allocator.h"
 #include "third_party/blink/renderer/platform/wtf/wtf_size_t.h"
@@ -79,16 +80,15 @@ class PLATFORM_EXPORT ImageFrame final {
   typedef uint32_t PixelData;
   typedef uint64_t PixelDataF16;
 
-  typedef WebVector<char> ICCProfile;
-
   ImageFrame();
+  ~ImageFrame();
 
   // The assignment operator reads has_alpha_ (inside SetStatus()) before it
   // sets it (in SetHasAlpha()).  This doesn't cause any problems, since the
   // SetHasAlpha() call ensures all state is set correctly, but it means we
   // need to initialize has_alpha_ to some value before calling the operator
   // lest any tools complain about using an uninitialized value.
-  ImageFrame(const ImageFrame& other) : has_alpha_(false) { operator=(other); }
+  ImageFrame(const ImageFrame& other);
 
   // For backends which refcount their data, this operator doesn't need to
   // create a new copy of the image data, only increase the ref count.
@@ -120,8 +120,9 @@ class PLATFORM_EXPORT ImageFrame final {
     DCHECK_LE(end_y, Height());
     const int row_bytes = (end_x - start_x) * sizeof(PixelData);
     const PixelData* const start_addr = GetAddr(start_x, start_y);
-    for (int dest_y = start_y + 1; dest_y < end_y; ++dest_y)
+    for (int dest_y = start_y + 1; dest_y < end_y; ++dest_y) {
       memcpy(GetAddr(start_x, dest_y), start_addr, row_bytes);
+    }
   }
 
   // Allocates space for the pixel data. Must be called before any pixels are
@@ -134,6 +135,7 @@ class PLATFORM_EXPORT ImageFrame final {
   PixelFormat GetPixelFormat() const { return pixel_format_; }
   const gfx::Rect& OriginalFrameRect() const { return original_frame_rect_; }
   Status GetStatus() const { return status_; }
+  absl::optional<base::TimeDelta> Timestamp() const { return timestamp_; }
   base::TimeDelta Duration() const { return duration_; }
   DisposalMethod GetDisposalMethod() const { return disposal_method_; }
   AlphaBlendSource GetAlphaBlendSource() const { return alpha_blend_source_; }
@@ -145,7 +147,7 @@ class PLATFORM_EXPORT ImageFrame final {
 
   // Create SkImage from Bitmap() and return it.  This should be called only
   // if frame is complete.  The bitmap is set immutable before creating
-  // SkImage to avoid copying bitmap in SkImage::MakeFromBitmap(bitmap_).
+  // SkImage to avoid copying bitmap in SkImages::RasterFromBitmap(bitmap_).
   sk_sp<SkImage> FinalizePixelsAndGetImage();
 
   // Returns true if the pixels changed, but the bitmap has not yet been
@@ -158,6 +160,7 @@ class PLATFORM_EXPORT ImageFrame final {
   void SetPixelFormat(PixelFormat format) { pixel_format_ = format; }
   void SetOriginalFrameRect(const gfx::Rect& r) { original_frame_rect_ = r; }
   void SetStatus(Status);
+  void SetTimestamp(base::TimeDelta timestamp) { timestamp_ = timestamp; }
   void SetDuration(base::TimeDelta duration) { duration_ = duration; }
   void SetDisposalMethod(DisposalMethod disposal_method) {
     disposal_method_ = disposal_method;
@@ -189,8 +192,9 @@ class PLATFORM_EXPORT ImageFrame final {
   inline PixelDataF16* GetAddrF16(int x, int y) {
     DCHECK(pixel_format_ == kRGBA_F16);
     SkPixmap pixmap;
-    if (!bitmap_.peekPixels(&pixmap))
+    if (!bitmap_.peekPixels(&pixmap)) {
       NOTREACHED();
+    }
     return pixmap.writable_addr64(x, y);
   }
 
@@ -210,10 +214,11 @@ class PLATFORM_EXPORT ImageFrame final {
                       unsigned b,
                       unsigned a) {
     DCHECK(pixel_format_ == kN32);
-    if (premultiply_alpha_)
+    if (premultiply_alpha_) {
       SetRGBAPremultiply(dest, r, g, b, a);
-    else
+    } else {
       *dest = SkPackARGB32NoCheck(a, r, g, b);
+    }
   }
 
   static inline void SetRGBAPremultiply(PixelData* dest,
@@ -268,8 +273,9 @@ class PLATFORM_EXPORT ImageFrame final {
                                             unsigned a) {
     // If the new pixel is completely transparent, no operation is necessary
     // since |dest| contains the background pixel.
-    if (a == 0x0)
+    if (a == 0x0) {
       return;
+    }
 
     // If the new pixel is opaque, no need for blending - just write the
     // pixel.
@@ -295,8 +301,9 @@ class PLATFORM_EXPORT ImageFrame final {
 
   // Notifies the SkBitmap if any pixels changed and resets the flag.
   inline void NotifyBitmapIfPixelsChanged() {
-    if (pixels_changed_)
+    if (pixels_changed_) {
       bitmap_.notifyPixelsChanged();
+    }
     pixels_changed_ = false;
   }
 
@@ -308,25 +315,26 @@ class PLATFORM_EXPORT ImageFrame final {
   SkAlphaType ComputeAlphaType() const;
 
   SkBitmap bitmap_;
-  SkBitmap::Allocator* allocator_;
-  bool has_alpha_;
-  PixelFormat pixel_format_;
+  raw_ptr<SkBitmap::Allocator> allocator_ = nullptr;
+  bool has_alpha_ = true;
+  PixelFormat pixel_format_ = kN32;
   // This will always just be the entire buffer except for GIF or WebP
   // frames whose original rect was smaller than the overall image size.
   gfx::Rect original_frame_rect_;
-  Status status_;
+  Status status_ = kFrameEmpty;
+  absl::optional<base::TimeDelta> timestamp_;
   base::TimeDelta duration_;
-  DisposalMethod disposal_method_;
-  AlphaBlendSource alpha_blend_source_;
-  bool premultiply_alpha_;
+  DisposalMethod disposal_method_ = kDisposeNotSpecified;
+  AlphaBlendSource alpha_blend_source_ = kBlendAtopPreviousFrame;
+  bool premultiply_alpha_ = true;
   // True if the pixels changed, but the bitmap has not yet been notified.
-  bool pixels_changed_;
+  bool pixels_changed_ = false;
 
   // The frame that must be decoded before this frame can be decoded.
   // WTF::kNotFound if this frame doesn't require any previous frame.
   // This is used by ImageDecoder::ClearCacheExceptFrame(), and will never
   // be read for image formats that do not have multiple frames.
-  wtf_size_t required_previous_frame_index_;
+  wtf_size_t required_previous_frame_index_ = kNotFound;
 };
 
 }  // namespace blink

@@ -4,8 +4,8 @@
 <translation id="1016765312371154165">Carbon Browser wurde nicht richtig beendet.</translation>
 <translation id="130631256467250065">Deine Änderungen werden beim nächsten Neustart wirksam.</translation>
 <translation id="1635457557763038537">Deine Änderungen werden beim nächsten Neustart von Carbon Browser wirksam.</translation>
+<translation id="2399868464369312507">Carbon Browser versucht, Zahlungsmethoden zu bearbeiten.</translation>
 <translation id="2447485272386224171">Carbon Browser wird durch das Open-Source-Projekt <ph name="BEGIN_LINK_CHROMIUM" />Carbon Browser<ph name="END_LINK_CHROMIUM" /> und andere <ph name="BEGIN_LINK_OSS" />Open-Source-Software<ph name="END_LINK_OSS" /> ermöglicht.</translation>
-<translation id="2505647373045235387">Die Ersteinrichtung von Carbon Browser OS wurde nicht abgeschlossen.</translation>
 <translation id="2588322182880276190">Carbon Browser-Logo</translation>
 <translation id="3444832043240812445">Diese Seite zeigt nur Informationen zu deinen letzten Abstürzen, wenn du die <ph name="BEGIN_LINK" />Absturzberichtsfunktion aktivierst<ph name="END_LINK" />.</translation>
 <translation id="3875312571075912821">Erlaube Carbon Browser in deinen Firewall- und Virenschutzeinstellungen den Zugriff auf das Netzwerk.</translation>
@@ -22,5 +22,7 @@
 <translation id="6855094794438142393">Gehe zum Carbon Browser-Menü &gt; „<ph name="SETTINGS_TITLE" />“ &gt; „<ph name="ADVANCED_TITLE" />“ &gt; „<ph name="PROXIES_TITLE" />“ &gt; „LAN-Einstellungen“ und deaktiviere die Option „Proxyserver für LAN verwenden“.</translation>
 <translation id="7230956101631259640">Dies ist eine sichere Carbon Browser-Seite</translation>
 <translation id="8187289872471304532">Gehe zu „Programme“ &gt; „Systemeinstellungen“ &gt; „Netzwerk“ &gt; „Erweitert“ &gt; „Proxys“ und deaktiviere alle ausgewählten Proxyserver.</translation>
-<translation id="864712724203364111">Die Ersteinrichtung von Carbon Browser OS Flex wurde nicht abgeschlossen.</translation>
+<translation id="8232971017369963250">Carbon Browser wird durch das Open-Source-Projekt <ph name="BEGIN_LINK_CHROMIUM" />Carbon Browser<ph name="END_LINK_CHROMIUM" /> ermöglicht.</translation>
+<translation id="8279509328145658601">Carbon Browser wird auch durch andere <ph name="BEGIN_LINK_OSS" />Open-Source-Software<ph name="END_LINK_OSS" /> ermöglicht.</translation>
+<translation id="8544217240017914508">Carbon Browser versucht, die Einstellungen für das Ausfüllen von Zahlungsmethoden zu ändern.</translation>
 </translationbundle>

@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,9 +8,9 @@
 #include <utility>
 
 #include "base/base64.h"
-#include "base/bind.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
 #include "base/run_loop.h"
 #include "base/test/test_timeouts.h"
 #include "base/timer/timer.h"
@@ -27,16 +27,16 @@
 using testing::_;
 using testing::SaveArg;
 
-namespace remoting {
-namespace protocol {
+namespace remoting::protocol {
 
 namespace {
 
 ACTION_P(QuitThreadOnCounter, counter) {
   --(*counter);
   EXPECT_GE(*counter, 0);
-  if (*counter == 0)
+  if (*counter == 0) {
     base::RunLoop::QuitCurrentWhenIdleDeprecated();
+  }
 }
 
 }  // namespace
@@ -68,16 +68,12 @@ void AuthenticatorTestBase::SetUp() {
 }
 
 void AuthenticatorTestBase::RunAuthExchange() {
-  ContinueAuthExchangeWith(client_.get(),
-                           host_.get(),
-                           client_->started(),
+  ContinueAuthExchangeWith(client_.get(), host_.get(), client_->started(),
                            host_->started());
 }
 
 void AuthenticatorTestBase::RunHostInitiatedAuthExchange() {
-  ContinueAuthExchangeWith(host_.get(),
-                           client_.get(),
-                           host_->started(),
+  ContinueAuthExchangeWith(host_.get(), client_.get(), host_->started(),
                            client_->started());
 }
 
@@ -142,7 +138,7 @@ void AuthenticatorTestBase::RunChannelAuth(bool expected_fail) {
       .WillOnce(QuitThreadOnCounter(&callback_counter));
   if (expected_fail) {
     EXPECT_CALL(host_callback_, OnDone(net::ERR_FAILED))
-         .WillOnce(QuitThreadOnCounter(&callback_counter));
+        .WillOnce(QuitThreadOnCounter(&callback_counter));
   } else {
     EXPECT_CALL(host_callback_, OnDone(net::OK))
         .WillOnce(QuitThreadOnCounter(&callback_counter));
@@ -179,5 +175,4 @@ void AuthenticatorTestBase::OnClientConnected(
   client_socket_ = std::move(socket);
 }
 
-}  // namespace protocol
-}  // namespace remoting
+}  // namespace remoting::protocol

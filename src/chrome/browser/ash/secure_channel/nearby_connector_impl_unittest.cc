@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,9 +7,8 @@
 #include <memory>
 #include <vector>
 
-#include "ash/services/nearby/public/cpp/fake_nearby_process_manager.h"
-#include "ash/services/secure_channel/public/mojom/nearby_connector.mojom.h"
 #include "base/containers/flat_map.h"
+#include "base/memory/raw_ptr_exclusion.h"
 #include "base/run_loop.h"
 #include "base/test/bind.h"
 #include "base/test/task_environment.h"
@@ -17,6 +16,8 @@
 #include "chrome/browser/ash/secure_channel/fake_nearby_endpoint_finder.h"
 #include "chrome/browser/ash/secure_channel/nearby_connection_broker_impl.h"
 #include "chrome/browser/ash/secure_channel/nearby_endpoint_finder_impl.h"
+#include "chromeos/ash/services/nearby/public/cpp/fake_nearby_process_manager.h"
+#include "chromeos/ash/services/secure_channel/public/mojom/nearby_connector.mojom.h"
 #include "mojo/public/cpp/bindings/remote.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
@@ -42,8 +43,7 @@ class FakeEndpointFinderFactory : public NearbyEndpointFinderImpl::Factory {
  private:
   // NearbyEndpointFinderImpl::Factory:
   std::unique_ptr<NearbyEndpointFinder> CreateInstance(
-      const mojo::SharedRemote<
-          location::nearby::connections::mojom::NearbyConnections>&
+      const mojo::SharedRemote<::nearby::connections::mojom::NearbyConnections>&
           nearby_connections) override {
     return std::make_unique<FakeNearbyEndpointFinder>();
   }
@@ -65,8 +65,7 @@ class FakeConnectionBrokerFactory : public NearbyConnectionBrokerImpl::Factory {
       mojo::PendingReceiver<mojom::NearbyFilePayloadHandler>
           file_payload_handler_receiver,
       mojo::PendingRemote<mojom::NearbyMessageReceiver> message_receiver_remote,
-      const mojo::SharedRemote<
-          location::nearby::connections::mojom::NearbyConnections>&
+      const mojo::SharedRemote<::nearby::connections::mojom::NearbyConnections>&
           nearby_connections,
       base::OnceClosure on_connected_callback,
       base::OnceClosure on_disconnected_callback,
@@ -80,7 +79,9 @@ class FakeConnectionBrokerFactory : public NearbyConnectionBrokerImpl::Factory {
     return instance;
   }
 
-  FakeNearbyConnectionBroker* last_created_ = nullptr;
+  // This field is not a raw_ptr<> because it was filtered by the rewriter
+  // for: #constexpr-ctor-field-initializer
+  RAW_PTR_EXCLUSION FakeNearbyConnectionBroker* last_created_ = nullptr;
 };
 
 class FakeMessageReceiver : public mojom::NearbyMessageReceiver {

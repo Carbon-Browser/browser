@@ -1,8 +1,11 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "third_party/blink/renderer/modules/sensor/sensor_reading_remapper.h"
+
+#include "base/notreached.h"
+#include "services/device/public/mojom/sensor.mojom-shared.h"
 
 using device::SensorReading;
 using device::SensorReadingXYZ;

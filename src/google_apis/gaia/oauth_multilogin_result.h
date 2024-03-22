@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,6 +7,7 @@
 
 #include <string>
 
+#include "base/component_export.h"
 #include "base/gtest_prod_util.h"
 #include "base/values.h"
 #include "google_apis/gaia/gaia_auth_util.h"
@@ -49,10 +50,11 @@ enum class OAuthMultiloginResponseStatus {
 };
 
 // Parses the status field of the response.
+COMPONENT_EXPORT(GOOGLE_APIS)
 OAuthMultiloginResponseStatus ParseOAuthMultiloginResponseStatus(
     const std::string& status);
 
-class OAuthMultiloginResult {
+class COMPONENT_EXPORT(GOOGLE_APIS) OAuthMultiloginResult {
  public:
   // Parses cookies and status from JSON response. Maps status to
   // GoogleServiceAuthError::State values or sets error to
@@ -77,11 +79,11 @@ class OAuthMultiloginResult {
   // against XSSI that have to be removed. See go/xssi.
   static base::StringPiece StripXSSICharacters(const std::string& data);
 
-  void TryParseCookiesFromValue(base::Value* json_value);
+  void TryParseCookiesFromValue(const base::Value::Dict& json_value);
 
   // If error is INVALID_GAIA_CREDENTIALS response is expected to have a list of
   // failed accounts for which tokens are not valid.
-  void TryParseFailedAccountsFromValue(base::Value* json_value);
+  void TryParseFailedAccountsFromValue(const base::Value::Dict& json_value);
 
   std::vector<net::CanonicalCookie> cookies_;
   std::vector<std::string> failed_gaia_ids_;

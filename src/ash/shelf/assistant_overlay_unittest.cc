@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -65,12 +65,11 @@ class AssistantOverlayTest : public AshTestBase,
 
     // Enable Assistant
     Shell::Get()->session_controller()->GetPrimaryUserPrefService()->SetBoolean(
-        chromeos::assistant::prefs::kAssistantEnabled, true);
+        assistant::prefs::kAssistantEnabled, true);
     AssistantState* assistant_state = AssistantState::Get();
     assistant_state->NotifyFeatureAllowed(
-        chromeos::assistant::AssistantAllowedState::ALLOWED);
-    assistant_state->NotifyStatusChanged(
-        chromeos::assistant::AssistantStatus::READY);
+        assistant::AssistantAllowedState::ALLOWED);
+    assistant_state->NotifyStatusChanged(assistant::AssistantStatus::READY);
 
     const TestVariant test_variant = GetParam();
     switch (test_variant) {

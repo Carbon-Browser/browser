@@ -1,17 +1,16 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "components/omnibox/browser/in_memory_url_index_types.h"
 
-#include <algorithm>
 #include <functional>
 #include <iterator>
 #include <numeric>
 #include <set>
 
-#include "base/i18n/break_iterator.h"
 #include "base/i18n/case_conversion.h"
+#include "base/ranges/algorithm.h"
 #include "base/strings/escape.h"
 #include "base/strings/string_util.h"
 #include "base/trace_event/memory_usage_estimator.h"
@@ -19,12 +18,12 @@
 
 namespace {
 
-// The maximum number of characters to consider from an URL and page title
-// while matching user-typed terms.
+// The maximum number of characters to consider from a URL and page title while
+// matching user-typed terms.
 const size_t kMaxSignificantChars = 200;
 
 void String16VectorFromString16Internal(std::u16string word,
-                                        size_t previous_postion,
+                                        size_t previous_position,
                                         String16Vector* words,
                                         WordStarts* word_starts) {
   size_t initial_whitespace = 0;
@@ -33,7 +32,7 @@ void String16VectorFromString16Internal(std::u16string word,
   words->push_back(word);
   if (!word_starts)
     return;
-  size_t word_start = previous_postion + initial_whitespace;
+  size_t word_start = previous_position + initial_whitespace;
   if (word_start < kMaxSignificantChars)
     word_starts->push_back(word_start);
 }
@@ -84,11 +83,11 @@ TermMatches SortMatches(const TermMatches& matches) {
 // Assumes |sorted_matches| is already sorted.
 TermMatches DeoverlapMatches(const TermMatches& sorted_matches) {
   TermMatches out;
-  std::copy_if(
-      sorted_matches.begin(), sorted_matches.end(), std::back_inserter(out),
-      [&out](const TermMatch& match) {
+  base::ranges::copy_if(
+      sorted_matches, std::back_inserter(out), [&out](const TermMatch& match) {
         return out.empty() ||
-               match.offset >= (out.back().offset + out.back().length); });
+               match.offset >= (out.back().offset + out.back().length);
+      });
   return out;
 }
 
@@ -142,8 +141,7 @@ String16Vector String16VectorFromString16(
     word_starts->clear();
 
   String16Vector words;
-  TailoredWordBreakIterator iter(cleaned_uni_string,
-                                 base::i18n::BreakIterator::BREAK_WORD);
+  TailoredWordBreakIterator iter(cleaned_uni_string);
   if (!iter.Init())
     return words;
   while (iter.Advance()) {

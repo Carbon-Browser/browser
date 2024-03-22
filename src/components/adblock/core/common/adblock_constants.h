@@ -18,7 +18,9 @@
 #ifndef COMPONENTS_ADBLOCK_CORE_COMMON_ADBLOCK_CONSTANTS_H_
 #define COMPONENTS_ADBLOCK_CORE_COMMON_ADBLOCK_CONSTANTS_H_
 
-#include "base/strings/string_piece.h"
+#include <string_view>
+
+#include "base/auto_reset.h"
 #include "url/gurl.h"
 
 namespace adblock {
@@ -28,14 +30,24 @@ enum AbpResource : int8_t;
 }
 
 extern const char kSiteKeyHeaderKey[];
+extern const char kAllowlistEverythingFilter[];
+extern const char kAdblockFilteringConfigurationName[];
 
 const std::string& CurrentSchemaVersion();
-const GURL& AcceptableAdsUrl();
-const GURL& AntiCVUrl();
-const GURL& DefaultSubscriptionUrl();
 const GURL& TestPagesSubscriptionUrl();
 const GURL& CustomFiltersUrl();
-base::StringPiece RewriteUrl(flat::AbpResource type);
+std::string_view RewriteUrl(flat::AbpResource type);
+
+bool IsEyeoFilteringDisabledByDefault();
+bool IsAcceptableAdsDisabledByDefault();
+
+// Override result of IsEyeoFilteringDisabledByDefault() for the
+// duration of the returned AutoReset's lifetime. Used for testing.
+base::AutoReset<bool> OverrideEyeoFilteringDisabledByDefault(bool val);
+
+// Override result of IsAcceptableAdsDisabledByDefault() for the
+// duration of the returned AutoReset's lifetime. Used for testing.
+base::AutoReset<bool> OverrideAcceptableAdsDisabledByDefault(bool val);
 
 }  // namespace adblock
 

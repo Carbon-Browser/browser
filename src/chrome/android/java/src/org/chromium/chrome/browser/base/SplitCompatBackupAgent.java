@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -35,8 +35,9 @@ public class SplitCompatBackupAgent extends BackupAgent {
     }
 
     @Override
-    public void onBackup(ParcelFileDescriptor oldState, BackupDataOutput data,
-            ParcelFileDescriptor newState) throws IOException {
+    public void onBackup(
+            ParcelFileDescriptor oldState, BackupDataOutput data, ParcelFileDescriptor newState)
+            throws IOException {
         mImpl.onBackup(oldState, data, newState);
     }
 
@@ -61,9 +62,12 @@ public class SplitCompatBackupAgent extends BackupAgent {
             return mBackupAgent;
         }
 
-        public abstract void onBackup(ParcelFileDescriptor oldState, BackupDataOutput data,
-                ParcelFileDescriptor newState) throws IOException;
-        public abstract void onRestore(BackupDataInput data, int appVersionCode,
-                ParcelFileDescriptor newState) throws IOException;
+        public abstract void onBackup(
+                ParcelFileDescriptor oldState, BackupDataOutput data, ParcelFileDescriptor newState)
+                throws IOException;
+
+        public abstract void onRestore(
+                BackupDataInput data, int appVersionCode, ParcelFileDescriptor newState)
+                throws IOException;
     }
 }

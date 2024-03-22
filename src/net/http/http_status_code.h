@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,9 +12,9 @@ namespace net {
 // HTTP status codes.
 enum HttpStatusCode {
 
-#define HTTP_STATUS(label, code, reason) HTTP_ ## label = code,
+#define HTTP_STATUS_ENUM_VALUE(label, code, reason) HTTP_##label = code,
 #include "net/http/http_status_code_list.h"
-#undef HTTP_STATUS
+#undef HTTP_STATUS_ENUM_VALUE
 
 };
 
@@ -27,6 +27,11 @@ enum HttpStatusCode {
 // returns an empty string (or crash in debug build) for status codes which are
 // not yet covered or just invalid. Please extend it when needed.
 NET_EXPORT const char* GetHttpReasonPhrase(HttpStatusCode code);
+
+// Similar to the one above, but returns a nullptr in case code does not map
+// to a known reasone phrase, which allows a gentle recovery in case the code
+// was obtained from a non-trusted party.
+NET_EXPORT const char* TryToGetHttpReasonPhrase(HttpStatusCode code);
 
 }  // namespace net
 

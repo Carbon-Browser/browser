@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -25,10 +25,8 @@ DISPLAY_EXPORT extern const char kSecondaryDisplayLayout[];
 DISPLAY_EXPORT extern const char kUseFirstDisplayAsInternal[];
 
 #if BUILDFLAG(IS_CHROMEOS_ASH)
+DISPLAY_EXPORT extern const char kDisplayProperties[];
 DISPLAY_EXPORT extern const char kEnableUnifiedDesktop[];
-
-// TODO(oshima): Remove once all tests are fixed. crbug.com/1225308.
-DISPLAY_EXPORT extern const char kRejectSquareDisplay[];
 #endif
 
 }  // namespace switches

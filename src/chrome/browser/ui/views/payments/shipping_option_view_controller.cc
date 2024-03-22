@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -23,7 +23,7 @@ namespace {
 
 class ShippingOptionItem : public PaymentRequestItemList::Item {
  public:
-  ShippingOptionItem(mojom::PaymentShippingOption* shipping_option,
+  ShippingOptionItem(mojom::PaymentShippingOptionPtr shipping_option,
                      base::WeakPtr<PaymentRequestSpec> spec,
                      base::WeakPtr<PaymentRequestState> state,
                      PaymentRequestItemList* parent_list,
@@ -35,7 +35,7 @@ class ShippingOptionItem : public PaymentRequestItemList::Item {
                                      selected,
                                      /*clickable=*/true,
                                      /*show_edit_button=*/false),
-        shipping_option_(shipping_option) {
+        shipping_option_(std::move(shipping_option)) {
     Init();
   }
 
@@ -49,7 +49,7 @@ class ShippingOptionItem : public PaymentRequestItemList::Item {
   std::unique_ptr<views::View> CreateContentView(
       std::u16string* accessible_content) override {
     return CreateShippingOptionLabel(
-        shipping_option_,
+        shipping_option_.get(),
         /*formatted_amount=*/
         spec() ? spec()->GetFormattedCurrencyAmount(shipping_option_->amount)
                : std::u16string(),
@@ -73,15 +73,15 @@ class ShippingOptionItem : public PaymentRequestItemList::Item {
 
   void PerformSelectionFallback() override {
     // Since CanBeSelected() is always true, this should never be called.
-    NOTREACHED();
+    NOTREACHED_NORETURN();
   }
 
   void EditButtonPressed() override {
     // This subclass doesn't display the edit button.
-    NOTREACHED();
+    NOTREACHED_NORETURN();
   }
 
-  raw_ptr<mojom::PaymentShippingOption> shipping_option_;
+  mojom::PaymentShippingOptionPtr shipping_option_;
 };
 
 }  // namespace
@@ -95,7 +95,7 @@ ShippingOptionViewController::ShippingOptionViewController(
   spec->AddObserver(this);
   for (const auto& option : spec->GetShippingOptions()) {
     shipping_option_list_.AddItem(std::make_unique<ShippingOptionItem>(
-        option.get(), spec, state, &shipping_option_list_, dialog,
+        option->Clone(), spec, state, &shipping_option_list_, dialog,
         option.get() == spec->selected_shipping_option()));
   }
 }
@@ -139,6 +139,11 @@ bool ShippingOptionViewController::ShouldShowPrimaryButton() {
 bool ShippingOptionViewController::ShouldShowSecondaryButton() {
   // Do not show the "Cancel Payment" button.
   return false;
+}
+
+base::WeakPtr<PaymentRequestSheetController>
+ShippingOptionViewController::GetWeakPtr() {
+  return weak_ptr_factory_.GetWeakPtr();
 }
 
 }  // namespace payments

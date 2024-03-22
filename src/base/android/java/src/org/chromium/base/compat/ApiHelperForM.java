@@ -1,12 +1,10 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 package org.chromium.base.compat;
 
 import android.app.Activity;
-import android.app.AlarmManager;
-import android.app.Notification;
 import android.app.PendingIntent;
 import android.content.Context;
 import android.graphics.Bitmap;
@@ -14,7 +12,6 @@ import android.graphics.drawable.Icon;
 import android.net.ConnectivityManager;
 import android.net.Network;
 import android.net.NetworkInfo;
-import android.os.BatteryManager;
 import android.os.Build;
 import android.os.PowerManager;
 import android.os.Process;
@@ -38,17 +35,13 @@ import androidx.annotation.RequiresApi;
 public final class ApiHelperForM {
     private ApiHelperForM() {}
 
-    /**
-     * See {@link WebViewClient#onPageCommitVisible(WebView, String)}, which was added in M.
-     */
+    /** See {@link WebViewClient#onPageCommitVisible(WebView, String)}, which was added in M. */
     public static void onPageCommitVisible(
             WebViewClient webViewClient, WebView webView, String url) {
         webViewClient.onPageCommitVisible(webView, url);
     }
 
-    /**
-     * See {@link Process#is64Bit()}.
-     */
+    /** See {@link Process#is64Bit()}. */
     public static boolean isProcess64Bit() {
         return Process.is64Bit();
     }
@@ -88,8 +81,8 @@ public final class ApiHelperForM {
 
     /** See {@link PackageManager#isPermissionRevokedByPolicy(String, String)}. */
     public static boolean isPermissionRevokedByPolicy(Activity activity, String permission) {
-        return activity.getPackageManager().isPermissionRevokedByPolicy(
-                permission, activity.getPackageName());
+        return activity.getPackageManager()
+                .isPermissionRevokedByPolicy(permission, activity.getPackageName());
     }
 
     /** See {@link NetworkSecurityPolicy#isCleartextTrafficPermitted()}. */
@@ -102,8 +95,9 @@ public final class ApiHelperForM {
         return userManager.isSystemUser();
     }
 
-    /*
+    /**
      * See {@link ActionMode#invalidateContentRect()}.
+     *
      * @param actionMode
      */
     public static void invalidateContentRectOnActionMode(ActionMode actionMode) {
@@ -141,22 +135,6 @@ public final class ApiHelperForM {
         return event.getActionButton();
     }
 
-    /** See {@link AlarmManager#setExactAndAllowWhileIdle(int, long, PendingIntent) }.  */
-    public static void setAlarmManagerExactAndAllowWhileIdle(AlarmManager alarmManager, int type,
-            long triggerAtMillis, PendingIntent pendingIntent) {
-        alarmManager.setExactAndAllowWhileIdle(type, triggerAtMillis, pendingIntent);
-    }
-
-    /** See {@link Display#getSupportedModes() }. */
-    public static Display.Mode[] getDisplaySupportedModes(Display display) {
-        return display.getSupportedModes();
-    }
-
-    /** See {@link Display#getMode() }. */
-    public static Display.Mode getDisplayMode(Display display) {
-        return display.getMode();
-    }
-
     /** See {@link Display.Mode#getPhysicalWidth() }. */
     public static int getModePhysicalWidth(Display.Mode mode) {
         return mode.getPhysicalWidth();
@@ -165,11 +143,6 @@ public final class ApiHelperForM {
     /** See {@link Display.Mode#getPhysicalHeight() }. */
     public static int getModePhysicalHeight(Display.Mode mode) {
         return mode.getPhysicalHeight();
-    }
-
-    /** See {@link BatteryManager#isCharging() }. */
-    public static boolean isCharging(BatteryManager batteryManager) {
-        return batteryManager.isCharging();
     }
 
     /** See {@link Icon#createWithBitmap(Bitmap) }. */
@@ -182,24 +155,8 @@ public final class ApiHelperForM {
         return powerManager.isDeviceIdleMode();
     }
 
-    /** See {@link Notification.Builder#setSmallIcon(Icon)}. */
-    public static Notification.Builder setSmallIcon(Notification.Builder builder, Icon icon) {
-        return builder.setSmallIcon(icon);
-    }
-
-    /** See {@link Icon#createWithResource(Context, int)}. */
-    public static Icon createIconWithResource(Context context, int resId) {
-        return Icon.createWithResource(context, resId);
-    }
-
     /** See {@link Context#getSystemService(Class<T>)}. */
     public static <T> T getSystemService(Context context, Class<T> serviceClass) {
         return context.getSystemService(serviceClass);
-    }
-
-    /** See {@link Notification.Action.Builder#Builder(Icon, CharSequence, PendingIntent)}. */
-    public static Notification.Action.Builder newNotificationActionBuilder(
-            Icon icon, CharSequence title, PendingIntent intent) {
-        return new Notification.Action.Builder(icon, title, intent);
     }
 }

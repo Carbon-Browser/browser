@@ -1,13 +1,13 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+#include "base/memory/raw_ptr.h"
 #include "chrome/browser/net/nss_service_factory.h"
 
 #include <memory>
 
-#include "ash/components/login/auth/public/user_context.h"
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/run_loop.h"
 #include "build/build_config.h"
 #include "chrome/browser/ash/login/login_manager_test.h"
@@ -19,6 +19,7 @@
 #include "chrome/browser/ash/scoped_test_system_nss_key_slot_mixin.h"
 #include "chrome/browser/net/nss_service.h"
 #include "chrome/browser/profiles/profile.h"
+#include "chromeos/ash/components/login/auth/public/user_context.h"
 #include "components/account_id/account_id.h"
 #include "components/signin/public/identity_manager/identity_test_utils.h"
 #include "components/user_manager/user.h"
@@ -137,8 +138,8 @@ class DBTester {
                                                  std::move(done_callback));
   }
 
-  Profile* profile_ = nullptr;
-  net::NSSCertDatabase* db_ = nullptr;
+  raw_ptr<Profile, ExperimentalAsh> profile_ = nullptr;
+  raw_ptr<net::NSSCertDatabase, ExperimentalAsh> db_ = nullptr;
   // Indicates if the tester should expect to receive a database with
   // initialized system slot or not.
   bool will_have_system_slot_ = false;
@@ -195,7 +196,7 @@ class NSSContextChromeOSBrowserTest : public ash::LoginManagerTest {
   ~NSSContextChromeOSBrowserTest() override {}
 
   void SetUpInProcessBrowserTestFixture() override {
-    chromeos::LoginManagerTest::SetUpInProcessBrowserTestFixture();
+    LoginManagerTest::SetUpInProcessBrowserTestFixture();
 
     auto device_policy_update = device_state_mixin_.RequestDevicePolicyUpdate();
     auto user_policy_update_1 = user_policy_mixin_1_.RequestPolicyUpdate();
@@ -214,7 +215,7 @@ class NSSContextChromeOSBrowserTest : public ash::LoginManagerTest {
   AccountId affiliated_account_id_1_{AccountId::FromUserEmailGaiaId(
       kTestEmail1,
       signin::GetTestGaiaIdForEmail(kTestEmail1))};
-  chromeos::LoginManagerMixin::TestUserInfo affiliated_user_1_{
+  ash::LoginManagerMixin::TestUserInfo affiliated_user_1_{
       affiliated_account_id_1_};
   ash::UserPolicyMixin user_policy_mixin_1_{&mixin_host_,
                                             affiliated_account_id_1_};
@@ -223,7 +224,7 @@ class NSSContextChromeOSBrowserTest : public ash::LoginManagerTest {
   AccountId affiliated_account_id_2_{AccountId::FromUserEmailGaiaId(
       kTestEmail2,
       signin::GetTestGaiaIdForEmail(kTestEmail2))};
-  chromeos::LoginManagerMixin::TestUserInfo affiliated_user_2_{
+  ash::LoginManagerMixin::TestUserInfo affiliated_user_2_{
       affiliated_account_id_2_};
   ash::UserPolicyMixin user_policy_mixin_2_{&mixin_host_,
                                             affiliated_account_id_2_};
@@ -238,7 +239,7 @@ class NSSContextChromeOSBrowserTest : public ash::LoginManagerTest {
       &mixin_host_,
       ash::DeviceStateMixin::State::OOBE_COMPLETED_CLOUD_ENROLLED};
 
-  chromeos::LoginManagerMixin login_mixin_{
+  ash::LoginManagerMixin login_mixin_{
       &mixin_host_,
       /*initial_users=*/{affiliated_user_1_, affiliated_user_2_}};
 };

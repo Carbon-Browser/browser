@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,7 +12,6 @@
 #include "base/memory/scoped_refptr.h"
 #include "base/task/sequenced_task_runner.h"
 #include "base/threading/sequence_bound.h"
-#include "base/threading/sequenced_task_runner_handle.h"
 #include "base/unguessable_token.h"
 #include "components/services/storage/dom_storage/dom_storage_database.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
@@ -97,7 +96,7 @@ class AsyncDomStorageDatabase {
                              db, std::move(task), std::move(callback)));
         },
         std::move(task), std::move(callback),
-        base::SequencedTaskRunnerHandle::Get());
+        base::SequencedTaskRunner::GetCurrentDefault());
     if (database_) {
       database_.PostTaskWithThisObject(std::move(wrapped_task));
     } else {

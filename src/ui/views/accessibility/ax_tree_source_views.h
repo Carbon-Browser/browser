@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -47,11 +47,12 @@ class VIEWS_EXPORT AXTreeSourceViews
   AXAuraObjWrapper* GetRoot() const override;
   AXAuraObjWrapper* GetFromId(int32_t id) const override;
   int32_t GetId(AXAuraObjWrapper* node) const override;
-  void GetChildren(AXAuraObjWrapper* node,
-                   std::vector<AXAuraObjWrapper*>* out_children) const override;
+  void CacheChildrenIfNeeded(AXAuraObjWrapper*) override;
+  size_t GetChildCount(AXAuraObjWrapper* node) const override;
+  void ClearChildCache(AXAuraObjWrapper*) override;
+  AXAuraObjWrapper* ChildAt(AXAuraObjWrapper* node, size_t) const override;
   AXAuraObjWrapper* GetParent(AXAuraObjWrapper* node) const override;
   bool IsIgnored(AXAuraObjWrapper* node) const override;
-  bool IsValid(AXAuraObjWrapper* node) const override;
   bool IsEqual(AXAuraObjWrapper* node1, AXAuraObjWrapper* node2) const override;
   AXAuraObjWrapper* GetNull() const override;
   std::string GetDebugString(AXAuraObjWrapper* node) const override;
@@ -65,12 +66,12 @@ class VIEWS_EXPORT AXTreeSourceViews
 
  private:
   // The top-level object to use for the AX tree. See class comment.
-  const raw_ptr<AXAuraObjWrapper> root_ = nullptr;
+  const raw_ptr<AXAuraObjWrapper, DanglingUntriaged> root_ = nullptr;
 
   // ID to use for the AX tree.
   const ui::AXTreeID tree_id_;
 
-  raw_ptr<views::AXAuraObjCache> cache_;
+  raw_ptr<views::AXAuraObjCache, DanglingUntriaged> cache_;
 };
 
 }  // namespace views

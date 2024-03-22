@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,9 +7,10 @@
 
 #include <string>
 
+#include "base/memory/raw_ptr.h"
 #include "base/scoped_observation.h"
-#include "chrome/browser/ui/app_list/arc/arc_app_list_prefs.h"
-#include "chrome/browser/ui/app_list/arc/arc_app_list_prefs_factory.h"
+#include "chrome/browser/ash/app_list/arc/arc_app_list_prefs.h"
+#include "chrome/browser/ash/app_list/arc/arc_app_list_prefs_factory.h"
 #include "extensions/browser/browser_context_keyed_api_factory.h"
 #include "extensions/browser/event_router.h"
 #include "extensions/browser/extension_function.h"
@@ -48,7 +49,7 @@ class ArcAppsPrivateAPI : public extensions::BrowserContextKeyedAPI,
   // extensions::BrowserContextKeyedAPI:
   static const bool kServiceIsNULLWhileTesting = true;
 
-  content::BrowserContext* const context_;
+  const raw_ptr<content::BrowserContext, ExperimentalAsh> context_;
 
   base::ScopedObservation<ArcAppListPrefs, ArcAppListPrefs::Observer>
       scoped_prefs_observation_{this};

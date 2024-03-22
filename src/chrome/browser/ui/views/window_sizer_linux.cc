@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -46,7 +46,7 @@ void WindowSizerLinux::AdjustWorkAreaForPlatform(gfx::Rect& work_area) {
                          .supports_server_side_window_decorations ||
                     browser()->profile()->GetPrefs()->GetBoolean(
                         prefs::kUseCustomChromeFrame))) {
-    work_area.Inset(
-        gfx::ShadowValue::GetMargin(BrowserFrameViewLinux::GetShadowValues()));
+    work_area.Inset(gfx::ShadowValue::GetMargin(
+        BrowserFrameViewLinux::GetShadowValues(true)));
   }
 }

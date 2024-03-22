@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,8 +7,8 @@
 #include <jni.h>
 
 #include "base/android/jni_android.h"
+#include "base/ranges/algorithm.h"
 #include "chrome/browser/android/tab_android.h"
-#include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/ui/android/tab_model/tab_model.h"
 #include "chrome/browser/ui/android/tab_model/tab_model_list_observer.h"
 #include "chrome/browser/ui/browser_navigator_params.h"
@@ -35,7 +35,7 @@ void TabModelList::RemoveTabModel(TabModel* tab_model) {
   auto& tab_models = tab_model_list_.Get().models_;
 
   TabModelList::iterator remove_tab_model =
-      std::find(tab_models.begin(), tab_models.end(), tab_model);
+      base::ranges::find(tab_models, tab_model);
 
   if (remove_tab_model != tab_models.end())
     tab_models.erase(remove_tab_model);
@@ -68,7 +68,8 @@ TabModel* TabModelList::GetTabModelForWebContents(
     return nullptr;
 
   for (TabModel* model : models()) {
-    for (int index = 0; index < model->GetTabCount(); index++) {
+    const size_t tab_count = model->GetTabCount();
+    for (size_t index = 0; index < tab_count; index++) {
       if (web_contents == model->GetWebContentsAt(index))
         return model;
     }
@@ -82,7 +83,8 @@ TabModel* TabModelList::GetTabModelForTabAndroid(TabAndroid* tab_android) {
     return nullptr;
 
   for (TabModel* model : models()) {
-    for (int index = 0; index < model->GetTabCount(); index++) {
+    const size_t tab_count = model->GetTabCount();
+    for (size_t index = 0; index < tab_count; index++) {
       if (tab_android == model->GetTabAt(index))
         return model;
     }

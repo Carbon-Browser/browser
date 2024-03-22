@@ -1,5 +1,4 @@
-
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,12 +13,10 @@ MockInputMethodEngine::MockInputMethodEngine() = default;
 
 MockInputMethodEngine::~MockInputMethodEngine() = default;
 
-void MockInputMethodEngine::FocusIn(
-    const IMEEngineHandlerInterface::InputContext& input_context) {}
+void MockInputMethodEngine::Focus(
+    const TextInputMethod::InputContext& input_context) {}
 
-void MockInputMethodEngine::OnTouch(ui::EventPointerType pointerType) {}
-
-void MockInputMethodEngine::FocusOut() {}
+void MockInputMethodEngine::Blur() {}
 
 void MockInputMethodEngine::Enable(const std::string& component_id) {
   active_component_id_ = component_id;
@@ -35,15 +32,10 @@ void MockInputMethodEngine::ProcessKeyEvent(const ui::KeyEvent& key_event,
                                             KeyEventDoneCallback callback) {}
 
 void MockInputMethodEngine::SetSurroundingText(const std::u16string& text,
-                                               uint32_t cursor_pos,
-                                               uint32_t anchor_pos,
+                                               const gfx::Range selection_range,
                                                uint32_t offset_pos) {}
 
-void MockInputMethodEngine::SetCompositionBounds(
-    const std::vector<gfx::Rect>& bounds) {}
-
-void MockInputMethodEngine::SetCaretBounds(
-    const gfx::Rect& caret_bounds) {}
+void MockInputMethodEngine::SetCaretBounds(const gfx::Rect& caret_bounds) {}
 
 ui::VirtualKeyboardController*
 MockInputMethodEngine::GetVirtualKeyboardController() const {
@@ -55,6 +47,9 @@ void MockInputMethodEngine::PropertyActivate(const std::string& property_name) {
 }
 
 void MockInputMethodEngine::CandidateClicked(uint32_t index) {}
+
+void MockInputMethodEngine::AssistiveWindowChanged(
+    const ash::ime::AssistiveWindow& window) {}
 
 void MockInputMethodEngine::SetMirroringEnabled(bool mirroring_enabled) {}
 

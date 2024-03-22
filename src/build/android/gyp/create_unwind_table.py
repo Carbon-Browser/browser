@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Copyright 2021 The Chromium Authors. All rights reserved.
+# Copyright 2021 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 """Creates a table of unwind information in Android Chrome's bespoke format."""
@@ -1027,17 +1027,22 @@ def ReadTextSectionStartAddress(readobj_path: str, libchrome_path: str) -> int:
   Returns:
     The text section start address as a number.
   """
+  def GetSectionName(section) -> str:
+    # See crbug.com/1426287 for context on different JSON names.
+    if 'Name' in section['Section']['Name']:
+      return section['Section']['Name']['Name']
+    return section['Section']['Name']['Value']
+
   proc = subprocess.Popen(
       [readobj_path, '--sections', '--elf-output-style=JSON', libchrome_path],
       stdout=subprocess.PIPE,
       encoding='ascii')
 
   elfs = json.loads(proc.stdout.read())[0]
-  assert len(elfs) == 1
-  sections = list(elfs.values())[0]['Sections']
+  sections = elfs['Sections']
 
   return next(s['Section']['Address'] for s in sections
-              if s['Section']['Name']['Value'] == '.text')
+              if GetSectionName(s) == '.text')
 
 
 def main():

@@ -1,10 +1,11 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "components/gwp_asan/client/guarded_page_allocator.h"
 
 #include <sys/mman.h>
+#include <ostream>
 
 #include "base/check.h"
 #include "base/posix/eintr_wrapper.h"

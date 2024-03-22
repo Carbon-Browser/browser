@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,9 +9,7 @@
 
 #include <delayimp.h>
 
-#include "base/check.h"
-#include "base/debug/alias.h"
-#include "base/strings/string_util.h"
+#include "chrome/common/win/delay_load_failure_support.h"
 
 namespace chrome {
 
@@ -27,13 +25,7 @@ FARPROC WINAPI DelayLoadFailureHookEXE(unsigned reason,
   if (!g_hooks_enabled)
     return 0;
 
-  char dll_name[MAX_PATH];
-  base::strlcpy(dll_name, dll_info->szDll, std::size(dll_name));
-
-  base::debug::Alias(&dll_name);
-  CHECK(false);
-
-  return 0;
+  return HandleDelayLoadFailureCommon(reason, dll_info);
 }
 
 }  // namespace

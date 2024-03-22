@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -21,6 +21,8 @@ class MockScriptElementBase : public GarbageCollected<MockScriptElementBase>,
 
   MOCK_METHOD0(DispatchLoadEvent, void());
   MOCK_METHOD0(DispatchErrorEvent, void());
+  MOCK_METHOD0(HasLoadEventHandler, bool());
+  MOCK_METHOD0(HasErrorEventHandler, bool());
   MOCK_CONST_METHOD0(AsyncAttributeValue, bool());
   MOCK_CONST_METHOD0(CharsetAttributeValue, String());
   MOCK_CONST_METHOD0(CrossOriginAttributeValue, String());

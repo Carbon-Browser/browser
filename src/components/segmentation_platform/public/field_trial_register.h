@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -17,8 +17,8 @@ class FieldTrialRegister {
   FieldTrialRegister() = default;
   virtual ~FieldTrialRegister() = default;
 
-  FieldTrialRegister(FieldTrialRegister&) = delete;
-  FieldTrialRegister& operator=(FieldTrialRegister&) = delete;
+  FieldTrialRegister(const FieldTrialRegister&) = delete;
+  FieldTrialRegister& operator=(const FieldTrialRegister&) = delete;
 
   // Records that the current session uses `trial_name` and `group_name` as
   // segmentation groups. Calling multiple times with same `trial_name`

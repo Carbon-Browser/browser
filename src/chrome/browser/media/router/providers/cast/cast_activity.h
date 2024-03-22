@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -31,6 +31,10 @@ class AppActivity;
 class MirroringActivity;
 class CastSessionTracker;
 
+using OnSourceChangedCallback =
+    base::RepeatingCallback<void(int old_frame_tree_node_id,
+                                 int frame_tree_node_id)>;
+
 class CastActivityFactoryForTest {
  public:
   virtual std::unique_ptr<AppActivity> MakeAppActivity(
@@ -39,7 +43,8 @@ class CastActivityFactoryForTest {
   virtual std::unique_ptr<MirroringActivity> MakeMirroringActivity(
       const MediaRoute& route,
       const std::string& app_id,
-      base::OnceClosure on_stop) = 0;
+      base::OnceClosure on_stop,
+      OnSourceChangedCallback on_source_changed) = 0;
 };
 
 class CastActivity {
@@ -55,7 +60,6 @@ class CastActivity {
   const MediaRoute& route() const { return route_; }
   const std::string& app_id() const { return app_id_; }
   const absl::optional<std::string>& session_id() const { return session_id_; }
-  absl::optional<int> mirroring_tab_id() const { return mirroring_tab_id_; }
   const MediaSinkInternal sink() const { return sink_; }
 
   void SetRouteIsConnecting(bool is_connecting);
@@ -66,7 +70,7 @@ class CastActivity {
   virtual mojom::RoutePresentationConnectionPtr AddClient(
       const CastMediaSource& source,
       const url::Origin& origin,
-      int tab_id);
+      int frame_tree_node_id);
 
   virtual void RemoveClient(const std::string& client_id);
 
@@ -88,7 +92,7 @@ class CastActivity {
       const std::string& client_id,
       blink::mojom::PresentationConnectionMessagePtr message);
 
-  virtual void SendMediaStatusToClients(const base::Value& media_status,
+  virtual void SendMediaStatusToClients(const base::Value::Dict& media_status,
                                         absl::optional<int> request_id);
 
   // Handles a message forwarded by CastActivityManager.
@@ -174,7 +178,6 @@ class CastActivity {
 
   MediaRoute route_;
   std::string app_id_;
-  absl::optional<int> mirroring_tab_id_;
 
   // TODO(https://crbug.com/809249): Consider wrapping CastMessageHandler with
   // known parameters (sink, client ID, session transport ID) and passing them

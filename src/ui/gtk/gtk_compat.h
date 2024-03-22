@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -17,6 +17,12 @@
 #include "ui/base/glib/scoped_gobject.h"
 #include "ui/gfx/geometry/insets.h"
 #include "ui/gtk/gtk_types.h"
+
+#if GTK_CHECK_VERSION(4, 1, 1)
+#define UI_GTK_CONST const
+#else
+#define UI_GTK_CONST
+#endif
 
 extern "C" {
 #include "ui/gtk/gdk.sigs"

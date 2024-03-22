@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,7 +14,6 @@
 #include <string>
 #include <vector>
 
-#include "base/compiler_specific.h"
 #include "base/memory/ref_counted.h"
 #include "base/memory/weak_ptr.h"
 #include "components/prefs/pref_member.h"
@@ -85,13 +84,16 @@ class IOSIOThread : public web::WebThreadDelegate {
     SystemRequestContextLeakChecker system_request_context_leak_checker;
   };
 
-  // |net_log| must either outlive the IOSIOThread or be NULL.
+  // `net_log` must either outlive the IOSIOThread or be NULL.
   IOSIOThread(PrefService* local_state, net::NetLog* net_log);
 
   IOSIOThread(const IOSIOThread&) = delete;
   IOSIOThread& operator=(const IOSIOThread&) = delete;
 
   ~IOSIOThread() override;
+
+  // Initialize the IO thread with blocking allowed.
+  void InitOnIO();
 
   // Can only be called on the IO thread.
   Globals* globals();

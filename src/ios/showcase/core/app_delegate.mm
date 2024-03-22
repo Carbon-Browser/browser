@@ -1,24 +1,23 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #import "ios/showcase/core/app_delegate.h"
 
-#import <MaterialComponents/MaterialTypography.h>
-
-#include "base/command_line.h"
-#include "base/i18n/icu_util.h"
-#include "base/memory/ptr_util.h"
-#include "base/path_service.h"
+#import "base/command_line.h"
+#import "base/i18n/icu_util.h"
+#import "base/memory/ptr_util.h"
+#import "base/message_loop/message_pump_type.h"
+#import "base/path_service.h"
+#import "base/task/single_thread_task_executor.h"
+#import "base/task/thread_pool/thread_pool_instance.h"
 #import "ios/showcase/core/showcase_model.h"
 #import "ios/showcase/core/showcase_view_controller.h"
-#include "ui/base/resource/resource_bundle.h"
+#import "ui/base/resource/resource_bundle.h"
 
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
-
-@implementation AppDelegate
+@implementation AppDelegate {
+  base::SingleThreadTaskExecutor* _task_executor;
+}
 @synthesize window = _window;
 
 - (void)setupUI {
@@ -37,6 +36,9 @@
   ui::ResourceBundle::InitSharedInstanceWithLocale(
       std::string(), nullptr, ui::ResourceBundle::LOAD_COMMON_RESOURCES);
   CHECK(base::i18n::InitializeICU());
+  base::ThreadPoolInstance::Get()->CreateAndStartWithDefaultParams("Showcase");
+  _task_executor =
+      new base::SingleThreadTaskExecutor(base::MessagePumpType::UI);
 
   self.window = [[UIWindow alloc] initWithFrame:[[UIScreen mainScreen] bounds]];
   [self setupUI];

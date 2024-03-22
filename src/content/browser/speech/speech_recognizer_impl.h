@@ -1,4 +1,4 @@
-// Copyright (c) 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -170,7 +170,7 @@ class CONTENT_EXPORT SpeechRecognizerImpl
   static media::AudioSystem* audio_system_for_tests_;
   static media::AudioCapturerSource* audio_capturer_source_for_tests_;
 
-  raw_ptr<media::AudioSystem> audio_system_;
+  raw_ptr<media::AudioSystem, DanglingUntriaged> audio_system_;
   std::unique_ptr<SpeechRecognitionEngine> recognition_engine_;
   Endpointer endpointer_;
   scoped_refptr<media::AudioCapturerSource> audio_capturer_source_;

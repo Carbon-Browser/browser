@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,7 +9,6 @@
 #include "base/containers/contains.h"
 #include "components/password_manager/core/browser/password_form.h"
 #include "components/password_manager/core/browser/password_manager_util.h"
-#include "components/password_manager/core/browser/statistics_table.h"
 
 namespace password_manager {
 
@@ -56,7 +55,7 @@ bool FakeFormFetcher::IsBlocklisted() const {
   return is_blocklisted_;
 }
 
-bool FakeFormFetcher::IsMovingBlocked(const autofill::GaiaIdHash& destination,
+bool FakeFormFetcher::IsMovingBlocked(const signin::GaiaIdHash& destination,
                                       const std::u16string& username) const {
   // This is analogous to the implementation in
   // MultiStoreFormFetcher::IsMovingBlocked().
@@ -93,7 +92,10 @@ const std::vector<const PasswordForm*>& FakeFormFetcher::GetBestMatches()
 }
 
 const PasswordForm* FakeFormFetcher::GetPreferredMatch() const {
-  return preferred_match_;
+  if (best_matches_.empty()) {
+    return nullptr;
+  }
+  return *best_matches_.begin();
 }
 
 std::unique_ptr<FormFetcher> FakeFormFetcher::Clone() {
@@ -103,9 +105,8 @@ std::unique_ptr<FormFetcher> FakeFormFetcher::Clone() {
 void FakeFormFetcher::SetNonFederated(
     const std::vector<const PasswordForm*>& non_federated) {
   non_federated_ = non_federated;
-  password_manager_util::FindBestMatches(non_federated_, scheme_,
-                                         &non_federated_same_scheme_,
-                                         &best_matches_, &preferred_match_);
+  password_manager_util::FindBestMatches(
+      non_federated_, scheme_, &non_federated_same_scheme_, &best_matches_);
 }
 
 void FakeFormFetcher::SetBlocklisted(bool is_blocklisted) {
@@ -117,4 +118,25 @@ void FakeFormFetcher::NotifyFetchCompleted() {
   for (Consumer& consumer : consumers_)
     consumer.OnFetchCompleted();
 }
+
+std::optional<PasswordStoreBackendError>
+FakeFormFetcher::GetProfileStoreBackendError() const {
+  return profile_store_backend_error_;
+}
+
+absl::optional<PasswordStoreBackendError>
+FakeFormFetcher::GetAccountStoreBackendError() const {
+  return account_store_backend_error_;
+}
+
+void FakeFormFetcher::SetProfileStoreBackendError(
+    std::optional<PasswordStoreBackendError> error) {
+  profile_store_backend_error_ = error;
+}
+
+void FakeFormFetcher::SetAccountStoreBackendError(
+    std::optional<PasswordStoreBackendError> error) {
+  account_store_backend_error_ = error;
+}
+
 }  // namespace password_manager

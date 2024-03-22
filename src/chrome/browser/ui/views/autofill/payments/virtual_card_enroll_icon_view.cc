@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,9 +13,11 @@
 #include "chrome/browser/ui/views/autofill/payments/virtual_card_enroll_bubble_views.h"
 #include "chrome/grit/generated_resources.h"
 #include "components/autofill/core/browser/ui/payments/virtual_card_enroll_bubble_controller.h"
+#include "components/omnibox/browser/omnibox_field_trial.h"
 #include "components/strings/grit/components_strings.h"
 #include "components/vector_icons/vector_icons.h"
 #include "ui/base/l10n/l10n_util.h"
+#include "ui/base/metadata/metadata_impl_macros.h"
 #include "ui/gfx/paint_vector_icon.h"
 
 namespace autofill {
@@ -27,7 +29,13 @@ VirtualCardEnrollIconView::VirtualCardEnrollIconView(
     : PageActionIconView(command_updater,
                          IDC_VIRTUAL_CARD_ENROLL,
                          icon_label_bubble_delegate,
-                         delegate) {}
+                         delegate,
+                         "VirtualCardEnroll") {
+  SetAccessibilityProperties(
+      /*role*/ absl::nullopt,
+      l10n_util::GetStringUTF16(
+          IDS_AUTOFILL_VIRTUAL_CARD_ENROLLMENT_FALLBACK_ICON_TOOLTIP));
+}
 
 VirtualCardEnrollIconView::~VirtualCardEnrollIconView() = default;
 
@@ -54,17 +62,9 @@ void VirtualCardEnrollIconView::OnExecuting(
     PageActionIconView::ExecuteSource execute_source) {}
 
 const gfx::VectorIcon& VirtualCardEnrollIconView::GetVectorIcon() const {
-  return kCreditCardIcon;
-}
-
-const char* VirtualCardEnrollIconView::GetClassName() const {
-  return "VirtualCardEnrollIconView";
-}
-
-std::u16string VirtualCardEnrollIconView::GetTextForTooltipAndAccessibleName()
-    const {
-  return l10n_util::GetStringUTF16(
-      IDS_AUTOFILL_VIRTUAL_CARD_ENROLLMENT_FALLBACK_ICON_TOOLTIP);
+  return OmniboxFieldTrial::IsChromeRefreshIconsEnabled()
+             ? kCreditCardChromeRefreshIcon
+             : kCreditCardIcon;
 }
 
 VirtualCardEnrollBubbleController* VirtualCardEnrollIconView::GetController()
@@ -75,5 +75,8 @@ VirtualCardEnrollBubbleController* VirtualCardEnrollIconView::GetController()
 
   return VirtualCardEnrollBubbleControllerImpl::FromWebContents(web_contents);
 }
+
+BEGIN_METADATA(VirtualCardEnrollIconView, PageActionIconView)
+END_METADATA
 
 }  // namespace autofill

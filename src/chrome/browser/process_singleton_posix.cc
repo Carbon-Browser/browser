@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -57,12 +57,12 @@
 #include <type_traits>
 
 #include "base/base_paths.h"
-#include "base/bind.h"
 #include "base/command_line.h"
 #include "base/containers/unique_ptr_adapters.h"
 #include "base/files/file_descriptor_watcher_posix.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/logging.h"
 #include "base/memory/raw_ptr.h"
@@ -82,7 +82,6 @@
 #include "base/task/sequenced_task_runner_helpers.h"
 #include "base/task/single_thread_task_runner.h"
 #include "base/threading/platform_thread.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "base/time/time.h"
 #include "base/timer/timer.h"
 #include "build/build_config.h"
@@ -90,12 +89,13 @@
 #include "chrome/browser/process_singleton_internal.h"
 #include "chrome/common/chrome_constants.h"
 #include "chrome/common/process_singleton_lock_posix.h"
-#include "chrome/grit/chromium_strings.h"
+#include "chrome/grit/branded_strings.h"
 #include "chrome/grit/generated_resources.h"
 #include "content/public/browser/browser_task_traits.h"
 #include "content/public/browser/browser_thread.h"
 #include "net/base/network_interfaces.h"
 #include "ui/base/l10n/l10n_util.h"
+#include "ui/base/resource/scoped_startup_resource_bundle.h"
 
 #if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)
 #include "chrome/browser/ui/process_singleton_dialog_linux.h"
@@ -202,7 +202,7 @@ int WaitSocketForRead(int fd, const base::TimeDelta& timeout) {
   FD_ZERO(&read_fds);
   FD_SET(fd, &read_fds);
 
-  return HANDLE_EINTR(select(fd + 1, &read_fds, NULL, NULL, &tv));
+  return HANDLE_EINTR(select(fd + 1, &read_fds, nullptr, nullptr, &tv));
 }
 
 // Read a message from a socket fd, with an optional timeout.
@@ -343,6 +343,10 @@ bool SymlinkPath(const base::FilePath& target, const base::FilePath& path) {
 bool DisplayProfileInUseError(const base::FilePath& lock_path,
                               const std::string& hostname,
                               int pid) {
+  // Ensure there is an instance of ResourceBundle that is initialized for
+  // localized string resource accesses.
+  ui::ScopedStartupResourceBundle ensure_startup_resource_bundle;
+
   std::u16string error = l10n_util::GetStringFUTF16(
       IDS_PROFILE_IN_USE_POSIX, base::NumberToString16(pid),
       base::ASCIIToUTF16(hostname));
@@ -571,7 +575,8 @@ class ProcessSingleton::LinuxWatcher
 
   // We expect to only be constructed on the UI thread.
   explicit LinuxWatcher(ProcessSingleton* parent)
-      : ui_task_runner_(base::ThreadTaskRunnerHandle::Get()), parent_(parent) {}
+      : ui_task_runner_(base::SingleThreadTaskRunner::GetCurrentDefault()),
+        parent_(parent) {}
 
   LinuxWatcher(const LinuxWatcher&) = delete;
   LinuxWatcher& operator=(const LinuxWatcher&) = delete;
@@ -607,7 +612,7 @@ class ProcessSingleton::LinuxWatcher
   scoped_refptr<base::SingleThreadTaskRunner> ui_task_runner_;
 
   // The ProcessSingleton that owns us.
-  const raw_ptr<ProcessSingleton> parent_;
+  const raw_ptr<ProcessSingleton, LeakedDanglingUntriaged> parent_;
 
   std::set<std::unique_ptr<SocketReader>, base::UniquePtrComparator> readers_;
 };
@@ -757,8 +762,7 @@ ProcessSingleton::ProcessSingleton(
     const base::FilePath& user_data_dir,
     const NotificationCallback& notification_callback)
     : notification_callback_(notification_callback),
-      current_pid_(base::GetCurrentProcId()),
-      watcher_(new LinuxWatcher(this)) {
+      current_pid_(base::GetCurrentProcId()) {
   socket_path_ = user_data_dir.Append(chrome::kSingletonSocketFilename);
   lock_path_ = user_data_dir.Append(chrome::kSingletonLockFilename);
   cookie_path_ = user_data_dir.Append(chrome::kSingletonCookieFilename);
@@ -1051,10 +1055,9 @@ bool ProcessSingleton::Create() {
   // leaving a dangling symlink.
   base::FilePath socket_target_path =
       socket_dir_.GetPath().Append(chrome::kSingletonSocketFilename);
-  int sock;
   SockaddrUn addr;
   socklen_t socklen;
-  SetupSocket(socket_target_path.value(), &sock, &addr, &socklen);
+  SetupSocket(socket_target_path.value(), &sock_, &addr, &socklen);
 
   // Setup the socket symlink and the two cookies.
   base::FilePath cookie(GenerateCookie());
@@ -1073,21 +1076,26 @@ bool ProcessSingleton::Create() {
     return false;
   }
 
-  if (bind(sock, reinterpret_cast<sockaddr*>(&addr), socklen) < 0) {
+  if (bind(sock_, reinterpret_cast<sockaddr*>(&addr), socklen) < 0) {
     PLOG(ERROR) << "Failed to bind() " << socket_target_path.value();
-    CloseSocket(sock);
+    CloseSocket(sock_);
     return false;
   }
 
-  if (listen(sock, 5) < 0)
+  if (listen(sock_, 5) < 0)
     NOTREACHED() << "listen failed: " << base::safe_strerror(errno);
 
+  return true;
+}
+
+void ProcessSingleton::StartWatching() {
+  DCHECK_GE(sock_, 0);
+  DCHECK(!watcher_);
+  watcher_ = new LinuxWatcher(this);
   DCHECK(BrowserThread::IsThreadInitialized(BrowserThread::IO));
   content::GetIOThreadTaskRunner({})->PostTask(
       FROM_HERE, base::BindOnce(&ProcessSingleton::LinuxWatcher::StartListening,
-                                watcher_, sock));
-
-  return true;
+                                watcher_, sock_));
 }
 
 void ProcessSingleton::Cleanup() {

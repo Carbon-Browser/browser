@@ -1,14 +1,14 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CHROME_BROWSER_UI_VIEWS_FRAME_BROWSER_FRAME_MAC_H_
 #define CHROME_BROWSER_UI_VIEWS_FRAME_BROWSER_FRAME_MAC_H_
 
-#include "base/memory/raw_ptr.h"
 #include "chrome/browser/ui/views/frame/native_browser_frame.h"
 
-#import "base/mac/scoped_nsobject.h"
+#include "base/memory/raw_ptr.h"
+#include "chrome/browser/command_observer.h"
 #include "ui/views/widget/native_widget_mac.h"
 
 class BrowserFrame;
@@ -21,7 +21,8 @@ class BrowserView;
 //  the window frame for the Chrome browser window.
 //
 class BrowserFrameMac : public views::NativeWidgetMac,
-                        public NativeBrowserFrame {
+                        public NativeBrowserFrame,
+                        public CommandObserver {
  public:
   BrowserFrameMac(BrowserFrame* browser_frame, BrowserView* browser_view);
 
@@ -60,6 +61,9 @@ class BrowserFrameMac : public views::NativeWidgetMac,
   void ValidateUserInterfaceItem(
       int32_t command,
       remote_cocoa::mojom::ValidateUserInterfaceItemResult* result) override;
+  bool WillExecuteCommand(int32_t command,
+                          WindowOpenDisposition window_open_disposition,
+                          bool is_before_first_responder) override;
   bool ExecuteCommand(int32_t command,
                       WindowOpenDisposition window_open_disposition,
                       bool is_before_first_responder) override;
@@ -75,9 +79,12 @@ class BrowserFrameMac : public views::NativeWidgetMac,
   // Overridden from NativeBrowserFrame:
   int GetMinimizeButtonOffset() const override;
 
+  // Overridden from CommandObserver:
+  void EnabledStateChangedForCommand(int id, bool enabled) override;
+
  private:
   raw_ptr<BrowserView> browser_view_;  // Weak. Our ClientView.
-  base::scoped_nsobject<BrowserWindowTouchBarViewsDelegate> touch_bar_delegate_;
+  BrowserWindowTouchBarViewsDelegate* __strong touch_bar_delegate_;
 };
 
 #endif  // CHROME_BROWSER_UI_VIEWS_FRAME_BROWSER_FRAME_MAC_H_

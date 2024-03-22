@@ -1,10 +1,12 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "content/browser/process_lock.h"
 
+#include "base/strings/stringprintf.h"
 #include "content/public/browser/browser_thread.h"
+#include "content/public/browser/web_exposed_isolation_level.h"
 
 namespace content {
 
@@ -12,11 +14,19 @@ namespace content {
 ProcessLock ProcessLock::CreateAllowAnySite(
     const StoragePartitionConfig& storage_partition_config,
     const WebExposedIsolationInfo& web_exposed_isolation_info) {
+  WebExposedIsolationLevel web_exposed_isolation_level =
+      SiteInfo::ComputeWebExposedIsolationLevelForEmptySite(
+          web_exposed_isolation_info);
+
   return ProcessLock(SiteInfo(
-      GURL(), GURL(), false, false /* is_sandboxed */, storage_partition_config,
-      web_exposed_isolation_info, /* is_guest */ false,
-      /* does_site_request_dedicated_process_for_coop */ false,
-      /* is_jit_disabled */ false, /* is_pdf */ false));
+      /*site_url=*/GURL(), /*process_lock_url=*/GURL(),
+      /*requires_origin_keyed_process=*/false,
+      /*requires_origin_keyed_process_by_default=*/false,
+      /*is_sandboxed=*/false, UrlInfo::kInvalidUniqueSandboxId,
+      storage_partition_config, web_exposed_isolation_info,
+      web_exposed_isolation_level, /*is_guest=*/false,
+      /*does_site_request_dedicated_process_for_coop=*/false,
+      /*is_jit_disabled=*/false, /*is_pdf=*/false, /*is_fenced=*/false));
 }
 
 // static
@@ -58,6 +68,11 @@ StoragePartitionConfig ProcessLock::GetStoragePartitionConfig() const {
 WebExposedIsolationInfo ProcessLock::GetWebExposedIsolationInfo() const {
   return site_info_.has_value() ? site_info_->web_exposed_isolation_info()
                                 : WebExposedIsolationInfo::CreateNonIsolated();
+}
+
+WebExposedIsolationLevel ProcessLock::GetWebExposedIsolationLevel() const {
+  return site_info_.has_value() ? site_info_->web_exposed_isolation_level()
+                                : WebExposedIsolationLevel::kNotIsolated;
 }
 
 bool ProcessLock::IsASiteOrOrigin() const {
@@ -121,14 +136,20 @@ std::string ProcessLock::ToString() const {
     if (is_origin_keyed_process())
       ret += " origin-keyed";
 
-    if (is_sandboxed())
+    if (is_sandboxed()) {
       ret += " sandboxed";
+      if (site_info_->unique_sandbox_id() != UrlInfo::kInvalidUniqueSandboxId)
+        ret += base::StringPrintf(" (id=%d)", site_info_->unique_sandbox_id());
+    }
 
     if (is_pdf())
       ret += " pdf";
 
     if (is_guest())
       ret += " guest";
+
+    if (is_fenced())
+      ret += " fenced";
 
     if (GetWebExposedIsolationInfo().is_isolated()) {
       ret += " cross-origin-isolated";

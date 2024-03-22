@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -44,9 +44,16 @@ enum class OptimizationTypeDecision {
   // Guide Service was started, but was not available in time to make a
   // decision.
   kHintFetchStartedButNotAvailableInTime = 10,
+  // A fetch to get the hint for the page load from the remote Optimization
+  // Guide Service was started, but requested optimization type was not
+  // registered.
+  kRequestedUnregisteredType = 11,
+  // A fetch to get the hint for the page load from the remote Optimization
+  // Guide Service was started, but requested URL was invalid.
+  kInvalidURL = 12,
 
   // Add new values above this line.
-  kMaxValue = kHintFetchStartedButNotAvailableInTime,
+  kMaxValue = kInvalidURL,
 };
 
 // The statuses for racing a hints fetch with the current navigation based
@@ -110,9 +117,13 @@ enum class PredictionModelDownloadStatus {
   // The new directory to persist this model version's files could not be
   // created.
   kCouldNotCreateDirectory = 12,
+  // The model info was not saved to model store file.
+  kFailedModelInfoSaving = 13,
+  // The additional file was not found in the CRX file.
+  kFailedInvalidAdditionalFile = 14,
 
   // Add new values above this line.
-  kMaxValue = kCouldNotCreateDirectory,
+  kMaxValue = kFailedInvalidAdditionalFile,
 };
 
 // The status for the page content annotations being stored.
@@ -169,8 +180,165 @@ enum class ModelDeliveryEvent {
   // model.
   kModelDownloadFailure = 10,
 
+  // Loading the model from store failed.
+  kModelLoadFailed = 11,
+
+  // Model download was attempted after the model load failed.
+  kModelDownloadDueToModelLoadFailure = 12,
+
   // Add new values above this line.
-  kMaxValue = kModelDownloadFailure,
+  kMaxValue = kModelDownloadDueToModelLoadFailure,
+};
+
+// The various results of an access token request.
+//
+// Keep in sync with OptimizationGuideAccessTokenResult in enums.xml.
+enum class OptimizationGuideAccessTokenResult {
+  kUnknown = 0,
+  // The access token was received successfully.
+  kSuccess = 1,
+  // User was not signed-in.
+  kUserNotSignedIn = 2,
+  // Failed with a transient error.
+  kTransientError = 3,
+  // Failed with a persistent error.
+  kPersistentError = 4,
+
+  // Add new values above this line.
+  kMaxValue = kPersistentError,
+};
+
+// Status of a request to fetch from the optimization guide service.
+// This enum must remain synchronized with the enum
+// |OptimizationGuideFetcherRequestStatus| in
+// tools/metrics/histograms/enums.xml.
+enum class FetcherRequestStatus {
+  // No fetch status known. Used in testing.
+  kUnknown,
+  // Fetch request was sent and a response received.
+  kSuccess,
+  // Fetch request was sent but no response received.
+  kResponseError,
+  // DEPRECATED: Fetch request not sent because of offline network status.
+  kDeprecatedNetworkOffline,
+  // Fetch request not sent because fetcher was busy with another request.
+  kFetcherBusy,
+  // Hints fetch request not sent because the host and URL lists were empty.
+  kNoHostsOrURLsToFetchHints,
+  // Hints fetch request not sent because no supported optimization types were
+  // provided.
+  kNoSupportedOptimizationTypesToFetchHints,
+  // Fetch request was canceled before completion.
+  kRequestCanceled,
+  // Fetch request was not started because user was not signed-in.
+  kUserNotSignedIn,
+
+  // Insert new values before this line.
+  kMaxValue = kUserNotSignedIn
+};
+
+// Reasons for whether the on-device model was eligible for use.
+//
+// These values are persisted to logs. Entries should not be renumbered and
+// numeric values should never be reused.
+enum class OnDeviceModelEligibilityReason {
+  kUnknown = 0,
+  // Success.
+  kSuccess = 1,
+  // The feature flag gating on-device model execution was disabled.
+  kFeatureNotEnabled = 2,
+  // There was no on-device model available.
+  kModelNotAvailable = 3,
+  // The on-device model was available but there was not an execution config
+  // available for the feature.
+  kConfigNotAvailableForFeature = 4,
+  // The GPU is blocked.
+  kGpuBlocked = 5,
+  // The on-device model process crashed too many times for this version.
+  kTooManyRecentCrashes = 6,
+  // The on-device model took too long too many times for this version.
+  kTooManyRecentTimeouts = 7,
+
+  // This must be kept in sync with
+  // OptimizationGuideOnDeviceModelEligibilityReason in optimization/enums.xml.
+
+  // Insert new values before this line.
+  kMaxValue = kTooManyRecentTimeouts,
+};
+
+// Status of a model quality logs upload request.
+enum class ModelQualityLogsUploadStatus {
+  kUnknown = 0,
+  // Logs upload was successful.
+  kUploadSuccessful = 1,
+  // Upload is disabled due to logging feature not enabled.
+  kLoggingNotEnabled = 2,
+  // Upload was not successful because of network error.
+  kNetError = 3,
+  // Upload is disabled due to user's metrics consent.
+  kNoMetricsConsent = 4,
+  // Upload is disabled due to enterprise policy.
+  kDisabledDueToEnterprisePolicy = 5,
+
+  // Insert new values before this line.
+  // This enum must remain synchronized with the enum
+  // |OptimizationGuideModelQualityLogsUploadStatus| in
+  // tools/metrics/histograms/enums.xml.
+  kMaxValue = kDisabledDueToEnterprisePolicy,
+};
+
+// Performance class of this device.
+//
+// These values are persisted to logs. Entries should not be renumbered and
+// numeric values should never be reused.
+enum class OnDeviceModelPerformanceClass {
+  kUnknown = 0,
+
+  // See on_device_model::mojom::PerformanceClass for explanation of these.
+  kError = 1,
+  kVeryLow = 2,
+  kLow = 3,
+  kMedium = 4,
+  kHigh = 5,
+  kVeryHigh = 6,
+
+  // The service crashed, so a valid value was not returned.
+  kServiceCrash = 7,
+
+  // GPU was blocklisted.
+  kGpuBlocked = 8,
+
+  // Native library failed to load.
+  kFailedToLoadLibrary = 9,
+
+  // This must be kept in sync with
+  // OnDeviceModelPerformanceClass in optimization/enums.xml.
+
+  // Insert new values before this line.
+  kMaxValue = kFailedToLoadLibrary,
+};
+
+// The result of loading an on-device model.
+//
+// These values are persisted to logs. Entries should not be renumbered and
+// numeric values should never be reused.
+enum class OnDeviceModelLoadResult {
+  kUnknown = 0,
+
+  // Model loaded successfully.
+  kSuccess = 1,
+
+  // GPU was blocklisted.
+  kGpuBlocked = 2,
+
+  // Native library failed to load.
+  kFailedToLoadLibrary = 3,
+
+  // This must be kept in sync with
+  // OnDeviceModelLoadResult in optimization/enums.xml.
+
+  // Insert new values before this line.
+  kMaxValue = kFailedToLoadLibrary,
 };
 
 }  // namespace optimization_guide

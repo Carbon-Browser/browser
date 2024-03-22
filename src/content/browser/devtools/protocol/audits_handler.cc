@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -72,7 +72,7 @@ DispatchResponse AuditsHandler::Enable() {
 void AuditsHandler::OnIssueAdded(
     const protocol::Audits::InspectorIssue* issue) {
   if (enabled_) {
-    frontend_->IssueAdded(issue->clone());
+    frontend_->IssueAdded(issue->Clone());
   }
 }
 

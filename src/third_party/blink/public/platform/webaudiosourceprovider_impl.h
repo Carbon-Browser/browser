@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,8 +10,8 @@
 #include <memory>
 #include <string>
 
-#include "base/callback.h"
-#include "base/callback_forward.h"
+#include "base/functional/callback.h"
+#include "base/functional/callback_forward.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/synchronization/lock.h"
@@ -93,6 +93,8 @@ class BLINK_PLATFORM_EXPORT WebAudioSourceProviderImpl
 
   int RenderForTesting(media::AudioBus* audio_bus);
 
+  bool IsAudioBeingCaptured() const;
+
  protected:
   ~WebAudioSourceProviderImpl() override;
 
@@ -103,17 +105,17 @@ class BLINK_PLATFORM_EXPORT WebAudioSourceProviderImpl
   void OnSetFormat();
 
   // Used to keep the volume across reconfigurations.
-  double volume_;
+  double volume_ = 1.0;
 
   // Tracks the current playback state.
   enum PlaybackState { kStopped, kStarted, kPlaying };
-  PlaybackState state_;
+  PlaybackState state_ = kStopped;
 
   // Closure that calls OnSetFormat() on |client_| on the renderer thread.
   base::RepeatingClosure set_format_cb_;
 
   // When set via setClient() it overrides |sink_| for consuming audio.
-  raw_ptr<WebAudioSourceProviderClient> client_;
+  raw_ptr<WebAudioSourceProviderClient> client_ = nullptr;
 
   // Where audio ends up unless overridden by |client_|.
   base::Lock sink_lock_;
@@ -125,9 +127,14 @@ class BLINK_PLATFORM_EXPORT WebAudioSourceProviderImpl
   class TeeFilter;
   const std::unique_ptr<TeeFilter> tee_filter_;
 
-  const raw_ptr<media::MediaLog> media_log_;
+  // This dangling raw_ptr occurred in:
+  // webkit_unit_tests: WebMediaPlayerImplTest.MediaPositionState_Playing
+  // https://ci.chromium.org/ui/p/chromium/builders/try/win-rel/237451/test-results?q=ExactID%3Aninja%3A%2F%2Fthird_party%2Fblink%2Frenderer%2Fcontroller%3Ablink_unittests%2FWebMediaPlayerImplTest.MediaPositionState_Playing+VHash%3Abfecf1e29c759a1c
+  const raw_ptr<media::MediaLog, FlakyDanglingUntriaged> media_log_;
 
   base::OnceClosure on_set_client_callback_;
+
+  bool has_copy_audio_callback_ = false;
 
   // NOTE: Weak pointers must be invalidated before all other member variables.
   base::WeakPtrFactory<WebAudioSourceProviderImpl> weak_factory_{this};

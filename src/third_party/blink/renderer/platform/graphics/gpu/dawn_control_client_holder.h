@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -21,6 +21,10 @@ class SingleThreadTaskRunner;
 }  // namespace base
 
 namespace blink {
+
+namespace scheduler {
+class EventLoop;
+}  // namespace scheduler
 
 // This class holds the WebGraphicsContext3DProviderWrapper and a strong
 // reference to the WebGPU APIChannel.
@@ -51,13 +55,12 @@ class PLATFORM_EXPORT DawnControlClientHolder
   void MarkContextLost();
   bool IsContextLost() const;
   std::unique_ptr<RecyclableCanvasResource> GetOrCreateCanvasResource(
-      const SkImageInfo& info,
-      bool is_origin_top_left);
+      const SkImageInfo& info);
 
   // Flush commands on this client immediately.
   void Flush();
   // Ensure commands on this client are flushed by the end of the task.
-  void EnsureFlush();
+  void EnsureFlush(scheduler::EventLoop& event_loop);
 
  private:
   friend class RefCounted<DawnControlClientHolder>;

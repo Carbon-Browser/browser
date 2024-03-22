@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,9 +9,7 @@ import androidx.annotation.Nullable;
 import org.chromium.components.browser_ui.bottomsheet.BottomSheetController.SheetState;
 import org.chromium.components.browser_ui.bottomsheet.BottomSheetController.StateChangeReason;
 
-/**
- * An interface for notifications about the state of the bottom sheet.
- */
+/** An interface for notifications about the state of the bottom sheet. */
 public interface BottomSheetObserver {
     /**
      * A notification that the sheet has been opened, meaning the sheet is any height greater

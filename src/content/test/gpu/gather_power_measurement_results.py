@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2019 The Chromium Authors. All rights reserved.
+# Copyright 2019 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 """Script which gathers power measurement test results from bots.
@@ -271,10 +271,9 @@ def main():
       action='store_true',
       default=False,
       help='Enable verbose output')
-  parser.add_argument(
-      '--bot',
-      default='Win10 FYI x64 Release (Intel HD 630)',
-      help='Which bot to examine.')
+  parser.add_argument('--bot',
+                      default='Win10 FYI x64 Release (Intel)',
+                      help='Which bot to examine.')
   parser.add_argument(
       '--last-build',
       type=int,

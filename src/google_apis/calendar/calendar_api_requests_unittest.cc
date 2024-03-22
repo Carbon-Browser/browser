@@ -1,11 +1,10 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "google_apis/calendar/calendar_api_requests.h"
 
 #include "base/run_loop.h"
-#include "base/strings/stringprintf.h"
 #include "base/test/task_environment.h"
 #include "base/time/time.h"
 #include "google_apis/calendar/calendar_api_response_types.h"
@@ -107,11 +106,13 @@ TEST_F(CalendarApiRequestsTest, GetEventListRequest) {
       "&timeMax=2021-06-16T10%3A00%3A00.000Z"
       "&singleEvents=true"
       "&maxAttendees=1"
+      "&maxResults=2500"
       "&fields=timeZone%2Cetag%2Ckind%2Citems(id%2Ckind%"
       "2Csummary%2CcolorId%2Cstatus%"
       "2Cstart(date)%2Cend(date)%"
       "2Cstart(dateTime)%2Cend(dateTime)%"
       "2ChtmlLink%2Cattendees(responseStatus%2Cself)%2CattendeesOmitted%"
+      "2CconferenceData(conferenceId%2CentryPoints(entryPointType%2Curi))%"
       "2Ccreator(self))",
       http_request_.relative_url);
 

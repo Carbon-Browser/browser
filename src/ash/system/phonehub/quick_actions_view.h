@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,7 +6,9 @@
 #define ASH_SYSTEM_PHONEHUB_QUICK_ACTIONS_VIEW_H_
 
 #include "ash/ash_export.h"
-#include "ash/components/phonehub/phone_hub_manager.h"
+#include "base/memory/raw_ptr.h"
+#include "chromeos/ash/components/phonehub/phone_hub_manager.h"
+#include "ui/base/metadata/metadata_header_macros.h"
 #include "ui/views/view.h"
 
 namespace ash {
@@ -17,15 +19,23 @@ class QuickActionItem;
 // A view in Phone Hub bubble that contains toggle button for quick actions such
 // as enable hotspot, silence phone and locate phone.
 class ASH_EXPORT QuickActionsView : public views::View {
+  METADATA_HEADER(QuickActionsView, views::View)
+
  public:
   explicit QuickActionsView(phonehub::PhoneHubManager* phone_hub_manager);
   ~QuickActionsView() override;
   QuickActionsView(QuickActionsView&) = delete;
   QuickActionsView operator=(QuickActionsView&) = delete;
 
-  QuickActionItem* enable_hotspot_for_testing() { return enable_hotspot_; }
+  // Return enable_hotspot to start tethering from Phone
+  // Hub error dialog.
+  QuickActionItem* GetEnableHotspotQuickActionItem() { return enable_hotspot_; }
+
+  // Used for testing only
   QuickActionItem* silence_phone_for_testing() { return silence_phone_; }
   QuickActionItem* locate_phone_for_testing() { return locate_phone_; }
+
+  void OnThemeChanged() override;
 
  private:
   // Add all the quick actions items to the view.
@@ -35,12 +45,13 @@ class ASH_EXPORT QuickActionsView : public views::View {
   std::vector<std::unique_ptr<QuickActionControllerBase>>
       quick_action_controllers_;
 
-  phonehub::PhoneHubManager* phone_hub_manager_ = nullptr;
+  raw_ptr<phonehub::PhoneHubManager, ExperimentalAsh> phone_hub_manager_ =
+      nullptr;
 
   // QuickActionItem for unit testing. Owned by this view.
-  QuickActionItem* enable_hotspot_ = nullptr;
-  QuickActionItem* silence_phone_ = nullptr;
-  QuickActionItem* locate_phone_ = nullptr;
+  raw_ptr<QuickActionItem, ExperimentalAsh> enable_hotspot_ = nullptr;
+  raw_ptr<QuickActionItem, ExperimentalAsh> silence_phone_ = nullptr;
+  raw_ptr<QuickActionItem, ExperimentalAsh> locate_phone_ = nullptr;
 };
 
 }  // namespace ash

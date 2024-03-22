@@ -1,4 +1,4 @@
-// Copyright (c) 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -82,7 +82,7 @@ void NudgeTracker::RecordSuccessfulCommitMessage(ModelTypeSet types) {
   }
 }
 
-void NudgeTracker::RecordSuccessfulSyncCycle(ModelTypeSet types) {
+void NudgeTracker::RecordSuccessfulSyncCycleIfNotBlocked(ModelTypeSet types) {
   // If a retry was required, we've just serviced it.  Unset the flag.
   if (IsRetryRequired()) {
     current_retry_time_ = base::TimeTicks();
@@ -94,7 +94,7 @@ void NudgeTracker::RecordSuccessfulSyncCycle(ModelTypeSet types) {
   for (ModelType type : types) {
     TypeTrackerMap::const_iterator tracker_it = type_trackers_.find(type);
     DCHECK(tracker_it != type_trackers_.end()) << ModelTypeToDebugString(type);
-    tracker_it->second->RecordSuccessfulSyncCycle();
+    tracker_it->second->RecordSuccessfulSyncCycleIfNotBlocked();
   }
 }
 
@@ -121,13 +121,9 @@ base::TimeDelta NudgeTracker::RecordLocalRefreshRequest(ModelTypeSet types) {
   return kLocalRefreshDelay;
 }
 
-base::TimeDelta NudgeTracker::RecordRemoteInvalidation(
-    ModelType type,
-    std::unique_ptr<SyncInvalidation> invalidation) {
-  // Forward the invalidations to the proper recipient.
+base::TimeDelta NudgeTracker::GetRemoteInvalidationDelay(ModelType type) const {
   TypeTrackerMap::const_iterator tracker_it = type_trackers_.find(type);
   DCHECK(tracker_it != type_trackers_.end());
-  tracker_it->second->RecordRemoteInvalidation(std::move(invalidation));
   return tracker_it->second->GetRemoteInvalidationDelay();
 }
 
@@ -173,6 +169,13 @@ void NudgeTracker::UpdateTypeThrottlingAndBackoffState() {
   for (const auto& [type, tracker] : type_trackers_) {
     tracker->UpdateThrottleOrBackoffState();
   }
+}
+
+void NudgeTracker::SetHasPendingInvalidations(ModelType type,
+                                              bool has_invalidation) {
+  TypeTrackerMap::const_iterator tracker_it = type_trackers_.find(type);
+  DCHECK(tracker_it != type_trackers_.end());
+  tracker_it->second->SetHasPendingInvalidations(has_invalidation);
 }
 
 bool NudgeTracker::IsAnyTypeBlocked() const {
@@ -307,12 +310,6 @@ void NudgeTracker::SetSyncCycleStartTime(base::TimeTicks now) {
       next_retry_time_ <= sync_cycle_start_time_) {
     current_retry_time_ = next_retry_time_;
     next_retry_time_ = base::TimeTicks();
-  }
-}
-
-void NudgeTracker::SetHintBufferSize(size_t size) {
-  for (const auto& [type, tracker] : type_trackers_) {
-    tracker->UpdatePayloadBufferSize(size);
   }
 }
 

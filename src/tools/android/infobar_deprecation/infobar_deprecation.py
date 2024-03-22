@@ -1,5 +1,5 @@
 # Lint as: python3
-# Copyright 2021 The Chromium Authors. All rights reserved.
+# Copyright 2021 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 """Script that is used by PRESUBMIT.py to check Android new infobar files.
@@ -12,8 +12,6 @@ This file checks for the following:
 import re
 import os
 import pathlib
-
-USE_PYTHON3 = True
 
 INFOBAR_DELEGATE_H = 'components/infobars/core/infobar_delegate.h'
 INFOBAR_ANDROID_FOLDERS = (

@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -31,11 +31,11 @@ class LinkHeader {
   const String& VariantKey() const { return variant_key_; }
   const String& Blocking() const { return blocking_; }
   const String& ReferrerPolicy() const { return referrer_policy_; }
+  const String& FetchPriority() const { return fetch_priority_; }
   const absl::optional<String>& Anchor() const { return anchor_; }
   bool Valid() const { return is_valid_; }
   bool IsViewportDependent() const {
-    return !Media().IsEmpty() || !ImageSrcset().IsEmpty() ||
-           !ImageSizes().IsEmpty();
+    return !Media().empty() || !ImageSrcset().empty() || !ImageSizes().empty();
   }
 
   enum LinkParameterName {
@@ -59,6 +59,7 @@ class LinkHeader {
     kLinkParameterVariantKey,
     kLinkParameterBlocking,
     kLinkParameterReferrerPolicy,
+    kLinkParameterFetchPriority,
   };
 
  private:
@@ -83,6 +84,7 @@ class LinkHeader {
   String variant_key_;
   String blocking_;
   String referrer_policy_;
+  String fetch_priority_;
   absl::optional<String> anchor_;
   bool is_valid_;
 };

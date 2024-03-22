@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,10 +6,10 @@
 #include "base/test/test_future.h"
 #include "content/public/test/browser_test.h"
 #include "fuchsia_web/common/test/fit_adapter.h"
+#include "fuchsia_web/common/test/frame_for_test.h"
 #include "fuchsia_web/common/test/frame_test_util.h"
 #include "fuchsia_web/common/test/test_navigation_listener.h"
 #include "fuchsia_web/webengine/browser/frame_impl_browser_test_base.h"
-#include "fuchsia_web/webengine/test/frame_for_test.h"
 
 namespace {
 

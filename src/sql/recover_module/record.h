@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -90,10 +90,7 @@ class RecordReader {
   bool Initialize();
 
   // True if the last call to Initialize succeeded.
-  bool IsInitialized() const {
-    DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-    return value_headers_.size() == static_cast<size_t>(column_count_);
-  }
+  bool IsInitialized() const;
 
   // The type of a value in the record. |column_index| is 0-based.
   ValueType GetValueType(int column_index) const;

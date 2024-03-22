@@ -1,11 +1,9 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CHROME_BROWSER_ASH_FILE_SYSTEM_PROVIDER_OPERATIONS_CREATE_FILE_H_
 #define CHROME_BROWSER_ASH_FILE_SYSTEM_PROVIDER_OPERATIONS_CREATE_FILE_H_
-
-#include <memory>
 
 #include "base/files/file.h"
 #include "chrome/browser/ash/file_system_provider/operations/operation.h"
@@ -18,10 +16,6 @@ namespace base {
 class FilePath;
 }  // namespace base
 
-namespace extensions {
-class EventRouter;
-}  // namespace extensions
-
 namespace ash {
 namespace file_system_provider {
 namespace operations {
@@ -30,7 +24,7 @@ namespace operations {
 // the FILE_ERROR_EXISTS error. Created per request.
 class CreateFile : public Operation {
  public:
-  CreateFile(extensions::EventRouter* event_router,
+  CreateFile(RequestDispatcher* dispatcher,
              const ProvidedFileSystemInfo& file_system_info,
              const base::FilePath& file_path,
              storage::AsyncFileUtil::StatusCallback callback);
@@ -43,10 +37,10 @@ class CreateFile : public Operation {
   // Operation overrides.
   bool Execute(int request_id) override;
   void OnSuccess(int request_id,
-                 std::unique_ptr<RequestValue> result,
+                 const RequestValue& result,
                  bool has_more) override;
   void OnError(int request_id,
-               std::unique_ptr<RequestValue> result,
+               const RequestValue& result,
                base::File::Error error) override;
 
  private:

@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -37,23 +37,11 @@ void ReportSchedulerAndroid::OnBrowserVersionUploaded() {
   // No-op because in-app auto-update is not supported on Android.
 }
 
-void ReportSchedulerAndroid::StartWatchingExtensionRequestIfNeeded() {
-  // No-op because extensions are not supported on Android.
-}
-
-void ReportSchedulerAndroid::StopWatchingExtensionRequest() {
-  // No-op because extensions are not supported on Android.
-}
-
-void ReportSchedulerAndroid::OnExtensionRequestUploaded() {
-  // No-op because extensions are not supported on Android.
-}
-
 policy::DMToken ReportSchedulerAndroid::GetProfileDMToken() {
   absl::optional<std::string> dm_token = reporting::GetUserDmToken(profile_);
   if (!dm_token || dm_token->empty())
-    return policy::DMToken();
-  return policy::DMToken(policy::DMToken::Status::kValid, *dm_token);
+    return policy::DMToken::CreateEmptyToken();
+  return policy::DMToken::CreateValidToken(*dm_token);
 }
 
 std::string ReportSchedulerAndroid::GetProfileClientId() {

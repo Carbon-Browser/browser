@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,6 +6,7 @@
 #define ASH_CAPTURE_MODE_FAKE_FOLDER_SELECTION_DIALOG_FACTORY_H_
 
 #include "base/files/file_path.h"
+#include "base/memory/raw_ptr.h"
 #include "ui/shell_dialogs/select_file_dialog.h"
 #include "ui/shell_dialogs/select_file_dialog_factory.h"
 
@@ -27,6 +28,8 @@ class FakeFolderSelectionDialogFactory : public ui::SelectFileDialogFactory {
       delete;
   FakeFolderSelectionDialogFactory& operator=(
       const FakeFolderSelectionDialogFactory&) = delete;
+
+  ~FakeFolderSelectionDialogFactory() override;
 
   // Starts using this factory. This creates an instance of this factory and
   // sets it to ui::SelectFileDialog::SetFactory() which takes ownership of the
@@ -63,13 +66,12 @@ class FakeFolderSelectionDialogFactory : public ui::SelectFileDialogFactory {
   friend class FakeFolderSelectionDialog;
 
   FakeFolderSelectionDialogFactory();
-  ~FakeFolderSelectionDialogFactory() override;
 
   // Called by the dialog when it gets deleted so we can clear |dialog_|.
   void OnDialogDeleted(FakeFolderSelectionDialog* dialog);
 
   // A reference to the dialog created by this factory.
-  FakeFolderSelectionDialog* dialog_ = nullptr;
+  raw_ptr<FakeFolderSelectionDialog, ExperimentalAsh> dialog_ = nullptr;
 };
 
 }  // namespace ash

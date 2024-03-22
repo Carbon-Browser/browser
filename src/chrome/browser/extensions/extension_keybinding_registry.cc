@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -116,17 +116,16 @@ void ExtensionKeybindingRegistry::Init() {
   if (!registry)
     return;  // ExtensionRegistry can be null during testing.
 
-  for (const scoped_refptr<const extensions::Extension>& extension :
-       registry->enabled_extensions())
+  for (const scoped_refptr<const Extension>& extension :
+       registry->enabled_extensions()) {
     if (ExtensionMatchesFilter(extension.get()))
       AddExtensionKeybindings(extension.get(), std::string());
+  }
 }
 
 bool ExtensionKeybindingRegistry::ShouldIgnoreCommand(
     const std::string& command) const {
-  return command == manifest_values::kPageActionCommandEvent ||
-         command == manifest_values::kBrowserActionCommandEvent ||
-         command == manifest_values::kActionCommandEvent;
+  return Command::IsActionRelatedCommand(command);
 }
 
 bool ExtensionKeybindingRegistry::NotifyEventTargets(
@@ -145,7 +144,7 @@ void ExtensionKeybindingRegistry::CommandExecuted(
   base::Value::List args;
   args.Append(command);
 
-  std::unique_ptr<base::Value> tab_value;
+  base::Value tab_value;
   if (delegate_) {
     content::WebContents* web_contents =
         delegate_->GetWebContentsForExtension();
@@ -154,7 +153,7 @@ void ExtensionKeybindingRegistry::CommandExecuted(
     // not set the delegate as it deals only with named commands (not
     // page/browser actions that are associated with the current page directly).
     ActiveTabPermissionGranter* granter =
-        web_contents ? extensions::TabHelper::FromWebContents(web_contents)
+        web_contents ? TabHelper::FromWebContents(web_contents)
                            ->active_tab_permission_granter()
                      : nullptr;
     if (granter) {
@@ -170,17 +169,13 @@ void ExtensionKeybindingRegistry::CommandExecuted(
       ExtensionTabUtil::ScrubTabBehavior scrub_tab_behavior =
           ExtensionTabUtil::GetScrubTabBehavior(extension, context_type,
                                                 web_contents);
-      tab_value = ExtensionTabUtil::CreateTabObject(
-                      web_contents, scrub_tab_behavior, extension)
-                      ->ToValue();
+      tab_value = base::Value(ExtensionTabUtil::CreateTabObject(
+                                  web_contents, scrub_tab_behavior, extension)
+                                  .ToValue());
     }
   }
 
-  if (!tab_value) {
-    // No currently-active tab. Push a null value.
-    tab_value = std::make_unique<base::Value>();
-  }
-  args.Append(base::Value::FromUniquePtrValue(std::move(tab_value)));
+  args.Append(std::move(tab_value));
 
   auto event =
       std::make_unique<Event>(events::COMMANDS_ON_COMMAND, kOnCommandEventName,
@@ -307,8 +302,7 @@ void ExtensionKeybindingRegistry::OnMediaKeysAccelerator(
 }
 
 bool ExtensionKeybindingRegistry::ExtensionMatchesFilter(
-    const extensions::Extension* extension)
-{
+    const Extension* extension) {
   switch (extension_filter_) {
     case ALL_EXTENSIONS:
       return true;
@@ -330,9 +324,10 @@ bool ExtensionKeybindingRegistry::ExecuteCommands(
   bool executed = false;
   for (TargetList::const_iterator it = targets->second.begin();
        it != targets->second.end(); it++) {
-    if (!extensions::EventRouter::Get(browser_context_)
-        ->ExtensionHasEventListener(it->first, kOnCommandEventName))
+    if (!EventRouter::Get(browser_context_)
+             ->ExtensionHasEventListener(it->first, kOnCommandEventName)) {
       continue;
+    }
 
     if (extension_id.empty() || it->first == extension_id) {
       CommandExecuted(it->first, it->second);

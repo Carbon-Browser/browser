@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,10 +7,10 @@
 #include <cmath>
 
 #include "ash/constants/ash_features.h"
-#include "base/bind.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
 #include "base/files/important_file_writer.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
 #include "base/memory/ptr_util.h"
 #include "base/metrics/field_trial_params.h"
@@ -19,7 +19,7 @@
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/string_split.h"
 #include "base/strings/string_util.h"
-#include "base/task/task_runner_util.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/task/thread_pool.h"
 #include "base/time/default_tick_clock.h"
 #include "base/time/time.h"
@@ -112,10 +112,8 @@ Model LoadModelFromDisk(const ModellerImpl::ModelSavingSpec& spec,
 // Saves |data| to |path|. Returns whether successful and logs error if an
 // error occurs.
 bool SaveDataAndLogError(const base::FilePath& path, const std::string& data) {
-  const int bytes_written = base::WriteFile(path, data.data(), data.size());
-  if (bytes_written != static_cast<int>(data.size())) {
-    LOG(ERROR) << "Wrote " << bytes_written << " byte(s) instead of "
-               << data.size() << " to " << path.value();
+  if (!base::WriteFile(path, data)) {
+    LOG(ERROR) << "Writing to " << path.value() << " failed.";
     return false;
   }
   return true;
@@ -402,8 +400,8 @@ ModellerImpl::ModellerImpl(
 
   user_activity_observation_.Observe(user_activity_detector);
 
-  base::PostTaskAndReplyWithResult(
-      blocking_task_runner_.get(), FROM_HERE,
+  blocking_task_runner_->PostTaskAndReplyWithResult(
+      FROM_HERE,
       base::BindOnce(&ModellerImpl::GetModelSavingSpecFromProfilePath,
                      profile->GetPath()),
       base::BindOnce(&ModellerImpl::OnModelSavingSpecReadFromProfile,
@@ -468,8 +466,8 @@ void ModellerImpl::HandleStatusUpdate() {
     return;
   }
 
-  base::PostTaskAndReplyWithResult(
-      blocking_task_runner_.get(), FROM_HERE,
+  blocking_task_runner_->PostTaskAndReplyWithResult(
+      FROM_HERE,
       base::BindOnce(&LoadModelFromDisk, *model_saving_spec_, is_testing_),
       base::BindOnce(&ModellerImpl::OnModelLoadedFromDisk,
                      weak_ptr_factory_.GetWeakPtr()));
@@ -547,8 +545,8 @@ void ModellerImpl::OnModelLoadedFromDisk(const Model& model) {
   DCHECK(model_.global_curve);
   // Run SetInitialCurves calculations on background thread to avoid blocking UI
   // thread.
-  base::PostTaskAndReplyWithResult(
-      blocking_task_runner_.get(), FROM_HERE,
+  blocking_task_runner_->PostTaskAndReplyWithResult(
+      FROM_HERE,
       base::BindOnce(
           &SetInitialCurves, trainer_.get(), *model_.global_curve,
           model_.personal_curve ? *model_.personal_curve : *model_.global_curve,
@@ -626,8 +624,8 @@ void ModellerImpl::StartTraining() {
   }
 
   training_start_ = tick_clock_->NowTicks();
-  base::PostTaskAndReplyWithResult(
-      blocking_task_runner_.get(), FROM_HERE,
+  blocking_task_runner_->PostTaskAndReplyWithResult(
+      FROM_HERE,
       base::BindOnce(&TrainModel, trainer_.get(), std::move(data_cache_),
                      is_testing_),
       base::BindOnce(&ModellerImpl::OnTrainingFinished,
@@ -661,8 +659,8 @@ void ModellerImpl::OnTrainingFinished(const TrainingResult& result) {
       (export_personal_curve ? "NewCurve" : "NoNewCurve");
   base::UmaHistogramTimes(histogram_name, now - training_start_.value());
 
-  base::PostTaskAndReplyWithResult(
-      blocking_task_runner_.get(), FROM_HERE,
+  blocking_task_runner_->PostTaskAndReplyWithResult(
+      FROM_HERE,
       base::BindOnce(&SaveModelToDisk, *model_saving_spec_, model_,
                      global_curve_reset_, export_personal_curve, is_testing_),
       base::BindOnce(&ModellerImpl::OnModelSavedToDisk,

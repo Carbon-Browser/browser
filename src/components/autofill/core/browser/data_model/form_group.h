@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,9 +11,7 @@
 
 namespace autofill {
 
-namespace structured_address {
 enum class VerificationStatus;
-}
 
 class AutofillType;
 
@@ -35,6 +33,10 @@ class FormGroup {
   virtual void GetNonEmptyTypes(const std::string& app_locale,
                                 ServerFieldTypeSet* non_empty_types) const;
 
+  // Returns a set of server field types for which this FormGroup has non-empty
+  // raw data. This method is additive on `non_empty_types`.
+  virtual void GetNonEmptyRawTypes(ServerFieldTypeSet* non_empty_types) const;
+
   // Returns the string associated with |type|, without canonicalizing the
   // returned value. For user-visible strings, use GetInfo() instead.
   virtual std::u16string GetRawInfo(ServerFieldType type) const = 0;
@@ -44,24 +46,18 @@ class FormGroup {
   // conversions.
   virtual int GetRawInfoAsInt(ServerFieldType type) const;
 
-  // Finalization routine that should be called after importing a FormGroup.
-  // Returns true if the finalization was successful.
-  bool FinalizeAfterImport();
-
   // Sets this FormGroup object's data for |type| to |value|, without
   // canonicalizing the |value|.  For data that has not already been
   // canonicalized, use SetInfo() instead.
   // Accepts a verification status.
-  virtual void SetRawInfoWithVerificationStatus(
-      ServerFieldType type,
-      const std::u16string& value,
-      structured_address::VerificationStatus status) = 0;
+  virtual void SetRawInfoWithVerificationStatus(ServerFieldType type,
+                                                const std::u16string& value,
+                                                VerificationStatus status) = 0;
 
   // Convenience wrapper to allow passing the |value| as an integer.
-  virtual void SetRawInfoAsIntWithVerificationStatus(
-      ServerFieldType type,
-      int value,
-      structured_address::VerificationStatus status);
+  virtual void SetRawInfoAsIntWithVerificationStatus(ServerFieldType type,
+                                                     int value,
+                                                     VerificationStatus status);
 
   // Convenience wrapper to allow passing the |status| as an integer.
   void SetRawInfoWithVerificationStatusInt(ServerFieldType type,
@@ -69,7 +65,7 @@ class FormGroup {
                                            int status);
 
   // Convenience wrapper to add
-  // |structured_address::VerificationStatus::kNoStatus| to
+  // |VerificationStatus::kNoStatus| to
   // |SetRawInfoWithVerificationStatus|.
   void SetRawInfo(ServerFieldType type, const std::u16string& value);
 
@@ -89,10 +85,8 @@ class FormGroup {
 
   // Returns the verification status associated with the type.
   // Returns kNoStatus if the type does not support a verification status.
-  virtual structured_address::VerificationStatus GetVerificationStatus(
-      ServerFieldType type) const;
-  structured_address::VerificationStatus GetVerificationStatus(
-      const AutofillType& type) const;
+  virtual VerificationStatus GetVerificationStatus(ServerFieldType type) const;
+  VerificationStatus GetVerificationStatus(const AutofillType& type) const;
 
   // Convenience wrappers to retrieve the Verification status in integer
   // representation.
@@ -109,17 +103,15 @@ class FormGroup {
                const std::string& app_locale);
 
   // Same as |SetInfo| but supports a verification status.
-  bool SetInfoWithVerificationStatus(
-      ServerFieldType type,
-      const std::u16string& value,
-      const std::string& app_locale,
-      const structured_address::VerificationStatus status);
+  bool SetInfoWithVerificationStatus(ServerFieldType type,
+                                     const std::u16string& value,
+                                     const std::string& app_locale,
+                                     const VerificationStatus status);
 
-  bool SetInfoWithVerificationStatus(
-      const AutofillType& type,
-      const std::u16string& value,
-      const std::string& app_locale,
-      const structured_address::VerificationStatus status);
+  bool SetInfoWithVerificationStatus(const AutofillType& type,
+                                     const std::u16string& value,
+                                     const std::string& app_locale,
+                                     const VerificationStatus status);
 
   // Returns true iff the string associated with |type| is nonempty.
   bool HasInfo(ServerFieldType type) const;
@@ -145,10 +137,10 @@ class FormGroup {
       const AutofillType& type,
       const std::u16string& value,
       const std::string& app_locale,
-      const structured_address::VerificationStatus status);
+      const VerificationStatus status);
 
   // Used to retrieve the verification status of a value associated with |type|.
-  virtual structured_address::VerificationStatus GetVerificationStatusImpl(
+  virtual VerificationStatus GetVerificationStatusImpl(
       ServerFieldType type) const;
 };
 

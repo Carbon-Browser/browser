@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -24,28 +24,28 @@ EntityData::~EntityData() = default;
 
 EntityData& EntityData::operator=(EntityData&& other) = default;
 
-std::unique_ptr<base::DictionaryValue> EntityData::ToDictionaryValue() {
+base::Value::Dict EntityData::ToDictionaryValue() const {
   // This is used when debugging at sync-internals page. The code in
   // sync_node_browser.js is expecting certain fields names. e.g. CTIME, MTIME,
   // and IS_DIR.
-  std::unique_ptr<base::DictionaryValue> dict =
-      std::make_unique<base::DictionaryValue>();
-  dict->SetKey("SPECIFICS", base::Value::FromUniquePtrValue(
-                                EntitySpecificsToValue(specifics)));
-  dict->SetStringKey("ID", id);
-  dict->SetStringKey("CLIENT_TAG_HASH", client_tag_hash.value());
-  dict->SetStringKey("ORIGINATOR_CACHE_GUID", originator_cache_guid);
-  dict->SetStringKey("ORIGINATOR_CLIENT_ITEM_ID", originator_client_item_id);
-  dict->SetStringKey("SERVER_DEFINED_UNIQUE_TAG", server_defined_unique_tag);
-  // The string "NON_UNIQUE_NAME" is used in sync-internals to identify the node
-  // title.
-  dict->SetStringKey("NON_UNIQUE_NAME", name);
-  dict->SetStringKey("NAME", name);
-  // The string "PARENT_ID" is used in sync-internals to build the node tree.
-  dict->SetStringKey("PARENT_ID", legacy_parent_id);
-  dict->SetStringKey("CTIME", GetTimeDebugString(creation_time));
-  dict->SetStringKey("MTIME", GetTimeDebugString(modification_time));
-  return dict;
+  return base::Value::Dict()
+      .Set("SPECIFICS", EntitySpecificsToValue(specifics))
+      .Set("ID", id)
+      .Set("CLIENT_TAG_HASH", client_tag_hash.value())
+      .Set("ORIGINATOR_CACHE_GUID", originator_cache_guid)
+      .Set("ORIGINATOR_CLIENT_ITEM_ID", originator_client_item_id)
+      .Set("SERVER_DEFINED_UNIQUE_TAG", server_defined_unique_tag)
+      // The string "NON_UNIQUE_NAME" is used in sync-internals to identify the
+      // node title.
+      .Set("NON_UNIQUE_NAME", name)
+      .Set("NAME", name)
+      // The string "PARENT_ID" is used in sync-internals to build the node
+      // tree.
+      .Set("PARENT_ID", legacy_parent_id)
+      .Set("CTIME", GetTimeDebugString(creation_time))
+      .Set("MTIME", GetTimeDebugString(modification_time))
+      .Set("RECIPIENT_PUBLIC_KEY",
+           CrossUserSharingPublicKeyToValue(recipient_public_key));
 }
 
 size_t EntityData::EstimateMemoryUsage() const {
@@ -59,13 +59,14 @@ size_t EntityData::EstimateMemoryUsage() const {
   memory_usage += EstimateMemoryUsage(name);
   memory_usage += EstimateMemoryUsage(specifics);
   memory_usage += EstimateMemoryUsage(legacy_parent_id);
+  memory_usage += EstimateMemoryUsage(recipient_public_key);
   return memory_usage;
 }
 
 void PrintTo(const EntityData& entity_data, std::ostream* os) {
   std::string specifics;
   base::JSONWriter::WriteWithOptions(
-      *syncer::EntitySpecificsToValue(entity_data.specifics),
+      syncer::EntitySpecificsToValue(entity_data.specifics),
       base::JSONWriter::OPTIONS_PRETTY_PRINT, &specifics);
   *os << "{ id: '" << entity_data.id << "', client_tag_hash: '"
       << entity_data.client_tag_hash << "', originator_cache_guid: '"

@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,8 +11,7 @@
 #include "ui/display/display.h"
 #include "ui/display/display_export.h"
 
-namespace display {
-namespace win {
+namespace display::win::internal {
 
 // Gathers the parameters necessary to create a win::ScreenWinDisplay.
 class DISPLAY_EXPORT DisplayInfo final {
@@ -21,7 +20,7 @@ class DISPLAY_EXPORT DisplayInfo final {
               float device_scale_factor,
               float sdr_white_level,
               Display::Rotation rotation,
-              int display_frequency,
+              float display_frequency,
               const gfx::Vector2dF& pixels_per_inch,
               DISPLAYCONFIG_VIDEO_OUTPUT_TECHNOLOGY output_technology,
               const std::string& label);
@@ -36,7 +35,7 @@ class DISPLAY_EXPORT DisplayInfo final {
   float device_scale_factor() const { return device_scale_factor_; }
   float sdr_white_level() const { return sdr_white_level_; }
   Display::Rotation rotation() const { return rotation_; }
-  int display_frequency() const { return display_frequency_; }
+  float display_frequency() const { return display_frequency_; }
   const gfx::Vector2dF& pixels_per_inch() const { return pixels_per_inch_; }
   DISPLAYCONFIG_VIDEO_OUTPUT_TECHNOLOGY output_technology() const {
     return output_technology_;
@@ -48,12 +47,17 @@ class DISPLAY_EXPORT DisplayInfo final {
 
  private:
   int64_t id_;
+  // The MONITORINFO::rcMonitor display rectangle in virtual-screen coordinates.
+  // Used to derive display::Display bounds, and for window placement logic.
   gfx::Rect screen_rect_;
+  // The MONITORINFO::rcWork work area rectangle in virtual-screen coordinates.
+  // These are display bounds that exclude system UI, like the Windows taskbar.
+  // Used to derive display::Display work areas, and for window placement logic.
   gfx::Rect screen_work_rect_;
   float device_scale_factor_;
   float sdr_white_level_;
   Display::Rotation rotation_;
-  int display_frequency_;
+  float display_frequency_;
   // Pixels per inch of a display. This value will only be set for touch
   // monitors. In non-touch cases, it will be set to Zero.
   gfx::Vector2dF pixels_per_inch_;
@@ -61,7 +65,6 @@ class DISPLAY_EXPORT DisplayInfo final {
   std::string label_;
 };
 
-}  // namespace win
-}  // namespace display
+}  // namespace display::win::internal
 
 #endif  // UI_DISPLAY_WIN_DISPLAY_INFO_H_

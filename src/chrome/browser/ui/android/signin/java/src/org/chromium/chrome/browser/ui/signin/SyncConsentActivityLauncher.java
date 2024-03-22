@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -15,9 +15,15 @@ import java.lang.annotation.RetentionPolicy;
 
 /** Allows for launching {@link SyncConsentActivity} in modularized code. */
 public interface SyncConsentActivityLauncher {
-    @IntDef({SigninAccessPoint.SETTINGS, SigninAccessPoint.BOOKMARK_MANAGER,
-            SigninAccessPoint.RECENT_TABS, SigninAccessPoint.SIGNIN_PROMO,
-            SigninAccessPoint.NTP_CONTENT_SUGGESTIONS, SigninAccessPoint.AUTOFILL_DROPDOWN})
+    @IntDef({
+        SigninAccessPoint.SETTINGS,
+        SigninAccessPoint.BOOKMARK_MANAGER,
+        SigninAccessPoint.RECENT_TABS,
+        SigninAccessPoint.SIGNIN_PROMO,
+        SigninAccessPoint.NTP_CONTENT_SUGGESTIONS,
+        SigninAccessPoint.AUTOFILL_DROPDOWN,
+        SigninAccessPoint.NTP_SIGNED_OUT_ICON
+    })
     @Retention(RetentionPolicy.SOURCE)
     @interface AccessPoint {}
 
@@ -53,4 +59,19 @@ public interface SyncConsentActivityLauncher {
      * @return a boolean indicating if the {@link SyncConsentActivity} is launched.
      */
     boolean launchActivityIfAllowed(Context context, @SigninAccessPoint int accessPoint);
+
+    /**
+     * Launches the {@link SyncConsentActivity} with Tangible Sync flow.
+     * @param accessPoint {@link SigninAccessPoint} for starting sign-in flow.
+     * @param accountName The account to select.
+     */
+    void launchActivityForTangibleSyncFlow(
+            Context context, @SigninAccessPoint int accessPoint, String accountName);
+
+    /**
+     * Launches the {@link SyncConsentActivity} with "New Account" sign-in flow for Tangible Sync.
+     * @param accessPoint {@link SigninAccessPoint} for starting sign-in flow.
+     */
+    void launchActivityForTangibleSyncAddAccountFlow(
+            Context context, @SigninAccessPoint int accessPoint);
 }

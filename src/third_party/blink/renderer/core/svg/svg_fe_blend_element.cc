@@ -89,11 +89,7 @@ SVGFEBlendElement::SVGFEBlendElement(Document& document)
       mode_(MakeGarbageCollected<SVGAnimatedEnumeration<Mode>>(
           this,
           svg_names::kModeAttr,
-          SVGFEBlendElement::kModeNormal)) {
-  AddToPropertyMap(in1_);
-  AddToPropertyMap(in2_);
-  AddToPropertyMap(mode_);
-}
+          SVGFEBlendElement::kModeNormal)) {}
 
 void SVGFEBlendElement::Trace(Visitor* visitor) const {
   visitor->Trace(in1_);
@@ -143,10 +139,30 @@ FilterEffect* SVGFEBlendElement::Build(SVGFilterBuilder* filter_builder,
   auto* effect = MakeGarbageCollected<FEBlend>(
       filter, ToBlendMode(mode_->CurrentEnumValue()));
   FilterEffectVector& input_effects = effect->InputEffects();
-  input_effects.ReserveCapacity(2);
+  input_effects.reserve(2);
   input_effects.push_back(input1);
   input_effects.push_back(input2);
   return effect;
+}
+
+SVGAnimatedPropertyBase* SVGFEBlendElement::PropertyFromAttribute(
+    const QualifiedName& attribute_name) const {
+  if (attribute_name == svg_names::kInAttr) {
+    return in1_.Get();
+  } else if (attribute_name == svg_names::kIn2Attr) {
+    return in2_.Get();
+  } else if (attribute_name == svg_names::kModeAttr) {
+    return mode_.Get();
+  } else {
+    return SVGFilterPrimitiveStandardAttributes::PropertyFromAttribute(
+        attribute_name);
+  }
+}
+
+void SVGFEBlendElement::SynchronizeAllSVGAttributes() const {
+  SVGAnimatedPropertyBase* attrs[]{in1_.Get(), in2_.Get(), mode_.Get()};
+  SynchronizeListOfSVGAttributes(attrs);
+  SVGFilterPrimitiveStandardAttributes::SynchronizeAllSVGAttributes();
 }
 
 }  // namespace blink

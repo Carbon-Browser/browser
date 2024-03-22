@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,17 +10,15 @@
 
 namespace offline_pages {
 
-extern const base::Feature kOfflinePagesCTFeature;
-extern const base::Feature kOfflinePagesLivePageSharingFeature;
-extern const base::Feature kBackgroundLoaderForDownloadsFeature;
-extern const base::Feature kPrefetchingOfflinePagesFeature;
-extern const base::Feature kOfflinePagesCTV2Feature;
-extern const base::Feature kOfflinePagesDescriptivePendingStatusFeature;
-extern const base::Feature kOfflinePagesInDownloadHomeOpenInCctFeature;
-extern const base::Feature kOfflinePagesDescriptiveFailStatusFeature;
-extern const base::Feature kOfflineIndicatorFeature;
-extern const base::Feature kOnTheFlyMhtmlHashComputationFeature;
-extern const base::Feature kOfflinePagesNetworkStateLikelyUnknown;
+BASE_DECLARE_FEATURE(kOfflinePagesCTFeature);
+BASE_DECLARE_FEATURE(kOfflinePagesLivePageSharingFeature);
+BASE_DECLARE_FEATURE(kBackgroundLoaderForDownloadsFeature);
+BASE_DECLARE_FEATURE(kOfflinePagesCTV2Feature);
+BASE_DECLARE_FEATURE(kOfflinePagesDescriptivePendingStatusFeature);
+BASE_DECLARE_FEATURE(kOfflinePagesInDownloadHomeOpenInCctFeature);
+BASE_DECLARE_FEATURE(kOfflinePagesDescriptiveFailStatusFeature);
+BASE_DECLARE_FEATURE(kOnTheFlyMhtmlHashComputationFeature);
+BASE_DECLARE_FEATURE(kOfflinePagesNetworkStateLikelyUnknown);
 
 // The parameter name used to find the experiment tag for prefetching offline
 // pages.
@@ -31,9 +29,6 @@ bool IsOfflinePagesCTEnabled();
 
 // Returns true if live page sharing of offline page is enabled.
 bool IsOfflinePagesLivePageSharingEnabled();
-
-// Returns true if prefetching offline pages is enabled.
-bool IsPrefetchingOfflinePagesEnabled();
 
 // Returns true if a command line for test has been set that shortens the
 // snapshot delay.
@@ -59,9 +54,6 @@ bool ShouldOfflinePagesInDownloadHomeOpenInCct();
 // Server. The server will use this this optional tag to decide how to process
 // the request.
 std::string GetPrefetchingOfflinePagesExperimentTag();
-
-// Returns true if offline indicator UI is shown when the user is offline.
-bool IsOfflineIndicatorFeatureEnabled();
 
 // Returns true if we are saving MHTML files to the target location and
 // calculating their content digests in one step.

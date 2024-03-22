@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,7 +6,7 @@
 
 #include <algorithm>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/memory/raw_ptr.h"
 #include "base/strings/utf_string_conversions.h"
 #include "chrome/app/vector_icons/vector_icons.h"
@@ -18,7 +18,6 @@
 #include "chrome/browser/ui/views/chrome_typography.h"
 #include "chrome/grit/generated_resources.h"
 #include "chrome/grit/theme_resources.h"
-#include "components/password_manager/core/common/password_manager_features.h"
 #include "ui/base/l10n/l10n_util.h"
 #include "ui/base/metadata/metadata_header_macros.h"
 #include "ui/base/metadata/metadata_impl_macros.h"
@@ -52,7 +51,7 @@ class BackgroundBorderAdderImageSource : public gfx::CanvasImageSource {
  public:
   BackgroundBorderAdderImageSource(const gfx::ImageSkia& image,
                                    bool add_background,
-                                   absl::optional<SkColor> background_color,
+                                   std::optional<SkColor> background_color,
                                    SkColor border_color,
                                    int radius)
       : gfx::CanvasImageSource(gfx::Size(radius, radius)),
@@ -67,7 +66,7 @@ class BackgroundBorderAdderImageSource : public gfx::CanvasImageSource {
  private:
   const gfx::ImageSkia image_;
   const bool add_background_;
-  const absl::optional<SkColor> background_color_;
+  const std::optional<SkColor> background_color_;
   const SkColor border_color_;
 };
 
@@ -121,8 +120,8 @@ class ImageWithBadge : public views::ImageView {
   void Render();
 
   raw_ptr<const gfx::VectorIcon> main_vector_icon_ = nullptr;
-  absl::optional<gfx::ImageSkia> main_image_skia_;
-  absl::optional<gfx::ImageSkia> badge_image_skia_;
+  std::optional<gfx::ImageSkia> main_image_skia_;
+  std::optional<gfx::ImageSkia> badge_image_skia_;
 };
 
 ImageWithBadge::ImageWithBadge(const gfx::ImageSkia& main_image)
@@ -177,11 +176,11 @@ void ImageWithBadge::Render() {
   gfx::ImageSkia main_image_with_border =
       gfx::CanvasImageSource::MakeImageSkia<BackgroundBorderAdderImageSource>(
           GetMainImage(), /*add_background=*/false,
-          /*background_color=*/absl::nullopt, kBorderColor, kImageSize);
+          /*background_color=*/std::nullopt, kBorderColor, kImageSize);
 
   gfx::ImageSkia badged_image = gfx::ImageSkiaOperations::CreateIconWithBadge(
       main_image_with_border, rounded_badge_with_background_and_border);
-  SetImage(badged_image);
+  SetImage(ui::ImageModel::FromImageSkia(badged_image));
 }
 
 BEGIN_METADATA(ImageWithBadge, views::ImageView)
@@ -294,8 +293,7 @@ MoveToAccountStoreBubbleView::MoveToAccountStoreBubbleView(
       base::BindOnce(&MoveToAccountStoreBubbleController::RejectMove,
                      base::Unretained(&controller_)));
 
-  SetShowIcon(base::FeatureList::IsEnabled(
-      password_manager::features::kUnifiedPasswordManagerDesktop));
+  SetShowIcon(true);
 
   // The request is cancelled when the |controller_| is destructed.
   // |controller_| has the same life time as |this| and hence it's safe to use
@@ -309,12 +307,7 @@ MoveToAccountStoreBubbleView::~MoveToAccountStoreBubbleView() = default;
 void MoveToAccountStoreBubbleView::AddedToWidget() {
   static_cast<views::Label*>(GetBubbleFrameView()->title())
       ->SetAllowCharacterBreak(true);
-  if (base::FeatureList::IsEnabled(
-          password_manager::features::kUnifiedPasswordManagerDesktop)) {
-    SetBubbleHeader(IDR_SAVE_PASSWORD_V2, IDR_SAVE_PASSWORD_V2_DARK);
-  } else {
-    SetBubbleHeader(IDR_SAVE_PASSWORD, IDR_SAVE_PASSWORD_DARK);
-  }
+  SetBubbleHeader(IDR_SAVE_PASSWORD, IDR_SAVE_PASSWORD_DARK);
 }
 
 MoveToAccountStoreBubbleController*
@@ -328,10 +321,6 @@ MoveToAccountStoreBubbleView::GetController() const {
 }
 
 ui::ImageModel MoveToAccountStoreBubbleView::GetWindowIcon() {
-  if (!base::FeatureList::IsEnabled(
-          password_manager::features::kUnifiedPasswordManagerDesktop)) {
-    return ui::ImageModel();
-  }
   return ui::ImageModel::FromVectorIcon(GooglePasswordManagerVectorIcon(),
                                         ui::kColorIcon);
 }

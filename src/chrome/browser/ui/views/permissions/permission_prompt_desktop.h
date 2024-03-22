@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,7 +8,7 @@
 #include "base/memory/raw_ptr.h"
 #include "base/time/time.h"
 #include "chrome/browser/ui/browser.h"
-#include "chrome/browser/ui/views/permissions/permission_prompt_bubble_view.h"
+#include "chrome/browser/ui/views/permissions/permission_prompt_bubble_base_view.h"
 #include "chrome/browser/ui/views/permissions/permission_prompt_style.h"
 #include "components/permissions/permission_prompt.h"
 
@@ -34,10 +34,12 @@ class PermissionPromptDesktop : public permissions::PermissionPrompt {
   ~PermissionPromptDesktop() override;
 
   // permissions::PermissionPrompt:
-  void UpdateAnchor() override;
+  bool UpdateAnchor() override;
   TabSwitchingBehavior GetTabSwitchingBehavior() override;
   permissions::PermissionPromptDisposition GetPromptDisposition()
       const override = 0;
+  absl::optional<gfx::Rect> GetViewBoundsInScreen() const override;
+  bool ShouldFinalizeRequestAfterDecided() const override;
 
   virtual views::Widget* GetPromptBubbleWidgetForTesting();
 

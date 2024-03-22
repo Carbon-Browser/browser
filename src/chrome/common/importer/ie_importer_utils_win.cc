@@ -1,4 +1,4 @@
-// Copyright (c) 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,9 +11,6 @@ namespace {
 const wchar_t kIEFavoritesOrderKey[] =
     L"Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\MenuOrder\\"
     L"Favorites";
-
-const wchar_t kIEStorage2Key[] =
-    L"Software\\Microsoft\\Internet Explorer\\IntelliForms\\Storage2";
 
 const wchar_t kIESettingsMainKey[] =
     L"Software\\Microsoft\\Internet Explorer\\Main";
@@ -32,11 +29,6 @@ namespace importer {
 std::wstring GetIEFavoritesOrderKey() {
   // Return kIEFavoritesOrderKey unless an override has been set for tests.
   return GetPotentiallyOverridenIEKey(kIEFavoritesOrderKey);
-}
-
-std::wstring GetIE7PasswordsKey() {
-  // Return kIEStorage2Key unless an override has been set for tests.
-  return GetPotentiallyOverridenIEKey(kIEStorage2Key);
 }
 
 std::wstring GetIESettingsKey() {

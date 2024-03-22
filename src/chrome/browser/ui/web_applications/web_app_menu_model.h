@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -31,7 +31,6 @@ class WebAppMenuModel : public AppMenuModel {
  protected:
   // AppMenuModel:
   void Build() override;
-  void LogMenuAction(AppMenuAction action_id) override;
 
  private:
 #if BUILDFLAG(IS_CHROMEOS_ASH)

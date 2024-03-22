@@ -56,7 +56,7 @@ void CrossfadeGeneratedImage::DrawCrossfade(
   cc::PaintFlags layer_flags;
   layer_flags.setBlendMode(flags.getBlendMode());
   PaintCanvasAutoRestore ar(canvas, false);
-  canvas->saveLayer(nullptr, &layer_flags);
+  canvas->saveLayer(layer_flags);
 
   cc::PaintFlags image_flags(flags);
   image_flags.setBlendMode(SkBlendMode::kSrcOver);
@@ -87,23 +87,19 @@ void CrossfadeGeneratedImage::Draw(cc::PaintCanvas* canvas,
   SkRect src_sk_rect = gfx::RectFToSkRect(src_rect);
   SkRect dst_sk_rect = gfx::RectFToSkRect(dst_rect);
   canvas->clipRect(dst_sk_rect);
-  canvas->concat(SkMatrix::RectToRect(src_sk_rect, dst_sk_rect));
+  canvas->concat(SkM44::RectToRect(src_sk_rect, dst_sk_rect));
   DrawCrossfade(canvas, flags, draw_options);
 }
 
-void CrossfadeGeneratedImage::DrawTile(GraphicsContext& context,
+void CrossfadeGeneratedImage::DrawTile(cc::PaintCanvas* canvas,
                                        const gfx::RectF& src_rect,
                                        const ImageDrawOptions& options) {
   // Draw nothing if either of the images hasn't loaded yet.
   if (from_image_ == Image::NullImage() || to_image_ == Image::NullImage())
     return;
-  cc::PaintFlags flags = context.FillFlags();
-  flags.setBlendMode(SkBlendMode::kSrcOver);
-  gfx::RectF dest_rect(size_);
-  ImageDrawOptions draw_options(options);
-  draw_options.sampling_options =
-      context.ComputeSamplingOptions(this, dest_rect, src_rect);
-  DrawCrossfade(context.Canvas(), flags, draw_options);
+  cc::PaintFlags flags;
+  flags.setAntiAlias(true);
+  DrawCrossfade(canvas, flags, options);
 }
 
 }  // namespace blink

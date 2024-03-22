@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,10 +6,10 @@
 
 #include <utility>
 
+#include "base/ranges/algorithm.h"
 #include "ui/display/types/display_snapshot.h"
 
-namespace display {
-namespace test {
+namespace display::test {
 
 TestDisplayLayoutManager::TestDisplayLayoutManager(
     std::vector<std::unique_ptr<DisplaySnapshot>> displays,
@@ -42,6 +42,7 @@ bool TestDisplayLayoutManager::GetDisplayLayout(
     MultipleDisplayState new_display_state,
     chromeos::DisplayPowerState new_power_state,
     RefreshRateThrottleState new_throttle_state,
+    bool new_vrr_state,
     std::vector<DisplayConfigureRequest>* requests) const {
   NOTREACHED();
   return false;
@@ -50,9 +51,8 @@ bool TestDisplayLayoutManager::GetDisplayLayout(
 std::vector<DisplaySnapshot*> TestDisplayLayoutManager::GetDisplayStates()
     const {
   std::vector<DisplaySnapshot*> snapshots(displays_.size());
-  std::transform(
-      displays_.cbegin(), displays_.cend(), snapshots.begin(),
-      [](const std::unique_ptr<DisplaySnapshot>& item) { return item.get(); });
+  base::ranges::transform(displays_, snapshots.begin(),
+                          &std::unique_ptr<DisplaySnapshot>::get);
   return snapshots;
 }
 
@@ -60,5 +60,4 @@ bool TestDisplayLayoutManager::IsMirroring() const {
   return display_state_ == MULTIPLE_DISPLAY_STATE_MULTI_MIRROR;
 }
 
-}  // namespace test
-}  // namespace display
+}  // namespace display::test

@@ -1,23 +1,20 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #import "ios/chrome/browser/ui/tab_switcher/tab_strip/tab_strip_coordinator.h"
 
-#include "base/check_op.h"
-#import "ios/chrome/browser/browser_state/chrome_browser_state.h"
-#import "ios/chrome/browser/main/browser.h"
+#import "base/check_op.h"
+#import "ios/chrome/browser/shared/model/browser/browser.h"
+#import "ios/chrome/browser/shared/model/browser_state/chrome_browser_state.h"
+#import "ios/chrome/browser/shared/model/web_state_list/web_state_list.h"
+#import "ios/chrome/browser/ui/sharing/sharing_coordinator.h"
+#import "ios/chrome/browser/ui/sharing/sharing_params.h"
 #import "ios/chrome/browser/ui/tab_switcher/tab_strip/tab_strip_mediator.h"
-#import "ios/chrome/browser/ui/tab_switcher/tab_strip/tab_strip_view_controller.h"
-#import "ios/chrome/browser/web_state_list/web_state_list.h"
+#import "ios/chrome/browser/ui/tab_switcher/tab_strip/tab_strip_swift.h"
+#import "ios/chrome/browser/ui/tab_switcher/tab_switcher_item.h"
 
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
-
-@protocol TabStripContaining;
-
-@interface TabStripCoordinator ()
+@interface TabStripCoordinator () <TabStripViewControllerDelegate>
 
 // Mediator for updating the TabStrip when the WebStateList changes.
 @property(nonatomic, strong) TabStripMediator* mediator;
@@ -26,7 +23,11 @@
 
 @end
 
-@implementation TabStripCoordinator
+@implementation TabStripCoordinator {
+  SharingCoordinator* _sharingCoordinator;
+}
+
+@synthesize baseViewController = _baseViewController;
 
 #pragma mark - ChromeCoordinator
 
@@ -39,23 +40,25 @@
   if (self.tabStripViewController)
     return;
 
+  ChromeBrowserState* browserState = self.browser->GetBrowserState();
+  CHECK(browserState);
   self.tabStripViewController = [[TabStripViewController alloc] init];
+  self.tabStripViewController.delegate = self;
   self.tabStripViewController.overrideUserInterfaceStyle =
-      self.browser->GetBrowserState()->IsOffTheRecord()
-          ? UIUserInterfaceStyleDark
-          : UIUserInterfaceStyleUnspecified;
-  self.tabStripViewController.isOffTheRecord =
-      self.browser->GetBrowserState()->IsOffTheRecord();
+      browserState->IsOffTheRecord() ? UIUserInterfaceStyleDark
+                                     : UIUserInterfaceStyleUnspecified;
 
   self.mediator =
       [[TabStripMediator alloc] initWithConsumer:self.tabStripViewController];
   self.mediator.webStateList = self.browser->GetWebStateList();
+  self.mediator.browserState = browserState;
 
-  self.tabStripViewController.faviconDataSource = self.mediator;
-  self.tabStripViewController.delegate = self.mediator;
+  self.tabStripViewController.mutator = self.mediator;
 }
 
 - (void)stop {
+  [_sharingCoordinator stop];
+  _sharingCoordinator = nil;
   [self.mediator disconnect];
   self.mediator = nil;
   self.tabStripViewController = nil;
@@ -67,18 +70,27 @@
   return self.tabStripViewController;
 }
 
-- (void)setLongPressDelegate:(id<PopupMenuLongPressDelegate>)longPressDelegate {
-  _longPressDelegate = longPressDelegate;
-}
-
-- (UIView<TabStripContaining>*)view {
-  return static_cast<UIView<TabStripContaining>*>(self.viewController.view);
-}
-
 #pragma mark - Public
 
 - (void)hideTabStrip:(BOOL)hidden {
   self.tabStripViewController.view.hidden = hidden;
+}
+
+#pragma mark - TabStripViewControllerDelegate
+
+- (void)tabStrip:(TabStripViewController*)tabStrip
+       shareItem:(TabSwitcherItem*)item
+      originView:(UIView*)originView {
+  SharingParams* params =
+      [[SharingParams alloc] initWithURL:item.URL
+                                   title:item.title
+                                scenario:SharingScenario::TabStripItem];
+  _sharingCoordinator = [[SharingCoordinator alloc]
+      initWithBaseViewController:self.baseViewController
+                         browser:self.browser
+                          params:params
+                      originView:originView];
+  [_sharingCoordinator start];
 }
 
 @end

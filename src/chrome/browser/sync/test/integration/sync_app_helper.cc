@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -90,10 +90,10 @@ void LoadApp(content::BrowserContext* context,
 AppStateMap GetAppStates(Profile* profile) {
   AppStateMap app_state_map;
 
-  std::unique_ptr<const extensions::ExtensionSet> extensions(
+  const extensions::ExtensionSet extensions =
       extensions::ExtensionRegistry::Get(profile)
-          ->GenerateInstalledExtensionsSet());
-  for (scoped_refptr<const extensions::Extension> extension : *extensions) {
+          ->GenerateInstalledExtensionsSet();
+  for (const auto& extension : extensions) {
     if (extension->is_app() &&
         extensions::util::ShouldSync(extension.get(), profile)) {
       const std::string& id = extension->id();
@@ -221,6 +221,6 @@ void SyncAppHelper::FixNTPOrdinalCollisions(Profile* profile) {
   ExtensionSystem::Get(profile)->app_sorting()->FixNTPOrdinalCollisions();
 }
 
-SyncAppHelper::SyncAppHelper() : setup_completed_(false) {}
+SyncAppHelper::SyncAppHelper() = default;
 
 SyncAppHelper::~SyncAppHelper() = default;

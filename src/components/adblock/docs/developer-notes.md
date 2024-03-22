@@ -7,7 +7,7 @@ This document includes general information that can be relevant for developers a
 
 In order to test scenarios where ad-blocking or Acceptable Ads need to be disabled by default, you can add certain options to the default Chromium command line:
 
-* Disable ad-blocking: `--disable-adblock`
+* Disable ad-blocking: `--disable-eyeo-filtering` or `--disable-adblock` (legacy switch)
 * Disable Acceptable Ads: `--disable-aa`
 
 These options can be used when testing a debug build.

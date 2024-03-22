@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,15 +9,16 @@
 #import <XCTest/XCTest.h>
 
 #include <memory>
+#include <optional>
 #include <string>
 
 #include "base/files/file_path.h"
 #include "base/ios/block_types.h"
+#include "base/time/time.h"
 #include "base/values.h"
 #include "net/test/embedded_test_server/embedded_test_server.h"
 #include "net/test/embedded_test_server/http_request.h"
 #include "net/test/embedded_test_server/http_response.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 // Implements a subset of the WebDriver protocol, for running Web Platform
 // Tests. This not intended to be a general-purpose WebDriver implementation.
@@ -40,7 +41,7 @@
 // 3) DELETE /session/{session id}
 class CWTRequestHandler {
  public:
-  // |session_completion_handler| is a block to be called when a session is
+  // `session_completion_handler` is a block to be called when a session is
   // closed.
   CWTRequestHandler(ProceduralBlock sesssion_completion_handler);
 
@@ -63,11 +64,11 @@ class CWTRequestHandler {
 
   // Navigates the target tab to the given URL, and waits for the page load to
   // complete.
-  base::Value NavigateToUrl(const base::Value* url);
+  base::Value NavigateToUrl(const std::string* url);
 
-  // Navigates the target tab to the URL given in |input|, waits for the page
+  // Navigates the target tab to the URL given in `input`, waits for the page
   // load to complete, and then waits for the additional time specified in
-  // |input|. Returns the stderr output produced by the app during page load.
+  // `input`. Returns the stderr output produced by the app during page load.
   base::Value NavigateToUrlForCrashTest(const base::Value& input);
 
   // Sets timeouts used when performing browser operations.
@@ -82,30 +83,35 @@ class CWTRequestHandler {
 
   // Switches to the tab with the given id and makes this the target tab.
   // Returns an error value if no such tab exists.
-  base::Value SwitchToTabWithId(const base::Value* tab_id);
+  base::Value SwitchToTabWithId(const std::string* tab_id);
 
   // Closes the target tab. Returns an error value if no tab is open.
   // Otherwise, returns the ids of the remaining tabs.
   base::Value CloseTargetTab();
 
+  // Releases keys and buttons that are currently pressed as a result of
+  // performed actions. This is currently a no-op since performing actions is
+  // not supported.
+  base::Value ReleaseActions();
+
   // Executes the given script in the target tab. Returns an error if script
   // execution times out. Otherwise, returns the result of script execution.
-  // When |is_async_function| is true, the given script must be the body of a
+  // When `is_async_function` is true, the given script must be the body of a
   // function that uses its last argument (that is, the argument at
   // "arguments[arguments.length - 1]") as a completion handler that it calls
   // (possibly asynchronously) with the result to be returned. When
-  // |is_async_function| is false, the given script must be the body of a
+  // `is_async_function` is false, the given script must be the body of a
   // function whose return value is the result to be returned.
   //
   // Examples:
-  // 1) |script| is "arguments[arguments.length - 1].call(7)" and
-  //    |is_async_function| is true. In this case, the return value is |7|.
-  // 2) |script| is "return 'hello';" and |is_async_function| is false. In this
+  // 1) `script` is "arguments[arguments.length - 1].call(7)" and
+  //    `is_async_function` is true. In this case, the return value is |7`.
+  // 2) `script` is "return 'hello';" and `is_async_function` is false. In this
   //    case, the return value is |'hello'|.
-  // 3) |script| is "document.title = 'hello world';" and |is_async_function| is
+  // 3) `script` is "document.title = 'hello world';" and `is_async_function` is
   //    false. In this case, the script's return value is "undefined" so the
   //    value returned by this method is a default-constructed base::Value.
-  base::Value ExecuteScript(const base::Value* script, bool is_async_function);
+  base::Value ExecuteScript(const std::string* script, bool is_async_function);
 
   // Takes a snapshot of the target tab. Returns an error value if the target
   // tab is no longer open. Otherwise, returns the snapshot as a base64-encoded
@@ -123,7 +129,7 @@ class CWTRequestHandler {
 
   // Processes the given command, HTTP method, and request content. Returns the
   // result of processing the command, or nullopt_t if the command is unknown.
-  absl::optional<base::Value> ProcessCommand(
+  std::optional<base::Value> ProcessCommand(
       const std::string& command,
       net::test_server::HttpMethod http_method,
       const std::string& request_content);
@@ -138,8 +144,8 @@ class CWTRequestHandler {
   std::string target_tab_id_;
 
   // Timeouts used when performing browser operations.
-  NSTimeInterval script_timeout_;
-  NSTimeInterval page_load_timeout_;
+  base::TimeDelta script_timeout_;
+  base::TimeDelta page_load_timeout_;
 
   // A server for test files used in crash tests.
   net::EmbeddedTestServer test_case_server_;

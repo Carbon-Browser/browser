@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,10 +9,11 @@
 #include "base/time/time.h"
 #include "chrome/browser/themes/theme_service.h"
 #include "chrome/browser/themes/theme_syncable_service.h"
+#include "chrome/test/base/test_browser_window.h"
 #include "chrome/test/base/testing_browser_process.h"
 #include "chrome/test/base/testing_profile_manager.h"
-#include "components/sync/driver/sync_service.h"
-#include "components/sync/driver/test_sync_service.h"
+#include "components/sync/service/sync_service.h"
+#include "components/sync/test/test_sync_service.h"
 #include "content/public/test/browser_task_environment.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
@@ -48,9 +49,11 @@ class FakeThemeService : public ThemeService {
     NotifyThemeChanged();
   }
 
-  void UseDefaultTheme() override {
-    using_default_theme_ = true;
-    color_ = 0;
+  void UseTheme(ui::SystemTheme system_theme) override {
+    if (system_theme == ui::SystemTheme::kDefault) {
+      using_default_theme_ = true;
+      color_ = 0;
+    }
     NotifyThemeChanged();
   }
 
@@ -83,6 +86,9 @@ class ProfileCustomizationBubbleSyncControllerTest : public testing::Test {
     testing_profile_ =
         testing_profile_manager_.CreateTestingProfile(kTestingProfileName);
 
+    Browser::CreateParams params(testing_profile_, /*user_gesture=*/true);
+    params.window = &test_browser_window_;
+    browser_ = std::unique_ptr<Browser>(Browser::Create(params));
     testing_view_ = std::make_unique<views::View>();
   }
 
@@ -91,7 +97,7 @@ class ProfileCustomizationBubbleSyncControllerTest : public testing::Test {
           show_bubble_callback) {
     ProfileCustomizationBubbleSyncController::
         ApplyColorAndShowBubbleWhenNoValueSyncedForTesting(
-            testing_profile_, testing_view_.get(), &test_sync_service_,
+            browser_.get(), testing_view_.get(), &test_sync_service_,
             &fake_theme_service_, std::move(show_bubble_callback),
             kNewProfileColor);
   }
@@ -104,9 +110,7 @@ class ProfileCustomizationBubbleSyncControllerTest : public testing::Test {
     fake_theme_service_.DoSetTheme(nullptr, false);
   }
 
-  void DeleteTestingProfile() {
-    testing_profile_manager_.DeleteTestingProfile(kTestingProfileName);
-  }
+  void CloseBrowser() { browser_.reset(); }
 
   void DeleteTestingView() { testing_view_.reset(); }
 
@@ -124,8 +128,12 @@ class ProfileCustomizationBubbleSyncControllerTest : public testing::Test {
   syncer::TestSyncService test_sync_service_;
 
  private:
-  raw_ptr<Profile> testing_profile_ = nullptr;
   TestingProfileManager testing_profile_manager_;
+  raw_ptr<Profile> testing_profile_ = nullptr;
+
+  TestBrowserWindow test_browser_window_;
+  std::unique_ptr<Browser> browser_;
+
   std::unique_ptr<views::View> testing_view_;
   FakeThemeService fake_theme_service_;
   ThemeSyncableService theme_syncable_service_;
@@ -147,7 +155,7 @@ TEST_F(ProfileCustomizationBubbleSyncControllerTest,
   EXPECT_CALL(show_bubble, Run(Outcome::kShowBubble));
 
   test_sync_service_.SetDisableReasons(
-      syncer::SyncService::DISABLE_REASON_ENTERPRISE_POLICY);
+      {syncer::SyncService::DISABLE_REASON_ENTERPRISE_POLICY});
   ApplyColorAndShowBubbleWhenNoValueSynced(show_bubble.Get());
 }
 
@@ -218,7 +226,7 @@ TEST_F(ProfileCustomizationBubbleSyncControllerTest,
   EXPECT_CALL(show_bubble, Run(Outcome::kAbort));
 
   ApplyColorAndShowBubbleWhenNoValueSynced(show_bubble.Get());
-  DeleteTestingProfile();
+  CloseBrowser();
 }
 
 TEST_F(ProfileCustomizationBubbleSyncControllerTest,
@@ -228,6 +236,18 @@ TEST_F(ProfileCustomizationBubbleSyncControllerTest,
 
   ApplyColorAndShowBubbleWhenNoValueSynced(show_bubble.Get());
   DeleteTestingView();
+}
+
+TEST_F(ProfileCustomizationBubbleSyncControllerTest, ShouldAbortIfCalledAgain) {
+  base::MockCallback<base::OnceCallback<void(Outcome)>> old_show_bubble;
+  EXPECT_CALL(old_show_bubble, Run(Outcome::kAbort));
+  base::MockCallback<base::OnceCallback<void(Outcome)>> new_show_bubble;
+  EXPECT_CALL(new_show_bubble, Run(Outcome::kShowBubble));
+
+  ApplyColorAndShowBubbleWhenNoValueSynced(old_show_bubble.Get());
+  ApplyColorAndShowBubbleWhenNoValueSynced(new_show_bubble.Get());
+
+  NotifyOnSyncStarted();
 }
 
 }  // namespace

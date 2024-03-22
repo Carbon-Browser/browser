@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -33,8 +33,13 @@ public class CaptioningStyle {
      * @param windowColor window color of the CaptioningStyle
      * @param typeFace Typeface of the CaptioningStyle
      */
-    public CaptioningStyle(Integer backgroundColor, Integer edgeColor, Integer edgeType,
-            Integer foregroundColor, Integer windowColor, Typeface typeface) {
+    public CaptioningStyle(
+            Integer backgroundColor,
+            Integer edgeColor,
+            Integer edgeType,
+            Integer foregroundColor,
+            Integer windowColor,
+            Typeface typeface) {
         mBackgroundColor = backgroundColor;
         mEdgeColor = edgeColor;
         mEdgeType = edgeType;
@@ -127,7 +132,12 @@ public class CaptioningStyle {
             windowColor = Integer.valueOf(captionStyle.windowColor);
         }
 
-        return new CaptioningStyle(backgroundColor, edgeColor, edgeType, foregroundColor,
-                windowColor, captionStyle.getTypeface());
+        return new CaptioningStyle(
+                backgroundColor,
+                edgeColor,
+                edgeType,
+                foregroundColor,
+                windowColor,
+                captionStyle.getTypeface());
     }
 }

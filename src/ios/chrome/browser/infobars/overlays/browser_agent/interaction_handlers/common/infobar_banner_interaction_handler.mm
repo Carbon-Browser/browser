@@ -1,19 +1,15 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #import "ios/chrome/browser/infobars/overlays/browser_agent/interaction_handlers/common/infobar_banner_interaction_handler.h"
 
-#include "base/check.h"
-#include "components/infobars/core/infobar_delegate.h"
-#include "ios/chrome/browser/infobars/infobar_ios.h"
+#import "base/check.h"
+#import "components/infobars/core/infobar_delegate.h"
+#import "ios/chrome/browser/infobars/infobar_ios.h"
 #import "ios/chrome/browser/infobars/overlays/browser_agent/interaction_handlers/common/infobar_banner_overlay_request_callback_installer.h"
 #import "ios/chrome/browser/infobars/overlays/infobar_overlay_request_inserter.h"
-#import "ios/chrome/browser/overlays/public/overlay_request_queue.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
+#import "ios/chrome/browser/overlays/model/public/overlay_request_queue.h"
 
 namespace {
 infobars::InfoBarDelegate* GetInfobarDelegate(InfoBarIOS* infobar) {

@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,13 +6,17 @@
 
 #include <stddef.h>
 
+#include <vector>
+
 #include "build/build_config.h"
 
 #if BUILDFLAG(IS_POSIX) || BUILDFLAG(IS_FUCHSIA)
 #include <string.h>
 #endif
 
-#include <vector>
+#if BUILDFLAG(IS_WIN)
+#include "base/check_op.h"
+#endif
 
 namespace base {
 namespace internal {

@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -22,24 +22,16 @@ public interface ChromeActivityNativeDelegate {
      */
     void onCreateWithNative();
 
-    /**
-     * Carry out native code dependent tasks that should happen during on Activity.onStart().
-     */
+    /** Carry out native code dependent tasks that should happen during on Activity.onStart(). */
     void onStartWithNative();
 
-    /**
-     * Carry out native code dependent tasks that should happen during on Activity.onResume().
-     */
+    /** Carry out native code dependent tasks that should happen during on Activity.onResume(). */
     void onResumeWithNative();
 
-    /**
-     * Carry out native code dependent tasks that should happen during on Activity.onPause().
-     */
+    /** Carry out native code dependent tasks that should happen during on Activity.onPause(). */
     void onPauseWithNative();
 
-    /**
-     * Carry out native code dependent tasks that should happen during on Activity.onStop().
-     */
+    /** Carry out native code dependent tasks that should happen during on Activity.onStop(). */
     void onStopWithNative();
 
     /**

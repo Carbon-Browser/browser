@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,13 +9,11 @@
 
 #include "base/memory/raw_ptr.h"
 #include "chrome/browser/ui/content_settings/content_setting_image_model.h"
+#include "chrome/browser/ui/content_settings/content_setting_image_model_states.h"
 #include "chrome/browser/ui/views/location_bar/icon_label_bubble_view.h"
-#include "components/content_settings/core/common/content_settings_types.h"
 #include "components/user_education/common/help_bubble.h"
 #include "ui/base/metadata/metadata_header_macros.h"
 #include "ui/gfx/animation/animation_delegate.h"
-#include "ui/gfx/animation/slide_animation.h"
-#include "ui/views/painter.h"
 #include "ui/views/view.h"
 #include "ui/views/widget/widget.h"
 #include "ui/views/widget/widget_observer.h"
@@ -41,7 +39,7 @@ class ContentSettingImageView : public IconLabelBubbleView,
                                 public views::WidgetObserver {
  public:
   METADATA_HEADER(ContentSettingImageView);
-
+  DECLARE_CLASS_ELEMENT_IDENTIFIER_VALUE(kMediaActivityIndicatorElementId);
   class Delegate {
    public:
     // Delegate should return true if the content setting icon should be hidden.
@@ -96,6 +94,14 @@ class ContentSettingImageView : public IconLabelBubbleView,
   }
   user_education::HelpBubble* critical_promo_bubble_for_testing() {
     return critical_promo_bubble_.get();
+  }
+
+  const gfx::VectorIcon* get_icon_for_testing() const {
+    return content_setting_image_model_->get_icon_for_testing();
+  }
+
+  const gfx::VectorIcon* get_icon_badge_for_testing() const {
+    return content_setting_image_model_->get_icon_badge();
   }
 
  private:

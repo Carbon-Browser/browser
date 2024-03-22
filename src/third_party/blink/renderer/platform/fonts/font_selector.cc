@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -86,9 +86,9 @@ AtomicString FontSelector::FamilyNameFromSettings(
     return settings.Fixed(script);
   if (generic_family_name == font_family_names::kWebkitStandard)
     return settings.Standard(script);
-  if (RuntimeEnabledFeatures::CSSFontFamilyMathEnabled() &&
-      generic_family_name == font_family_names::kMath)
+  if (generic_family_name == font_family_names::kMath) {
     return settings.Math(script);
+  }
 #endif  // BUILDFLAG(IS_ANDROID)
   return g_empty_atom;
 }

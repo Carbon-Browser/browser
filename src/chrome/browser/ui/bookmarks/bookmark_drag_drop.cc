@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -52,25 +52,30 @@ DragOperation DropBookmarks(Profile* profile,
   if (data.IsFromProfilePath(profile->GetPath())) {
     const std::vector<const BookmarkNode*> dragged_nodes =
         data.GetNodes(model, profile->GetPath());
-    DCHECK(model->client()->CanBeEditedByUser(parent_node));
+    DCHECK(!model->client()->IsNodeManaged(parent_node));
     DCHECK(copy ||
            bookmarks::CanAllBeEditedByUser(model->client(), dragged_nodes));
     if (!dragged_nodes.empty()) {
       // Drag from same profile. Copy or move nodes.
+      bool is_reorder = !copy && dragged_nodes[0]->parent() == parent_node;
       for (size_t i = 0; i < dragged_nodes.size(); ++i) {
         if (copy) {
           model->Copy(dragged_nodes[i], parent_node, index);
+          // Increment `index` so that the next copied node ends up after the
+          // one that was just inserted.
+          ++index;
         } else {
           model->Move(dragged_nodes[i], parent_node, index);
+          index = parent_node->GetIndexOf(dragged_nodes[i]).value() + 1;
         }
-        index =
-            static_cast<size_t>(parent_node->GetIndexOf(dragged_nodes[i]) + 1);
       }
+      RecordBookmarkDropped(data, parent_node, is_reorder);
       return copy ? DragOperation::kCopy : DragOperation::kMove;
     }
     return DragOperation::kNone;
   }
   RecordBookmarksAdded(profile);
+  RecordBookmarkDropped(data, parent_node, false);
   // Dropping a folder from different profile. Always accept.
   bookmarks::CloneBookmarkNode(model, data.elements, parent_node, index, true);
   return DragOperation::kCopy;

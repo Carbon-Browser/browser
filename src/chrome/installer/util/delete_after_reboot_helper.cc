@@ -1,4 +1,4 @@
-// Copyright (c) 2010 The Chromium Authors. All rights reserved.
+// Copyright 2010 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 //
@@ -13,6 +13,7 @@
 #include "chrome/installer/util/delete_after_reboot_helper.h"
 
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include "base/files/file_enumerator.h"
@@ -330,7 +331,7 @@ bool MatchPendingDeletePath(const base::FilePath& short_form_needle,
   std::wstring match_path(reg_path.value());
 
   // First chomp the prefix since that will mess up GetShortPathName.
-  base::WStringPiece prefix(L"\\??\\");
+  std::wstring_view prefix(L"\\??\\");
   if (base::StartsWith(match_path, prefix, base::CompareCase::SENSITIVE))
     match_path = match_path.substr(prefix.size());
 

@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,10 +11,11 @@
 #include <string>
 #include <vector>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
 #include "base/sequence_checker.h"
+#include "components/viz/service/frame_sinks/video_capture/capturable_frame_sink.h"
 #include "components/viz/service/viz_service_export.h"
 #include "media/base/video_types.h"
 #include "mojo/public/cpp/bindings/pending_receiver.h"
@@ -49,7 +50,7 @@ namespace viz {
 //
 // The blit algorithm uses naive linear blending. Thus, the use of non-linear
 // color spaces will cause losses in color accuracy.
-class VIZ_SERVICE_EXPORT VideoCaptureOverlay final
+class VIZ_SERVICE_EXPORT VideoCaptureOverlay
     : public mojom::FrameSinkVideoCaptureOverlay {
  public:
   // Interface for notifying the frame source when changes to the overlay's
@@ -89,28 +90,23 @@ class VIZ_SERVICE_EXPORT VideoCaptureOverlay final
   VideoCaptureOverlay(const VideoCaptureOverlay&) = delete;
   VideoCaptureOverlay& operator=(const VideoCaptureOverlay&) = delete;
 
-  ~VideoCaptureOverlay() final;
+  ~VideoCaptureOverlay() override;
 
   // mojom::FrameSinkVideoCaptureOverlay implementation:
   void SetImageAndBounds(const SkBitmap& image, const gfx::RectF& bounds) final;
   void SetBounds(const gfx::RectF& bounds) final;
+  void OnCapturedMouseEvent(const gfx::Point& coordinates) final {}
 
   const SkBitmap& bitmap() const { return image_; }
 
-  struct CapturedFrameProperties {
-    // The entire size of the compositor frame on the surface. This should be
-    // the maximum possible capturable surface size.
-    gfx::Rect compositor_region;
+  struct VIZ_SERVICE_EXPORT CapturedFrameProperties {
+    // Properties of the region associated with the video capture sub target
+    // that has been selected for capture.
+    CapturableFrameSink::RegionProperties region_properties;
 
-    // The sub region of the compositor frame selected for capture. Should be in
-    // the same coordinate system as |compositor_region| as a subset of pixels.
-    // If sub_region == compositor_region, then the entire frame surface is
-    // being captured.
-    gfx::Rect sub_region;
-
-    // Ultimately the overlay gets outputted onto a video frame with a region
-    // of |content_region|.
-    gfx::Rect content_region;
+    // The subsection of the video frame, in output pixels, that the overlay
+    // gets outputted onto.
+    gfx::Rect content_rect;
 
     // The frame's pixel format.
     media::VideoPixelFormat format;
@@ -122,15 +118,15 @@ class VIZ_SERVICE_EXPORT VideoCaptureOverlay final
   // a VideoFrame. The overlay's position and size are computed based on the
   // given content |region_in_frame|. Returns a null OnceCallback if there is
   // nothing to render at this time.
-  OnceRenderer MakeRenderer(const CapturedFrameProperties& properties);
+  virtual OnceRenderer MakeRenderer(const CapturedFrameProperties& properties);
 
-  struct BlendInformation {
+  struct VIZ_SERVICE_EXPORT BlendInformation {
     // Source region that we will blend from, expressed in the coordinate system
     // of the overlay's |image_|.
     gfx::Rect source_region;
 
     // Source region that we will blend from, expressed in the coordinate system
-    // of the **scaled* overlay's |image_|. Scaled overlay's image is computed
+    // of the *scaled* overlay's |image_|. Scaled overlay's image is computed
     // by |sprite_|. This should have the same scale as the content (aka
     // VideoFrame).
     gfx::Rect source_region_scaled;

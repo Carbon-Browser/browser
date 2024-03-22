@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,9 +6,11 @@
 
 #include <utility>
 
+#include "base/task/single_thread_task_runner.h"
 #include "base/threading/thread_checker.h"
 #include "services/network/public/mojom/web_sandbox_flags.mojom-blink.h"
 #include "third_party/blink/public/common/features.h"
+#include "third_party/blink/public/common/privacy_budget/identifiability_sample_collector.h"
 #include "third_party/blink/public/mojom/devtools/inspector_issue.mojom-blink.h"
 #include "third_party/blink/public/mojom/fetch/fetch_api_request.mojom-blink.h"
 #include "third_party/blink/public/mojom/loader/content_security_notifier.mojom-blink.h"
@@ -200,7 +202,8 @@ WorkerOrWorkletGlobalScope::WorkerOrWorkletGlobalScope(
     WorkerClients* worker_clients,
     std::unique_ptr<WebContentSettingsClient> content_settings_client,
     scoped_refptr<WebWorkerFetchContext> web_worker_fetch_context,
-    WorkerReportingProxy& reporting_proxy)
+    WorkerReportingProxy& reporting_proxy,
+    bool is_worker_loaded_from_data_url)
     : ExecutionContext(isolate, agent),
       is_creator_secure_context_(is_creator_secure_context),
       name_(name),
@@ -212,6 +215,8 @@ WorkerOrWorkletGlobalScope::WorkerOrWorkletGlobalScope(
           MakeGarbageCollected<WorkerOrWorkletScriptController>(this, isolate)),
       v8_cache_options_(v8_cache_options),
       reporting_proxy_(reporting_proxy) {
+  GetSecurityContext().SetIsWorkerLoadedFromDataURL(
+      is_worker_loaded_from_data_url);
   GetSecurityContext().SetSecurityOrigin(std::move(origin));
 
   SetPolicyContainer(PolicyContainer::CreateEmpty());
@@ -243,12 +248,6 @@ v8::Local<v8::Object> WorkerOrWorkletGlobalScope::AssociateWithWrapper(
                 "method. The global object of ECMAScript environment is used "
                 "as the wrapper.";
   return v8::Local<v8::Object>();
-}
-
-bool WorkerOrWorkletGlobalScope::HasPendingActivity() const {
-  // The global scope wrapper is kept alive as longs as its execution context is
-  // active.
-  return !ExecutionContext::IsContextDestroyed();
 }
 
 void WorkerOrWorkletGlobalScope::CountUse(WebFeature feature) {
@@ -310,7 +309,7 @@ ResourceFetcher* WorkerOrWorkletGlobalScope::Fetcher() {
 
   // Check if the fetcher has already been initialized, otherwise initialize it.
   if (inside_settings_resource_fetcher_)
-    return inside_settings_resource_fetcher_;
+    return inside_settings_resource_fetcher_.Get();
 
   // Because CSP is initialized inside the WorkerGlobalScope or
   // WorkletGlobalScope constructor, GetContentSecurityPolicy() should be
@@ -322,7 +321,7 @@ ResourceFetcher* WorkerOrWorkletGlobalScope::Fetcher() {
   inside_settings_resource_fetcher_ = CreateFetcherInternal(
       *MakeGarbageCollected<FetchClientSettingsObjectImpl>(*this),
       *GetContentSecurityPolicy(), *resource_timing_notifier);
-  return inside_settings_resource_fetcher_;
+  return inside_settings_resource_fetcher_.Get();
 }
 
 ResourceFetcher* WorkerOrWorkletGlobalScope::CreateFetcherInternal(
@@ -443,10 +442,8 @@ void WorkerOrWorkletGlobalScope::Dispose() {
     resource_fetcher->StopFetching();
     resource_fetcher->ClearContext();
   }
-}
-
-void WorkerOrWorkletGlobalScope::SetModulator(Modulator* modulator) {
-  modulator_ = modulator;
+  IdentifiabilitySampleCollector::Get()->FlushSource(UkmRecorder(),
+                                                     UkmSourceID());
 }
 
 scoped_refptr<base::SingleThreadTaskRunner>
@@ -562,13 +559,20 @@ String WorkerOrWorkletGlobalScope::GetAcceptLanguages() const {
   return web_worker_fetch_context_->GetAcceptLanguages();
 }
 
+void WorkerOrWorkletGlobalScope::OnConsoleApiMessage(
+    mojom::ConsoleMessageLevel level,
+    const String& message,
+    SourceLocation* location) {
+  reporting_proxy_.ReportConsoleMessage(
+      mojom::ConsoleMessageSource::kConsoleApi, level, message, location);
+}
+
 void WorkerOrWorkletGlobalScope::Trace(Visitor* visitor) const {
   visitor->Trace(inside_settings_resource_fetcher_);
   visitor->Trace(resource_fetchers_);
   visitor->Trace(subresource_filter_);
   visitor->Trace(script_controller_);
-  visitor->Trace(modulator_);
-  EventTargetWithInlineData::Trace(visitor);
+  EventTarget::Trace(visitor);
   ExecutionContext::Trace(visitor);
 }
 

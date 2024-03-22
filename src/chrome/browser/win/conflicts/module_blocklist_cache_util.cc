@@ -1,10 +1,9 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/win/conflicts/module_blocklist_cache_util.h"
 
-#include <algorithm>
 #include <functional>
 #include <iterator>
 #include <string>
@@ -19,6 +18,7 @@
 #include "base/files/file_util.h"
 #include "base/files/important_file_writer.h"
 #include "base/hash/md5.h"
+#include "base/ranges/algorithm.h"
 #include "base/time/time.h"
 #include "chrome/browser/win/conflicts/module_list_filter.h"
 #include "chrome/chrome_elf/third_party_dlls/packed_list_format.h"
@@ -44,8 +44,7 @@ ForwardIt BinaryFind(ForwardIt first,
 
 // Returns true if the 2 digests are equal.
 bool IsMD5DigestEqual(const base::MD5Digest& lhs, const base::MD5Digest& rhs) {
-  return std::equal(std::begin(lhs.a), std::end(lhs.a), std::begin(rhs.a),
-                    std::end(rhs.a));
+  return base::ranges::equal(lhs.a, rhs.a);
 }
 
 // Returns MD5 hash of the cache data.

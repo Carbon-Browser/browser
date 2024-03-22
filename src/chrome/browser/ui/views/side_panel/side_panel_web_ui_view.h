@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,13 +7,12 @@
 
 #include <memory>
 
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
 #include "base/memory/raw_ptr.h"
 #include "chrome/browser/ui/views/bubble/bubble_contents_wrapper.h"
+#include "ui/base/metadata/metadata_header_macros.h"
 #include "ui/views/controls/webview/unhandled_keyboard_event_handler.h"
 #include "ui/views/controls/webview/webview.h"
-
-class Browser;
 
 namespace ui {
 class MenuModel;
@@ -29,8 +28,10 @@ class MenuRunner;
 class SidePanelWebUIView : public views::WebView,
                            public BubbleContentsWrapper::Host {
  public:
-  SidePanelWebUIView(Browser* browser,
-                     base::RepeatingClosure on_show_cb,
+  static inline constexpr int kSidePanelWebViewId = 777;
+
+  METADATA_HEADER(SidePanelWebUIView);
+  SidePanelWebUIView(base::RepeatingClosure on_show_cb,
                      base::RepeatingClosure close_cb,
                      BubbleContentsWrapper* contents_wrapper);
   SidePanelWebUIView(const SidePanelWebUIView&) = delete;
@@ -38,7 +39,6 @@ class SidePanelWebUIView : public views::WebView,
   ~SidePanelWebUIView() override;
 
   // views::WebView:
-  void SetVisible(bool visible) override;
   void ViewHierarchyChanged(
       const views::ViewHierarchyChangedDetails& details) override;
 
@@ -54,10 +54,9 @@ class SidePanelWebUIView : public views::WebView,
       const content::NativeWebKeyboardEvent& event) override;
 
  private:
-  const raw_ptr<Browser> browser_;
   base::RepeatingClosure on_show_cb_;
   base::RepeatingClosure close_cb_;
-  raw_ptr<BubbleContentsWrapper> contents_wrapper_;
+  raw_ptr<BubbleContentsWrapper, DanglingUntriaged> contents_wrapper_;
   std::unique_ptr<views::MenuRunner> context_menu_runner_;
   std::unique_ptr<ui::MenuModel> context_menu_model_;
   // A handler to handle unhandled keyboard messages coming back from the
@@ -68,14 +67,14 @@ class SidePanelWebUIView : public views::WebView,
 
 template <class T>
 class SidePanelWebUIViewT : public SidePanelWebUIView {
+  METADATA_TEMPLATE_HEADER(SidePanelWebUIViewT, SidePanelWebUIView)
+
  public:
   SidePanelWebUIViewT(
-      Browser* browser,
       base::RepeatingClosure on_show_cb,
       base::RepeatingClosure close_cb,
       std::unique_ptr<BubbleContentsWrapperT<T>> contents_wrapper)
-      : SidePanelWebUIView(browser,
-                           std::move(on_show_cb),
+      : SidePanelWebUIView(std::move(on_show_cb),
                            std::move(close_cb),
                            contents_wrapper.get()),
         contents_wrapper_(std::move(contents_wrapper)) {

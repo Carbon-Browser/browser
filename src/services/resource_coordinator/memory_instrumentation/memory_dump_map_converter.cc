@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -54,11 +54,11 @@ perfetto::trace_processor::LevelOfDetail
 MemoryDumpMapConverter::ConvertLevelOfDetail(
     const base::trace_event::MemoryDumpLevelOfDetail& input) const {
   switch (input) {
-    case base::trace_event::MemoryDumpLevelOfDetail::BACKGROUND:
+    case base::trace_event::MemoryDumpLevelOfDetail::kBackground:
       return perfetto::trace_processor::LevelOfDetail::kBackground;
-    case base::trace_event::MemoryDumpLevelOfDetail::LIGHT:
+    case base::trace_event::MemoryDumpLevelOfDetail::kLight:
       return perfetto::trace_processor::LevelOfDetail::kLight;
-    case base::trace_event::MemoryDumpLevelOfDetail::DETAILED:
+    case base::trace_event::MemoryDumpLevelOfDetail::kDetailed:
       return perfetto::trace_processor::LevelOfDetail::kDetailed;
   }
   return perfetto::trace_processor::LevelOfDetail::kDetailed;

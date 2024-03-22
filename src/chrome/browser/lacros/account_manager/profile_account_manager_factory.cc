@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,8 +9,6 @@
 #include "chrome/browser/lacros/account_manager/profile_account_manager.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/profiles/profile_manager.h"
-#include "components/keyed_service/content/browser_context_dependency_manager.h"
-#include "components/keyed_service/content/browser_context_keyed_service_factory.h"
 #include "components/keyed_service/core/keyed_service.h"
 #include "content/public/browser/browser_context.h"
 
@@ -28,15 +26,21 @@ ProfileAccountManager* ProfileAccountManagerFactory::GetForProfile(
 }
 
 ProfileAccountManagerFactory::ProfileAccountManagerFactory()
-    : BrowserContextKeyedServiceFactory(
+    : ProfileKeyedServiceFactory(
           "ProfileAccountManager",
-          BrowserContextDependencyManager::GetInstance()) {}
+          ProfileSelections::Builder()
+              .WithRegular(ProfileSelection::kOriginalOnly)
+              // TODO(crbug.com/1418376): Check if this service is needed in
+              // Guest mode.
+              .WithGuest(ProfileSelection::kOriginalOnly)
+              .Build()) {}
 
 ProfileAccountManagerFactory::~ProfileAccountManagerFactory() = default;
 
-KeyedService* ProfileAccountManagerFactory::BuildServiceInstanceFor(
+std::unique_ptr<KeyedService>
+ProfileAccountManagerFactory::BuildServiceInstanceForBrowserContext(
     content::BrowserContext* context) const {
-  return new ProfileAccountManager(
+  return std::make_unique<ProfileAccountManager>(
       g_browser_process->profile_manager()->GetAccountProfileMapper(),
       /*profile_path=*/context->GetPath());
 }

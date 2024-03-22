@@ -1,4 +1,4 @@
-// Copyright (c) 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,10 +10,11 @@
 #include <string>
 #include <vector>
 
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
 #include "base/memory/ref_counted.h"
 #include "base/task/task_traits.h"
 #include "base/timer/timer.h"
+#include "base/values.h"
 #include "build/chromeos_buildflags.h"
 #include "content/common/content_export.h"
 #include "content/public/browser/tracing_controller.h"
@@ -23,22 +24,13 @@
 #include "services/tracing/public/mojom/perfetto_service.mojom.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 
-namespace perfetto {
-namespace protos {
-namespace pbzero {
+namespace perfetto::protos::pbzero {
 class TracePacket;
-}  // namespace pbzero
-}  // namespace protos
-}  // namespace perfetto
+}  // namespace perfetto::protos::pbzero
 
-namespace base {
-
-namespace trace_event {
+namespace base::trace_event {
 class TraceConfig;
-}  // namespace trace_event
-
-class Value;
-}  // namespace base
+}  // namespace base::trace_event
 
 namespace tracing {
 class BaseAgent;
@@ -95,7 +87,7 @@ class TracingControllerImpl : public TracingController,
   ~TracingControllerImpl() override;
   void AddAgents();
   void ConnectToServiceIfNeeded();
-  absl::optional<base::Value> GenerateMetadataDict();
+  absl::optional<base::Value::Dict> GenerateMetadataDict();
   void GenerateMetadataPacket(perfetto::protos::pbzero::TracePacket* packet,
                               bool privacy_filtering_enabled);
 

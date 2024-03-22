@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -29,7 +29,7 @@ PaintImageBuilder::PaintImageBuilder(PaintImage image, bool clear_contents)
 #endif
   if (clear_contents) {
     paint_image_.sk_image_ = nullptr;
-    paint_image_.paint_record_ = nullptr;
+    paint_image_.paint_record_ = std::nullopt;
     paint_image_.paint_record_rect_ = gfx::Rect();
     paint_image_.paint_image_generator_ = nullptr;
     paint_image_.cached_sk_image_ = nullptr;
@@ -37,6 +37,8 @@ PaintImageBuilder::PaintImageBuilder(PaintImage image, bool clear_contents)
   }
 }
 PaintImageBuilder::PaintImageBuilder(PaintImageBuilder&& other) = default;
+PaintImageBuilder& PaintImageBuilder::operator=(PaintImageBuilder&& other) =
+    default;
 PaintImageBuilder::~PaintImageBuilder() = default;
 
 PaintImage PaintImageBuilder::TakePaintImage() {
@@ -68,6 +70,10 @@ PaintImage PaintImageBuilder::TakePaintImage() {
     DCHECK(!paint_image_.sk_image_);
     DCHECK(!paint_image_.paint_record_);
     DCHECK(!paint_image_.paint_image_generator_);
+  }
+
+  if (paint_image_.HasGainmap()) {
+    DCHECK(paint_image_.paint_image_generator_);
   }
 
   if (paint_image_.ShouldAnimate()) {

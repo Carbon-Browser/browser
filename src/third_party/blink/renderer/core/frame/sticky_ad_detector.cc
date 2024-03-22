@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,7 +13,7 @@
 #include "third_party/blink/renderer/core/layout/layout_object.h"
 #include "third_party/blink/renderer/core/layout/layout_object_inlines.h"
 #include "third_party/blink/renderer/core/layout/layout_view.h"
-#include "third_party/blink/renderer/core/paint/paint_timing.h"
+#include "third_party/blink/renderer/core/paint/timing/paint_timing.h"
 #include "third_party/blink/renderer/core/scroll/scrollable_area.h"
 
 #include <cstdlib>
@@ -62,7 +62,7 @@ void StickyAdDetector::MaybeFireDetection(LocalFrame* outermost_main_frame) {
 
   // Skip any measurement before the FCP.
   if (PaintTiming::From(*outermost_main_frame->GetDocument())
-          .FirstContentfulPaint()
+          .FirstContentfulPaintIgnoringSoftNavigations()
           .is_null()) {
     return;
   }
@@ -77,8 +77,10 @@ void StickyAdDetector::MaybeFireDetection(LocalFrame* outermost_main_frame) {
 
   TRACE_EVENT0("blink,benchmark", "StickyAdDetector::MaybeFireDetection");
 
-  gfx::Size outermost_main_frame_size =
-      outermost_main_frame->GetMainFrameViewportSize();
+  gfx::Size outermost_main_frame_size = outermost_main_frame->View()
+                                            ->LayoutViewport()
+                                            ->VisibleContentRect()
+                                            .size();
 
   // Hit test the bottom center of the viewport.
   HitTestLocation location(
@@ -95,14 +97,15 @@ void StickyAdDetector::MaybeFireDetection(LocalFrame* outermost_main_frame) {
   if (!element)
     return;
 
-  DOMNodeId element_id = DOMNodeIds::IdForNode(element);
+  DOMNodeId element_id = element->GetDomNodeId();
 
   if (element_id == candidate_id_) {
     // If the main frame scrolling position has changed by a distance greater
     // than the height of the candidate, and the candidate is still at the
     // bottom center, then we record the use counter.
-    if (std::abs(candidate_start_outermost_main_frame_scroll_position_ -
-                 outermost_main_frame->GetMainFrameScrollPosition().y()) >
+    if (std::abs(
+            candidate_start_outermost_main_frame_scroll_position_ -
+            outermost_main_frame->GetOutermostMainFrameScrollPosition().y()) >
         candidate_height_) {
       OnLargeStickyAdDetected(outermost_main_frame);
     }
@@ -133,7 +136,7 @@ void StickyAdDetector::MaybeFireDetection(LocalFrame* outermost_main_frame) {
     candidate_id_ = element_id;
     candidate_height_ = overlay_rect.size().height();
     candidate_start_outermost_main_frame_scroll_position_ =
-        outermost_main_frame->GetMainFrameScrollPosition().y();
+        outermost_main_frame->GetOutermostMainFrameScrollPosition().y();
   }
 }
 

@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,6 +8,7 @@
 
 #include "ash/components/arc/mojom/file_system.mojom.h"
 #include "base/json/json_reader.h"
+#include "base/memory/raw_ptr.h"
 #include "base/strings/stringprintf.h"
 #include "base/test/mock_callback.h"
 #include "chrome/browser/ash/arc/fileapi/arc_select_files_util.h"
@@ -168,7 +169,8 @@ class ArcSelectFilesHandlerTest : public testing::Test {
   content::BrowserTaskEnvironment task_environment_;
   std::unique_ptr<TestingProfileManager> profile_manager_;
   std::unique_ptr<ArcSelectFilesHandler> arc_select_files_handler_;
-  MockSelectFileDialogHolder* mock_dialog_holder_;
+  raw_ptr<MockSelectFileDialogHolder, DanglingUntriaged | ExperimentalAsh>
+      mock_dialog_holder_;
 };
 
 TEST_F(ArcSelectFilesHandlerTest, SelectFiles_DialogType) {
@@ -208,8 +210,8 @@ TEST_F(ArcSelectFilesHandlerTest, SelectFiles_FileTypeInfo) {
   expected_file_type_info.allowed_paths =
       SelectFileDialog::FileTypeInfo::ANY_PATH;
   std::vector<base::FilePath::StringType> extensions;
-  extensions.push_back("text");
   extensions.push_back("txt");
+  extensions.push_back("text");
   expected_file_type_info.extensions.push_back(extensions);
 
   EXPECT_CALL(
@@ -234,8 +236,8 @@ TEST_F(ArcSelectFilesHandlerTest, SelectFiles_FileTypeInfo_UnknownExtension) {
   expected_file_type_info.allowed_paths =
       SelectFileDialog::FileTypeInfo::ANY_PATH;
   std::vector<base::FilePath::StringType> extensions;
-  extensions.push_back("text");
   extensions.push_back("txt");
+  extensions.push_back("text");
   expected_file_type_info.extensions.push_back(extensions);
   // include_all_files should be enabled when there is unknown MIME type.
   expected_file_type_info.include_all_files = true;

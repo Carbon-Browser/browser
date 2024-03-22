@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -17,7 +17,8 @@ FeedUIConfig::FeedUIConfig()
     : WebUIConfig(content::kChromeUIUntrustedScheme, kFeedHost) {}
 
 std::unique_ptr<content::WebUIController> FeedUIConfig::CreateWebUIController(
-    content::WebUI* web_ui) {
+    content::WebUI* web_ui,
+    const GURL& url) {
   return std::make_unique<FeedUI>(web_ui);
 }
 

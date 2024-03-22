@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -99,9 +99,6 @@ class StabilityMetricsHelper {
 
   // Records that a new renderer process was successfully launched.
   void LogRendererLaunched(bool was_extension_process);
-
-  // Records a renderer process hang.
-  void LogRendererHang();
 
   // Registers local state prefs used by this class.
   static void RegisterPrefs(PrefRegistrySimple* registry);

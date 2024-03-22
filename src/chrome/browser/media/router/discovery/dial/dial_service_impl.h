@@ -1,4 +1,4 @@
-// Copyright (c) 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,6 +11,7 @@
 
 #include "base/gtest_prod_util.h"
 #include "base/memory/raw_ptr.h"
+#include "base/memory/raw_ref.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/sequence_checker.h"
 #include "base/task/sequenced_task_runner.h"
@@ -18,6 +19,7 @@
 #include "base/timer/timer.h"
 #include "chrome/browser/media/router/discovery/dial/dial_service.h"
 #include "net/base/ip_address.h"
+#include "net/base/network_interfaces.h"
 #include "net/socket/udp_socket.h"
 
 namespace net {
@@ -170,7 +172,7 @@ class DialServiceImpl : public DialService {
   bool HasOpenSockets();
 
   // Unowned reference to the DialService::Client.
-  DialService::Client& client_;
+  const raw_ref<DialService::Client> client_;
 
   // Task runner for the DialServiceImpl.  Currently must be bound to the IO
   // thread because of socket use, but this may change in the future.

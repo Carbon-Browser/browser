@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2016 The Chromium Authors. All rights reserved.
+# Copyright 2016 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 """Generates a JSON typemap from its command-line arguments and dependencies.
@@ -87,6 +87,7 @@ def LoadCppTypemapConfig(path):
             'traits_headers': config.get('traits_private_headers', []),
             'copyable_pass_by_value': entry.get('copyable_pass_by_value',
                                                 False),
+            'default_constructible': entry.get('default_constructible', True),
             'force_serialize': entry.get('force_serialize', False),
             'hashable': entry.get('hashable', False),
             'move_only': entry.get('move_only', False),

@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -41,16 +41,12 @@ public final class ApiHelperForR {
         return manager.getStorageVolume(uri).getDirectory();
     }
 
-    /**
-     * See {@link InputManager#verifyInputEvent(InputEvent)}.
-     */
+    /** See {@link InputManager#verifyInputEvent(InputEvent)}. */
     public static VerifiedInputEvent verifyInputEvent(InputManager manager, InputEvent inputEvent) {
         return manager.verifyInputEvent(inputEvent);
     }
 
-    /**
-     * See {@link android.app.ActivityManager#setProcessStateSummary(byte[])}
-     */
+    /** See {@link android.app.ActivityManager#setProcessStateSummary(byte[])} */
     public static void setProcessStateSummary(ActivityManager am, byte[] bytes) {
         am.setProcessStateSummary(bytes);
     }

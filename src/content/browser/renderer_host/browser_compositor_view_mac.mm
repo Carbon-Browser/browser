@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,7 +12,7 @@
 
 #include "base/command_line.h"
 #include "base/containers/circular_deque.h"
-#include "base/lazy_instance.h"
+#include "base/no_destructor.h"
 #include "base/trace_event/trace_event.h"
 #include "components/viz/common/features.h"
 #include "components/viz/common/surfaces/local_surface_id.h"
@@ -22,7 +22,6 @@
 #include "third_party/abseil-cpp/absl/types/optional.h"
 #include "ui/accelerated_widget_mac/accelerated_widget_mac.h"
 #include "ui/accelerated_widget_mac/window_resize_helper_mac.h"
-#include "ui/base/layout.h"
 #include "ui/compositor/recyclable_compositor_mac.h"
 #include "ui/gfx/geometry/dip_util.h"
 #include "ui/gfx/geometry/size_conversions.h"
@@ -38,8 +37,10 @@ namespace {
 //   signals to shut down will come in very late, long after things that the
 //   ui::Compositor depend on have been destroyed).
 //   https://crbug.com/805726
-base::LazyInstance<std::set<BrowserCompositorMac*>>::Leaky
-    g_browser_compositors;
+std::set<BrowserCompositorMac*>& GetBrowserCompositors() {
+  static base::NoDestructor<std::set<BrowserCompositorMac*>> instance;
+  return *instance.get();
+}
 
 }  // namespace
 
@@ -54,7 +55,7 @@ BrowserCompositorMac::BrowserCompositorMac(
     : client_(client),
       accelerated_widget_mac_ns_view_(accelerated_widget_mac_ns_view),
       weak_factory_(this) {
-  g_browser_compositors.Get().insert(this);
+  GetBrowserCompositors().insert(this);
 
   root_layer_ = std::make_unique<ui::Layer>(ui::LAYER_SOLID_COLOR);
   // Ensure that this layer draws nothing when it does not not have delegated
@@ -75,7 +76,7 @@ BrowserCompositorMac::~BrowserCompositorMac() {
   delegated_frame_host_.reset();
   root_layer_.reset();
 
-  size_t num_erased = g_browser_compositors.Get().erase(this);
+  size_t num_erased = GetBrowserCompositors().erase(this);
   DCHECK_EQ(1u, num_erased);
 }
 
@@ -138,9 +139,9 @@ void BrowserCompositorMac::UpdateSurfaceFromNSView(
   }
 
   if (recyclable_compositor_) {
-    recyclable_compositor_->UpdateSurface(dfh_size_pixels_,
-                                          current.device_scale_factor,
-                                          current.display_color_spaces);
+    recyclable_compositor_->UpdateSurface(
+        dfh_size_pixels_, current.device_scale_factor,
+        current.display_color_spaces, current.display_id);
   }
 }
 
@@ -160,9 +161,9 @@ void BrowserCompositorMac::UpdateSurfaceFromChild(
       dfh_device_scale_factor_ = new_device_scale_factor;
       root_layer_->SetBounds(gfx::Rect(dfh_size_dip_));
       if (recyclable_compositor_) {
-        recyclable_compositor_->UpdateSurface(dfh_size_pixels_,
-                                              current.device_scale_factor,
-                                              current.display_color_spaces);
+        recyclable_compositor_->UpdateSurface(
+            dfh_size_pixels_, current.device_scale_factor,
+            current.display_color_spaces, current.display_id);
       }
     }
     delegated_frame_host_->EmbedSurface(
@@ -172,28 +173,10 @@ void BrowserCompositorMac::UpdateSurfaceFromChild(
   client_->OnBrowserCompositorSurfaceIdChanged();
 }
 
-void BrowserCompositorMac::UpdateVSyncParameters(
-    const base::TimeTicks& timebase,
-    const base::TimeDelta& interval) {
-  ui::Compositor* compositor = nullptr;
-  if (recyclable_compositor_)
-    compositor = recyclable_compositor_->compositor();
-  // TODO(ccameron): VSync parameters for a ui::Compositor should be tracked
-  // with the owner of that ui::Compositor (which, in the case of MacViews, is
-  // BridgedNativeView). For the moment, push the VSync parameters from here to
-  // the BridgedNativeView's ui::Compositor because that is a small change and
-  // is easy to merge.
-  // https://crbug.com/869129
-  if (parent_ui_layer_)
-    compositor = parent_ui_layer_->GetCompositor();
-  if (compositor)
-    compositor->SetDisplayVSyncParameters(timebase, interval);
-}
-
 void BrowserCompositorMac::SetRenderWidgetHostIsHidden(bool hidden) {
   render_widget_host_is_hidden_ = hidden;
   UpdateState();
-  if (state_ == UseParentLayerCompositor) {
+  if (state_ == UseParentLayerCompositor && !hidden) {
     // UpdateState might not call WasShown when showing a frame using the same
     // ParentLayerCompositor, since it returns early on a no-op state
     // transition.
@@ -246,8 +229,7 @@ void BrowserCompositorMac::TransitionToState(State new_state) {
   if (state_ == HasOwnCompositor) {
     recyclable_compositor_->widget()->ResetNSView();
     recyclable_compositor_->compositor()->SetRootLayer(nullptr);
-    ui::RecyclableCompositorMacFactory::Get()->RecycleCompositor(
-        std::move(recyclable_compositor_));
+    recyclable_compositor_.reset();
   }
 
   // The compositor is now detached. If this is the target state, we're done.
@@ -268,13 +250,12 @@ void BrowserCompositorMac::TransitionToState(State new_state) {
     state_ = UseParentLayerCompositor;
   }
   if (new_state == HasOwnCompositor) {
-    recyclable_compositor_ =
-        ui::RecyclableCompositorMacFactory::Get()->CreateCompositor(
-            content::GetContextFactory());
+    recyclable_compositor_ = std::make_unique<ui::RecyclableCompositorMac>(
+        content::GetContextFactory());
     display::ScreenInfo current = client_->GetCurrentScreenInfo();
-    recyclable_compositor_->UpdateSurface(dfh_size_pixels_,
-                                          current.device_scale_factor,
-                                          current.display_color_spaces);
+    recyclable_compositor_->UpdateSurface(
+        dfh_size_pixels_, current.device_scale_factor,
+        current.display_color_spaces, current.display_id);
     recyclable_compositor_->compositor()->SetRootLayer(root_layer_.get());
     recyclable_compositor_->compositor()->SetBackgroundColor(background_color_);
     recyclable_compositor_->widget()->SetNSView(
@@ -293,13 +274,10 @@ void BrowserCompositorMac::DisableRecyclingForShutdown() {
   // Ensure that the client has destroyed its BrowserCompositorViewMac before
   // it dependencies are destroyed.
   // https://crbug.com/805726
-  while (!g_browser_compositors.Get().empty()) {
-    BrowserCompositorMac* browser_compositor =
-        *g_browser_compositors.Get().begin();
+  while (!GetBrowserCompositors().empty()) {
+    BrowserCompositorMac* browser_compositor = *GetBrowserCompositors().begin();
     browser_compositor->client_->DestroyCompositorForShutdown();
   }
-
-  ui::RecyclableCompositorMacFactory::Get()->DisableRecyclingForShutdown();
 }
 
 void BrowserCompositorMac::TakeFallbackContentFrom(
@@ -344,6 +322,15 @@ BrowserCompositorMac::CollectSurfaceIdsForEviction() {
 
 bool BrowserCompositorMac::ShouldShowStaleContentOnEviction() {
   return false;
+}
+
+void BrowserCompositorMac::DidNavigateMainFramePreCommit() {
+  delegated_frame_host_->DidNavigateMainFramePreCommit();
+}
+
+void BrowserCompositorMac::DidEnterBackForwardCache() {
+  dfh_local_surface_id_allocator_.GenerateId();
+  delegated_frame_host_->DidEnterBackForwardCache();
 }
 
 void BrowserCompositorMac::DidNavigate() {
@@ -406,7 +393,7 @@ void BrowserCompositorMac::TransformPointToRootSurface(gfx::PointF* point) {
   gfx::Transform transform_to_root;
   if (parent_ui_layer_)
     parent_ui_layer_->GetTargetTransformRelativeTo(nullptr, &transform_to_root);
-  transform_to_root.TransformPoint(point);
+  *point = transform_to_root.MapPoint(*point);
 }
 
 void BrowserCompositorMac::LayerDestroyed(ui::Layer* layer) {
@@ -420,6 +407,11 @@ ui::Compositor* BrowserCompositorMac::GetCompositor() const {
   if (recyclable_compositor_)
     return recyclable_compositor_->compositor();
   return nullptr;
+}
+
+void BrowserCompositorMac::InvalidateSurfaceAllocationGroup() {
+  dfh_local_surface_id_allocator_.Invalidate(
+      /*also_invalidate_allocation_group=*/true);
 }
 
 cc::DeadlinePolicy BrowserCompositorMac::GetDeadlinePolicy(

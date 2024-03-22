@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,7 +8,7 @@
 #include <memory>
 #include <string>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "base/time/time.h"
 #include "content/browser/renderer_host/navigation_request.h"
@@ -23,6 +23,7 @@
 #include "net/base/ip_endpoint.h"
 #include "net/base/load_flags.h"
 #include "net/dns/public/resolve_error_info.h"
+#include "net/http/http_connection_info.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/blink/public/common/navigation/impression.h"
 #include "third_party/blink/public/mojom/loader/mixed_content.mojom.h"
@@ -142,7 +143,7 @@ class NavigationSimulatorImpl : public NavigationSimulator,
     should_replace_current_entry_ = should_replace_current_entry;
   }
 
-  void set_http_connection_info(net::HttpResponseInfo::ConnectionInfo info) {
+  void set_http_connection_info(net::HttpConnectionInfo info) {
     http_connection_info_ = info;
   }
 
@@ -228,6 +229,8 @@ class NavigationSimulatorImpl : public NavigationSimulator,
     supports_loading_mode_header_ = value;
   }
 
+  void set_post_id(int64_t post_id) { post_id_ = post_id; }
+
  private:
   NavigationSimulatorImpl(const GURL& original_url,
                           bool browser_initiated,
@@ -244,6 +247,7 @@ class NavigationSimulatorImpl : public NavigationSimulator,
   void InitializeFromStartedRequest(NavigationRequest* request);
 
   // WebContentsObserver:
+  void RenderFrameDeleted(RenderFrameHost* render_frame_host) override;
   void DidStartNavigation(NavigationHandle* navigation_handle) override;
   void DidRedirectNavigation(NavigationHandle* navigation_handle) override;
   void ReadyToCommitNavigation(NavigationHandle* navigation_handle) override;
@@ -341,13 +345,13 @@ class NavigationSimulatorImpl : public NavigationSimulator,
   // IMPORTANT: Because NavigationSimulator is used outside content/ where we
   // sometimes use WebContentsImpl and not TestWebContents, this cannot be
   // assumed to cast properly to TestWebContents.
-  raw_ptr<WebContentsImpl> web_contents_;
+  raw_ptr<WebContentsImpl, DanglingUntriaged> web_contents_;
 
   // The renderer associated with this navigation.
   // Note: this can initially be null for browser-initiated navigations.
-  raw_ptr<TestRenderFrameHost> render_frame_host_;
+  raw_ptr<TestRenderFrameHost, AcrossTasksDanglingUntriaged> render_frame_host_;
 
-  raw_ptr<FrameTreeNode> frame_tree_node_;
+  raw_ptr<FrameTreeNode, AcrossTasksDanglingUntriaged> frame_tree_node_;
 
   // The NavigationRequest associated with this navigation.
   raw_ptr<NavigationRequest> request_;
@@ -380,8 +384,8 @@ class NavigationSimulatorImpl : public NavigationSimulator,
   mojo::ScopedDataPipeConsumerHandle response_body_;
   network::mojom::CSPDisposition should_check_main_world_csp_ =
       network::mojom::CSPDisposition::CHECK;
-  net::HttpResponseInfo::ConnectionInfo http_connection_info_ =
-      net::HttpResponseInfo::CONNECTION_INFO_UNKNOWN;
+  net::HttpConnectionInfo http_connection_info_ =
+      net::HttpConnectionInfo::kUNKNOWN;
   net::ResolveErrorInfo resolve_error_info_ = net::ResolveErrorInfo(net::OK);
   absl::optional<net::SSLInfo> ssl_info_;
   absl::optional<blink::PageState> page_state_;

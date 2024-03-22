@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -19,16 +19,13 @@ import org.robolectric.annotation.Config;
 import org.chromium.base.UserDataHost;
 import org.chromium.base.test.BaseRobolectricTestRunner;
 
-/**
- * Tests for {@link TabAttributes}.
- */
+/** Tests for {@link TabAttributes}. */
 @RunWith(BaseRobolectricTestRunner.class)
 @Config(manifest = Config.NONE)
 public class TabAttributesTest {
     private static final String ATTR1 = "attr1";
 
-    @Mock
-    private Tab mTab;
+    @Mock private Tab mTab;
 
     private final UserDataHost mUserDataHost = new UserDataHost();
 

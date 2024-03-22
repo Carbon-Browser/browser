@@ -1,10 +1,10 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "components/viz/service/frame_sinks/gpu_vsync_begin_frame_source.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/trace_event/trace_event.h"
 #include "components/viz/service/display/output_surface.h"
 
@@ -90,6 +90,10 @@ void GpuVSyncBeginFrameSource::SetDynamicBeginFrameDeadlineOffsetSource(
 void GpuVSyncBeginFrameSource::OnNeedsBeginFrames(bool needs_begin_frames) {
   skip_next_vsync_ = false;
   output_surface_->SetGpuVSyncEnabled(needs_begin_frames);
+}
+
+void GpuVSyncBeginFrameSource::SetVSyncDisplayID(int64_t display_id) {
+  output_surface_->SetVSyncDisplayID(display_id);
 }
 
 }  // namespace viz

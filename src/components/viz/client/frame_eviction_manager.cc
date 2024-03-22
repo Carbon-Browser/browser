@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,13 +6,18 @@
 
 #include <algorithm>
 
-#include "base/bind.h"
 #include "base/check_op.h"
 #include "base/containers/contains.h"
+#include "base/functional/bind.h"
+#include "base/location.h"
 #include "base/memory/memory_pressure_listener.h"
 #include "base/memory/memory_pressure_monitor.h"
 #include "base/system/sys_info.h"
+#include "base/task/sequenced_task_runner.h"
+#include "base/task/single_thread_task_runner.h"
+#include "base/trace_event/memory_dump_manager.h"
 #include "build/build_config.h"
+#include "components/viz/common/features.h"
 
 namespace viz {
 namespace {
@@ -42,7 +47,7 @@ void FrameEvictionManager::AddFrame(FrameEvictionManagerClient* frame,
   if (locked)
     locked_frames_[frame] = 1;
   else
-    unlocked_frames_.push_front(frame);
+    RegisterUnlockedFrame(frame);
   CullUnlockedFrames(GetMaxNumberOfSavedFrames());
 }
 
@@ -50,13 +55,14 @@ void FrameEvictionManager::RemoveFrame(FrameEvictionManagerClient* frame) {
   auto locked_iter = locked_frames_.find(frame);
   if (locked_iter != locked_frames_.end())
     locked_frames_.erase(locked_iter);
-  unlocked_frames_.remove(frame);
+  unlocked_frames_.remove_if([&](const auto& p) { return p.first == frame; });
 }
 
 void FrameEvictionManager::LockFrame(FrameEvictionManagerClient* frame) {
-  if (base::Contains(unlocked_frames_, frame)) {
+  if (base::Contains(unlocked_frames_, frame,
+                     [](const auto& p) { return p.first; })) {
     DCHECK(locked_frames_.find(frame) == locked_frames_.end());
-    unlocked_frames_.remove(frame);
+    unlocked_frames_.remove_if([&](const auto& p) { return p.first == frame; });
     locked_frames_[frame] = 1;
   } else {
     DCHECK(locked_frames_.find(frame) != locked_frames_.end());
@@ -72,8 +78,23 @@ void FrameEvictionManager::UnlockFrame(FrameEvictionManagerClient* frame) {
     locked_frames_[frame]--;
   } else {
     RemoveFrame(frame);
-    unlocked_frames_.push_front(frame);
+    RegisterUnlockedFrame(frame);
     CullUnlockedFrames(GetMaxNumberOfSavedFrames());
+  }
+}
+
+void FrameEvictionManager::RegisterUnlockedFrame(
+    FrameEvictionManagerClient* frame) {
+  unlocked_frames_.emplace_front(frame, clock_->NowTicks());
+  if (base::FeatureList::IsEnabled(features::kAggressiveFrameCulling)) {
+    if (!idle_frames_culling_timer_.IsRunning()) {
+      // Unretained: `idle_frames_culling_timer_` is a member of `this`, doesn't
+      // outlive it, and cancels the task in its destructor.
+      idle_frames_culling_timer_.Start(
+          FROM_HERE, kPeriodicCullingDelay,
+          base::BindRepeating(&FrameEvictionManager::CullOldUnlockedFrames,
+                              base::Unretained(this)));
+    }
   }
 }
 
@@ -114,6 +135,13 @@ FrameEvictionManager::FrameEvictionManager()
 #else
       std::min(5, 2 + (base::SysInfo::AmountOfPhysicalMemoryMB() / 256));
 #endif
+
+  // For WebView, we may not have a default task runner.
+  if (base::SingleThreadTaskRunner::HasCurrentDefault()) {
+    base::trace_event::MemoryDumpManager::GetInstance()->RegisterDumpProvider(
+        this, "FrameEvictionManager",
+        base::SingleThreadTaskRunner::GetCurrentDefault());
+  }
 }
 
 void FrameEvictionManager::CullUnlockedFrames(size_t saved_frame_limit) {
@@ -126,10 +154,40 @@ void FrameEvictionManager::CullUnlockedFrames(size_t saved_frame_limit) {
          unlocked_frames_.size() + locked_frames_.size() > saved_frame_limit) {
     size_t old_size = unlocked_frames_.size();
     // Should remove self from list.
-    unlocked_frames_.back()->EvictCurrentFrame();
+    auto* frame = unlocked_frames_.back().first;
+    frame->EvictCurrentFrame();
     if (unlocked_frames_.size() == old_size)
       break;
   }
+}
+
+void FrameEvictionManager::CullOldUnlockedFrames() {
+  DCHECK(std::is_sorted(
+      unlocked_frames_.begin(), unlocked_frames_.end(),
+      [](const auto& a, const auto& b) { return a.second >= b.second; }));
+
+  // Try again later, since the timer is not cancelled.
+  if (pause_count_)
+    return;
+
+  auto now = clock_->NowTicks();
+  while (!unlocked_frames_.empty() &&
+         now - unlocked_frames_.back().second >= kPeriodicCullingDelay) {
+    size_t old_size = unlocked_frames_.size();
+    auto* frame = unlocked_frames_.back().first;
+    frame->EvictCurrentFrame();
+    // Should remove self from list. If it's not possible, give up and try again
+    // later. This should be a rare case, so don't bother rescheduling earlier
+    // than the next timer tick.
+    //
+    // See https://chromium-review.googlesource.com/c/chromium/src/+/2585790 for
+    // an example where this can happen.
+    if (old_size - 1 != unlocked_frames_.size())
+      break;
+  }
+
+  if (unlocked_frames_.empty())
+    idle_frames_culling_timer_.Stop();
 }
 
 void FrameEvictionManager::OnMemoryPressure(
@@ -139,7 +197,10 @@ void FrameEvictionManager::OnMemoryPressure(
       PurgeMemory(kModeratePressurePercentage);
       break;
     case base::MemoryPressureListener::MEMORY_PRESSURE_LEVEL_CRITICAL:
-      PurgeMemory(kCriticalPressurePercentage);
+      if (base::FeatureList::IsEnabled(features::kAggressiveFrameCulling))
+        PurgeAllUnlockedFrames();
+      else
+        PurgeMemory(kCriticalPressurePercentage);
       break;
     case base::MemoryPressureListener::MEMORY_PRESSURE_LEVEL_NONE:
       // No need to change anything when there is no pressure.
@@ -149,13 +210,23 @@ void FrameEvictionManager::OnMemoryPressure(
 
 void FrameEvictionManager::PurgeMemory(int percentage) {
   int saved_frame_limit = max_number_of_saved_frames_;
+  int remaining_frames = std::max(1, (saved_frame_limit * percentage) / 100);
+
   if (saved_frame_limit <= 1)
     return;
-  CullUnlockedFrames(std::max(1, (saved_frame_limit * percentage) / 100));
+
+  CullUnlockedFrames(remaining_frames);
 }
 
 void FrameEvictionManager::PurgeAllUnlockedFrames() {
   CullUnlockedFrames(0);
+}
+
+void FrameEvictionManager::SetOverridesForTesting(
+    scoped_refptr<base::SingleThreadTaskRunner> task_runner,
+    const base::TickClock* clock) {
+  idle_frames_culling_timer_.SetTaskRunner(task_runner);
+  clock_ = clock;
 }
 
 void FrameEvictionManager::Pause() {
@@ -170,6 +241,16 @@ void FrameEvictionManager::Unpause() {
     CullUnlockedFrames(pending_unlocked_frame_limit_.value());
     pending_unlocked_frame_limit_.reset();
   }
+}
+
+bool FrameEvictionManager::OnMemoryDump(
+    const base::trace_event::MemoryDumpArgs& args,
+    base::trace_event::ProcessMemoryDump* pmd) {
+  auto* dump = pmd->CreateAllocatorDump("frame_evictor");
+  dump->AddScalar("locked_frames", "count", locked_frames_.size());
+  dump->AddScalar("unlocked_frames", "count", unlocked_frames_.size());
+
+  return true;
 }
 
 }  // namespace viz

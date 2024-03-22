@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,14 +6,13 @@
 
 #include "base/test/scoped_feature_list.h"
 #include "chrome/browser/ui/browser.h"
+#include "chrome/browser/ui/browser_window.h"
 #include "chrome/browser/ui/test/test_browser_dialog.h"
 #include "chrome/browser/ui/views/webid/fake_delegate.h"
 #include "chrome/test/base/in_process_browser_test.h"
 #include "chrome/test/base/ui_test_utils.h"
-#include "chrome/test/views/chrome_views_test_base.h"
 #include "content/public/common/content_features.h"
 #include "content/public/test/browser_test.h"
-#include "net/test/embedded_test_server/embedded_test_server.h"
 
 class FedCmAccountSelectionViewBrowserTest : public DialogBrowserTest {
  public:
@@ -29,13 +28,17 @@ class FedCmAccountSelectionViewBrowserTest : public DialogBrowserTest {
   }
 
   void ShowUi(const std::string& name) override {
-    std::vector<const content::IdentityRequestAccount> accounts = {
-        {"id", "email", "name", "given_name", GURL::EmptyGURL()}};
-    content::IdentityProviderMetadata idp_metadata;
-    content::ClientIdData client_data(GURL::EmptyGURL(), GURL::EmptyGURL());
-    account_selection_view()->Show("rp-example.com", "idp-example.com",
-                                   accounts, idp_metadata, client_data,
-                                   Account::SignInMode::kExplicit);
+    std::vector<content::IdentityRequestAccount> accounts = {
+        {"id", "email", "name", "given_name", GURL::EmptyGURL(),
+         /*login_hints=*/std::vector<std::string>(),
+         /*domain_hints=*/std::vector<std::string>()}};
+    account_selection_view()->Show(
+        "top-frame-example.com",
+        absl::make_optional<std::string>("iframe-example.com"),
+        {{"idp-example.com", accounts, content::IdentityProviderMetadata(),
+          content::ClientMetadata(GURL::EmptyGURL(), GURL::EmptyGURL()),
+          blink::mojom::RpContext::kSignIn, /*request_permission=*/true}},
+        Account::SignInMode::kExplicit, /*show_auto_reauthn_checkbox=*/false);
   }
 
   void Show() {
@@ -71,6 +74,9 @@ IN_PROC_BROWSER_TEST_F(FedCmAccountSelectionViewBrowserTest, Hide) {
   // The bubble should be closed after the WebContents is Hidden.
   ASSERT_TRUE(GetBubble());
   EXPECT_FALSE(GetBubble()->IsVisible());
+  // Test workaround for http://crbug.com/1367309 where
+  // NativeWidgetMac::Activate() ignores views::Widget::IsVisible().
+  EXPECT_FALSE(GetBubble()->widget_delegate()->CanActivate());
 }
 
 IN_PROC_BROWSER_TEST_F(FedCmAccountSelectionViewBrowserTest, NavigateAway) {
@@ -95,6 +101,21 @@ IN_PROC_BROWSER_TEST_F(FedCmAccountSelectionViewBrowserTest, ReShow) {
   // The bubble should be reshown after the WebContents is Visible.
   ASSERT_TRUE(GetBubble());
   EXPECT_TRUE(GetBubble()->IsVisible());
+  // Test workaround for http://crbug.com/1367309 where
+  // NativeWidgetMac::Activate() ignores views::Widget::IsVisible().
+  EXPECT_TRUE(GetBubble()->widget_delegate()->CanActivate());
+}
+
+IN_PROC_BROWSER_TEST_F(FedCmAccountSelectionViewBrowserTest, ShowWhileHidden) {
+  browser()->tab_strip_model()->GetActiveWebContents()->WasHidden();
+  Show();
+  // Since Show() was called while hidden, the bubble should have been created,
+  // but should not be visible.
+  ASSERT_TRUE(GetBubble());
+  EXPECT_FALSE(GetBubble()->IsVisible());
+  browser()->tab_strip_model()->GetActiveWebContents()->WasShown();
+  ASSERT_TRUE(GetBubble());
+  EXPECT_TRUE(GetBubble()->IsVisible());
 }
 
 IN_PROC_BROWSER_TEST_F(FedCmAccountSelectionViewBrowserTest, DetachAndDelete) {
@@ -109,5 +130,16 @@ IN_PROC_BROWSER_TEST_F(FedCmAccountSelectionViewBrowserTest,
   browser()->tab_strip_model()->DetachWebContentsAtForInsertion(0);
   // TODO(npm): it would be better if the bubble actually moves with the
   // corresponding tab, instead of being altogether deleted.
+  EXPECT_FALSE(GetBubble());
+}
+
+// Tests crash scenario from crbug.com/1473691.
+IN_PROC_BROWSER_TEST_F(FedCmAccountSelectionViewBrowserTest, ClosedBrowser) {
+  PreShow();
+  browser()->window()->Close();
+  ui_test_utils::WaitForBrowserToClose(browser());
+
+  // Invoking this after browser is closed should not cause a crash.
+  ShowUi("");
   EXPECT_FALSE(GetBubble());
 }

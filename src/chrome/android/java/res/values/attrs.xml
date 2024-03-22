@@ -1,7 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Copyright 2014 The Chromium Authors. All rights reserved.
-     Use of this source code is governed by a BSD-style license that can be
-     found in the LICENSE file. -->
+<!--
+Copyright 2014 The Chromium Authors
+Use of this source code is governed by a BSD-style license that can be
+found in the LICENSE file.
+-->
 
 <resources>
     <declare-styleable name="HyperlinkPreference">
@@ -21,19 +23,7 @@
         <attr name="iconCornerRadius" format="dimension"/>
     </declare-styleable>
 
-
-    <declare-styleable name="BlurView">
-        <attr name="blurRadius" format="integer"/>
-        <attr name="downsampleFactor" format="integer"/>
-        <attr name="overlayColor" format="color"/>
-    </declare-styleable>
-
-    <declare-styleable name="BigButtonView">
-        <attr name="text" format="string"/>
-        <attr name="subText" format="string"/>
-    </declare-styleable>
-
-    <declare-styleable name="BlurLockView">
-        <attr name="password_type" format="string"/>
+    <declare-styleable name="ManageAccountDevicesLinkView">
+        <attr name="showLink" format="boolean" />
     </declare-styleable>
 </resources>

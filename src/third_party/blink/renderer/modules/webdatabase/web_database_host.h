@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,10 +12,6 @@
 #include "mojo/public/cpp/bindings/shared_remote.h"
 #include "third_party/blink/renderer/platform/wtf/allocator/allocator.h"
 #include "third_party/blink/renderer/platform/wtf/text/wtf_string.h"
-
-namespace base {
-class SingleThreadTaskRunner;
-}
 
 namespace blink {
 
@@ -76,10 +72,6 @@ class WebDatabaseHost {
 
   // Need a SharedRemote as method calls will happen from the Database thread.
   mojo::SharedRemote<mojom::blink::WebDatabaseHost> shared_remote_;
-
-  // Used to ensure that the database gets opened from the main thread, but that
-  // other database-related event is reported from the database thread instead.
-  scoped_refptr<base::SingleThreadTaskRunner> main_thread_task_runner_;
 };
 
 }  // namespace blink

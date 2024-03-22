@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -27,7 +27,7 @@ bool StructTraits<mojo_base::mojom::GenericPendingAssociatedReceiverDataView,
                   GenericPendingAssociatedReceiver>::
     Read(mojo_base::mojom::GenericPendingAssociatedReceiverDataView data,
          GenericPendingAssociatedReceiver* out) {
-  base::StringPiece interface_name;
+  std::string_view interface_name;
   if (!data.ReadInterfaceName(&interface_name))
     return false;
   *out = GenericPendingAssociatedReceiver(

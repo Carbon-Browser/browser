@@ -1,4 +1,4 @@
-// Copyright (c) 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -83,11 +83,13 @@ class NotificationUIManagerBrowserTest : public InProcessBrowserTest {
       new_delegate->AddRef();
     }
 
-    return Notification(message_center::NOTIFICATION_TYPE_SIMPLE, id, u"title",
-                        u"message", ui::ImageModel(), u"chrome-test://testing/",
-                        GURL("chrome-test://testing/"),
-                        message_center::NotifierId(),
-                        message_center::RichNotificationData(), new_delegate);
+    return Notification(
+        message_center::NOTIFICATION_TYPE_SIMPLE, id, u"title", u"message",
+        ui::ImageModel(), u"chrome-test://testing/",
+        GURL("chrome-test://testing/"),
+        message_center::NotifierId(message_center::NotifierType::APPLICATION,
+                                   "extension_id"),
+        message_center::RichNotificationData(), new_delegate);
   }
 
   Notification CreateRichTestNotification(const std::string& id,
@@ -101,7 +103,7 @@ class NotificationUIManagerBrowserTest : public InProcessBrowserTest {
     message_center::RichNotificationData data;
 
     return Notification(
-        message_center::NOTIFICATION_TYPE_BASE_FORMAT, id, u"title", u"message",
+        message_center::NOTIFICATION_TYPE_SIMPLE, id, u"title", u"message",
         ui::ImageModel(), u"chrome-test://testing/",
         GURL("chrome-test://testing/"),
         message_center::NotifierId(message_center::NotifierType::APPLICATION,

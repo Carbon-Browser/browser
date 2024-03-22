@@ -1,10 +1,11 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef THIRD_PARTY_BLINK_RENDERER_PLATFORM_TESTING_FONT_TEST_HELPERS_H_
 #define THIRD_PARTY_BLINK_RENDERER_PLATFORM_TESTING_FONT_TEST_HELPERS_H_
 
+#include "base/memory/raw_ptr.h"
 #include "build/build_config.h"
 #include "third_party/blink/public/platform/web_font_prewarmer.h"
 #include "third_party/blink/renderer/platform/fonts/font_description.h"
@@ -20,7 +21,8 @@ namespace test {
 Font CreateTestFont(const AtomicString& family_name,
                     const String& font_path,
                     float size,
-                    const FontDescription::VariantLigatures* = nullptr);
+                    const FontDescription::VariantLigatures* = nullptr,
+                    void (*init_font_description)(FontDescription*) = nullptr);
 
 // Reads a font from raw font data, for use in fuzzing test only.
 Font CreateTestFont(const AtomicString& family_name,
@@ -28,6 +30,8 @@ Font CreateTestFont(const AtomicString& family_name,
                     size_t data_size,
                     float size,
                     const FontDescription::VariantLigatures* = nullptr);
+
+Font CreateAhemFont(float size);
 
 #if BUILDFLAG(IS_WIN)
 class TestFontPrewarmer : public WebFontPrewarmer {
@@ -51,7 +55,7 @@ class ScopedTestFontPrewarmer {
 
  private:
   TestFontPrewarmer current_;
-  WebFontPrewarmer* saved_;
+  raw_ptr<WebFontPrewarmer, ExperimentalRenderer> saved_;
 };
 #endif
 

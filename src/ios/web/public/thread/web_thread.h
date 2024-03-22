@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,16 +9,8 @@
 #include <string>
 #include <utility>
 
-#include "base/callback.h"
 #include "base/check_op.h"
-#include "base/location.h"
-#include "base/memory/ref_counted.h"
 #include "base/task/single_thread_task_runner.h"
-#include "base/task/task_runner_util.h"
-
-namespace base {
-class Location;
-}
 
 namespace web {
 
@@ -31,13 +23,13 @@ class WebThreadDelegate;
 
 // Use DCHECK_CURRENTLY_ON(WebThread::ID) to assert that a function can only be
 // called on the named WebThread.
-#define DCHECK_CURRENTLY_ON(thread_identifier)              \
-  (DCHECK(::web::WebThread::CurrentlyOn(thread_identifier)) \
-   << ::web::WebThread::GetDCheckCurrentlyOnErrorMessage(thread_identifier))
+#define DCHECK_CURRENTLY_ON(thread_identifier)             \
+  DCHECK(::web::WebThread::CurrentlyOn(thread_identifier)) \
+      << ::web::WebThread::GetDCheckCurrentlyOnErrorMessage(thread_identifier)
 
 // The main entry point to post tasks to the UI thread. Tasks posted with the
-// same |traits| will run in posting order (i.e. according to the
-// SequencedTaskRunner contract). Tasks posted with different |traits| can be
+// same `traits` will run in posting order (i.e. according to the
+// SequencedTaskRunner contract). Tasks posted with different `traits` can be
 // re-ordered. You may keep a reference to this task runner, it's always
 // thread-safe to post to it though it may start returning false at some point
 // during shutdown when it definitely is no longer accepting tasks.
@@ -84,20 +76,6 @@ class WebThread {
   WebThread(const WebThread&) = delete;
   WebThread& operator=(const WebThread&) = delete;
 
-  // Delete/ReleaseSoon() helpers allow future deletion of an owned object on
-  // its associated thread. If you already have a task runner bound to a
-  // WebThread you should use its SequencedTaskRunner::DeleteSoon() member
-  // method.
-  // TODO(crbug.com/1026641): Get rid of the last few callers to these in favor
-  // of an explicit call to web::GetUIThreadTaskRunner({})->DeleteSoon(...).
-
-  template <class T>
-  static bool DeleteSoon(ID identifier,
-                         const base::Location& from_here,
-                         const T* object) {
-    return GetTaskRunnerForThread(identifier)->DeleteSoon(from_here, object);
-  }
-
   // Callable on any thread.  Returns whether the given well-known thread is
   // initialized.
   [[nodiscard]] static bool IsThreadInitialized(ID identifier);
@@ -125,57 +103,9 @@ class WebThread {
   // Returns an appropriate error message for when DCHECK_CURRENTLY_ON() fails.
   static std::string GetDCheckCurrentlyOnErrorMessage(ID expected);
 
-  // Use these templates in conjunction with RefCountedThreadSafe or
-  // std::unique_ptr when you want to ensure that an object is deleted on a
-  // specific thread. This is needed when an object can hop between threads
-  // (i.e. IO -> UI -> IO), and thread switching delays can mean that the final
-  // IO tasks executes before the UI task's stack unwinds. This would lead to
-  // the object destructing on the UI thread, which often is not what you want
-  // (i.e. to unregister from NotificationService, to notify other objects on
-  // the creating thread etc).
-  template <ID thread>
-  struct DeleteOnThread {
-    template <typename T>
-    static void Destruct(const T* x) {
-      if (CurrentlyOn(thread)) {
-        delete x;
-      } else {
-        if (!DeleteSoon(thread, FROM_HERE, x)) {
-          // Leaks at shutdown are acceptable under normal circumstances,
-          // do not report.
-        }
-      }
-    }
-    template <typename T>
-    inline void operator()(T* ptr) const {
-      enum { type_must_be_complete = sizeof(T) };
-      Destruct(ptr);
-    }
-  };
-
-  // Sample usage with RefCountedThreadSafe:
-  // class Foo
-  //     : public base::RefCountedThreadSafe<
-  //           Foo, web::WebThread::DeleteOnIOThread> {
-  //
-  // ...
-  //  private:
-  //   friend struct web::WebThread::DeleteOnThread<web::WebThread::IO>;
-  //   friend class base::DeleteHelper<Foo>;
-  //
-  //   ~Foo();
-  //
-  // Sample usage with std::unique_ptr:
-  // std::unique_ptr<Foo, web::WebThread::DeleteOnIOThread> ptr;
-  struct DeleteOnUIThread : public DeleteOnThread<UI> {};
-  struct DeleteOnIOThread : public DeleteOnThread<IO> {};
-
  private:
   friend class WebThreadImpl;
-
-  // For DeleteSoon() only.
-  static scoped_refptr<base::SingleThreadTaskRunner> GetTaskRunnerForThread(
-      ID identifier);
+  friend class ContentThreadImpl;
 
   WebThread() = default;
 };

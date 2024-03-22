@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -114,7 +114,7 @@ class MediaEngagementService : public KeyedService,
   base::flat_map<content::WebContents*, MediaEngagementContentsObserver*>
       contents_observers_;
 
-  raw_ptr<Profile> profile_;
+  raw_ptr<Profile, DanglingUntriaged> profile_;
 
   // Clear any data for a specific origin.
   void Clear(const url::Origin& origin);

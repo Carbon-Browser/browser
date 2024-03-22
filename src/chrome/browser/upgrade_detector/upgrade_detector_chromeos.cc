@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,7 +8,6 @@
 
 #include <algorithm>
 
-#include "ash/components/settings/timezone_settings.h"
 #include "ash/constants/ash_features.h"
 #include "base/location.h"
 #include "base/logging.h"
@@ -21,6 +20,7 @@
 #include "chrome/browser/upgrade_detector/build_state.h"
 #include "chrome/common/pref_names.h"
 #include "chromeos/ash/components/dbus/update_engine/update_engine_client.h"
+#include "chromeos/ash/components/settings/timezone_settings.h"
 #include "components/prefs/pref_registry_simple.h"
 #include "components/prefs/pref_service.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
@@ -208,6 +208,15 @@ void UpgradeDetectorChromeos::UpdateStatusChanged(
     // Update engine broadcasts this state only when update is available but
     // downloading over cellular connection requires user's agreement.
     NotifyUpdateOverCellularAvailable();
+  } else if (status.current_operation() ==
+             update_engine::Operation::UPDATED_BUT_DEFERRED) {
+    // Update engine broadcasts this state when update is downloaded but
+    // deferred.
+    NotifyUpdateDeferred(/*use_notification=*/false);
+    // Start timer for notification.
+    upgrade_notification_timer_.Start(
+        FROM_HERE, kDefaultHighThreshold, this,
+        &UpgradeDetectorChromeos::NotifyOnDeferredUpgrade);
   } else if (!update_in_progress_ &&
              status.current_operation() ==
                  update_engine::Operation::DOWNLOADING) {
@@ -220,8 +229,7 @@ void UpgradeDetectorChromeos::UpdateStatusChanged(
     toggled_update_flag_ = true;
     UpdateEngineClient::Get()->ToggleFeature(
         update_engine::kFeatureRepeatedUpdates,
-        base::FeatureList::IsEnabled(
-            chromeos::features::kAllowRepeatedUpdates));
+        base::FeatureList::IsEnabled(ash::features::kAllowRepeatedUpdates));
   }
 }
 
@@ -317,6 +325,11 @@ void UpgradeDetectorChromeos::NotifyOnUpgrade() {
       last_stage != UPGRADE_ANNOYANCE_NONE) {
     NotifyUpgrade();
   }
+}
+
+void UpgradeDetectorChromeos::NotifyOnDeferredUpgrade() {
+  upgrade_notification_timer_.Stop();
+  NotifyUpdateDeferred(/*use_notification=*/true);
 }
 
 // static

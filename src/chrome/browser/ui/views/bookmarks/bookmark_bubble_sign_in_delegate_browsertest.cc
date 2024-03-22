@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,7 +9,6 @@
 #include "base/command_line.h"
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
-#include "chrome/browser/chrome_notification_types.h"
 #include "chrome/browser/extensions/test_extension_service.h"
 #include "chrome/browser/extensions/test_extension_system.h"
 #include "chrome/browser/signin/account_consistency_mode_manager.h"
@@ -25,7 +24,6 @@
 #include "chrome/test/base/testing_profile.h"
 #include "components/signin/public/base/account_consistency_method.h"
 #include "components/signin/public/identity_manager/account_info.h"
-#include "content/public/browser/notification_service.h"
 #include "content/public/test/browser_test.h"
 #include "content/public/test/test_utils.h"
 #include "ui/events/event_constants.h"
@@ -56,10 +54,8 @@ class BookmarkBubbleSignInDelegateTest : public InProcessBrowserTest {
 // replace this tab.  This function replaces about:blank with another URL
 // so that the sign in page goes into a new tab.
 void BookmarkBubbleSignInDelegateTest::ReplaceBlank(Browser* browser) {
-  NavigateParams params(
-      GetSingletonTabNavigateParams(browser, GURL("chrome:version")));
-  params.path_behavior = NavigateParams::IGNORE_AND_NAVIGATE;
-  ShowSingletonTabOverwritingNTP(browser, &params);
+  ShowSingletonTabOverwritingNTP(browser, GURL("chrome:version"),
+                                 NavigateParams::IGNORE_AND_NAVIGATE);
 }
 
 void BookmarkBubbleSignInDelegateTest::SignInBrowser(Browser* browser) {

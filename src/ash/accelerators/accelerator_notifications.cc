@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -20,6 +20,7 @@
 #include "ash/system/model/system_tray_model.h"
 #include "base/strings/string_split.h"
 #include "chromeos/ui/vector_icons/vector_icons.h"
+#include "ui/accessibility/accessibility_features.h"
 #include "ui/base/l10n/l10n_util.h"
 #include "ui/message_center/message_center.h"
 
@@ -65,15 +66,11 @@ void EnsureNoWordBreaks(std::u16string* shortcut_text) {
 
 // Gets the notification message after it formats it in such a way that there
 // are no line breaks in the middle of the shortcut texts.
-std::u16string GetNotificationText(int message_id,
-                                   int old_shortcut_id,
-                                   int new_shortcut_id) {
-  std::u16string old_shortcut = l10n_util::GetStringUTF16(old_shortcut_id);
+std::u16string GetNotificationText(int message_id, int new_shortcut_id) {
   std::u16string new_shortcut = l10n_util::GetStringUTF16(new_shortcut_id);
-  EnsureNoWordBreaks(&old_shortcut);
   EnsureNoWordBreaks(&new_shortcut);
 
-  return l10n_util::GetStringFUTF16(message_id, new_shortcut, old_shortcut);
+  return l10n_util::GetStringFUTF16(message_id, new_shortcut);
 }
 
 std::unique_ptr<Notification> CreateNotification(
@@ -84,7 +81,7 @@ std::unique_ptr<Notification> CreateNotification(
     const VectorIcon& icon,
     scoped_refptr<NotificationDelegate> click_handler = nullptr,
     const RichNotificationData& rich_data = RichNotificationData()) {
-  return CreateSystemNotification(
+  return CreateSystemNotificationPtr(
       message_center::NOTIFICATION_TYPE_SIMPLE, notification_id, title, message,
       std::u16string() /* display source */, GURL(),
       NotifierId(NotifierType::SYSTEM_COMPONENT, kNotifierAccelerator,
@@ -143,14 +140,24 @@ void NotifyAccessibilityFeatureDisabledByAdmin(
       title, message, chromeos::kEnterpriseIcon);
 }
 
+// Shows a notification with the given title and message and the accessibility
+// icon, without any click handler.
 void ShowAccessibilityNotification(
     int title_id,
     int message_id,
     const std::string& notification_id,
     const NotificationCatalogName& catalog_name) {
-  CreateAndShowStickyNotification(
-      notification_id, catalog_name, l10n_util::GetStringUTF16(title_id),
-      l10n_util::GetStringUTF16(message_id), kNotificationAccessibilityIcon);
+  if (::features::IsAccessibilityAcceleratorNotificationsTimeoutEnabled()) {
+    // Show a notification that times out.
+    CreateAndShowNotification(
+        notification_id, catalog_name, l10n_util::GetStringUTF16(title_id),
+        l10n_util::GetStringUTF16(message_id), kNotificationAccessibilityIcon);
+  } else {
+    // Show a notification that does not time out.
+    CreateAndShowStickyNotification(
+        notification_id, catalog_name, l10n_util::GetStringUTF16(title_id),
+        l10n_util::GetStringUTF16(message_id), kNotificationAccessibilityIcon);
+  }
 }
 
 void RemoveNotification(const std::string& notification_id) {
@@ -174,12 +181,11 @@ const char kHighContrastToggleAccelNotificationId[] =
 
 void ShowDeprecatedAcceleratorNotification(const char* notification_id,
                                            int message_id,
-                                           int old_shortcut_id,
                                            int new_shortcut_id) {
   const std::u16string title =
       l10n_util::GetStringUTF16(IDS_DEPRECATED_SHORTCUT_TITLE);
   const std::u16string message =
-      GetNotificationText(message_id, old_shortcut_id, new_shortcut_id);
+      GetNotificationText(message_id, new_shortcut_id);
   auto on_click_handler = base::MakeRefCounted<HandleNotificationClickDelegate>(
       base::BindRepeating([]() {
         if (!Shell::Get()->session_controller()->IsUserSessionBlocked())

@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,9 +6,9 @@
  * @fileoverview Utility methods for the holding space feature.
  */
 
-import {metrics} from '../../common/js/metrics.js';
-import {VolumeManagerCommon} from '../../common/js/volume_manager_types.js';
-import {xfm} from '../../common/js/xfm.js';
+import {recordValue} from '../../common/js/metrics.js';
+import {storage} from '../../common/js/storage.js';
+import {VolumeType} from '../../common/js/volume_manager_types.js';
 
 export class HoldingSpaceUtil {
   /**
@@ -33,14 +33,15 @@ export class HoldingSpaceUtil {
 
   /**
    * Returns the volume types for which the holding space feature is allowed.
-   * @return {!Array<?VolumeManagerCommon.VolumeType>}
+   * @return {!Array<?VolumeType>}
    */
   static getAllowedVolumeTypes() {
     return [
-      VolumeManagerCommon.VolumeType.ANDROID_FILES,
-      VolumeManagerCommon.VolumeType.CROSTINI,
-      VolumeManagerCommon.VolumeType.DRIVE,
-      VolumeManagerCommon.VolumeType.DOWNLOADS,
+      VolumeType.ANDROID_FILES,
+      VolumeType.CROSTINI,
+      VolumeType.GUEST_OS,
+      VolumeType.DRIVE,
+      VolumeType.DOWNLOADS,
     ];
   }
 
@@ -53,7 +54,10 @@ export class HoldingSpaceUtil {
   static getTimeOfFirstPin_() {
     return new Promise(resolve => {
       const key = HoldingSpaceUtil.TIME_OF_FIRST_PIN_KEY_;
-      xfm.storage.local.get(key, values => {
+      storage.local.get(key, values => {
+        // @ts-ignore: error TS7053: Element implicitly has an 'any' type
+        // because expression of type 'string' can't be used to index type
+        // 'Object'.
         resolve(values[key]);
       });
     });
@@ -69,7 +73,10 @@ export class HoldingSpaceUtil {
   static getTimeOfFirstWelcomeBannerShow_() {
     return new Promise(resolve => {
       const key = HoldingSpaceUtil.TIME_OF_FIRST_WELCOME_BANNER_SHOW_KEY_;
-      xfm.storage.local.get(key, values => {
+      storage.local.get(key, values => {
+        // @ts-ignore: error TS7053: Element implicitly has an 'any' type
+        // because expression of type 'string' can't be used to index type
+        // 'Object'.
         resolve(values[key]);
       });
     });
@@ -89,16 +96,20 @@ export class HoldingSpaceUtil {
 
     // Store time of first pin.
     const values = {};
+    // @ts-ignore: error TS7053: Element implicitly has an 'any' type because
+    // expression of type 'string' can't be used to index type '{}'.
     values[HoldingSpaceUtil.TIME_OF_FIRST_PIN_KEY_] = now;
-    xfm.storage.local.set(values);
+    storage.local.set(values);
 
     // Record a metric of the interval from the first time the holding space
     // welcome banner was shown to the time of the first pin to holding space.
     // If the welcome banner was not shown prior to the first pin, record zero.
     const timeOfFirstWelcomeBannerShow =
         await HoldingSpaceUtil.getTimeOfFirstWelcomeBannerShow_() || now;
+    // We trim the max value to be 2^31 - 1, which is the maximum integer value
+    // that histograms can record.
     const timeFromFirstWelcomeBannerShowToFirstPin =
-        now - timeOfFirstWelcomeBannerShow;
+        Math.min(2 ** 31 - 1, now - timeOfFirstWelcomeBannerShow);
 
     // The histogram will use min values of 1 second and max of 1 day. Note
     // that it's permissible to record values smaller/larger than the min/max
@@ -106,7 +117,7 @@ export class HoldingSpaceUtil {
     // respectively.
     const oneSecondInMillis = 1000;
     const oneDayInMillis = 24 * 60 * 60 * 1000;
-    metrics.recordValue(
+    recordValue(
         /*name=*/ 'HoldingSpace.TimeFromFirstWelcomeBannerShowToFirstPin',
         chrome.metricsPrivate.MetricTypeType.HISTOGRAM_LOG,
         /*min=*/ oneSecondInMillis,
@@ -129,7 +140,9 @@ export class HoldingSpaceUtil {
 
     // Store time of first show.
     const values = {};
+    // @ts-ignore: error TS7053: Element implicitly has an 'any' type because
+    // expression of type 'string' can't be used to index type '{}'.
     values[HoldingSpaceUtil.TIME_OF_FIRST_WELCOME_BANNER_SHOW_KEY_] = now;
-    xfm.storage.local.set(values);
+    storage.local.set(values);
   }
 }

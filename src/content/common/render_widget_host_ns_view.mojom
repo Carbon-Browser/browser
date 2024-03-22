@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -101,6 +101,18 @@ interface RenderWidgetHostNSView {
                            string url,
                            array<string> file_paths)
     => (blink.mojom.ShareError error);
+
+  // TODO(https://crbug.com/1327478): This is a work around for a bug in mojo
+  // where close notifications for associated messages pipes can sometimes be
+  // delivered later than they should. This method is called before closing the
+  // remote, and is treated as if a close notification was received.
+  Destroy();
+
+  // Ack gesture scroll event from the renderer.
+  GestureScrollEventAck(blink.mojom.Event event, bool consumed);
+
+  // Ack overscroll message from the renderer.
+  DidOverscroll(blink.mojom.DidOverscrollParams params);
 };
 
 // The interface through which the RenderWidgetHostViewCocoa NSView in the app
@@ -153,7 +165,7 @@ interface RenderWidgetHostNSViewHost {
   ForwardKeyboardEventWithCommands(
       blink.mojom.Event event,
       array<uint8> native_event_data,
-      bool skip_in_browser,
+      bool skip_if_unhandled,
       array<blink.mojom.EditCommand> commands);
 
   // Forward events to the renderer or the input router, as appropriate.
@@ -224,6 +236,7 @@ interface RenderWidgetHostNSViewHost {
   Cut();
   Copy();
   CopyToFindPboard();
+  CenterSelection();
   Paste();
   PasteAndMatchStyle();
   SelectAll();
@@ -243,4 +256,3 @@ interface RenderWidgetHostNSViewHost {
   // Send the token for the NSWindow in which this NSView is being displayed.
   SetRemoteAccessibilityWindowToken(array<uint8> window_token);
 };
-

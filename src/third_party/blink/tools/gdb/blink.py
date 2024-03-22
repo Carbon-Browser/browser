@@ -70,7 +70,7 @@ def ustring_to_string(ptr, length=None):
     char_vals = [int((ptr + i).dereference()) for i in range(length)]
     string = struct.pack('H' * length, *char_vals).decode(
         'utf-16', 'replace').encode('utf-8')
-    return string + error_message
+    return string + error_message.encode('utf-8')
 
 
 def lstring_to_string(ptr, length=None):
@@ -160,7 +160,7 @@ class blinkKURLPrinter(StringPrinter):
     "Print a blink::KURL"
 
     def to_string(self):
-        return WTFStringPrinter(self.val['string_']).to_string()
+        return WTFAtomicStringPrinter(self.val['string_']).to_string()
 
 
 class blinkLayoutUnitPrinter:
@@ -174,13 +174,13 @@ class blinkLayoutUnitPrinter:
 
 
 class blinkLayoutSizePrinter:
-    "Print a blink::LayoutSize"
+    "Print a blink::DeprecatedLayoutSize"
 
     def __init__(self, val):
         self.val = val
 
     def to_string(self):
-        return 'LayoutSize(%s, %s)' % (
+        return 'DeprecatedLayoutSize(%s, %s)' % (
             blinkLayoutUnitPrinter(self.val['width_']).to_string(),
             blinkLayoutUnitPrinter(self.val['height_']).to_string())
 
@@ -248,10 +248,7 @@ class BlinkLengthPrinter:
 
     def to_string(self):
         ltype = self.val['type_']
-        if self.val['is_float_']:
-            val = self.val['float_value_']
-        else:
-            val = int(self.val['int_value_'])
+        val = self.val['value_']
 
         quirk = ''
         if self.val['quirk_']:
@@ -268,20 +265,22 @@ class BlinkLengthPrinter:
         if ltype == 4:
             return 'Length(MaxContent)'
         if ltype == 5:
-            return 'Length(FillAvailable)'
+            return 'Length(MinIntrinsic)'
         if ltype == 6:
-            return 'Length(FitContent)'
+            return 'Length(FillAvailable)'
         if ltype == 7:
+            return 'Length(FitContent)'
+        if ltype == 8:
             # Would like to print pixelsAndPercent() but can't call member
             # functions - https://sourceware.org/bugzilla/show_bug.cgi?id=13326
             return 'Length(Calculated)'
-        if ltype == 8:
-            return 'Length(ExtendToZoom)'
         if ltype == 9:
-            return 'Length(DeviceWidth)'
+            return 'Length(ExtendToZoom)'
         if ltype == 10:
-            return 'Length(DeviceHeight)'
+            return 'Length(DeviceWidth)'
         if ltype == 11:
+            return 'Length(DeviceHeight)'
+        if ltype == 12:
             return 'Length(MaxSizeNone)'
         return 'Length(unknown type %i)' % ltype
 
@@ -459,7 +458,7 @@ def add_pretty_printers():
         (re.compile("^blink::KURL$"), blinkKURLPrinter),
         (re.compile("^blink::LayoutUnit$"), blinkLayoutUnitPrinter),
         (re.compile("^blink::LayoutPoint$"), blinkLayoutPointPrinter),
-        (re.compile("^blink::LayoutSize$"), blinkLayoutSizePrinter),
+        (re.compile("^blink::DeprecatedLayoutSize$"), blinkLayoutSizePrinter),
         (re.compile("^blink::QualifiedName$"), blinkQualifiedNamePrinter),
         (re.compile("^blink::PixelsAndPercent$"),
          BlinkPixelsAndPercentPrinter),

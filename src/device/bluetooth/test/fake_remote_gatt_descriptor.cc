@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,8 +6,8 @@
 
 #include <utility>
 
-#include "base/bind.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/functional/bind.h"
+#include "base/task/single_thread_task_runner.h"
 #include "device/bluetooth/public/mojom/test/fake_bluetooth.mojom.h"
 
 namespace bluetooth {
@@ -63,7 +63,7 @@ FakeRemoteGattDescriptor::GetCharacteristic() const {
 }
 
 void FakeRemoteGattDescriptor::ReadRemoteDescriptor(ValueCallback callback) {
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE,
       base::BindOnce(&FakeRemoteGattDescriptor::DispatchReadResponse,
                      weak_ptr_factory_.GetWeakPtr(), std::move(callback)));
@@ -73,7 +73,7 @@ void FakeRemoteGattDescriptor::WriteRemoteDescriptor(
     const std::vector<uint8_t>& value,
     base::OnceClosure callback,
     ErrorCallback error_callback) {
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE,
       base::BindOnce(&FakeRemoteGattDescriptor::DispatchWriteResponse,
                      weak_ptr_factory_.GetWeakPtr(), std::move(callback),
@@ -94,8 +94,9 @@ void FakeRemoteGattDescriptor::DispatchReadResponse(ValueCallback callback) {
       break;
     case mojom::kGATTInvalidHandle:
       DCHECK(!value);
-      std::move(callback).Run(device::BluetoothGattService::GATT_ERROR_FAILED,
-                              /*value=*/std::vector<uint8_t>());
+      std::move(callback).Run(
+          device::BluetoothGattService::GattErrorCode::kFailed,
+          /*value=*/std::vector<uint8_t>());
       break;
     default:
       NOTREACHED();
@@ -117,7 +118,7 @@ void FakeRemoteGattDescriptor::DispatchWriteResponse(
       break;
     case mojom::kGATTInvalidHandle:
       std::move(error_callback)
-          .Run(device::BluetoothGattService::GATT_ERROR_FAILED);
+          .Run(device::BluetoothGattService::GattErrorCode::kFailed);
       break;
     default:
       NOTREACHED();

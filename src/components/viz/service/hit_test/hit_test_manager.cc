@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -34,11 +34,6 @@ HitTestManager::HitTestManager(SurfaceManager* surface_manager)
     : surface_manager_(surface_manager) {}
 
 HitTestManager::~HitTestManager() = default;
-
-bool HitTestManager::OnSurfaceDamaged(const SurfaceId& surface_id,
-                                      const BeginFrameAck& ack) {
-  return false;
-}
 
 void HitTestManager::OnSurfaceDestroyed(const SurfaceId& surface_id) {
   hit_test_region_lists_.erase(surface_id);

@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,11 +11,11 @@
 #include <memory>
 #include <set>
 #include <string>
-#include <unordered_map>
 #include <vector>
 
-#include "base/callback.h"
+#include "base/containers/flat_map.h"
 #include "base/containers/span.h"
+#include "base/functional/callback.h"
 #include "base/lazy_instance.h"
 #include "extensions/common/mojom/api_permission_id.mojom-shared.h"
 #include "extensions/common/permissions/api_permission.h"
@@ -74,8 +74,8 @@ class PermissionsInfo {
   void RegisterPermission(std::unique_ptr<APIPermissionInfo> permission);
 
   // Maps permission ids to permissions. Owns the permissions.
-  typedef std::unordered_map<mojom::APIPermissionID,
-                             std::unique_ptr<APIPermissionInfo>>
+  typedef base::flat_map<mojom::APIPermissionID,
+                         std::unique_ptr<APIPermissionInfo>>
       IDMap;
 
   // Maps names and aliases to permissions. Doesn't own the permissions.

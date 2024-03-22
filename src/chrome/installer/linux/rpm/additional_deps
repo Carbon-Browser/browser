@@ -1,4 +1,4 @@
-# Copyright 2018 The Chromium Authors. All rights reserved.
+# Copyright 2018 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 #
@@ -18,12 +18,8 @@ liberation-fonts
 # (libgtk-3.so.0()(64bit) or libgtk-4.so.1()(64bit))
 libgtk-3.so.0()(64bit)
 
-# Specify a more recent version for security and stability updates. While we
-# depend on libnss3.so and not libssl3.so, force the dependency on libssl3 to
-# ensure the NSS version is 3.28 or later, since libssl3 should always be
-# packaged with libnss3.
-libnss3.so(NSS_3.22)(64bit)
-libssl3.so(NSS_3.28)(64bit)
+# Specify a more recent version for security and stability updates.
+libnss3.so(NSS_3.39)(64bit)
 
 # This dependency is added by newer versions of rpmlib.  To ensure consistency
 # of expected dependencies when Chrome is built with the older versions, add it
@@ -44,6 +40,3 @@ libcurl.so.4()(64bit)
 
 # For OS integration.
 xdg-utils
-
-# For ANGLE with Wayland support - Fedora and openSUSE use different package names
-libwayland-client.so.0()(64bit)

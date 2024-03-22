@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -17,8 +17,8 @@
                         isAnswer:(BOOL)isAnswer
                         imageURL:(CrURL*)imageURL NS_DESIGNATED_INITIALIZER;
 
-// Whether the default search engine is Google impacts which icon is used in
-// some cases
+/// Whether the default search engine is Google impacts which icon is used in
+/// some cases
 @property(nonatomic, assign) BOOL defaultSearchEngineIsGoogle;
 
 @end

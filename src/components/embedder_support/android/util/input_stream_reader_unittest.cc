@@ -1,11 +1,11 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "components/embedder_support/android/util/input_stream_reader.h"
 
 #include "base/android/scoped_java_ref.h"
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/ref_counted.h"
 #include "components/embedder_support/android/util/input_stream.h"
 #include "net/base/io_buffer.h"
@@ -29,7 +29,7 @@ using testing::Test;
 class MockInputStream : public embedder_support::InputStream {
  public:
   MockInputStream() {}
-  virtual ~MockInputStream() {}
+  ~MockInputStream() override {}
 
   MOCK_CONST_METHOD1(BytesAvailable, bool(int* bytes_available));
   MOCK_METHOD2(Skip, bool(int64_t n, int64_t* bytes_skipped));
@@ -130,7 +130,7 @@ TEST_F(InputStreamReaderTest, SeekMoreThanAvailable) {
 
 TEST_F(InputStreamReaderTest, ReadFailure) {
   const int bytesToRead = 128;
-  auto buffer = base::MakeRefCounted<net::IOBuffer>(bytesToRead);
+  auto buffer = base::MakeRefCounted<net::IOBufferWithSize>(bytesToRead);
   EXPECT_CALL(input_stream_, Read(buffer.get(), bytesToRead, NotNull()))
       .WillOnce(Return(false));
 
@@ -140,7 +140,7 @@ TEST_F(InputStreamReaderTest, ReadFailure) {
 TEST_F(InputStreamReaderTest, ReadNothing) {
   const int bytesToRead = 0;
   // Size of net::IOBuffer can't be 0.
-  auto buffer = base::MakeRefCounted<net::IOBuffer>(1);
+  auto buffer = base::MakeRefCounted<net::IOBufferWithSize>(1);
   EXPECT_CALL(input_stream_, Read(buffer.get(), bytesToRead, NotNull()))
       .Times(0);
 
@@ -149,7 +149,7 @@ TEST_F(InputStreamReaderTest, ReadNothing) {
 
 TEST_F(InputStreamReaderTest, ReadSuccess) {
   const int bytesToRead = 128;
-  auto buffer = base::MakeRefCounted<net::IOBuffer>(bytesToRead);
+  auto buffer = base::MakeRefCounted<net::IOBufferWithSize>(bytesToRead);
 
   EXPECT_CALL(input_stream_, Read(buffer.get(), bytesToRead, NotNull()))
       .WillOnce(DoAll(SetArgPointee<2>(bytesToRead), Return(true)));

@@ -1,4 +1,4 @@
-// Copyright (c) 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,17 +6,16 @@
 
 #include "content/public/test/browser_test_utils.h"
 
-namespace storage {
-namespace test {
+namespace storage::test {
+
+const std::vector<std::string> kCookiesTypesForFrame{"Cookie", "CookieStore"};
 
 const std::vector<std::string> kStorageTypesForFrame{
-    "Cookie",         "LocalStorage", "FileSystem",       "FileSystemAccess",
-    "SessionStorage", "IndexedDb",    "WebSql",           "CacheStorage",
-    "ServiceWorker",  "CookieStore",  "StorageFoundation"};
+    "LocalStorage", "FileSystem", "FileSystemAccess", "SessionStorage",
+    "IndexedDb",    "WebSql",     "CacheStorage",     "ServiceWorker"};
 
 const std::vector<std::string> kStorageTypesForWorker{
-    "WorkerFileSystemAccess", "WorkerCacheStorage", "WorkerIndexedDb",
-    "WorkerStorageFoundation"};
+    "WorkerFileSystemAccess", "WorkerCacheStorage", "WorkerIndexedDb"};
 
 const std::vector<std::string> kCrossTabCommunicationTypes{
     "SharedWorker",
@@ -24,101 +23,153 @@ const std::vector<std::string> kCrossTabCommunicationTypes{
 };
 
 constexpr char kRequestStorageAccess[] =
-    "document.requestStorageAccess().then("
-    "  () => { window.domAutomationController.send(true); },"
-    "  () => { window.domAutomationController.send(false); },"
-    ");";
+    "document.requestStorageAccess()"
+    "  .then(() => document.hasStorageAccess())";
 
-constexpr char kHasStorageAccess[] =
-    "document.hasStorageAccess().then("
-    "  (result) => { window.domAutomationController.send(result); },"
-    "  () => { window.domAutomationController.send(false); },"
-    ");";
+constexpr char kRequestStorageAccessFor[] =
+    "document.requestStorageAccessFor($1)";
+
+constexpr char kHasStorageAccess[] = "document.hasStorageAccess()";
+
+std::vector<std::string> GetStorageTypesForFrame(bool include_cookies) {
+  std::vector<std::string> types(kStorageTypesForFrame);
+  if (include_cookies) {
+    types.insert(types.end(), kCookiesTypesForFrame.begin(),
+                 kCookiesTypesForFrame.end());
+  }
+  return types;
+}
 
 std::string GetFrameContent(content::RenderFrameHost* frame) {
-  return content::EvalJs(frame, "document.body.textContent").ExtractString();
+  return content::EvalJs(frame, "document.body.textContent",
+                         content::EXECUTE_SCRIPT_NO_USER_GESTURE)
+      .ExtractString();
 }
 
-void SetStorageForFrame(content::RenderFrameHost* frame) {
-  for (const auto& data_type : kStorageTypesForFrame) {
-    bool data = content::EvalJs(frame, "set" + data_type + "()",
-                                content::EXECUTE_SCRIPT_USE_MANUAL_REPLY)
-                    .ExtractBool();
+void SetStorageForFrame(content::RenderFrameHost* frame,
+                        bool include_cookies,
+                        bool expected_to_be_set,
+                        const base::Location& location) {
+  base::flat_map<std::string, bool> actual;
+  base::flat_map<std::string, bool> expected;
+  for (const auto& data_type : GetStorageTypesForFrame(include_cookies)) {
+    actual[data_type] =
+        content::EvalJs(frame, "set" + data_type + "()").ExtractBool();
     if (frame->GetLastCommittedOrigin() !=
             frame->GetMainFrame()->GetLastCommittedOrigin() &&
         data_type == "WebSql") {
       // Third-party context WebSQL is disabled as of M97.
-      EXPECT_FALSE(data) << "SetStorageForFrame for " << data_type;
+      expected[data_type] = false;
     } else {
-      EXPECT_TRUE(data) << "SetStorageForFrame for " << data_type;
+      expected[data_type] = expected_to_be_set;
     }
   }
+  EXPECT_THAT(actual, testing::UnorderedElementsAreArray(expected))
+      << "(expected at " << location.ToString() << ")";
 }
 
-void SetStorageForWorker(content::RenderFrameHost* frame) {
+void SetStorageForWorker(content::RenderFrameHost* frame,
+                         const base::Location& location) {
+  base::flat_map<std::string, bool> actual;
+  base::flat_map<std::string, bool> expected;
   for (const auto& data_type : kStorageTypesForWorker) {
-    bool data = content::EvalJs(frame, "set" + data_type + "()",
-                                content::EXECUTE_SCRIPT_USE_MANUAL_REPLY)
-                    .ExtractBool();
-    EXPECT_TRUE(data) << "SetStorageForWorker for " << data_type;
+    actual[data_type] =
+        content::EvalJs(frame, "set" + data_type + "()").ExtractBool();
+    expected[data_type] = true;
   }
+  EXPECT_THAT(actual, testing::UnorderedElementsAreArray(expected))
+      << "(expected at " << location.ToString() << ")";
 }
 
-void ExpectStorageForFrame(content::RenderFrameHost* frame, bool expected) {
-  for (const auto& data_type : kStorageTypesForFrame) {
-    bool data = content::EvalJs(frame, "has" + data_type + "();",
-                                content::EXECUTE_SCRIPT_USE_MANUAL_REPLY)
-                    .ExtractBool();
+void ExpectStorageForFrame(content::RenderFrameHost* frame,
+                           bool expected,
+                           const base::Location& location) {
+  base::flat_map<std::string, bool> actual;
+  base::flat_map<std::string, bool> expected_elts;
+  for (const auto& data_type : GetStorageTypesForFrame(false)) {
+    actual[data_type] =
+        content::EvalJs(frame, "has" + data_type + "();").ExtractBool();
     if (frame->GetLastCommittedOrigin() !=
             frame->GetMainFrame()->GetLastCommittedOrigin() &&
         data_type == "WebSql") {
       // Third-party context WebSQL is disabled as of M97.
-      EXPECT_FALSE(data) << "ExpectStorageForFrame for " << data_type;
+      expected_elts[data_type] = false;
     } else {
-      EXPECT_EQ(expected, data) << "ExpectStorageForFrame for " << data_type;
+      expected_elts[data_type] = expected;
     }
   }
+  EXPECT_THAT(actual, testing::UnorderedElementsAreArray(expected_elts))
+      << "(expected at " << location.ToString() << ")";
 }
 
-void ExpectStorageForWorker(content::RenderFrameHost* frame, bool expected) {
+void ExpectStorageForWorker(content::RenderFrameHost* frame,
+                            bool expected,
+                            const base::Location& location) {
+  base::flat_map<std::string, bool> actual;
+  base::flat_map<std::string, bool> expected_elts;
   for (const auto& data_type : kStorageTypesForWorker) {
-    bool data = content::EvalJs(frame, "has" + data_type + "();",
-                                content::EXECUTE_SCRIPT_USE_MANUAL_REPLY)
-                    .ExtractBool();
-    EXPECT_EQ(expected, data) << "ExpectStorageForWorker for " << data_type;
+    actual[data_type] =
+        content::EvalJs(frame, "has" + data_type + "();").ExtractBool();
+    expected_elts[data_type] = expected;
   }
+  EXPECT_THAT(actual, testing::UnorderedElementsAreArray(expected_elts))
+      << "(expected at " << location.ToString() << ")";
 }
 
-void SetCrossTabInfoForFrame(content::RenderFrameHost* frame) {
+void SetCrossTabInfoForFrame(content::RenderFrameHost* frame,
+                             const base::Location& location) {
+  base::flat_map<std::string, bool> actual;
+  base::flat_map<std::string, bool> expected;
   for (const auto& data_type : kCrossTabCommunicationTypes) {
-    bool data = content::EvalJs(frame, "set" + data_type + "()",
-                                content::EXECUTE_SCRIPT_USE_MANUAL_REPLY)
-                    .ExtractBool();
-    EXPECT_TRUE(data) << data_type;
+    actual[data_type] =
+        content::EvalJs(frame, "set" + data_type + "()").ExtractBool();
+    expected[data_type] = true;
   }
+  EXPECT_THAT(actual, testing::UnorderedElementsAreArray(expected))
+      << "(expected at " << location.ToString() << ")";
 }
 
 void ExpectCrossTabInfoForFrame(content::RenderFrameHost* frame,
-                                bool expected) {
+                                bool expected,
+                                const base::Location& location) {
+  base::flat_map<std::string, bool> actual;
+  base::flat_map<std::string, bool> expected_elts;
   for (const auto& data_type : kCrossTabCommunicationTypes) {
-    bool data = content::EvalJs(frame, "has" + data_type + "();",
-                                content::EXECUTE_SCRIPT_USE_MANUAL_REPLY)
-                    .ExtractBool();
-    EXPECT_EQ(expected, data) << data_type;
+    actual[data_type] =
+        content::EvalJs(frame, "has" + data_type + "();").ExtractBool();
+    expected_elts[data_type] = expected;
   }
+  EXPECT_THAT(actual, testing::UnorderedElementsAreArray(expected_elts))
+      << "(expected at " << location.ToString() << ")";
 }
 
-bool RequestStorageAccessForFrame(content::RenderFrameHost* frame) {
-  return content::EvalJs(frame, kRequestStorageAccess,
-                         content::EXECUTE_SCRIPT_USE_MANUAL_REPLY)
-      .ExtractBool();
+bool RequestAndCheckStorageAccessForFrame(content::RenderFrameHost* frame) {
+  return content::EvalJs(frame, kRequestStorageAccess).ExtractBool();
+}
+
+bool RequestStorageAccessForOrigin(content::RenderFrameHost* frame,
+                                   const std::string& origin) {
+  return content::ExecJs(frame,
+                         content::JsReplace(kRequestStorageAccessFor, origin));
 }
 
 bool HasStorageAccessForFrame(content::RenderFrameHost* frame) {
   return content::EvalJs(frame, kHasStorageAccess,
-                         content::EXECUTE_SCRIPT_USE_MANUAL_REPLY)
+                         content::EXECUTE_SCRIPT_NO_USER_GESTURE)
       .ExtractBool();
 }
 
-}  // namespace test
-}  // namespace storage
+std::string FetchWithCredentials(content::RenderFrameHost* frame,
+                                 const GURL& url,
+                                 const bool cors_enabled) {
+  constexpr char script[] = R"(
+      fetch($1, {method: 'GET', mode: $2, credentials: 'include'})
+      .then((result) => result.text());
+    )";
+  const std::string mode = cors_enabled ? "cors" : "no-cors";
+  return content::EvalJs(frame, content::JsReplace(script, url, mode),
+                         content::EXECUTE_SCRIPT_NO_USER_GESTURE)
+      .ExtractString();
+}
+
+}  // namespace storage::test

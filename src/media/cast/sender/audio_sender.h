@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,8 +7,8 @@
 
 #include <memory>
 
-#include "base/callback.h"
-#include "base/memory/ref_counted.h"
+#include "base/functional/callback.h"
+#include "base/memory/scoped_refptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/time/tick_clock.h"
 #include "base/time/time.h"
@@ -47,7 +47,7 @@ class AudioSender final : public FrameSender::Client {
   AudioSender(scoped_refptr<CastEnvironment> cast_environment,
               const FrameSenderConfig& audio_config,
               StatusChangeOnceCallback status_change_cb,
-              openscreen::cast::Sender* sender);
+              std::unique_ptr<openscreen::cast::Sender> sender);
 
   AudioSender(const AudioSender&) = delete;
   AudioSender& operator=(const AudioSender&) = delete;
@@ -62,6 +62,7 @@ class AudioSender final : public FrameSender::Client {
 
   void SetTargetPlayoutDelay(base::TimeDelta new_target_playout_delay);
   base::TimeDelta GetTargetPlayoutDelay() const;
+  int GetEncoderBitrate() const;
 
   base::WeakPtr<AudioSender> AsWeakPtr();
 
@@ -93,6 +94,11 @@ class AudioSender final : public FrameSender::Client {
 
   // The number of audio samples enqueued in |audio_encoder_|.
   int samples_in_encoder_ = 0;
+
+  // Used to calculate the percentage of lost frames. We currently report this
+  // metric as the number of frames dropped in the entire session.
+  int number_of_frames_inserted_ = 0;
+  int number_of_frames_dropped_ = 0;
 
   // NOTE: Weak pointers must be invalidated before all other member variables.
   base::WeakPtrFactory<AudioSender> weak_factory_{this};

@@ -1,17 +1,18 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "content/browser/aggregation_service/aggregatable_report_assembler.h"
 
 #include <memory>
+#include <optional>
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
 #include "base/check.h"
 #include "base/check_op.h"
 #include "base/containers/contains.h"
+#include "base/functional/bind.h"
 #include "base/memory/ptr_util.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/metrics/histogram_functions.h"
@@ -24,7 +25,6 @@
 #include "content/browser/aggregation_service/public_key.h"
 #include "content/public/browser/storage_partition.h"
 #include "services/network/public/cpp/shared_url_loader_factory.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace content {
 
@@ -126,7 +126,7 @@ void AggregatableReportAssembler::AssembleReport(
   if (pending_requests_.size() >= kMaxSimultaneousRequests) {
     RecordAssemblyStatus(AssemblyStatus::kTooManySimultaneousRequests);
 
-    std::move(callback).Run(absl::nullopt,
+    std::move(callback).Run(std::move(report_request), std::nullopt,
                             AssemblyStatus::kTooManySimultaneousRequests);
     return;
   }
@@ -153,7 +153,7 @@ void AggregatableReportAssembler::AssembleReport(
 void AggregatableReportAssembler::OnPublicKeyFetched(
     int64_t report_id,
     size_t processing_url_index,
-    absl::optional<PublicKey> key,
+    std::optional<PublicKey> key,
     AggregationServiceKeyFetcher::PublicKeyFetchStatus status) {
   DCHECK_EQ(key.has_value(),
             status == AggregationServiceKeyFetcher::PublicKeyFetchStatus::kOk);
@@ -177,12 +177,13 @@ void AggregatableReportAssembler::OnAllPublicKeysFetched(
     int64_t report_id,
     PendingRequest& pending_request) {
   std::vector<PublicKey> public_keys;
-  for (absl::optional<PublicKey> elem : pending_request.processing_url_keys) {
+  for (std::optional<PublicKey> elem : pending_request.processing_url_keys) {
     if (!elem.has_value()) {
       RecordAssemblyStatus(AssemblyStatus::kPublicKeyFetchFailed);
 
       std::move(pending_request.callback)
-          .Run(absl::nullopt, AssemblyStatus::kPublicKeyFetchFailed);
+          .Run(std::move(pending_request.report_request), std::nullopt,
+               AssemblyStatus::kPublicKeyFetchFailed);
       pending_requests_.erase(report_id);
       return;
     }
@@ -190,15 +191,16 @@ void AggregatableReportAssembler::OnAllPublicKeysFetched(
     public_keys.push_back(std::move(elem.value()));
   }
 
-  absl::optional<AggregatableReport> assembled_report =
+  std::optional<AggregatableReport> assembled_report =
       report_provider_->CreateFromRequestAndPublicKeys(
-          std::move(pending_request.report_request), std::move(public_keys));
+          pending_request.report_request, std::move(public_keys));
   AssemblyStatus assembly_status =
       assembled_report ? AssemblyStatus::kOk : AssemblyStatus::kAssemblyFailed;
   RecordAssemblyStatus(assembly_status);
 
   std::move(pending_request.callback)
-      .Run(std::move(assembled_report), assembly_status);
+      .Run(std::move(pending_request.report_request),
+           std::move(assembled_report), assembly_status);
 
   pending_requests_.erase(report_id);
 }

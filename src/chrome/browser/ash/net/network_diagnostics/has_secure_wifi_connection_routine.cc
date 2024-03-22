@@ -1,15 +1,15 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/ash/net/network_diagnostics/has_secure_wifi_connection_routine.h"
 
-#include <algorithm>
 #include <iterator>
 #include <utility>
 
-#include "base/bind.h"
-#include "chromeos/services/network_config/in_process_instance.h"
+#include "base/containers/contains.h"
+#include "base/functional/bind.h"
+#include "chromeos/ash/services/network_config/in_process_instance.h"
 #include "chromeos/services/network_config/public/cpp/cros_network_config_util.h"
 #include "mojo/public/cpp/bindings/pending_receiver.h"
 #include "mojo/public/cpp/bindings/remote.h"
@@ -17,12 +17,10 @@
 
 namespace ash {
 namespace network_diagnostics {
+
 namespace {
 
-// TODO(https://crbug.com/1164001): remove when migrated to namespace ash.
 namespace mojom = ::chromeos::network_diagnostics::mojom;
-namespace network_config = ::chromeos::network_config;
-
 using chromeos::network_config::mojom::CrosNetworkConfig;
 using chromeos::network_config::mojom::FilterType;
 using chromeos::network_config::mojom::NetworkFilter;
@@ -32,25 +30,13 @@ using chromeos::network_config::mojom::SecurityType;
 
 void GetNetworkConfigService(
     mojo::PendingReceiver<CrosNetworkConfig> receiver) {
-  chromeos::network_config::BindToInProcessInstance(std::move(receiver));
+  network_config::BindToInProcessInstance(std::move(receiver));
 }
 
 constexpr SecurityType kSecureWiFiEncryptions[] = {SecurityType::kWpaEap,
                                                    SecurityType::kWpaPsk};
 constexpr SecurityType kInsecureWiFiEncryptions[] = {
     SecurityType::kNone, SecurityType::kWep8021x, SecurityType::kWepPsk};
-
-bool IsSecureWiFiSecurityType(SecurityType security_type) {
-  return std::find(std::begin(kSecureWiFiEncryptions),
-                   std::end(kSecureWiFiEncryptions),
-                   security_type) != std::end(kSecureWiFiEncryptions);
-}
-
-bool IsInsecureSecurityType(SecurityType security_type) {
-  return std::find(std::begin(kInsecureWiFiEncryptions),
-                   std::end(kInsecureWiFiEncryptions),
-                   security_type) != std::end(kInsecureWiFiEncryptions);
-}
 
 }  // namespace
 
@@ -78,7 +64,7 @@ void HasSecureWiFiConnectionRoutine::Run() {
 void HasSecureWiFiConnectionRoutine::AnalyzeResultsAndExecuteCallback() {
   if (!wifi_connected_) {
     set_verdict(mojom::RoutineVerdict::kNotRun);
-  } else if (IsInsecureSecurityType(wifi_security_)) {
+  } else if (base::Contains(kInsecureWiFiEncryptions, wifi_security_)) {
     set_verdict(mojom::RoutineVerdict::kProblem);
     switch (wifi_security_) {
       case SecurityType::kNone:
@@ -97,7 +83,7 @@ void HasSecureWiFiConnectionRoutine::AnalyzeResultsAndExecuteCallback() {
       case SecurityType::kWpaPsk:
         break;
     }
-  } else if (IsSecureWiFiSecurityType(wifi_security_)) {
+  } else if (base::Contains(kSecureWiFiEncryptions, wifi_security_)) {
     set_verdict(mojom::RoutineVerdict::kNoProblem);
   } else {
     set_verdict(mojom::RoutineVerdict::kProblem);
@@ -114,7 +100,7 @@ void HasSecureWiFiConnectionRoutine::FetchActiveWiFiNetworks() {
   DCHECK(remote_cros_network_config_);
   remote_cros_network_config_->GetNetworkStateList(
       NetworkFilter::New(FilterType::kActive, NetworkType::kWiFi,
-                         network_config::mojom::kNoLimit),
+                         chromeos::network_config::mojom::kNoLimit),
       base::BindOnce(
           &HasSecureWiFiConnectionRoutine::OnNetworkStateListReceived,
           base::Unretained(this)));
@@ -124,7 +110,7 @@ void HasSecureWiFiConnectionRoutine::FetchActiveWiFiNetworks() {
 void HasSecureWiFiConnectionRoutine::OnNetworkStateListReceived(
     std::vector<NetworkStatePropertiesPtr> networks) {
   for (const NetworkStatePropertiesPtr& network : networks) {
-    if (network_config::StateIsConnected(network->connection_state)) {
+    if (chromeos::network_config::StateIsConnected(network->connection_state)) {
       wifi_connected_ = true;
       wifi_security_ = network->type_state->get_wifi()->security;
       break;

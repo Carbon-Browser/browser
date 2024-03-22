@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -68,6 +68,8 @@ class CustomTabBarView : public views::AccessiblePaneView,
   // IconLabelBubbleView::Delegate:
   SkColor GetIconLabelBubbleSurroundingForegroundColor() const override;
   SkColor GetIconLabelBubbleBackgroundColor() const override;
+  std::optional<ui::ColorId> GetLocationIconBackgroundColorOverride()
+      const override;
 
   // LocationIconView::Delegate:
   content::WebContents* GetWebContents() override;
@@ -90,6 +92,7 @@ class CustomTabBarView : public views::AccessiblePaneView,
   }
   void GoBackToAppForTesting();
   bool IsShowingOriginForTesting() const;
+  bool IsShowingCloseButtonForTesting() const;
 
  private:
   // Takes the web contents for the custom tab bar back to the app scope.

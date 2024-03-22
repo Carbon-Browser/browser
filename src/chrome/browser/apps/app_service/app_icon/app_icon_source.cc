@@ -1,4 +1,4 @@
-// Copyright (c) 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,8 +6,9 @@
 
 #include <string>
 
-#include "base/bind.h"
-#include "base/callback.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
+#include "base/memory/ref_counted_memory.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/string_split.h"
 #include "base/strings/string_util.h"
@@ -87,7 +88,7 @@ void AppIconSource::StartDataRequest(
   if (query_position != std::string::npos)
     size_param = size_param.substr(0, query_position);
   int size_in_dip = 0;
-  if (!base::StringToInt(size_param, &size_in_dip)) {
+  if (!base::StringToInt(size_param, &size_in_dip) || size_in_dip < 1) {
     LoadDefaultImage(std::move(callback));
     return;
   }

@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,13 +9,13 @@
 
 #include <limits>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/containers/fixed_flat_set.h"
 #include "base/dcheck_is_on.h"
 #include "base/files/file.h"
 #include "base/files/file_path.h"
 #include "base/files/scoped_file.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/no_destructor.h"
 #include "base/posix/eintr_wrapper.h"
 #include "base/strings/string_util.h"
@@ -34,6 +34,7 @@
 #include "ui/gfx/gpu_memory_buffer.h"
 #include "ui/gfx/linux/drm_util_linux.h"
 #include "ui/gfx/linux/gbm_buffer.h"
+#include "ui/gfx/linux/gbm_defines.h"
 #include "ui/gfx/linux/gbm_device.h"
 #include "ui/gfx/linux/gbm_util.h"
 #include "ui/gfx/linux/gbm_wrapper.h"
@@ -94,6 +95,7 @@ class GbmDeviceWrapper {
       gfx::BufferFormat format,
       const gfx::Size& size,
       gfx::NativePixmapHandle handle) {
+    CHECK_LE(handle.planes.size(), base::checked_cast<size_t>(GBM_MAX_PLANES));
     base::AutoLock lock(lock_);
     if (!gbm_device_)
       return nullptr;
@@ -113,7 +115,15 @@ class GbmDeviceWrapper {
       base::FilePath dev_path(FILE_PATH_LITERAL(
           base::StringPrintf(kRenderNodeFilePattern, i).c_str()));
       render_node_file_ =
-          base::File(dev_path, base::File::FLAG_OPEN | base::File::FLAG_READ);
+          base::File(dev_path, base::File::FLAG_OPEN | base::File::FLAG_READ
+// TODO(b/313513760): don't guard base::File::FLAG_WRITE behind
+// BUILDFLAG(IS_LINUX) && BUILDFLAG(USE_V4L2_CODEC) once the hardware video
+// decoding sandbox allows R+W access to the render nodes.
+#if BUILDFLAG(IS_LINUX) && BUILDFLAG(USE_V4L2_CODEC)
+                         // Needed on Linux for gbm_create_device().
+                         | base::File::FLAG_WRITE
+#endif
+          );
       if (!render_node_file_.IsValid())
         return;
       // Skip the virtual graphics memory manager device.

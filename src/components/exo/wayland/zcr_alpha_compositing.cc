@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,6 +6,7 @@
 
 #include <alpha-compositing-unstable-v1-server-protocol.h>
 
+#include "base/memory/raw_ptr.h"
 #include "components/exo/surface.h"
 #include "components/exo/surface_observer.h"
 #include "components/exo/wayland/server_util.h"
@@ -61,7 +62,7 @@ class Blending : public SurfaceObserver {
   }
 
  private:
-  Surface* surface_;
+  raw_ptr<Surface, ExperimentalAsh> surface_;
 };
 
 void blending_destroy(wl_client* client, wl_resource* resource) {

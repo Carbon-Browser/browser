@@ -1,23 +1,19 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include "ios/web/public/test/fakes/fake_web_state_observer.h"
+#import "ios/web/public/test/fakes/fake_web_state_observer.h"
 
-#include <memory>
+#import <memory>
 
-#include "ios/web/navigation/navigation_context_impl.h"
+#import "ios/web/navigation/navigation_context_impl.h"
 #import "ios/web/public/navigation/navigation_context.h"
 #import "ios/web/public/navigation/navigation_item.h"
 #import "ios/web/public/navigation/navigation_manager.h"
-#include "ios/web/public/security/ssl_status.h"
+#import "ios/web/public/security/ssl_status.h"
 #import "ios/web/public/web_state.h"
-#include "net/http/http_response_headers.h"
-#include "testing/gtest/include/gtest/gtest.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
+#import "net/http/http_response_headers.h"
+#import "testing/gtest/include/gtest/gtest.h"
 
 namespace web {
 
@@ -128,24 +124,6 @@ void FakeWebStateObserver::FaviconUrlUpdated(
       std::make_unique<web::TestUpdateFaviconUrlCandidatesInfo>();
   update_favicon_url_candidates_info_->web_state = web_state;
   update_favicon_url_candidates_info_->candidates = candidates;
-}
-
-void FakeWebStateObserver::WebFrameDidBecomeAvailable(WebState* web_state,
-                                                      WebFrame* web_frame) {
-  ASSERT_EQ(web_state_, web_state);
-  web_frame_available_info_ =
-      std::make_unique<web::TestWebFrameAvailabilityInfo>();
-  web_frame_available_info_->web_state = web_state;
-  web_frame_available_info_->web_frame = web_frame;
-}
-
-void FakeWebStateObserver::WebFrameWillBecomeUnavailable(WebState* web_state,
-                                                         WebFrame* web_frame) {
-  ASSERT_EQ(web_state_, web_state);
-  web_frame_unavailable_info_ =
-      std::make_unique<web::TestWebFrameAvailabilityInfo>();
-  web_frame_unavailable_info_->web_state = web_state;
-  web_frame_unavailable_info_->web_frame = web_frame;
 }
 
 void FakeWebStateObserver::RenderProcessGone(WebState* web_state) {

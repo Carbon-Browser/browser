@@ -1,10 +1,11 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "third_party/blink/renderer/core/editing/markers/composition_marker_list_impl.h"
 
-#include "third_party/blink/renderer/core/editing/markers/unsorted_document_marker_list_editor.h"
+#include "third_party/blink/renderer/core/editing/markers/overlapping_document_marker_list_editor.h"
+#include "third_party/blink/renderer/core/editing/markers/sorted_document_marker_list_editor.h"
 
 namespace blink {
 
@@ -13,12 +14,12 @@ DocumentMarker::MarkerType CompositionMarkerListImpl::MarkerType() const {
 }
 
 bool CompositionMarkerListImpl::IsEmpty() const {
-  return markers_.IsEmpty();
+  return markers_.empty();
 }
 
 void CompositionMarkerListImpl::Add(DocumentMarker* marker) {
   DCHECK_EQ(DocumentMarker::kComposition, marker->GetType());
-  markers_.push_back(marker);
+  OverlappingDocumentMarkerListEditor::AddMarker(&markers_, marker);
 }
 
 void CompositionMarkerListImpl::Clear() {
@@ -33,34 +34,34 @@ CompositionMarkerListImpl::GetMarkers() const {
 DocumentMarker* CompositionMarkerListImpl::FirstMarkerIntersectingRange(
     unsigned start_offset,
     unsigned end_offset) const {
-  return UnsortedDocumentMarkerListEditor::FirstMarkerIntersectingRange(
+  return SortedDocumentMarkerListEditor::FirstMarkerIntersectingRange(
       markers_, start_offset, end_offset);
 }
 
 HeapVector<Member<DocumentMarker>>
 CompositionMarkerListImpl::MarkersIntersectingRange(unsigned start_offset,
                                                     unsigned end_offset) const {
-  return UnsortedDocumentMarkerListEditor::MarkersIntersectingRange(
+  return OverlappingDocumentMarkerListEditor::MarkersIntersectingRange(
       markers_, start_offset, end_offset);
 }
 
 bool CompositionMarkerListImpl::MoveMarkers(int length,
                                             DocumentMarkerList* dst_markers_) {
-  return UnsortedDocumentMarkerListEditor::MoveMarkers(&markers_, length,
-                                                       dst_markers_);
+  return OverlappingDocumentMarkerListEditor::MoveMarkers(&markers_, length,
+                                                          dst_markers_);
 }
 
 bool CompositionMarkerListImpl::RemoveMarkers(unsigned start_offset,
                                               int length) {
-  return UnsortedDocumentMarkerListEditor::RemoveMarkers(&markers_,
-                                                         start_offset, length);
+  return OverlappingDocumentMarkerListEditor::RemoveMarkers(
+      &markers_, start_offset, length);
 }
 
 bool CompositionMarkerListImpl::ShiftMarkers(const String&,
                                              unsigned offset,
                                              unsigned old_length,
                                              unsigned new_length) {
-  return UnsortedDocumentMarkerListEditor::ShiftMarkersContentIndependent(
+  return OverlappingDocumentMarkerListEditor::ShiftMarkers(
       &markers_, offset, old_length, new_length);
 }
 

@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -21,6 +21,7 @@
 #include "chrome/grit/generated_resources.h"
 #include "components/prefs/pref_service.h"
 #include "ui/base/l10n/l10n_util.h"
+#include "ui/chromeos/styles/cros_tokens_color_mappings.h"
 #include "ui/gfx/image/image.h"
 #include "ui/message_center/public/cpp/message_center_constants.h"
 #include "ui/message_center/public/cpp/notification.h"
@@ -45,6 +46,9 @@ std::u16string GetNotificationTitleForFailure(
     case PrinterErrorCode::CLIENT_UNAUTHORIZED:
       return l10n_util::GetStringUTF16(
           IDS_PRINT_JOB_AUTHORIZATION_ERROR_NOTIFICATION_TITLE);
+    case PrinterErrorCode::EXPIRED_CERTIFICATE:
+      return l10n_util::GetStringUTF16(
+          IDS_PRINT_JOB_EXPIRED_CERT_ERROR_NOTIFICATION_TITLE);
     default:
       return l10n_util::GetStringUTF16(IDS_PRINT_JOB_ERROR_NOTIFICATION_TITLE);
   }
@@ -79,6 +83,9 @@ std::u16string GetNotificationTitleForError(
     case PrinterErrorCode::STOPPED:
       return l10n_util::GetStringUTF16(
           IDS_PRINT_JOB_STOPPED_NOTIFICATION_TITLE);
+    case PrinterErrorCode::EXPIRED_CERTIFICATE:
+      return l10n_util::GetStringUTF16(
+          IDS_PRINT_JOB_EXPIRED_CERT_ERROR_NOTIFICATION_TITLE);
     default:
       return l10n_util::GetStringUTF16(IDS_PRINT_JOB_ERROR_NOTIFICATION_TITLE);
   }
@@ -139,7 +146,7 @@ void CupsPrintJobNotification::Click(
   chrome::ShowPrintManagementApp(
       profile_->IsGuestSession()
           ? profile_->GetPrimaryOTRProfile(/*create_if_needed=*/true)
-          : profile_);
+          : profile_.get());
 }
 
 void CupsPrintJobNotification::CleanUpNotification() {
@@ -227,20 +234,23 @@ void CupsPrintJobNotification::UpdateNotificationIcon() {
     case CupsPrintJob::State::STATE_STARTED:
     case CupsPrintJob::State::STATE_PAGE_DONE:
     case CupsPrintJob::State::STATE_SUSPENDED:
-    case CupsPrintJob::State::STATE_RESUMED:
-      notification_->set_accent_color(kSystemNotificationColorNormal);
+    case CupsPrintJob::State::STATE_RESUMED: {
+      notification_->set_accent_color_id(cros_tokens::kCrosSysPrimary);
       notification_->set_vector_small_image(kNotificationPrintingIcon);
       break;
-    case CupsPrintJob::State::STATE_DOCUMENT_DONE:
-      notification_->set_accent_color(kSystemNotificationColorNormal);
+    }
+    case CupsPrintJob::State::STATE_DOCUMENT_DONE: {
+      notification_->set_accent_color_id(cros_tokens::kCrosSysPrimary);
       notification_->set_vector_small_image(kNotificationPrintingDoneIcon);
       break;
+    }
     case CupsPrintJob::State::STATE_CANCELLED:
     case CupsPrintJob::State::STATE_FAILED:
-    case CupsPrintJob::State::STATE_ERROR:
-      notification_->set_accent_color(kSystemNotificationColorWarning);
+    case CupsPrintJob::State::STATE_ERROR: {
+      notification_->set_accent_color_id(cros_tokens::kCrosSysError);
       notification_->set_vector_small_image(kNotificationPrintingWarningIcon);
       break;
+    }
     case CupsPrintJob::State::STATE_NONE:
       break;
   }

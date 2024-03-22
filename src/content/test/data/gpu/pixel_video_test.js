@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -61,13 +61,16 @@ function main() {
   getParametersTesting();
 
   video.onerror = e => {
-    logOutput(`Test failed: ${e.message}`);
+    logOutput(`Video playback error occurred: ${e.message}`);
     abort = true;
     domAutomationController.send('FAIL');
   };
 
   logOutput('Playback started.');
-  video.play();
+  video.play().catch(e => {
+    logOutput(`play() failed: ${e.message}`);
+    domAutomationController.send('FAIL');
+  });
 
   // Used by the swap counter, without using the timer.
   let testCompletion = false;

@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,7 +9,7 @@
 #include "ash/public/cpp/notification_utils.h"
 #include "ash/public/cpp/shell_window_ids.h"
 #include "ash/shell.h"
-#include "base/callback_helpers.h"
+#include "base/functional/callback_helpers.h"
 #include "base/i18n/time_formatting.h"
 #include "base/memory/ptr_util.h"
 #include "base/strings/strcat.h"
@@ -116,12 +116,11 @@ void RebootNotificationController::ShowNotification(
     const message_center::RichNotificationData& data,
     scoped_refptr<message_center::NotificationDelegate> delegate) const {
   // Create notification.
-  std::unique_ptr<message_center::Notification> notification =
-      ash::CreateSystemNotification(
-          message_center::NOTIFICATION_TYPE_SIMPLE, id, title, message,
-          std::u16string(), GURL(), message_center::NotifierId(), data,
-          delegate, vector_icons::kBusinessIcon,
-          message_center::SystemNotificationWarningLevel::NORMAL);
+  message_center::Notification notification = ash::CreateSystemNotification(
+      message_center::NOTIFICATION_TYPE_SIMPLE, id, title, message,
+      std::u16string(), GURL(), message_center::NotifierId(), data, delegate,
+      vector_icons::kBusinessIcon,
+      message_center::SystemNotificationWarningLevel::NORMAL);
 
   NotificationDisplayService* notification_display_service =
       NotificationDisplayService::GetForProfile(
@@ -130,7 +129,7 @@ void RebootNotificationController::ShowNotification(
   notification_display_service->Close(NotificationHandler::Type::TRANSIENT, id);
   // Display new notification.
   notification_display_service->Display(NotificationHandler::Type::TRANSIENT,
-                                        *notification,
+                                        notification,
                                         /*metadata=*/nullptr);
 }
 

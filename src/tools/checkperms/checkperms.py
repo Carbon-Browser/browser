@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Copyright (c) 2012 The Chromium Authors. All rights reserved.
+# Copyright 2012 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -412,7 +412,16 @@ class ApiAllFilesAtOnceBase(ApiBase):
 
 class ApiGit(ApiAllFilesAtOnceBase):
   def _get_all_files(self):
-    return capture([git_name, 'ls-files'], cwd=self.root_dir).splitlines()
+    # ls-files -s outputs in the following format:
+    # <mode> <SP> <object> <SP> <stage> <TAB> <file>
+    # Example output:
+    # 100644 08f1a0445babd612aab0a9934eabc0a7ae3d48ef 0<TAB>README.md
+    # 160000 e9f9f56b0dee9032936d23c81c8246ae0ffe36bd 0<TAB>build
+    out = capture([git_name, 'ls-files', '-s'], cwd=self.root_dir).splitlines()
+
+    # Return only actual files, which start with 100, and ignore anything else.
+    # See: https://git-scm.com/book/en/v2/Git-Internals-Git-Objects
+    return [x.split(maxsplit=3)[-1] for x in out if x.startswith('100')]
 
 
 def get_scm(dir_path, bare):

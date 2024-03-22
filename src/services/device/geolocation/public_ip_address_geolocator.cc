@@ -1,10 +1,10 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "services/device/geolocation/public_ip_address_geolocator.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "net/traffic_annotation/network_traffic_annotation.h"
 #include "services/device/geolocation/public_ip_address_location_notifier.h"
 
@@ -45,11 +45,14 @@ void PublicIpAddressGeolocator::QueryNextPosition(
 void PublicIpAddressGeolocator::SetHighAccuracy(bool /* high_accuracy */) {}
 
 void PublicIpAddressGeolocator::OnPositionUpdate(
-    const mojom::Geoposition& position) {
-  last_updated_timestamp_ = position.timestamp;
+    mojom::GeopositionResultPtr result) {
+  DCHECK(result);
+  if (result->is_position()) {
+    last_updated_timestamp_ = result->get_position()->timestamp;
+  }
   // Use Clone since query_next_position_callback_ needs an
-  // device::mojom::GeopositionPtr.
-  std::move(query_next_position_callback_).Run(position.Clone());
+  // device::mojom::GeopositionResultPtr.
+  std::move(query_next_position_callback_).Run(std::move(result));
 }
 
 }  // namespace device

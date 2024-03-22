@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,35 +6,36 @@
  * @fileoverview
  * 'settings-menu' shows a menu with a hardcoded set of pages and subpages.
  */
-import 'chrome://resources/cr_elements/cr_icons_css.m.js';
+import 'chrome://resources/cr_elements/cr_icons.css.js';
 import 'chrome://resources/cr_elements/cr_menu_selector/cr_menu_selector.js';
+import 'chrome://resources/cr_elements/cr_hidden_style.css.js';
 import 'chrome://resources/cr_elements/cr_nav_menu_item_style.css.js';
-import 'chrome://resources/cr_elements/icons.m.js';
+import 'chrome://resources/cr_elements/cr_shared_vars.css.js';
+import 'chrome://resources/cr_elements/icons.html.js';
 import 'chrome://resources/polymer/v3_0/iron-icon/iron-icon.js';
-import 'chrome://resources/polymer/v3_0/iron-selector/iron-selector.js';
 import 'chrome://resources/polymer/v3_0/paper-ripple/paper-ripple.js';
+import '../settings_vars.css.js';
 import '../icons.html.js';
-import '../settings_shared.css.js';
 
-import {assert} from 'chrome://resources/js/assert_ts.js';
-import {IronSelectorElement} from 'chrome://resources/polymer/v3_0/iron-selector/iron-selector.js';
+import {CrMenuSelector} from 'chrome://resources/cr_elements/cr_menu_selector/cr_menu_selector.js';
+import {assert} from 'chrome://resources/js/assert.js';
+import {loadTimeData} from 'chrome://resources/js/load_time_data.js';
 import {PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 
 import {PageVisibility} from '../page_visibility.js';
-import {Route, RouteObserverMixin, RouteObserverMixinInterface, Router} from '../router.js';
+import {Route, RouteObserverMixin, Router, SettingsRoutes} from '../router.js';
 
 import {getTemplate} from './settings_menu.html.js';
 
 export interface SettingsMenuElement {
   $: {
     autofill: HTMLLinkElement,
-    menu: IronSelectorElement,
+    menu: CrMenuSelector,
     people: HTMLLinkElement,
   };
 }
 
-const SettingsMenuElementBase = RouteObserverMixin(PolymerElement) as
-    {new (): PolymerElement & RouteObserverMixinInterface};
+const SettingsMenuElementBase = RouteObserverMixin(PolymerElement);
 
 export class SettingsMenuElement extends SettingsMenuElementBase {
   static get is() {
@@ -51,12 +52,40 @@ export class SettingsMenuElement extends SettingsMenuElementBase {
        * Dictionary defining page visibility.
        */
       pageVisibility: Object,
+
+      showAdvancedFeaturesMainControl_: {
+        type: Boolean,
+        value: () => loadTimeData.getBoolean('showAdvancedFeaturesMainControl'),
+      },
     };
   }
 
   pageVisibility: PageVisibility;
+  private showAdvancedFeaturesMainControl_: boolean;
+  private routes_: SettingsRoutes;
+
+  override ready() {
+    super.ready();
+    this.routes_ = Router.getInstance().getRoutes();
+  }
+
+  private showExperimentalMenuItem_(): boolean {
+    return this.showAdvancedFeaturesMainControl_ &&
+        (!this.pageVisibility || this.pageVisibility.ai !== false);
+  }
 
   override currentRouteChanged(newRoute: Route) {
+    // <if expr="_google_chrome">
+    if (loadTimeData.getBoolean('showGetTheMostOutOfChromeSection') &&
+        newRoute === this.routes_.GET_MOST_CHROME) {
+      const about =
+          this.shadowRoot!.querySelector<HTMLAnchorElement>('#about-menu');
+      assert(about);
+      this.setSelectedUrl_(about.href);
+      return;
+    }
+    // </if>
+
     // Focus the initially selected path.
     const anchors = this.shadowRoot!.querySelectorAll('a');
     for (let i = 0; i < anchors.length; ++i) {

@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -38,40 +38,40 @@ api::developer_private::ViewType ConvertViewType(const mojom::ViewType type) {
   api::developer_private::ViewType developer_private_type;
   switch (type) {
     case mojom::ViewType::kAppWindow:
-      developer_private_type = api::developer_private::VIEW_TYPE_APP_WINDOW;
+      developer_private_type = api::developer_private::ViewType::kAppWindow;
       break;
     case mojom::ViewType::kBackgroundContents:
       developer_private_type =
-          api::developer_private::VIEW_TYPE_BACKGROUND_CONTENTS;
+          api::developer_private::ViewType::kBackgroundContents;
       break;
     case mojom::ViewType::kComponent:
-      developer_private_type = api::developer_private::VIEW_TYPE_COMPONENT;
+      developer_private_type = api::developer_private::ViewType::kComponent;
       break;
     case mojom::ViewType::kExtensionBackgroundPage:
       developer_private_type =
-          api::developer_private::VIEW_TYPE_EXTENSION_BACKGROUND_PAGE;
-      break;
-    case mojom::ViewType::kExtensionDialog:
-      developer_private_type =
-          api::developer_private::VIEW_TYPE_EXTENSION_DIALOG;
+          api::developer_private::ViewType::kExtensionBackgroundPage;
       break;
     case mojom::ViewType::kExtensionGuest:
       developer_private_type =
-          api::developer_private::VIEW_TYPE_EXTENSION_GUEST;
+          api::developer_private::ViewType::kExtensionGuest;
       break;
     case mojom::ViewType::kExtensionPopup:
       developer_private_type =
-          api::developer_private::VIEW_TYPE_EXTENSION_POPUP;
+          api::developer_private::ViewType::kExtensionPopup;
       break;
     case mojom::ViewType::kTabContents:
-      developer_private_type = api::developer_private::VIEW_TYPE_TAB_CONTENTS;
+      developer_private_type = api::developer_private::ViewType::kTabContents;
       break;
     case mojom::ViewType::kOffscreenDocument:
       developer_private_type =
-          api::developer_private::VIEW_TYPE_OFFSCREEN_DOCUMENT;
+          api::developer_private::ViewType::kOffscreenDocument;
+      break;
+    case mojom::ViewType::kExtensionSidePanel:
+      developer_private_type =
+          api::developer_private::ViewType::kExtensionSidePanel;
       break;
     default:
-      developer_private_type = api::developer_private::VIEW_TYPE_NONE;
+      developer_private_type = api::developer_private::ViewType::kNone;
       NOTREACHED();
   }
   return developer_private_type;
@@ -146,7 +146,7 @@ void InspectableViewsFinder::GetViewsForExtensionForProfile(
       !process_manager->GetBackgroundHostForExtension(extension.id())) {
     result->push_back(ConstructView(
         BackgroundInfo::GetBackgroundURL(&extension), -1, -1, is_incognito,
-        false, api::developer_private::VIEW_TYPE_EXTENSION_BACKGROUND_PAGE));
+        false, api::developer_private::ViewType::kExtensionBackgroundPage));
   }
   if (BackgroundInfo::IsServiceWorkerBased(&extension) &&
       process_manager->GetServiceWorkersForExtension(extension.id()).empty()) {
@@ -154,7 +154,7 @@ void InspectableViewsFinder::GetViewsForExtensionForProfile(
         extension.GetResourceURL(
             BackgroundInfo::GetBackgroundServiceWorkerScript(&extension)),
         -1, -1, is_incognito, false,
-        api::developer_private::VIEW_TYPE_EXTENSION_SERVICE_WORKER_BACKGROUND));
+        api::developer_private::ViewType::kExtensionServiceWorkerBackground));
   }
 }
 
@@ -171,7 +171,6 @@ void InspectableViewsFinder::GetViewsForExtensionProcess(
     mojom::ViewType host_type = GetViewType(web_contents);
     if (host_type == mojom::ViewType::kInvalid ||
         host_type == mojom::ViewType::kExtensionPopup ||
-        host_type == mojom::ViewType::kExtensionDialog ||
         host_type == mojom::ViewType::kAppWindow) {
       continue;
     }
@@ -181,15 +180,14 @@ void InspectableViewsFinder::GetViewsForExtensionProcess(
     // committed (or visible) url yet. In this case, use the initial url.
     if (url.is_empty()) {
       ExtensionHost* extension_host =
-          process_manager->GetExtensionHostForRenderFrameHost(host);
+          process_manager->GetBackgroundHostForRenderFrameHost(host);
       if (extension_host)
         url = extension_host->initial_url();
     }
 
-    bool is_iframe = web_contents->GetPrimaryMainFrame() != host;
     content::RenderProcessHost* process = host->GetProcess();
     result->push_back(ConstructView(url, process->GetID(), host->GetRoutingID(),
-                                    is_incognito, is_iframe,
+                                    is_incognito, !host->IsInPrimaryMainFrame(),
                                     ConvertViewType(host_type)));
   }
 
@@ -200,7 +198,7 @@ void InspectableViewsFinder::GetViewsForExtensionProcess(
         extension.GetResourceURL(
             BackgroundInfo::GetBackgroundServiceWorkerScript(&extension)),
         service_worker_id.render_process_id, -1, is_incognito, false,
-        api::developer_private::VIEW_TYPE_EXTENSION_SERVICE_WORKER_BACKGROUND));
+        api::developer_private::ViewType::kExtensionServiceWorkerBackground));
   }
 }
 

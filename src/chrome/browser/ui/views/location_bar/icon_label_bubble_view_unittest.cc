@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -21,7 +21,7 @@
 #include "ui/events/gesture_detection/gesture_configuration.h"
 #include "ui/events/test/event_generator.h"
 #include "ui/views/animation/ink_drop.h"
-#include "ui/views/animation/test/ink_drop_host_view_test_api.h"
+#include "ui/views/animation/test/ink_drop_host_test_api.h"
 #include "ui/views/animation/test/test_ink_drop.h"
 #include "ui/views/controls/image_view.h"
 #include "ui/views/widget/widget_utils.h"
@@ -104,8 +104,7 @@ class TestIconLabelBubbleView : public IconLabelBubbleView {
       case SHRINKING:
         return min + (max - min) * ((1.0 - fraction) / kOpenFraction);
     }
-    NOTREACHED();
-    return 1.0;
+    NOTREACHED_NORETURN();
   }
 
   bool IsShrinking() const override { return state() == SHRINKING; }
@@ -269,8 +268,8 @@ class IconLabelBubbleViewTest : public IconLabelBubbleViewTestBase {
   }
 
   std::unique_ptr<views::Widget> widget_;
-  raw_ptr<TestIconLabelBubbleView> view_ = nullptr;
-  raw_ptr<TestInkDrop> ink_drop_ = nullptr;
+  raw_ptr<TestIconLabelBubbleView, DanglingUntriaged> view_ = nullptr;
+  raw_ptr<TestInkDrop, DanglingUntriaged> ink_drop_ = nullptr;
   std::unique_ptr<ui::test::EventGenerator> generator_;
 
   bool steady_reached_ = false;

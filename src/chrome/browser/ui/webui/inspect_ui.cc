@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,7 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/metrics/user_metrics.h"
@@ -72,17 +72,28 @@ const char kInspectUiNameField[] = "name";
 const char kInspectUiUrlField[] = "url";
 const char kInspectUiIsNativeField[] = "isNative";
 
-base::Value GetUiDevToolsTargets() {
-  base::Value targets(base::Value::Type::LIST);
+base::Value::List GetUiDevToolsTargets() {
+  base::Value::List targets;
   for (const auto& client_pair :
        ui_devtools::UiDevToolsServer::GetClientNamesAndUrls()) {
-    base::Value target_data(base::Value::Type::DICTIONARY);
-    target_data.SetStringKey(kInspectUiNameField, client_pair.first);
-    target_data.SetStringKey(kInspectUiUrlField, client_pair.second);
-    target_data.SetBoolKey(kInspectUiIsNativeField, true);
+    base::Value::Dict target_data;
+    target_data.Set(kInspectUiNameField, client_pair.first);
+    target_data.Set(kInspectUiUrlField, client_pair.second);
+    target_data.Set(kInspectUiIsNativeField, true);
     targets.Append(std::move(target_data));
   }
   return targets;
+}
+
+void CreateAndAddInspectUIHTMLSource(Profile* profile) {
+  content::WebUIDataSource* source = content::WebUIDataSource::CreateAndAdd(
+      profile, chrome::kChromeUIInspectHost);
+  source->AddResourcePath("inspect.css", IDR_INSPECT_CSS);
+  source->AddResourcePath("inspect.js", IDR_INSPECT_JS);
+  source->SetDefaultResource(IDR_INSPECT_HTML);
+  source->OverrideContentSecurityPolicy(
+      network::mojom::CSPDirectiveName::ScriptSrc,
+      "script-src chrome://resources chrome://webui-test 'self';");
 }
 
 // DevToolsFrontEndObserver ----------------------------------------
@@ -191,7 +202,7 @@ class InspectMessageHandler : public WebUIMessageHandler {
   void CreateNativeUIInspectionSession(const std::string& url);
   void OnFrontEndFinished();
 
-  const raw_ptr<InspectUI> inspect_ui_;
+  const raw_ptr<InspectUI, DanglingUntriaged> inspect_ui_;
 
   base::WeakPtrFactory<InspectMessageHandler> weak_factory_{this};
 };
@@ -275,7 +286,7 @@ void InspectMessageHandler::HandleInitUICommand(const base::Value::List&) {
 static bool ParseStringArgs(const base::Value::List& args,
                             std::string* arg0,
                             std::string* arg1,
-                            std::string* arg2 = 0) {
+                            std::string* arg2 = nullptr) {
   int arg_size = args.size();
   if (arg0) {
     if (arg_size < 1 || !args[0].is_string()) {
@@ -401,7 +412,8 @@ void InspectMessageHandler::HandleOpenNodeFrontendCommand(
   Profile* profile = Profile::FromWebUI(web_ui());
   if (!profile)
     return;
-  DevToolsWindow::OpenNodeFrontendWindow(profile);
+  DevToolsWindow::OpenNodeFrontendWindow(profile,
+                                         DevToolsOpenedByAction::kInspectLink);
 }
 
 void InspectMessageHandler::HandleLaunchUIDevToolsCommand(
@@ -448,7 +460,7 @@ void InspectMessageHandler::CreateNativeUIInspectionSession(
 void InspectMessageHandler::OnFrontEndFinished() {
   // Clear the client list and re-enable the launch button when the front-end is
   // gone.
-  inspect_ui_->PopulateNativeUITargets(base::ListValue());
+  inspect_ui_->PopulateNativeUITargets(base::Value::List());
   inspect_ui_->ShowNativeUILaunchButton(/* enabled = */ true);
 }
 
@@ -460,7 +472,7 @@ InspectUI::InspectUI(content::WebUI* web_ui)
     : WebUIController(web_ui), WebContentsObserver(web_ui->GetWebContents()) {
   web_ui->AddMessageHandler(std::make_unique<InspectMessageHandler>(this));
   Profile* profile = Profile::FromWebUI(web_ui);
-  content::WebUIDataSource::Add(profile, CreateInspectUIHTMLSource());
+  CreateAndAddInspectUIHTMLSource(profile);
 
   // Set up the chrome://theme/ source.
   content::URLDataSource::Add(profile, std::make_unique<ThemeSource>(profile));
@@ -485,7 +497,8 @@ void InspectUI::Inspect(const std::string& source_id,
   scoped_refptr<DevToolsAgentHost> target = FindTarget(source_id, target_id);
   if (target) {
     Profile* profile = Profile::FromWebUI(web_ui());
-    DevToolsWindow::OpenDevToolsWindow(target, profile);
+    DevToolsWindow::OpenDevToolsWindow(target, profile,
+                                       DevToolsOpenedByAction::kInspectLink);
   }
 }
 
@@ -494,7 +507,8 @@ void InspectUI::InspectFallback(const std::string& source_id,
   scoped_refptr<DevToolsAgentHost> target = FindTarget(source_id, target_id);
   if (target) {
     Profile* profile = Profile::FromWebUI(web_ui());
-    DevToolsWindow::OpenDevToolsWindowWithBundledFrontend(target, profile);
+    DevToolsWindow::OpenDevToolsWindowWithBundledFrontend(
+        target, profile, DevToolsOpenedByAction::kInspectLink);
   }
 }
 
@@ -537,7 +551,8 @@ void InspectUI::Pause(const std::string& source_id,
   content::WebContents* web_contents = target->GetWebContents();
   if (web_contents) {
     DevToolsWindow::OpenDevToolsWindow(web_contents,
-                                       DevToolsToggleAction::PauseInDebugger());
+                                       DevToolsToggleAction::PauseInDebugger(),
+                                       DevToolsOpenedByAction::kInspectLink);
   }
 }
 
@@ -577,10 +592,8 @@ void InspectUI::InspectBrowserWithCustomFrontend(
 
 void InspectUI::InspectDevices(Browser* browser) {
   base::RecordAction(base::UserMetricsAction("InspectDevices"));
-  NavigateParams params(GetSingletonTabNavigateParams(
-      browser, GURL(chrome::kChromeUIInspectURL)));
-  params.path_behavior = NavigateParams::IGNORE_AND_NAVIGATE;
-  ShowSingletonTabOverwritingNTP(browser, &params);
+  ShowSingletonTabOverwritingNTP(browser, GURL(chrome::kChromeUIInspectURL),
+                                 NavigateParams::IGNORE_AND_NAVIGATE);
 }
 
 void InspectUI::WebContentsDestroyed() {
@@ -651,15 +664,6 @@ void InspectUI::StopListeningNotifications() {
   pref_change_registrar_.RemoveAll();
 }
 
-content::WebUIDataSource* InspectUI::CreateInspectUIHTMLSource() {
-  content::WebUIDataSource* source =
-      content::WebUIDataSource::Create(chrome::kChromeUIInspectHost);
-  source->AddResourcePath("inspect.css", IDR_INSPECT_CSS);
-  source->AddResourcePath("inspect.js", IDR_INSPECT_JS);
-  source->SetDefaultResource(IDR_INSPECT_HTML);
-  return source;
-}
-
 void InspectUI::UpdateDiscoverUsbDevicesEnabled() {
   web_ui()->CallJavascriptFunctionUnsafe(
       "updateDiscoverUsbDevicesEnabled",
@@ -705,20 +709,23 @@ void InspectUI::SetPortForwardingDefaults() {
 
   auto enabled =
       GetPrefValue(prefs::kDevToolsPortForwardingEnabled)->GetIfBool();
-  const base::DictionaryValue* config;
-  if (!enabled || !GetPrefValue(prefs::kDevToolsPortForwardingConfig)
-                       ->GetAsDictionary(&config)) {
+  if (!enabled)
     return;
-  }
+
+  const base::Value::Dict* config =
+      GetPrefValue(prefs::kDevToolsPortForwardingConfig)->GetIfDict();
+  if (!config)
+    return;
 
   // Do nothing if user already took explicit action.
-  if (enabled.value() || !config->DictEmpty())
+  if (enabled.value() || !config->empty())
     return;
 
-  base::DictionaryValue default_config;
-  default_config.SetStringPath(kInspectUiPortForwardingDefaultPort,
-                               kInspectUiPortForwardingDefaultLocation);
-  prefs->Set(prefs::kDevToolsPortForwardingConfig, default_config);
+  base::Value::Dict default_config;
+  default_config.Set(kInspectUiPortForwardingDefaultPort,
+                     kInspectUiPortForwardingDefaultLocation);
+  prefs->SetDict(prefs::kDevToolsPortForwardingConfig,
+                 std::move(default_config));
 }
 
 const base::Value* InspectUI::GetPrefValue(const char* name) {
@@ -751,7 +758,7 @@ void InspectUI::PopulateTargets(const std::string& source,
                                          targets);
 }
 
-void InspectUI::PopulateNativeUITargets(const base::Value& targets) {
+void InspectUI::PopulateNativeUITargets(const base::Value::List& targets) {
   web_ui()->CallJavascriptFunctionUnsafe("populateNativeUITargets", targets);
 }
 

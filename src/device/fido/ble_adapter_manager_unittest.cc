@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,9 +6,10 @@
 
 #include <map>
 #include <memory>
+#include <string_view>
 #include <utility>
 
-#include "base/callback_helpers.h"
+#include "base/functional/callback_helpers.h"
 #include "base/run_loop.h"
 #include "base/test/gmock_callback_support.h"
 #include "base/test/task_environment.h"
@@ -49,7 +50,7 @@ class MockObserver : public FidoRequestHandlerBase::Observer {
   MOCK_METHOD1(BluetoothAdapterPowerChanged, void(bool is_powered_on));
   MOCK_METHOD1(FidoAuthenticatorAdded,
                void(const FidoAuthenticator& authenticator));
-  MOCK_METHOD1(FidoAuthenticatorRemoved, void(base::StringPiece device_id));
+  MOCK_METHOD1(FidoAuthenticatorRemoved, void(std::string_view device_id));
   MOCK_CONST_METHOD0(SupportsPIN, bool());
   MOCK_METHOD2(CollectPIN,
                void(CollectPINOptions,
@@ -67,9 +68,8 @@ class FakeFidoRequestHandlerBase : public FidoRequestHandlerBase {
  public:
   FakeFidoRequestHandlerBase(MockObserver* observer,
                              FidoDiscoveryFactory* fido_discovery_factory)
-      : FidoRequestHandlerBase(
-            fido_discovery_factory,
-            {FidoTransportProtocol::kCloudAssistedBluetoothLowEnergy}) {
+      : FidoRequestHandlerBase(fido_discovery_factory,
+                               {FidoTransportProtocol::kHybrid}) {
     set_observer(observer);
     Start();
   }
@@ -121,10 +121,6 @@ class FidoBleAdapterManagerTest : public ::testing::Test {
 
   MockBluetoothAdapter* adapter() { return adapter_.get(); }
   MockObserver* observer() { return mock_observer_.get(); }
-  bool adapter_powered_on_programmatically(
-      const BleAdapterManager& adapter_manager) {
-    return adapter_manager.adapter_powered_on_programmatically_;
-  }
 
   FakeFidoRequestHandlerBase* fake_request_handler() {
     return fake_request_handler_.get();
@@ -196,9 +192,7 @@ TEST_F(FidoBleAdapterManagerTest, SetBluetoothPowerOn) {
       fake_request_handler_->get_bluetooth_adapter_manager_for_testing();
   ::testing::InSequence s;
   EXPECT_CALL(*adapter(), SetPowered(true, _, _));
-  EXPECT_CALL(*adapter(), SetPowered(false, _, _));
-  power_manager->SetAdapterPower(true /* set_power_on */);
-  EXPECT_TRUE(adapter_powered_on_programmatically(*power_manager));
+  power_manager->SetAdapterPower(/*set_power_on=*/true);
   power_manager.reset();
 }
 

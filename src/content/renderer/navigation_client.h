@@ -1,10 +1,11 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CONTENT_RENDERER_NAVIGATION_CLIENT_H_
 #define CONTENT_RENDERER_NAVIGATION_CLIENT_H_
 
+#include "base/memory/raw_ptr.h"
 #include "content/common/frame.mojom.h"
 #include "content/common/navigation_client.mojom.h"
 #include "content/public/common/alternative_error_page_override_info.mojom.h"
@@ -35,11 +36,17 @@ class NavigationClient : mojom::NavigationClient {
           controller_service_worker_info,
       blink::mojom::ServiceWorkerContainerInfoForClientPtr container_info,
       mojo::PendingRemote<network::mojom::URLLoaderFactory>
-          prefetch_loader_factory,
+          subresource_proxying_loader_factory,
+      mojo::PendingRemote<network::mojom::URLLoaderFactory>
+          keep_alive_loader_factory,
+      mojo::PendingAssociatedRemote<blink::mojom::FetchLaterLoaderFactory>
+          fetch_later_loader_factory,
+      const blink::DocumentToken& document_token,
       const base::UnguessableToken& devtools_navigation_token,
-      const blink::ParsedPermissionsPolicy& permissions_policy,
+      const absl::optional<blink::ParsedPermissionsPolicy>& permissions_policy,
       blink::mojom::PolicyContainerPtr policy_container,
       mojo::PendingRemote<blink::mojom::CodeCacheHost> code_cache_host,
+      mojo::PendingRemote<blink::mojom::ResourceCache> resource_cache,
       mojom::CookieManagerInfoPtr cookie_manager_info,
       mojom::StorageInfoPtr storage_info,
       CommitNavigationCallback callback) override;
@@ -52,6 +59,7 @@ class NavigationClient : mojom::NavigationClient {
       const net::ResolveErrorInfo& resolve_error_info,
       const absl::optional<std::string>& error_page_content,
       std::unique_ptr<blink::PendingURLLoaderFactoryBundle> subresource_loaders,
+      const blink::DocumentToken& document_token,
       blink::mojom::PolicyContainerPtr policy_container,
       mojom::AlternativeErrorPageOverrideInfoPtr alternative_error_page_info,
       CommitFailedNavigationCallback callback) override;
@@ -71,6 +79,8 @@ class NavigationClient : mojom::NavigationClient {
       mojo::PendingRemote<mojom::NavigationRendererCancellationListener>
           renderer_cancellation_listener_remote);
 
+  void ResetWithoutCancelling();
+
  private:
   // OnDroppedNavigation is bound from BeginNavigation till CommitNavigation.
   // During this period, it is called when the interface pipe is closed from the
@@ -87,7 +97,7 @@ class NavigationClient : mojom::NavigationClient {
       this};
   mojo::Remote<mojom::NavigationRendererCancellationListener>
       renderer_cancellation_listener_remote_;
-  RenderFrameImpl* render_frame_;
+  raw_ptr<RenderFrameImpl, ExperimentalRenderer> render_frame_;
   // See NavigationState::was_initiated_in_this_frame for details.
   bool was_initiated_in_this_frame_ = false;
 

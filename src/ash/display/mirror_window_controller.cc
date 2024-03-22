@@ -1,8 +1,9 @@
-// Copyright (c) 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "ash/display/mirror_window_controller.h"
+#include "base/memory/raw_ptr.h"
 
 #include <utility>
 
@@ -16,15 +17,15 @@
 #include "ash/host/root_window_transformer.h"
 #include "ash/root_window_settings.h"
 #include "ash/shell.h"
+#include "base/containers/contains.h"
 #include "base/strings/stringprintf.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/task/single_thread_task_runner.h"
 #include "components/viz/common/surfaces/surface_id.h"
 #include "ui/aura/client/capture_client.h"
 #include "ui/aura/window.h"
 #include "ui/aura/window_delegate.h"
 #include "ui/aura/window_event_dispatcher.h"
 #include "ui/aura/window_tree_host.h"
-#include "ui/base/layout.h"
 #include "ui/base/ui_base_features.h"
 #include "ui/compositor/compositor.h"
 #include "ui/compositor/layer.h"
@@ -97,7 +98,7 @@ class MirroringScreenPositionClient
   }
 
  private:
-  MirrorWindowController* controller_;  // not owned.
+  raw_ptr<MirrorWindowController, ExperimentalAsh> controller_;  // not owned.
 };
 
 // A trivial CaptureClient that does nothing. That is, calls to set/release
@@ -146,7 +147,7 @@ struct MirrorWindowController::MirroringHostInfo {
   ~MirroringHostInfo();
   std::unique_ptr<AshWindowTreeHost> ash_host;
   gfx::Size mirror_window_host_size;
-  aura::Window* mirror_window = nullptr;
+  raw_ptr<aura::Window, ExperimentalAsh> mirror_window = nullptr;
 };
 
 MirrorWindowController::MirroringHostInfo::MirroringHostInfo() = default;
@@ -187,8 +188,7 @@ void MirrorWindowController::UpdateWindow(
           display::Screen::GetScreen()->GetPrimaryDisplay().bounds(), display);
     }
 
-    if (mirroring_host_info_map_.find(display_info.id()) ==
-        mirroring_host_info_map_.end()) {
+    if (!base::Contains(mirroring_host_info_map_, display_info.id())) {
       AshWindowTreeHostInitParams init_params;
       init_params.initial_bounds = display_info.bounds_in_native();
       init_params.display_id = display_info.id();
@@ -291,10 +291,8 @@ void MirrorWindowController::UpdateWindow(
   if (mirroring_host_info_map_.size() > display_info_list.size()) {
     for (MirroringHostInfoMap::iterator iter = mirroring_host_info_map_.begin();
          iter != mirroring_host_info_map_.end();) {
-      if (std::find_if(display_info_list.begin(), display_info_list.end(),
-                       [iter](const display::ManagedDisplayInfo& info) {
-                         return info.id() == iter->first;
-                       }) == display_info_list.end()) {
+      if (!base::Contains(display_info_list, iter->first,
+                          &display::ManagedDisplayInfo::id)) {
         CloseAndDeleteHost(iter->second, true);
         iter = mirroring_host_info_map_.erase(iter);
       } else {
@@ -426,7 +424,8 @@ void MirrorWindowController::CloseAndDeleteHost(MirroringHostInfo* host_info,
   // was deleted as a result of input event (e.g. shortcut), so don't delete
   // now.
   if (delay_host_deletion)
-    base::ThreadTaskRunnerHandle::Get()->DeleteSoon(FROM_HERE, host_info);
+    base::SingleThreadTaskRunner::GetCurrentDefault()->DeleteSoon(FROM_HERE,
+                                                                  host_info);
   else
     delete host_info;
 }

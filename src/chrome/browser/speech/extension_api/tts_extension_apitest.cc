@@ -1,16 +1,15 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include <vector>
 
-#include "base/bind.h"
 #include "base/command_line.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/task/single_thread_task_runner.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
 #include "chrome/browser/extensions/component_loader.h"
@@ -37,16 +36,16 @@
 #include "chromeos/services/tts/tts_service.h"
 #endif  // IS_CHROMEOS_ASH
 
+using ::testing::_;
 using ::testing::AnyNumber;
 using ::testing::DoAll;
-using ::testing::Invoke;
 using ::testing::InSequence;
+using ::testing::Invoke;
 using ::testing::InvokeWithoutArgs;
 using ::testing::Return;
 using ::testing::SaveArg;
 using ::testing::SetArgPointee;
 using ::testing::StrictMock;
-using ::testing::_;
 
 namespace {
 int g_saved_utterance_id;
@@ -141,17 +140,16 @@ class MockTtsPlatformImpl : public content::TtsPlatform {
 
   void RefreshVoices() override {}
 
-  void GetVoicesForBrowserContext(
-      content::BrowserContext* browser_context,
-      const GURL& source_url,
-      std::vector<content::VoiceData>* out_voices) override {}
+  content::ExternalPlatformDelegate* GetExternalPlatformDelegate() override {
+    return nullptr;
+  }
 
   void set_should_fake_get_voices(bool val) { should_fake_get_voices_ = val; }
 
   void SetErrorToEpicFail() { SetError("epic fail"); }
 
   void SendEndEventOnSavedUtteranceId() {
-    base::ThreadTaskRunnerHandle::Get()->PostDelayedTask(
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostDelayedTask(
         FROM_HERE,
         base::BindOnce(&MockTtsPlatformImpl::SendEvent,
                        ptr_factory_.GetWeakPtr(), false, g_saved_utterance_id,
@@ -164,7 +162,7 @@ class MockTtsPlatformImpl : public content::TtsPlatform {
                     const std::string& lang,
                     const content::VoiceData& voice,
                     const content::UtteranceContinuousParameters& params) {
-    base::ThreadTaskRunnerHandle::Get()->PostDelayedTask(
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostDelayedTask(
         FROM_HERE,
         base::BindOnce(&MockTtsPlatformImpl::SendEvent,
                        ptr_factory_.GetWeakPtr(), false, utterance_id,
@@ -179,7 +177,7 @@ class MockTtsPlatformImpl : public content::TtsPlatform {
       const std::string& lang,
       const content::VoiceData& voice,
       const content::UtteranceContinuousParameters& params) {
-    base::ThreadTaskRunnerHandle::Get()->PostDelayedTask(
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostDelayedTask(
         FROM_HERE,
         base::BindOnce(&MockTtsPlatformImpl::SendEvent,
                        ptr_factory_.GetWeakPtr(), true, utterance_id,
@@ -195,7 +193,7 @@ class MockTtsPlatformImpl : public content::TtsPlatform {
                       const content::UtteranceContinuousParameters& params) {
     for (int i = 0; i < static_cast<int>(utterance.size()); i++) {
       if (i == 0 || utterance[i - 1] == ' ') {
-        base::ThreadTaskRunnerHandle::Get()->PostDelayedTask(
+        base::SingleThreadTaskRunner::GetCurrentDefault()->PostDelayedTask(
             FROM_HERE,
             base::BindOnce(&MockTtsPlatformImpl::SendEvent,
                            ptr_factory_.GetWeakPtr(), false, utterance_id,
@@ -214,7 +212,7 @@ class MockTtsPlatformImpl : public content::TtsPlatform {
     content::TtsController* tts_controller =
         content::TtsController::GetInstance();
     if (wait_for_non_empty_queue && tts_controller->QueueSize() == 0) {
-      base::ThreadTaskRunnerHandle::Get()->PostDelayedTask(
+      base::SingleThreadTaskRunner::GetCurrentDefault()->PostDelayedTask(
           FROM_HERE,
           base::BindOnce(&MockTtsPlatformImpl::SendEvent,
                          ptr_factory_.GetWeakPtr(), true, utterance_id,

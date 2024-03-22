@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,6 +6,7 @@
 #define THIRD_PARTY_BLINK_RENDERER_PLATFORM_GRAPHICS_PAINT_RASTER_INVALIDATION_TRACKING_H_
 
 #include "cc/base/region.h"
+#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/blink/renderer/platform/graphics/graphics_types.h"
 #include "third_party/blink/renderer/platform/graphics/paint/paint_record.h"
 #include "third_party/blink/renderer/platform/graphics/paint_invalidation_reason.h"
@@ -31,7 +32,7 @@ struct RasterInvalidationInfo {
   // For CAP, this is set in PaintArtifactCompositor when converting chunk
   // raster invalidations to cc raster invalidations.
   gfx::Rect rect;
-  PaintInvalidationReason reason = PaintInvalidationReason::kFull;
+  PaintInvalidationReason reason = PaintInvalidationReason::kLayout;
 };
 
 inline bool operator==(const RasterInvalidationInfo& a,
@@ -55,13 +56,15 @@ struct RasterUnderInvalidation {
   DISALLOW_NEW();
   int x;
   int y;
+  // TODO(https://crbug.com/1351544): This class should use SkColor4f.
   SkColor old_pixel;
   SkColor new_pixel;
 };
 
 class PLATFORM_EXPORT RasterInvalidationTracking {
- public:
+  USING_FAST_MALLOC(RasterInvalidationTracking);
 
+ public:
   // When RuntimeEnabledFeatures::PaintUnderInvalidationCheckingEnabled() and
   // SimulateRasterUnderInvalidation(true) is called, all changed pixels will
   // be reported as raster under-invalidations. Used to visually test raster
@@ -79,7 +82,7 @@ class PLATFORM_EXPORT RasterInvalidationTracking {
                        const String& debug_name,
                        const gfx::Rect&,
                        PaintInvalidationReason);
-  bool HasInvalidations() const { return !invalidations_.IsEmpty(); }
+  bool HasInvalidations() const { return !invalidations_.empty(); }
   const Vector<RasterInvalidationInfo>& Invalidations() const {
     return invalidations_;
   }
@@ -91,7 +94,7 @@ class PLATFORM_EXPORT RasterInvalidationTracking {
   // dark red. The caller can overlay UnderInvalidationRecord() onto the
   // original drawings to show the under raster invalidations.
   void CheckUnderInvalidations(const String& layer_debug_name,
-                               sk_sp<PaintRecord> new_record,
+                               PaintRecord new_record,
                                const gfx::Rect& new_interest_rect);
 
   void AsJSON(JSONObject*, bool detailed) const;
@@ -99,7 +102,7 @@ class PLATFORM_EXPORT RasterInvalidationTracking {
   void AddToLayerDebugInfo(cc::LayerDebugInfo&) const;
 
   // The record containing under-invalidated pixels in dark red.
-  sk_sp<const PaintRecord> UnderInvalidationRecord() const {
+  PaintRecord UnderInvalidationRecord() const {
     return under_invalidation_record_;
   }
 
@@ -107,11 +110,11 @@ class PLATFORM_EXPORT RasterInvalidationTracking {
   Vector<RasterInvalidationInfo> invalidations_;
 
   // The following fields are for raster under-invalidation detection.
-  sk_sp<PaintRecord> last_painted_record_;
+  absl::optional<PaintRecord> last_painted_record_;
   gfx::Rect last_interest_rect_;
   cc::Region invalidation_region_since_last_paint_;
   Vector<RasterUnderInvalidation> under_invalidations_;
-  sk_sp<PaintRecord> under_invalidation_record_;
+  PaintRecord under_invalidation_record_;
 };
 
 }  // namespace blink

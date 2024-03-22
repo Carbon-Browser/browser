@@ -1,4 +1,4 @@
-// Copyright (c) 2011 The Chromium Authors. All rights reserved.
+// Copyright 2011 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -148,7 +148,7 @@ chrome.test.getConfig(function(config) {
     // Tests that we can set cookies in both processes.
     function setDocumentCookie() {
       document.cookie = "k=v";
-      chrome.test.assertTrue(document.cookie.indexOf("k=v") != -1);
+      chrome.test.assertNe(-1, document.cookie.indexOf("k=v"));
       chrome.test.succeed();
     }
   ]);

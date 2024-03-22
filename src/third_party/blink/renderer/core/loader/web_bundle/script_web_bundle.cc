@@ -1,22 +1,27 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "third_party/blink/renderer/core/loader/web_bundle/script_web_bundle.h"
 
+#include "base/metrics/histogram_functions.h"
+#include "base/unguessable_token.h"
+#include "components/web_package/web_bundle_utils.h"
 #include "third_party/blink/public/mojom/use_counter/metrics/web_feature.mojom-blink.h"
 #include "third_party/blink/renderer/core/dom/document.h"
+#include "third_party/blink/renderer/core/execution_context/agent.h"
 #include "third_party/blink/renderer/core/execution_context/execution_context.h"
+#include "third_party/blink/renderer/core/frame/local_frame.h"
 #include "third_party/blink/renderer/core/html/cross_origin_attribute.h"
 #include "third_party/blink/renderer/core/html/html_script_element.h"
 #include "third_party/blink/renderer/core/inspector/console_message.h"
 #include "third_party/blink/renderer/core/loader/web_bundle/script_web_bundle_rule.h"
 #include "third_party/blink/renderer/core/loader/web_bundle/web_bundle_loader.h"
-#include "third_party/blink/renderer/platform/bindings/microtask.h"
 #include "third_party/blink/renderer/platform/instrumentation/use_counter.h"
 #include "third_party/blink/renderer/platform/loader/cors/cors.h"
 #include "third_party/blink/renderer/platform/loader/fetch/resource_fetcher.h"
 #include "third_party/blink/renderer/platform/loader/fetch/subresource_web_bundle_list.h"
+#include "third_party/blink/renderer/platform/scheduler/public/event_loop.h"
 #include "third_party/blink/renderer/platform/weborigin/kurl.h"
 #include "third_party/blink/renderer/platform/wtf/casting.h"
 #include "third_party/blink/renderer/platform/wtf/cross_thread_functional.h"
@@ -88,6 +93,16 @@ ScriptWebBundle::ScriptWebBundle(ScriptElementBase& element,
                                  const ScriptWebBundleRule& rule)
     : element_(&element), element_document_(&element_document), rule_(rule) {
   UseCounter::Count(element_document_, WebFeature::kScriptWebBundle);
+  if (IsSameOriginBundle()) {
+    base::UmaHistogramEnumeration(
+        "SubresourceWebBundles.OriginType",
+        web_package::ScriptWebBundleOriginType::kSameOrigin);
+  } else {
+    base::UmaHistogramEnumeration(
+        "SubresourceWebBundles.OriginType",
+        web_package::ScriptWebBundleOriginType::kCrossOrigin);
+  }
+
   CreateBundleLoaderAndRegister();
 }
 
@@ -152,15 +167,18 @@ void ScriptWebBundle::OnWebBundleError(const String& message) const {
 // |bundle_loader_| can be null here, if the script element
 // is removed from the document and the microtask already
 // cleaned up the pointer to the loader.
-// TODO(crbug/1263783): Add a test for the divergent behaviour
-// between <link> and <script> API when the element is removed.
 void ScriptWebBundle::NotifyLoadingFinished() {
   if (!element_ || !bundle_loader_)
     return;
   if (bundle_loader_->HasLoaded()) {
     element_->DispatchLoadEvent();
   } else if (bundle_loader_->HasFailed()) {
+    // Save token because DispatchErrorEvent() may remove the script element.
+    base::UnguessableToken web_bundle_token = WebBundleToken();
     element_->DispatchErrorEvent();
+    if (ResourceFetcher* resource_fetcher = element_document_->Fetcher()) {
+      resource_fetcher->CancelWebBundleSubresourceLoadersFor(web_bundle_token);
+    }
   } else {
     NOTREACHED();
   }
@@ -176,6 +194,17 @@ bool ScriptWebBundle::WillBeReleased() const {
 
 network::mojom::CredentialsMode ScriptWebBundle::GetCredentialsMode() const {
   return rule_.credentials_mode();
+}
+
+bool ScriptWebBundle::IsSameOriginBundle() const {
+  DCHECK(element_document_);
+  DCHECK(element_document_->GetFrame());
+  DCHECK(element_document_->GetFrame()->GetSecurityContext());
+  const SecurityOrigin* frame_security_origin =
+      element_document_->GetFrame()->GetSecurityContext()->GetSecurityOrigin();
+  auto bundle_origin = SecurityOrigin::Create(rule_.source_url());
+  return frame_security_origin &&
+         frame_security_origin->IsSameOriginWith(bundle_origin.get());
 }
 
 void ScriptWebBundle::CreateBundleLoaderAndRegister() {
@@ -225,9 +254,13 @@ void ScriptWebBundle::WillReleaseBundleLoaderAndUnregister() {
   // https://docs.google.com/document/d/1GEJ3wTERGEeTG_4J0QtAwaNXhPTza0tedd00A7vPVsw/edit#heading=h.y88lpjmx2ndn
   will_be_released_ = true;
   element_ = nullptr;
-  auto task = std::make_unique<ReleaseResourceTask>(*this);
-  Microtask::EnqueueMicrotask(
-      WTF::Bind(&ReleaseResourceTask::Run, std::move(task)));
+  if (element_document_) {
+    auto task = std::make_unique<ReleaseResourceTask>(*this);
+    element_document_->GetAgent().event_loop()->EnqueueMicrotask(
+        WTF::BindOnce(&ReleaseResourceTask::Run, std::move(task)));
+  } else {
+    ReleaseBundleLoaderAndUnregister();
+  }
 }
 
 // This function updates the WebBundleRule, element_ and cancels the release
@@ -246,12 +279,14 @@ void ScriptWebBundle::ReusedWith(ScriptElementBase& element,
   DCHECK(bundle_loader_);
   if (bundle_loader_->HasLoaded()) {
     element_document_->GetTaskRunner(TaskType::kDOMManipulation)
-        ->PostTask(FROM_HERE, WTF::Bind(&ScriptElementBase::DispatchLoadEvent,
-                                        WrapPersistent(element_.Get())));
+        ->PostTask(FROM_HERE,
+                   WTF::BindOnce(&ScriptElementBase::DispatchLoadEvent,
+                                 WrapPersistent(element_.Get())));
   } else if (bundle_loader_->HasFailed()) {
     element_document_->GetTaskRunner(TaskType::kDOMManipulation)
-        ->PostTask(FROM_HERE, WTF::Bind(&ScriptElementBase::DispatchErrorEvent,
-                                        WrapPersistent(element_.Get())));
+        ->PostTask(FROM_HERE,
+                   WTF::BindOnce(&ScriptElementBase::DispatchErrorEvent,
+                                 WrapPersistent(element_.Get())));
   }
 }
 

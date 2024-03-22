@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,7 +6,7 @@
 
 #include <vector>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/test/mock_callback.h"
 #include "chrome/browser/lacros/account_manager/account_profile_mapper.h"
 #include "chrome/browser/lacros/identity_manager_lacros.h"
@@ -32,7 +32,7 @@ using MockGetAccountInformationCallback = base::MockOnceCallback<void(
 class MockIdentityManagerLacros : public IdentityManagerLacros {
  public:
   MockIdentityManagerLacros() = default;
-  ~MockIdentityManagerLacros() = default;
+  ~MockIdentityManagerLacros() override = default;
 
   MOCK_METHOD(
       void,

@@ -37,6 +37,7 @@
 #include "third_party/blink/public/platform/web_theme_engine.h"
 #include "third_party/blink/renderer/core/scroll/scrollable_area.h"
 #include "third_party/blink/renderer/core/scroll/scrollbar.h"
+#include "third_party/blink/renderer/core/scroll/scrollbar_theme_fluent.h"
 #include "third_party/blink/renderer/core/scroll/scrollbar_theme_overlay.h"
 #include "third_party/blink/renderer/core/style/computed_style_base_constants.h"
 #include "third_party/blink/renderer/platform/graphics/graphics_context.h"
@@ -128,18 +129,16 @@ PartPaintingParams ButtonPartPaintingParams(const Scrollbar& scrollbar,
   return PartPaintingParams(paint_part, state);
 }
 
-inline float Proportion(EScrollbarWidth scrollbar_width) {
-  if (scrollbar_width == EScrollbarWidth::kThin)
-    return kThinProportion;
-  else
-    return kAutoProportion;
-}
-
 }  // namespace
 
 ScrollbarTheme& ScrollbarTheme::NativeTheme() {
-  if (OverlayScrollbarsEnabled())
+  if (FluentScrollbarsEnabled()) {
+    return ScrollbarThemeFluent::GetInstance();
+  }
+
+  if (OverlayScrollbarsEnabled()) {
     return ScrollbarThemeOverlay::GetInstance();
+  }
 
   DEFINE_STATIC_LOCAL(ScrollbarThemeAura, theme, ());
   return theme;
@@ -158,8 +157,9 @@ bool ScrollbarThemeAura::SupportsDragSnapBack() const {
 #endif
 }
 
-int ScrollbarThemeAura::ScrollbarThickness(float scale_from_dip,
-                                           EScrollbarWidth scrollbar_width) {
+int ScrollbarThemeAura::ScrollbarThickness(
+    float scale_from_dip,
+    EScrollbarWidth scrollbar_width) const {
   if (scrollbar_width == EScrollbarWidth::kNone)
     return 0;
 
@@ -239,15 +239,24 @@ void ScrollbarThemeAura::PaintTrack(GraphicsContext& context,
   // of the back track and forward track.
   auto state = WebThemeEngine::kStateNormal;
 
-  // TODO(wangxianzhu): The extra params for scrollbar track were for painting
-  // back and forward tracks separately, which we don't support. Remove them.
+  // TODO(wangxianzhu): Some of these extra params for scrollbar track were for
+  // painting back and forward tracks separately, which we don't support. Remove
+  // them.
   gfx::Rect align_rect = TrackRect(scrollbar);
-  WebThemeEngine::ExtraParams extra_params;
-  extra_params.scrollbar_track.is_back = false;
-  extra_params.scrollbar_track.track_x = align_rect.x();
-  extra_params.scrollbar_track.track_y = align_rect.y();
-  extra_params.scrollbar_track.track_width = align_rect.width();
-  extra_params.scrollbar_track.track_height = align_rect.height();
+
+  WebThemeEngine::ScrollbarTrackExtraParams scrollbar_track;
+  scrollbar_track.is_back = false;
+  scrollbar_track.track_x = align_rect.x();
+  scrollbar_track.track_y = align_rect.y();
+  scrollbar_track.track_width = align_rect.width();
+  scrollbar_track.track_height = align_rect.height();
+
+  if (scrollbar.ScrollbarTrackColor().has_value()) {
+    scrollbar_track.track_color =
+        scrollbar.ScrollbarTrackColor().value().toSkColor4f().toSkColor();
+  }
+
+  WebThemeEngine::ExtraParams extra_params(scrollbar_track);
 
   WebThemeEngineHelper::GetNativeThemeEngine()->Paint(
       context.Canvas(),
@@ -266,10 +275,21 @@ void ScrollbarThemeAura::PaintButton(GraphicsContext& gc,
   if (!params.should_paint)
     return;
 
-  WebThemeEngine::ExtraParams extra_params;
-  extra_params.scrollbar_button.zoom = scrollbar.EffectiveZoom();
-  extra_params.scrollbar_button.right_to_left =
-      scrollbar.ContainerIsRightToLeft();
+  WebThemeEngine::ScrollbarButtonExtraParams scrollbar_button;
+  scrollbar_button.zoom = scrollbar.EffectiveZoom();
+  // TODO(crbug.com/1493088): Should not draw rounded corner for a button
+  // adjacent to the scroll corner.
+  scrollbar_button.needs_rounded_corner = scrollbar.ContainerIsFormControl();
+  scrollbar_button.right_to_left = scrollbar.ContainerIsRightToLeft();
+  if (scrollbar.ScrollbarThumbColor().has_value()) {
+    scrollbar_button.thumb_color =
+        scrollbar.ScrollbarThumbColor().value().toSkColor4f().toSkColor();
+  }
+  if (scrollbar.ScrollbarTrackColor().has_value()) {
+    scrollbar_button.track_color =
+        scrollbar.ScrollbarTrackColor().value().toSkColor4f().toSkColor();
+  }
+  WebThemeEngine::ExtraParams extra_params(scrollbar_button);
   WebThemeEngineHelper::GetNativeThemeEngine()->Paint(
       gc.Canvas(), params.part, params.state, rect, &extra_params,
       scrollbar.UsedColorScheme());
@@ -293,12 +313,21 @@ void ScrollbarThemeAura::PaintThumb(GraphicsContext& gc,
   else
     state = WebThemeEngine::kStateNormal;
 
+  WebThemeEngine::ScrollbarThumbExtraParams scrollbar_thumb;
+
+  if (scrollbar.ScrollbarThumbColor().has_value()) {
+    scrollbar_thumb.thumb_color =
+        scrollbar.ScrollbarThumbColor().value().toSkColor4f().toSkColor();
+  }
+
+  WebThemeEngine::ExtraParams params(scrollbar_thumb);
+
   WebThemeEngineHelper::GetNativeThemeEngine()->Paint(
       canvas,
       scrollbar.Orientation() == kHorizontalScrollbar
           ? WebThemeEngine::kPartScrollbarHorizontalThumb
           : WebThemeEngine::kPartScrollbarVerticalThumb,
-      state, rect, nullptr, scrollbar.UsedColorScheme());
+      state, rect, &params, scrollbar.UsedColorScheme());
 }
 
 bool ScrollbarThemeAura::ShouldRepaintAllPartsOnInvalidation() const {
@@ -368,6 +397,14 @@ bool ScrollbarThemeAura::ShouldSnapBackToDragOrigin(
           mouse_offset_in_scrollbar >= snap_outside_of_max);
 }
 
+float ScrollbarThemeAura::Proportion(EScrollbarWidth scrollbar_width) const {
+  if (scrollbar_width == EScrollbarWidth::kNone) {
+    return 0.f;
+  }
+  return scrollbar_width == EScrollbarWidth::kThin ? kThinProportion
+                                                   : kAutoProportion;
+}
+
 bool ScrollbarThemeAura::HasScrollbarButtons(
     ScrollbarOrientation orientation) const {
   WebThemeEngine* theme_engine = WebThemeEngineHelper::GetNativeThemeEngine();
@@ -379,7 +416,7 @@ bool ScrollbarThemeAura::HasScrollbarButtons(
               .IsEmpty();
 }
 
-gfx::Size ScrollbarThemeAura::ButtonSize(const Scrollbar& scrollbar) {
+gfx::Size ScrollbarThemeAura::ButtonSize(const Scrollbar& scrollbar) const {
   if (!HasScrollbarButtons(scrollbar.Orientation()))
     return gfx::Size(0, 0);
 

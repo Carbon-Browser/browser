@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -23,10 +23,6 @@
 #include "net/net_buildflags.h"
 #include "services/network/public/mojom/network_context.mojom.h"
 #include "testing/gtest/include/gtest/gtest.h"
-
-#if BUILDFLAG(IS_MAC)
-#include "base/mac/mac_util.h"
-#endif
 
 namespace ssl_test_util {
 
@@ -136,34 +132,21 @@ void SecurityStateWebContentsObserver::DidChangeVisibleSecurityState() {
 }
 
 bool UsingBuiltinCertVerifier() {
-#if BUILDFLAG(IS_FUCHSIA) || BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)
+#if BUILDFLAG(IS_FUCHSIA) || BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS) || \
+    BUILDFLAG(CHROME_ROOT_STORE_ONLY)
   return true;
+#elif BUILDFLAG(CHROME_ROOT_STORE_OPTIONAL)
+  return base::FeatureList::IsEnabled(net::features::kChromeRootStoreUsed);
 #else
-#if BUILDFLAG(BUILTIN_CERT_VERIFIER_FEATURE_SUPPORTED)
-  if (base::FeatureList::IsEnabled(net::features::kCertVerifierBuiltinFeature))
-    return true;
-#endif
-#if BUILDFLAG(CHROME_ROOT_STORE_SUPPORTED)
-  if (base::FeatureList::IsEnabled(net::features::kChromeRootStoreUsed))
-    return true;
-#endif
   return false;
 #endif
 }
 
 bool SystemSupportsHardFailRevocationChecking() {
-  if (UsingBuiltinCertVerifier())
-    return true;
-#if BUILDFLAG(IS_WIN)
-  return true;
-#else
-  return false;
-#endif
+  return UsingBuiltinCertVerifier();
 }
 
 bool SystemUsesChromiumEVMetadata() {
-  if (UsingBuiltinCertVerifier())
-    return true;
 #if defined(PLATFORM_USES_CHROMIUM_EV_METADATA)
   return true;
 #else
@@ -176,10 +159,6 @@ bool SystemSupportsOCSPStapling() {
     return true;
 #if BUILDFLAG(IS_ANDROID)
   return false;
-#elif BUILDFLAG(IS_MAC)
-  // The SecTrustSetOCSPResponse function exists since macOS 10.9+, but does
-  // not actually do anything until 10.12.
-  return true;
 #else
   return true;
 #endif

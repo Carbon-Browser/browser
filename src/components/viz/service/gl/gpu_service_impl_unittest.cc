@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,36 +8,24 @@
 #include <tuple>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
+#include "base/functional/callback_helpers.h"
 #include "base/memory/weak_ptr.h"
 #include "base/run_loop.h"
 #include "base/task/single_thread_task_runner.h"
 #include "base/time/time.h"
 #include "gpu/config/gpu_info.h"
-#include "gpu/ipc/service/display_context.h"
 #include "gpu/ipc/service/gpu_watchdog_thread.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
 #include "mojo/public/cpp/bindings/remote.h"
 #include "services/viz/public/mojom/gpu.mojom.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
+#include "ui/gl/gl_utils.h"
 #include "ui/gl/init/gl_factory.h"
 
 namespace viz {
-namespace {
-
-class MockDisplayContext : public gpu::DisplayContext {
- public:
-  MockDisplayContext() = default;
-  ~MockDisplayContext() override = default;
-
-  // gpu::DisplayContext implementation.
-  MOCK_METHOD0(MarkContextLost, void());
-};
-
-}  // namespace
 
 class GpuServiceTest : public testing::Test {
  public:
@@ -132,30 +120,15 @@ TEST_F(GpuServiceTest, LoseAllContexts) {
   mojo::PendingRemote<mojom::GpuHost> gpu_host_proxy;
   std::ignore = gpu_host_proxy.InitWithNewPipeAndPassReceiver();
   gpu_service()->InitializeWithHost(
-      std::move(gpu_host_proxy), gpu::GpuProcessActivityFlags(),
-      gl::init::CreateOffscreenGLSurface(gfx::Size()),
+      std::move(gpu_host_proxy), gpu::GpuProcessShmCount(),
+      gl::init::CreateOffscreenGLSurface(gl::GetDefaultDisplay(), gfx::Size()),
       /*sync_point_manager=*/nullptr, /*shared_image_manager=*/nullptr,
       /*shutdown_event=*/nullptr);
   gpu_service_remote.FlushForTesting();
 
-  MockDisplayContext display_context;
-  gpu_service()->RegisterDisplayContext(&display_context);
-
-  // Verify that |display_context| is told to lose it's context.
-  EXPECT_CALL(display_context, MarkContextLost());
-  gpu_service()->LoseAllContexts();
-  testing::Mock::VerifyAndClearExpectations(&display_context);
-
-  gpu_service()->MaybeExitOnContextLost();
+  gpu_service()->MaybeExitOnContextLost(
+      /*synthetic_loss=*/false, gpu::error::ContextLostReason::kUnknown);
   EXPECT_TRUE(gpu_service()->IsExiting());
-
-  // Verify that if GPU process is already exiting then |display_context| won't
-  // be told to lose it's context.
-  EXPECT_CALL(display_context, MarkContextLost()).Times(0);
-  gpu_service()->LoseAllContexts();
-  testing::Mock::VerifyAndClearExpectations(&display_context);
-
-  gpu_service()->UnregisterDisplayContext(&display_context);
 }
 
 // Tests that the visibility callback gets called when visibility changes.
@@ -166,8 +139,8 @@ TEST_F(GpuServiceTest, VisibilityCallbackCalled) {
   mojo::PendingRemote<mojom::GpuHost> gpu_host_proxy;
   std::ignore = gpu_host_proxy.InitWithNewPipeAndPassReceiver();
   gpu_service()->InitializeWithHost(
-      std::move(gpu_host_proxy), gpu::GpuProcessActivityFlags(),
-      gl::init::CreateOffscreenGLSurface(gfx::Size()),
+      std::move(gpu_host_proxy), gpu::GpuProcessShmCount(),
+      gl::init::CreateOffscreenGLSurface(gl::GetDefaultDisplay(), gfx::Size()),
       /*sync_point_manager=*/nullptr, /*shared_image_manager=*/nullptr,
       /*shutdown_event=*/nullptr);
   gpu_service_remote.FlushForTesting();

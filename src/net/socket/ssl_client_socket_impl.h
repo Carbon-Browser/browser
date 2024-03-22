@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -15,9 +15,8 @@
 #include "base/compiler_specific.h"
 #include "base/containers/lru_cache.h"
 #include "base/memory/raw_ptr.h"
-#include "base/memory/ref_counted.h"
+#include "base/memory/scoped_refptr.h"
 #include "base/memory/weak_ptr.h"
-#include "base/time/time.h"
 #include "net/base/completion_once_callback.h"
 #include "net/base/host_port_pair.h"
 #include "net/base/io_buffer.h"
@@ -29,7 +28,6 @@
 #include "net/socket/ssl_client_socket.h"
 #include "net/socket/stream_socket.h"
 #include "net/ssl/openssl_ssl_util.h"
-#include "net/ssl/ssl_client_cert_type.h"
 #include "net/ssl/ssl_client_session_cache.h"
 #include "net/ssl/ssl_config.h"
 #include "net/traffic_annotation/network_traffic_annotation.h"
@@ -76,9 +74,9 @@ class SSLClientSocketImpl : public SSLClientSocket,
   std::vector<uint8_t> GetECHRetryConfigs() override;
 
   // SSLSocket implementation.
-  int ExportKeyingMaterial(const base::StringPiece& label,
+  int ExportKeyingMaterial(base::StringPiece label,
                            bool has_context,
-                           const base::StringPiece& context,
+                           base::StringPiece context,
                            unsigned char* out,
                            unsigned int outlen) override;
 
@@ -92,7 +90,6 @@ class SSLClientSocketImpl : public SSLClientSocket,
   int GetLocalAddress(IPEndPoint* address) const override;
   const NetLogWithSource& NetLog() const override;
   bool WasEverUsed() const override;
-  bool WasAlpnNegotiated() const override;
   NextProto GetNegotiatedProtocol() const override;
   absl::optional<base::StringPiece> GetPeerApplicationSettings() const override;
   bool GetSSLInfo(SSLInfo* ssl_info) override;
@@ -256,7 +253,6 @@ class SSLClientSocketImpl : public SSLClientSocket,
   const raw_ptr<SSLClientContext> context_;
 
   std::unique_ptr<CertVerifier::Request> cert_verifier_request_;
-  base::TimeTicks start_cert_verification_time_;
 
   // Result from Cert Verifier.
   int cert_verification_result_;

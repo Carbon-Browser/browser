@@ -34,15 +34,20 @@
 #include "net/dns/public/resolve_error_info.h"
 #include "services/network/public/cpp/cors/cors_error_status.h"
 #include "services/network/public/mojom/blocked_by_response_reason.mojom-shared.h"
+#include "services/network/public/mojom/cors.mojom-shared.h"
 #include "services/network/public/mojom/trust_tokens.mojom-shared.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/blink/public/platform/web_common.h"
 #include "third_party/blink/public/platform/web_url.h"
 
+namespace network {
+struct URLLoaderCompletionStatus;
+}  // namespace network
+
 namespace blink {
 
 // TODO(yhirano): Change this to a class.
-struct WebURLError {
+struct BLINK_PLATFORM_EXPORT WebURLError {
  public:
   enum class HasCopyInCache {
     kFalse,
@@ -57,32 +62,32 @@ struct WebURLError {
     kTrue,
   };
 
+  static WebURLError Create(const network::URLLoaderCompletionStatus&,
+                            const WebURL&);
+
   WebURLError() = delete;
   // |reason| must not be 0.
-  BLINK_PLATFORM_EXPORT WebURLError(int reason, const WebURL&);
+  WebURLError(int reason, const WebURL&);
   // |reason| must not be 0.
-  BLINK_PLATFORM_EXPORT WebURLError(int reason,
-                                    int extended_reason,
-                                    net::ResolveErrorInfo resolve_error_info,
-                                    HasCopyInCache,
-                                    IsWebSecurityViolation,
-                                    const WebURL&,
-                                    ShouldCollapseInitiator);
-  BLINK_PLATFORM_EXPORT WebURLError(
-      network::mojom::BlockedByResponseReason blocked_reason,
-      net::ResolveErrorInfo resolve_error_info,
-      HasCopyInCache,
-      const WebURL&);
-  BLINK_PLATFORM_EXPORT WebURLError(const network::CorsErrorStatus&,
-                                    HasCopyInCache,
-                                    const WebURL&);
+  WebURLError(int reason,
+              int extended_reason,
+              net::ResolveErrorInfo resolve_error_info,
+              HasCopyInCache,
+              IsWebSecurityViolation,
+              const WebURL&,
+              ShouldCollapseInitiator);
+  WebURLError(network::mojom::BlockedByResponseReason blocked_reason,
+              net::ResolveErrorInfo resolve_error_info,
+              HasCopyInCache,
+              const WebURL&);
+  WebURLError(const network::CorsErrorStatus&, HasCopyInCache, const WebURL&);
 
   // Constructs a new error for a request failing due to a Trust Tokens error.
   // This takes an integer error code in addition to a TrustTokenOperationStatus
   // because there are multiple Trust Tokens //net error codes.
   //
   // |trust_token_operation_error| must be an actual error (i.e., not kOk).
-  BLINK_PLATFORM_EXPORT WebURLError(
+  WebURLError(
       int reason,
       network::mojom::TrustTokenOperationStatus trust_token_operation_error,
       const WebURL& url);
@@ -97,6 +102,10 @@ struct WebURLError {
   const WebURL& url() const { return url_; }
   const absl::optional<network::CorsErrorStatus> cors_error_status() const {
     return cors_error_status_;
+  }
+  network::mojom::PrivateNetworkAccessPreflightResult
+  private_network_access_preflight_result() const {
+    return private_network_access_preflight_result_;
   }
   const absl::optional<network::mojom::BlockedByResponseReason>
   blocked_by_response_reason() const {
@@ -131,6 +140,11 @@ struct WebURLError {
 
   // Optional CORS error details.
   absl::optional<network::CorsErrorStatus> cors_error_status_;
+
+  // Details about any Private Network Access preflight.
+  network::mojom::PrivateNetworkAccessPreflightResult
+      private_network_access_preflight_result_ =
+          network::mojom::PrivateNetworkAccessPreflightResult::kNone;
 
   // True if the initiator of this request should be collapsed.
   bool should_collapse_initiator_ = false;

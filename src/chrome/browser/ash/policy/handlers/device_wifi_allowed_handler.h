@@ -1,10 +1,11 @@
-// Copyright (c) 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CHROME_BROWSER_ASH_POLICY_HANDLERS_DEVICE_WIFI_ALLOWED_HANDLER_H_
 #define CHROME_BROWSER_ASH_POLICY_HANDLERS_DEVICE_WIFI_ALLOWED_HANDLER_H_
 
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "chrome/browser/ash/settings/cros_settings.h"
 
@@ -25,7 +26,8 @@ class DeviceWiFiAllowedHandler {
  private:
   void OnWiFiPolicyChanged();
 
-  ash::CrosSettings* cros_settings_;
+  raw_ptr<ash::CrosSettings, DanglingUntriaged | ExperimentalAsh>
+      cros_settings_;
   base::CallbackListSubscription wifi_policy_subscription_;
   base::WeakPtrFactory<DeviceWiFiAllowedHandler> weak_factory_{this};
 };

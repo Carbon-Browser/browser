@@ -1,10 +1,10 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/lacros/download_controller_client_lacros.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "chrome/browser/browser_process.h"
 #include "chrome/browser/profiles/profile_manager.h"
 #include "chromeos/crosapi/mojom/download_controller.mojom.h"
@@ -29,7 +29,7 @@ crosapi::mojom::DownloadItemPtr ConvertToMojoDownloadItem(
 }  // namespace
 
 DownloadControllerClientLacros::DownloadControllerClientLacros() {
-  g_browser_process->profile_manager()->AddObserver(this);
+  profile_manager_observation_.Observe(g_browser_process->profile_manager());
   auto profiles = g_browser_process->profile_manager()->GetLoadedProfiles();
   for (auto* profile : profiles)
     OnProfileAdded(profile);
@@ -39,7 +39,7 @@ DownloadControllerClientLacros::DownloadControllerClientLacros() {
     return;
 
   int remote_version =
-      service->GetInterfaceVersion(crosapi::mojom::DownloadController::Uuid_);
+      service->GetInterfaceVersion<crosapi::mojom::DownloadController>();
   if (remote_version < 0 ||
       static_cast<uint32_t>(remote_version) <
           crosapi::mojom::DownloadController::kBindClientMinVersion) {
@@ -50,10 +50,7 @@ DownloadControllerClientLacros::DownloadControllerClientLacros() {
       client_receiver_.BindNewPipeAndPassRemoteWithVersion());
 }
 
-DownloadControllerClientLacros::~DownloadControllerClientLacros() {
-  if (g_browser_process && g_browser_process->profile_manager())
-    g_browser_process->profile_manager()->RemoveObserver(this);
-}
+DownloadControllerClientLacros::~DownloadControllerClientLacros() = default;
 
 void DownloadControllerClientLacros::GetAllDownloads(
     crosapi::mojom::DownloadControllerClient::GetAllDownloadsCallback
@@ -104,6 +101,10 @@ void DownloadControllerClientLacros::SetOpenWhenComplete(
 
 void DownloadControllerClientLacros::OnProfileAdded(Profile* profile) {
   download_notifier_.AddProfile(profile);
+}
+
+void DownloadControllerClientLacros::OnProfileManagerDestroying() {
+  profile_manager_observation_.Reset();
 }
 
 void DownloadControllerClientLacros::OnManagerInitialized(

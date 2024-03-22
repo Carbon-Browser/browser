@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -82,9 +82,6 @@ class CalendarEvent {
   static void RegisterJSONConverter(
       base::JSONValueConverter<CalendarEvent>* converter);
 
-  // Creates CalendarEvent from parsed JSON.
-  static std::unique_ptr<CalendarEvent> CreateFrom(const base::Value& value);
-
   // The ID of this Calendar Event.
   const std::string& id() const { return id_; }
   void set_id(const std::string& id) { id_ = id; }
@@ -117,6 +114,17 @@ class CalendarEvent {
   const DateTime& end_time() const { return end_time_; }
   void set_end_time(const DateTime& end_time) { end_time_ = end_time; }
 
+  const bool& all_day_event() const { return all_day_event_; }
+  void set_all_day_event(const bool& all_day_event) {
+    all_day_event_ = all_day_event;
+  }
+
+  // Video conference URL, if one is attached to the event and using the
+  // conferenceData.uri field. This could be 1P like Google Meet or any 3P
+  // provider as long as they have integrated with the calendar API correctly.
+  GURL conference_data_uri() const { return conference_data_uri_; }
+  void set_conference_data_uri(const GURL& uri) { conference_data_uri_ = uri; }
+
   // Return the approximate size of this event, in bytes.
   int GetApproximateSizeInBytes() const;
 
@@ -129,6 +137,8 @@ class CalendarEvent {
   ResponseStatus self_response_status_ = ResponseStatus::kUnknown;
   DateTime start_time_;
   DateTime end_time_;
+  bool all_day_event_ = false;
+  GURL conference_data_uri_;
 };
 
 // Parses a list of calendar events.

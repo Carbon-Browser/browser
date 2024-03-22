@@ -30,10 +30,10 @@
 #include <memory>
 #include <utility>
 
-#include "base/auto_reset.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/synchronization/lock.h"
 #include "base/synchronization/waitable_event.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/threading/thread_restrictions.h"
 #include "third_party/blink/public/common/loader/worker_main_script_load_parameters.h"
 #include "third_party/blink/public/mojom/frame/lifecycle.mojom-shared.h"
@@ -56,13 +56,13 @@
 #include "third_party/blink/renderer/core/workers/worker_clients.h"
 #include "third_party/blink/renderer/core/workers/worker_global_scope.h"
 #include "third_party/blink/renderer/core/workers/worker_reporting_proxy.h"
-#include "third_party/blink/renderer/platform/bindings/microtask.h"
 #include "third_party/blink/renderer/platform/instrumentation/tracing/trace_event.h"
 #include "third_party/blink/renderer/platform/loader/fetch/fetch_client_settings_object_snapshot.h"
 #include "third_party/blink/renderer/platform/loader/fetch/worker_resource_timing_notifier.h"
 #include "third_party/blink/renderer/platform/scheduler/public/event_loop.h"
+#include "third_party/blink/renderer/platform/scheduler/public/thread_scheduler.h"
 #include "third_party/blink/renderer/platform/scheduler/public/worker_scheduler.h"
-#include "third_party/blink/renderer/platform/scheduler/worker/worker_thread.h"
+#include "third_party/blink/renderer/platform/scheduler/worker/non_main_thread_impl.h"
 #include "third_party/blink/renderer/platform/scheduler/worker/worker_thread_scheduler.h"
 #include "third_party/blink/renderer/platform/weborigin/kurl.h"
 #include "third_party/blink/renderer/platform/wtf/cross_thread_copier_std.h"
@@ -161,7 +161,7 @@ WorkerThread::~WorkerThread() {
   InitializingWorkerThreads().erase(this);
   WorkerThreads().erase(this);
 
-  DCHECK(child_threads_.IsEmpty());
+  DCHECK(child_threads_.empty());
   DCHECK_NE(ExitCode::kNotTerminated, exit_code_);
   base::UmaHistogramEnumeration("WorkerThread.ExitCode", exit_code_);
 }
@@ -324,10 +324,11 @@ void WorkerThread::DidProcessTask(const base::PendingTask& pending_task) {
   // metrics for microtasks are counted as a part of the preceding task.
   GlobalScope()->GetAgent()->event_loop()->PerformMicrotaskCheckpoint();
 
-  // Microtask::PerformCheckpoint() runs microtasks and its completion hooks for
-  // the default microtask queue. The default queue may contain the microtasks
-  // queued by V8 itself, and legacy blink::MicrotaskQueue::EnqueueMicrotask.
-  // The completion hook contains IndexedDB clean-up task, as described at
+  // EventLoop::PerformIsolateGlobalMicrotasksCheckpoint() runs microtasks and
+  // its completion hooks for the default microtask queue. The default queue may
+  // contain the microtasks queued by V8 itself, and legacy
+  // blink::MicrotaskQueue::EnqueueMicrotask. The completion hook contains
+  // IndexedDB clean-up task, as described at
   // https://html.spec.whatwg.org/C#perform-a-microtask-checkpoint
   // TODO(tzik): Move rejected promise handling to EventLoop.
 
@@ -449,13 +450,13 @@ void WorkerThread::ChildThreadStartedOnWorkerThread(WorkerThread* child) {
 void WorkerThread::ChildThreadTerminatedOnWorkerThread(WorkerThread* child) {
   DCHECK(IsCurrentThread());
   child_threads_.erase(child);
-  if (child_threads_.IsEmpty() && CheckRequestedToTerminate())
+  if (child_threads_.empty() && CheckRequestedToTerminate())
     PerformShutdownOnWorkerThread();
 }
 
 WorkerThread::WorkerThread(WorkerReportingProxy& worker_reporting_proxy)
-    : WorkerThread(worker_reporting_proxy, Thread::Current()->GetTaskRunner()) {
-}
+    : WorkerThread(worker_reporting_proxy,
+                   ThreadScheduler::Current()->CleanupTaskRunner()) {}
 
 WorkerThread::WorkerThread(WorkerReportingProxy& worker_reporting_proxy,
                            scoped_refptr<base::SingleThreadTaskRunner>
@@ -480,8 +481,8 @@ void WorkerThread::ScheduleToTerminateScriptExecution() {
   // class on the parent thread.
   forcible_termination_task_handle_ = PostDelayedCancellableTask(
       *parent_thread_default_task_runner_, FROM_HERE,
-      WTF::Bind(&WorkerThread::EnsureScriptExecutionTerminates,
-                WTF::Unretained(this), ExitCode::kAsyncForciblyTerminated),
+      WTF::BindOnce(&WorkerThread::EnsureScriptExecutionTerminates,
+                    WTF::Unretained(this), ExitCode::kAsyncForciblyTerminated),
       forcible_termination_delay_);
 }
 
@@ -535,10 +536,10 @@ void WorkerThread::InitializeSchedulerOnWorkerThread(
   DCHECK(IsCurrentThread());
   DCHECK(!worker_scheduler_);
 
-  // TODO(hajimehoshi, nhiroki): scheduler::WorkerThread and scheduler::
+  // TODO(hajimehoshi, nhiroki): scheduler::NonMainThreadImpl and scheduler::
   // WorkerThreadScheduler are not in scheduler/public, then using them is a
   // layer violation. Fix this.
-  auto& worker_thread = static_cast<scheduler::WorkerThread&>(
+  auto& worker_thread = static_cast<scheduler::NonMainThreadImpl&>(
       GetWorkerBackingThread().BackingThread());
   worker_scheduler_ = scheduler::WorkerScheduler::CreateWorkerScheduler(
       static_cast<scheduler::WorkerThreadScheduler*>(
@@ -550,7 +551,7 @@ void WorkerThread::InitializeSchedulerOnWorkerThread(
   // worker thread. See also comments on GetTaskRunner().
   // We only capture task types that are actually used. When you want to use a
   // new task type, add it here.
-  Vector<TaskType> available_task_types = {
+  static constexpr TaskType kAvailableTaskTypes[] = {
       TaskType::kBackgroundFetch,
       TaskType::kCanvasBlobSerialization,
       TaskType::kDatabaseAccess,
@@ -576,6 +577,7 @@ void WorkerThread::InitializeSchedulerOnWorkerThread(
       TaskType::kPermission,
       TaskType::kPostedMessage,
       TaskType::kRemoteEvent,
+      TaskType::kStorage,
       TaskType::kUserInteraction,
       TaskType::kWakeLock,
       TaskType::kWebGL,
@@ -583,7 +585,8 @@ void WorkerThread::InitializeSchedulerOnWorkerThread(
       TaskType::kWebLocks,
       TaskType::kWebSocket,
       TaskType::kWorkerAnimation};
-  for (auto type : available_task_types) {
+  worker_task_runners_.ReserveCapacityForSize(std::size(kAvailableTaskTypes));
+  for (auto type : kAvailableTaskTypes) {
     auto task_runner = worker_scheduler_->GetTaskRunner(type);
     auto result = worker_task_runners_.insert(type, std::move(task_runner));
     DCHECK(result.is_new_entry);
@@ -597,6 +600,7 @@ void WorkerThread::InitializeOnWorkerThread(
     const absl::optional<WorkerBackingThreadStartupData>& thread_startup_data,
     std::unique_ptr<WorkerDevToolsParams> devtools_params) {
   DCHECK(IsCurrentThread());
+  backing_thread_weak_factory_.emplace(this);
   worker_reporting_proxy_.WillInitializeWorkerContext();
   {
     TRACE_EVENT0("blink.worker", "WorkerThread::InitializeWorkerContext");
@@ -634,6 +638,7 @@ void WorkerThread::InitializeOnWorkerThread(
       debugger->WorkerThreadCreated(this);
 
     GlobalScope()->ScriptController()->Initialize(url_for_debugger);
+    GlobalScope()->WillBeginLoading();
     v8::HandleScope handle_scope(GetIsolate());
     Platform::Current()->WorkerContextCreated(
         GlobalScope()->ScriptController()->GetContext());
@@ -664,6 +669,9 @@ void WorkerThread::InitializeOnWorkerThread(
   // from another thread and try to resume "pause on start" before
   // we even paused.
   worker_inspector_controller_->WaitForDebuggerIfNeeded();
+  // Note the above call runs nested message loop which may result in
+  // worker thread being torn down by request from the parent thread,
+  // while waiting for debugger.
 }
 
 void WorkerThread::EvaluateClassicScriptOnWorkerThread(
@@ -738,11 +746,13 @@ void WorkerThread::PrepareForShutdownOnWorkerThread() {
     SetThreadState(ThreadState::kReadyToShutdown);
   }
 
+  backing_thread_weak_factory_ = absl::nullopt;
   if (pause_or_freeze_count_ > 0) {
     DCHECK(nested_runner_);
     pause_or_freeze_count_ = 0;
     nested_runner_->QuitNow();
   }
+  pause_handle_.reset();
 
   if (WorkerThreadDebugger* debugger = WorkerThreadDebugger::From(GetIsolate()))
     debugger->WorkerThreadDestroyed(this);
@@ -777,7 +787,7 @@ void WorkerThread::PerformShutdownOnWorkerThread() {
   // down this thread. ChildThreadTerminatedOnWorkerThread() is responsible
   // for completing shutdown on the worker thread after the last child shuts
   // down.
-  if (!child_threads_.IsEmpty())
+  if (!child_threads_.empty())
     return;
 
   inspector_task_runner_->Dispose();
@@ -877,6 +887,13 @@ void WorkerThread::PauseOrFreezeOnWorkerThread(
   DCHECK(!is_in_back_forward_cache ||
          state == mojom::blink::FrameLifecycleState::kFrozen);
 
+  // Ensure we aren't trying to pause a worker that should be terminating.
+  {
+    base::AutoLock locker(lock_);
+    if (thread_state_ != ThreadState::kRunning)
+      return;
+  }
+
   pause_or_freeze_count_++;
   GlobalScope()->SetIsInBackForwardCache(is_in_back_forward_cache);
   GlobalScope()->SetLifecycleState(state);
@@ -887,8 +904,7 @@ void WorkerThread::PauseOrFreezeOnWorkerThread(
   if (pause_or_freeze_count_ > 1)
     return;
 
-  std::unique_ptr<scheduler::WorkerScheduler::PauseHandle> pause_handle =
-      GetScheduler()->Pause();
+  pause_handle_ = GetScheduler()->Pause();
   {
     // Since the nested message loop runner needs to be created and destroyed on
     // the same thread we allocate and destroy a new message loop runner each
@@ -896,13 +912,20 @@ void WorkerThread::PauseOrFreezeOnWorkerThread(
     // the worker thread such that the resume/terminate can quit this runner.
     std::unique_ptr<Platform::NestedMessageLoopRunner> nested_runner =
         Platform::Current()->CreateNestedMessageLoopRunner();
-    base::AutoReset<Platform::NestedMessageLoopRunner*> nested_runner_autoreset(
-        &nested_runner_, nested_runner.get());
+    auto weak_this = backing_thread_weak_factory_->GetWeakPtr();
+    nested_runner_ = nested_runner.get();
     nested_runner->Run();
+
+    // Careful `this` may be destroyed.
+    if (!weak_this) {
+      return;
+    }
+    nested_runner_ = nullptr;
   }
   GlobalScope()->SetDefersLoadingForResourceFetchers(LoaderFreezeMode::kNone);
   GlobalScope()->SetIsInBackForwardCache(false);
   GlobalScope()->SetLifecycleState(mojom::blink::FrameLifecycleState::kRunning);
+  pause_handle_.reset();
 }
 
 void WorkerThread::ResumeOnWorkerThread() {

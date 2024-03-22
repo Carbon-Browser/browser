@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,8 +11,9 @@
 #include <map>
 #include <memory>
 
-#include "base/callback.h"
+#include <optional>
 #include "base/compiler_specific.h"
+#include "base/functional/callback.h"
 #include "base/memory/read_only_shared_memory_region.h"
 #include "base/memory/ref_counted.h"
 #include "base/memory/weak_ptr.h"
@@ -24,7 +25,6 @@
 #include "mojo/public/cpp/system/message_pipe.h"
 #include "remoting/host/base/desktop_environment_options.h"
 #include "remoting/host/client_session_control.h"
-#include "remoting/host/desktop_and_cursor_conditional_composer.h"
 #include "remoting/host/desktop_display_info.h"
 #include "remoting/host/file_transfer/session_file_operations_handler.h"
 #include "remoting/host/mojom/desktop_session.mojom.h"
@@ -51,6 +51,7 @@ class ActionExecutor;
 class AudioCapturer;
 class AudioPacket;
 class AutoThreadTaskRunner;
+class DesktopCapturer;
 class DesktopEnvironment;
 class DesktopEnvironmentFactory;
 class InputInjector;
@@ -73,7 +74,6 @@ class DesktopSessionAgent
       public webrtc::DesktopCapturer::Callback,
       public webrtc::MouseCursorMonitor::Callback,
       public ClientSessionControl,
-      public IpcFileOperations::ResultHandler,
       public mojom::DesktopSessionAgent,
       public mojom::DesktopSessionControl {
  public:
@@ -126,13 +126,6 @@ class DesktopSessionAgent
   // Forwards an audio packet though the IPC channel to the network process.
   void ProcessAudioPacket(std::unique_ptr<AudioPacket> packet);
 
-  // IpcFileOperations::ResultHandler implementation.
-  void OnResult(std::uint64_t file_id, ResultHandler::Result result) override;
-  void OnInfoResult(std::uint64_t file_id,
-                    ResultHandler::InfoResult result) override;
-  void OnDataResult(std::uint64_t file_id,
-                    ResultHandler::DataResult result) override;
-
   // mojom::DesktopSessionAgent implementation.
   void Start(const std::string& authenticated_jid,
              const ScreenResolution& resolution,
@@ -152,6 +145,9 @@ class DesktopSessionAgent
   void InjectTouchEvent(const protocol::TouchEvent& event) override;
   void SetUpUrlForwarder() override;
   void SignalWebAuthnExtension() override;
+  void BeginFileRead(BeginFileReadCallback callback) override;
+  void BeginFileWrite(const base::FilePath& file_path,
+                      BeginFileWriteCallback callback) override;
 
   // Creates desktop integration components and a connected IPC channel to be
   // used to access them. The client end of the channel is returned.
@@ -186,9 +182,6 @@ class DesktopSessionAgent
 
   // Notifies the network process when a shared memory region is released.
   void OnSharedMemoryRegionReleased(int id);
-
-  // Sends a message to the network process.
-  void SendToNetwork(std::unique_ptr<IPC::Message> message);
 
   // Posted to |audio_capture_task_runner_| to start the audio capturer.
   void StartAudioCapturer();
@@ -245,7 +238,7 @@ class DesktopSessionAgent
   bool started_ = false;
 
   // Captures the screen and composites with the mouse cursor if necessary.
-  std::unique_ptr<DesktopAndCursorConditionalComposer> video_capturer_;
+  std::unique_ptr<DesktopCapturer> video_capturer_;
 
   // Captures mouse shapes.
   std::unique_ptr<webrtc::MouseCursorMonitor> mouse_cursor_monitor_;
@@ -259,7 +252,7 @@ class DesktopSessionAgent
 
   // Routes file-transfer messages to the corresponding reader/writer to be
   // executed.
-  absl::optional<SessionFileOperationsHandler> session_file_operations_handler_;
+  std::optional<SessionFileOperationsHandler> session_file_operations_handler_;
 
   mojo::AssociatedRemote<mojom::DesktopSessionEventHandler>
       desktop_session_event_handler_;

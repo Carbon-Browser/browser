@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,6 +13,7 @@
 #include "third_party/blink/renderer/core/css/parser/css_tokenizer.h"
 #include "third_party/blink/renderer/core/execution_context/security_context.h"
 #include "third_party/blink/renderer/core/media_type_names.h"
+#include "third_party/blink/renderer/core/style/computed_style_initial_values.h"
 #include "third_party/blink/renderer/platform/fonts/font.h"
 
 namespace blink {
@@ -56,12 +57,14 @@ static void VerifyCSSCalc(String text,
   Font font;
   CSSToLengthConversionData::FontSizes font_sizes(font_size, font_size, &font,
                                                   1);
+  CSSToLengthConversionData::LineHeightSize line_height_size;
   CSSToLengthConversionData::ViewportSize viewport_size(viewport_width,
                                                         viewport_height);
   CSSToLengthConversionData::ContainerSizes container_sizes;
-  CSSToLengthConversionData conversion_data(nullptr, WritingMode::kHorizontalTb,
-                                            font_sizes, viewport_size,
-                                            container_sizes, 1.0);
+  CSSToLengthConversionData::Flags ignored_flags = 0;
+  CSSToLengthConversionData conversion_data(
+      WritingMode::kHorizontalTb, font_sizes, line_height_size, viewport_size,
+      container_sizes, 1.0, ignored_flags);
   EXPECT_APPROX_EQ(value, math_value->ComputeLength<float>(conversion_data));
 }
 
@@ -191,16 +194,19 @@ TEST(SizesMathFunctionParserTest, Basic) {
 
   for (unsigned i = 0; test_cases[i].input; ++i) {
     SizesMathFunctionParser calc_parser(
-        CSSParserTokenRange(CSSTokenizer(test_cases[i].input).TokenizeToEOF()),
+        CSSParserTokenRange(
+            CSSTokenizer(StringView(test_cases[i].input)).TokenizeToEOF()),
         media_values);
     ASSERT_EQ(test_cases[i].valid, calc_parser.IsValid());
-    if (calc_parser.IsValid())
+    if (calc_parser.IsValid()) {
       EXPECT_APPROX_EQ(test_cases[i].output, calc_parser.Result());
+    }
   }
 
   for (unsigned i = 0; test_cases[i].input; ++i) {
-    if (test_cases[i].dont_run_in_css_calc)
+    if (test_cases[i].dont_run_in_css_calc) {
       continue;
+    }
     VerifyCSSCalc(test_cases[i].input, test_cases[i].output,
                   test_cases[i].valid, data.em_size, data.viewport_width,
                   data.viewport_height);

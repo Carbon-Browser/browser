@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -27,7 +27,7 @@ bool CSPDirectiveListIsReportOnly(
     const network::mojom::blink::ContentSecurityPolicy& csp);
 
 CORE_EXPORT
-bool CSPDirectiveListAllowFromSource(
+CSPCheckResult CSPDirectiveListAllowFromSource(
     const network::mojom::blink::ContentSecurityPolicy& csp,
     ContentSecurityPolicy* policy,
     CSPDirectiveName type,

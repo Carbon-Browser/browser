@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,8 +9,8 @@
 #include <set>
 #include <string>
 
-#include "base/callback.h"
 #include "base/files/file_path.h"
+#include "base/functional/callback.h"
 #include "storage/browser/file_system/watcher_manager.h"
 #include "url/gurl.h"
 
@@ -82,12 +82,5 @@ struct Watcher {
 
 }  // namespace file_system_provider
 }  // namespace ash
-
-// TODO(https://crbug.com/1164001): remove when ChromeOS code migration is done.
-namespace chromeos {
-namespace file_system_provider {
-using ::ash::file_system_provider::Watchers;
-}  // namespace file_system_provider
-}  // namespace chromeos
 
 #endif  // CHROME_BROWSER_ASH_FILE_SYSTEM_PROVIDER_WATCHER_H_

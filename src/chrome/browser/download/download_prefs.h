@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,7 +10,6 @@
 
 #include "base/files/file_path.h"
 #include "base/memory/raw_ptr.h"
-#include "base/time/time.h"
 #include "build/build_config.h"
 #include "components/prefs/pref_change_registrar.h"
 #include "components/prefs/pref_member.h"
@@ -79,8 +78,6 @@ class DownloadPrefs {
   void SetSaveFilePath(const base::FilePath& path);
   int save_file_type() const { return *save_file_type_; }
   void SetSaveFileType(int type);
-  base::Time GetLastCompleteTime();
-  void SetLastCompleteTime(const base::Time& last_complete_time);
   DownloadRestriction download_restriction() const {
     return static_cast<DownloadRestriction>(*download_restriction_);
   }
@@ -92,13 +89,6 @@ class DownloadPrefs {
   // download location is not managed (which means the user shouldn't be able
   // to choose another download location).
   bool PromptForDownload() const;
-
-  // Returns whether to prompt download later dialog to let the user choose
-  // download time.
-  bool PromptDownloadLater() const;
-
-  // Returns whether the download later prompt is ever shown to the user.
-  bool HasDownloadLaterPromptShown() const;
 
   // Returns true if the download path preference is managed.
   bool IsDownloadPathManaged() const;
@@ -141,6 +131,10 @@ class DownloadPrefs {
   // forward - whatever has been passed to SetDownloadPath will be used.
   void SkipSanitizeDownloadTargetPathForTesting();
 
+  // Returns true if the download_duplicate_file_prompt_enabled pref is set and
+  // the new download bubble UI is enabled. Returns false on Android.
+  bool PromptForDuplicateFile() const;
+
  private:
   void SaveAutoOpenState();
   bool CanPlatformEnableAutoOpenForPdf() const;
@@ -164,7 +158,7 @@ class DownloadPrefs {
   FilePathPrefMember save_file_path_;
   IntegerPrefMember save_file_type_;
   IntegerPrefMember download_restriction_;
-  BooleanPrefMember download_bubble_enabled_;
+  BooleanPrefMember prompt_for_duplicate_file_;
   BooleanPrefMember safebrowsing_for_trusted_sources_enabled_;
 
   PrefChangeRegistrar pref_change_registrar_;

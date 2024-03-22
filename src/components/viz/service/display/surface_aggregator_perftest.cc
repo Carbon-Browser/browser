@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -80,7 +80,8 @@ class SurfaceAggregatorPerfTest : public VizPerfTest {
   SurfaceAggregatorPerfTest()
       : manager_(FrameSinkManagerImpl::InitParams(&shared_bitmap_manager_)) {
     resource_provider_ = std::make_unique<DisplayResourceProviderSoftware>(
-        &shared_bitmap_manager_);
+        &shared_bitmap_manager_, /*shared_image_manager=*/nullptr,
+        /*sync_point_manager=*/nullptr);
   }
 
   void RunTest(int num_surfaces,
@@ -113,7 +114,8 @@ class SurfaceAggregatorPerfTest : public VizPerfTest {
       for (int j = 0; j < num_textures; j++) {
         const gfx::Size size(1, 2);
         TransferableResource resource = TransferableResource::MakeSoftware(
-            SharedBitmap::GenerateId(), size, ResourceFormat::RGBA_8888);
+            SharedBitmap::GenerateId(), gpu::SyncToken(), size,
+            SinglePlaneFormat::kRGBA_8888);
         resource.id = ResourceId(j);
         frame_builder.AddTransferableResource(resource);
 
@@ -231,7 +233,8 @@ class SurfaceAggregatorPerfTest : public VizPerfTest {
           // Create the resource if we haven't yet.
           if (created_resources.find(resource_id) == created_resources.end()) {
             created_resources[resource_id] = TransferableResource::MakeSoftware(
-                SharedBitmap::GenerateId(), quad->rect.size(), RGBA_8888);
+                SharedBitmap::GenerateId(), gpu::SyncToken(), quad->rect.size(),
+                SinglePlaneFormat::kRGBA_8888);
             created_resources[resource_id].id = resource_id;
           }
           resource_data_map_[frame_sink_id]

@@ -1,12 +1,10 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 package org.chromium.net;
 
-/**
- * Constants used by Chrome in SPNEGO authentication requests to the Android Account Manager.
- */
+/** Constants used by Chrome in SPNEGO authentication requests to the Android Account Manager. */
 public class HttpNegotiateConstants {
     // Option bundle keys
     //

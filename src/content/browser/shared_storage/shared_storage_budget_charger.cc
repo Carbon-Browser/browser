@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -31,7 +31,7 @@ void SharedStorageBudgetCharger::DidStartNavigation(
   RenderFrameHostImpl* initiator_frame_host =
       navigation_handle->GetInitiatorFrameToken().has_value()
           ? RenderFrameHostImpl::FromFrameToken(
-                navigation_handle->GetInitiatorProcessID(),
+                navigation_handle->GetInitiatorProcessId(),
                 navigation_handle->GetInitiatorFrameToken().value())
           : nullptr;
 
@@ -53,22 +53,30 @@ void SharedStorageBudgetCharger::DidStartNavigation(
   if (!initiator_frame_host)
     return;
 
-  FencedFrameURLMapping::SharedStorageBudgetMetadata*
+  storage::SharedStorageManager* shared_storage_manager =
+      initiator_frame_host->GetStoragePartition()->GetSharedStorageManager();
+
+  std::vector<const SharedStorageBudgetMetadata*>
       shared_storage_budget_metadata = initiator_frame_host->frame_tree_node()
                                            ->FindSharedStorageBudgetMetadata();
 
-  // Skip if the initiator frame is not originated from shared storage.
-  if (!shared_storage_budget_metadata)
-    return;
+  for (const auto* metadata : shared_storage_budget_metadata) {
+    if (metadata->top_navigated) {
+      continue;
+    }
 
-  if (shared_storage_budget_metadata->budget_to_charge > 0) {
-    storage::SharedStorageManager* shared_storage_manager =
-        initiator_frame_host->GetStoragePartition()->GetSharedStorageManager();
+    // We only want to charge the budget the first time a navigation leaves the
+    // fenced frame, across all fenced frames navigated to the same urn.
+    // We can do this even though the pointer is const because
+    // `top_navigated` is a mutable field of `SharedStorageBudgetMetadata`.
+    metadata->top_navigated = true;
+
+    if (metadata->budget_to_charge == 0) {
+      continue;
+    }
+
     shared_storage_manager->MakeBudgetWithdrawal(
-        shared_storage_budget_metadata->origin,
-        shared_storage_budget_metadata->budget_to_charge, base::DoNothing());
-
-    shared_storage_budget_metadata->budget_to_charge = 0;
+        metadata->site, metadata->budget_to_charge, base::DoNothing());
   }
 }
 

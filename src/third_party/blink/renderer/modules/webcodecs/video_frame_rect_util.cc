@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -114,40 +114,6 @@ gfx::Rect ToGfxRect(const DOMRectInit* rect,
   return gfx_rect;
 }
 
-bool ValidateCropAlignment(media::VideoPixelFormat format,
-                           const gfx::Rect& rect,
-                           const char* rect_name,
-                           ExceptionState& exception_state) {
-  const wtf_size_t num_planes =
-      static_cast<wtf_size_t>(media::VideoFrame::NumPlanes(format));
-  for (wtf_size_t i = 0; i < num_planes; i++) {
-    const gfx::Size sample_size = media::VideoFrame::SampleSize(format, i);
-    if (rect.x() % sample_size.width() != 0) {
-      exception_state.ThrowTypeError(String::Format(
-          "Invalid %s. x is not sample-aligned in plane %u.", rect_name, i));
-      return false;
-    }
-    if (rect.y() % sample_size.height() != 0) {
-      exception_state.ThrowTypeError(String::Format(
-          "Invalid %s. y is not sample-aligned in plane %u.", rect_name, i));
-      return false;
-    }
-    if (rect.width() % sample_size.width() != 0) {
-      exception_state.ThrowTypeError(
-          String::Format("Invalid %s. width is not sample-aligned in plane %u.",
-                         rect_name, i));
-      return false;
-    }
-    if (rect.height() % sample_size.height() != 0) {
-      exception_state.ThrowTypeError(String::Format(
-          "Invalid %s. height is not sample-aligned in plane %u.", rect_name,
-          i));
-      return false;
-    }
-  }
-  return true;
-}
-
 bool ValidateOffsetAlignment(media::VideoPixelFormat format,
                              const gfx::Rect& rect,
                              const char* rect_name,
@@ -170,18 +136,17 @@ bool ValidateOffsetAlignment(media::VideoPixelFormat format,
   return true;
 }
 
-gfx::Rect AlignCrop(media::VideoPixelFormat format, const gfx::Rect& rect) {
-  gfx::Rect result = rect;
-  const wtf_size_t num_planes =
-      static_cast<wtf_size_t>(media::VideoFrame::NumPlanes(format));
-  for (wtf_size_t i = 0; i < num_planes; i++) {
-    const gfx::Size sample_size = media::VideoFrame::SampleSize(format, i);
-    int width_ub = result.width() + sample_size.width() - 1;
-    result.set_width(width_ub - width_ub % sample_size.width());
-    int height_ub = result.height() + sample_size.height() - 1;
-    result.set_height(height_ub - height_ub % sample_size.height());
-  }
-  return result;
+int PlaneSize(int frame_size, int sample_size) {
+  return (frame_size + sample_size - 1) / sample_size;
+}
+
+gfx::Rect PlaneRect(gfx::Rect frame_rect, gfx::Size sample_size) {
+  DCHECK_EQ(frame_rect.x() % sample_size.width(), 0);
+  DCHECK_EQ(frame_rect.y() % sample_size.height(), 0);
+  return gfx::Rect(frame_rect.x() / sample_size.width(),
+                   frame_rect.y() / sample_size.height(),
+                   PlaneSize(frame_rect.width(), sample_size.width()),
+                   PlaneSize(frame_rect.height(), sample_size.height()));
 }
 
 }  // namespace blink

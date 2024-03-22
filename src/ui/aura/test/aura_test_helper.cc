@@ -1,13 +1,16 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "ui/aura/test/aura_test_helper.h"
 
-#include "base/bind.h"
+#include <memory>
+
+#include "base/functional/bind.h"
 #include "base/run_loop.h"
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
+#include "ui/aura/client/cursor_shape_client.h"
 #include "ui/aura/client/default_capture_client.h"
 #include "ui/aura/env.h"
 #include "ui/aura/input_state_lookup.h"
@@ -27,6 +30,7 @@
 #include "ui/compositor/scoped_animation_duration_scale_mode.h"
 #include "ui/compositor/test/test_context_factories.h"
 #include "ui/display/screen.h"
+#include "ui/wm/core/cursor_loader.h"
 #include "ui/wm/core/default_activation_client.h"
 #include "ui/wm/core/default_screen_position_client.h"
 
@@ -39,7 +43,7 @@
 #include "ui/aura/native_window_occlusion_tracker_win.h"
 #endif
 
-#if defined(USE_OZONE)
+#if BUILDFLAG(IS_OZONE)
 #include "ui/events/ozone/events_ozone.h"
 #endif
 
@@ -63,7 +67,8 @@ AuraTestHelper::AuraTestHelper(ui::ContextFactory* context_factory) {
   ui::test::EnableTestConfigForPlatformWindows();
 #endif
 
-#if defined(USE_OZONE) && BUILDFLAG(IS_CHROMEOS_ASH)
+#if BUILDFLAG(IS_OZONE) && BUILDFLAG(IS_CHROMEOS_ASH)
+  // TODO(b/304625912): Native events should be enabled for Crosier.
   ui::DisableNativeUiEventDispatchForTest();
 #endif
 
@@ -137,6 +142,8 @@ void AuraTestHelper::SetUp() {
   parenting_client_ = std::make_unique<TestWindowParentingClient>(root_window);
   screen_position_client_ =
       std::make_unique<wm::DefaultScreenPositionClient>(root_window);
+  cursor_shape_client_ = std::make_unique<wm::CursorLoader>();
+  client::SetCursorShapeClient(cursor_shape_client_.get());
 
   root_window->Show();
 }
@@ -157,6 +164,8 @@ void AuraTestHelper::TearDown() {
 
   // Destroy all owned objects to prevent tests from depending on their state
   // after this returns.
+  client::SetCursorShapeClient(nullptr);
+  cursor_shape_client_.reset();
   screen_position_client_.reset();
   parenting_client_.reset();
   capture_client_.reset();

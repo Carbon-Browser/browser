@@ -1,19 +1,20 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/lacros/app_mode/kiosk_session_service_lacros.h"
 
 #include "base/test/bind.h"
-#include "chrome/browser/lacros/app_mode/kiosk_session_service_lacros.h"
+#include "chrome/browser/extensions/extension_special_storage_policy.h"
 #include "chrome/browser/lacros/browser_service_lacros.h"
+#include "chrome/browser/profiles/profile_manager.h"
 #include "chrome/browser/ui/browser_list.h"
 #include "chrome/test/base/in_process_browser_test.h"
-#include "chrome/test/base/ui_test_utils.h"
 #include "chromeos/crosapi/mojom/kiosk_session_service.mojom.h"
 #include "chromeos/lacros/lacros_service.h"
 #include "chromeos/startup/browser_init_params.h"
 #include "content/public/test/browser_test.h"
+#include "ui/display/screen.h"
 
 using crosapi::mojom::BrowserInitParams;
 using crosapi::mojom::BrowserInitParamsPtr;
@@ -29,7 +30,11 @@ class FakeKioskSessionServiceLacros : public KioskSessionServiceLacros {
   ~FakeKioskSessionServiceLacros() override = default;
 
   // KioskSessionServiceLacros:
-  void AttemptUserExit() override { std::move(after_attempt_user_exit_).Run(); }
+  void AttemptUserExit() override {
+    if (after_attempt_user_exit_) {
+      std::move(after_attempt_user_exit_).Run();
+    }
+  }
 
   void set_after_attempt_user_exit(base::OnceClosure closure) {
     after_attempt_user_exit_ = std::move(closure);
@@ -56,6 +61,12 @@ class KioskSessionServiceBrowserTest : public InProcessBrowserTest {
         std::make_unique<FakeKioskSessionServiceLacros>();
   }
 
+  void TearDownOnMainThread() override {
+    kiosk_session_service_lacros_.reset();
+    InProcessBrowserTest::TearDownOnMainThread();
+    browser_service_.reset();
+  }
+
   bool IsServiceAvailable() const {
     auto* lacros_chrome_service = chromeos::LacrosService::Get();
     return lacros_chrome_service &&
@@ -74,6 +85,7 @@ class KioskSessionServiceBrowserTest : public InProcessBrowserTest {
     bool use_callback = false;
     browser_service()->NewFullscreenWindow(
         GURL(kNavigationUrl),
+        display::Screen::GetScreen()->GetDisplayForNewWindows().id(),
         base::BindLambdaForTesting([&](CreationResult result) {
           use_callback = true;
           EXPECT_EQ(result, CreationResult::kSuccess);
@@ -111,4 +123,15 @@ IN_PROC_BROWSER_TEST_F(KioskSessionServiceBrowserTest, AttemptUserExit) {
 
   // Verify that all windows have been closed.
   EXPECT_TRUE(BrowserList::GetInstance()->empty());
+}
+
+IN_PROC_BROWSER_TEST_F(KioskSessionServiceBrowserTest,
+                       KioskOriginShouldGetUnlimitedStorage) {
+  SetSessionType(SessionType::kWebKioskSession);
+  CreateKioskMainWindow();
+
+  // Verify the origin of the install URL has been granted unlimited storage
+  EXPECT_TRUE(ProfileManager::GetPrimaryUserProfile()
+                  ->GetExtensionSpecialStoragePolicy()
+                  ->IsStorageUnlimited(GURL(kNavigationUrl)));
 }

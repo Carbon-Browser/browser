@@ -1,10 +1,11 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/ui/cocoa/screentime/tab_helper.h"
 
 #include "base/test/scoped_feature_list.h"
+#include "chrome/browser/media/router/media_router_feature.h"
 #include "chrome/browser/ui/cocoa/screentime/fake_webpage_controller.h"
 #include "chrome/browser/ui/cocoa/screentime/screentime_features.h"
 #include "chrome/browser/ui/cocoa/screentime/tab_helper.h"
@@ -27,7 +28,10 @@ class ScreentimeTabHelperTest : public ::testing::Test {
     ::testing::Test::SetUp();
 
     TabHelper::UseFakeWebpageControllerForTesting();
-    features_.InitAndEnableFeature(kScreenTime);
+    // `kMediaRouter` is disabled because it has unmet dependencies and is
+    // unrelated to this unit test.
+    features_.InitWithFeatures(/*enabled=*/{kScreenTime},
+                               /*disabled=*/{media_router::kMediaRouter});
     profile_ = std::make_unique<TestingProfile>();
   }
 

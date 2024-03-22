@@ -1,4 +1,4 @@
-// Copyright (c) 2011 The Chromium Authors. All rights reserved.
+// Copyright 2011 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -38,6 +38,7 @@
 #include "base/win/windows_version.h"
 #include "build/build_config.h"
 #include "chrome/app/delay_load_failure_hook_win.h"
+#include "chrome/app/exit_code_watcher_win.h"
 #include "chrome/app/main_dll_loader_win.h"
 #include "chrome/app/packed_resources_integrity.h"
 #include "chrome/browser/policy/policy_path_parser.h"
@@ -48,7 +49,6 @@
 #include "chrome/install_static/initialize_from_primary_module.h"
 #include "chrome/install_static/install_util.h"
 #include "chrome/install_static/user_data_dir.h"
-#include "components/browser_watcher/exit_code_watcher_win.h"
 #include "components/crash/core/app/crash_switches.h"
 #include "components/crash/core/app/crashpad.h"
 #include "components/crash/core/app/fallback_crash_handling_win.h"
@@ -303,10 +303,10 @@ int main() {
       command_line->GetSwitchValueASCII(switches::kProcessType);
 
 #if !defined(COMPONENT_BUILD) && DCHECK_IS_ON()
-  // In non-component mode, chrome.exe contains a separate instance of
-  // base::FeatureList. Prevent accidental use of this here by forbidding use of
-  // the one that's linked with chrome.exe.
-  base::FeatureList::ForbidUseForCurrentModule();
+  // In non-component mode, chrome.exe contains its own base::FeatureList
+  // instance pointer, which remains nullptr. Attempts to access feature state
+  // from chrome.exe should fail, instead of silently returning a default state.
+  base::FeatureList::FailOnFeatureAccessWithoutFeatureList();
 
   // Patch the main EXE on non-component builds when DCHECKs are enabled.
   // This allows detection of third party code that might attempt to meddle with
@@ -315,7 +315,7 @@ int main() {
   // emplaced.
   // Note: The DLL is patched separately, in chrome/app/chrome_main.cc.
   base::debug::HandleHooks::AddIATPatch(CURRENT_MODULE());
-#endif  // !defined(COMPONENT_BUILD) && !DCHECK_IS_ON()
+#endif  // !defined(COMPONENT_BUILD) && DCHECK_IS_ON()
 
   // Confirm that an explicit prefetch profile is used for all process types
   // except for the browser process. Any new process type will have to assign
@@ -326,7 +326,7 @@ int main() {
 
   if (process_type == crash_reporter::switches::kCrashpadHandler) {
     // Check if we should monitor the exit code of this process
-    std::unique_ptr<browser_watcher::ExitCodeWatcher> exit_code_watcher;
+    std::unique_ptr<ExitCodeWatcher> exit_code_watcher;
 
     crash_reporter::SetupFallbackCrashHandling(*command_line);
     // no-periodic-tasks is specified for self monitoring crashpad instances.
@@ -344,8 +344,7 @@ int main() {
                 ::GetCurrentProcess(), &duplicate_handle,
                 PROCESS_QUERY_INFORMATION, FALSE, DUPLICATE_SAME_ACCESS)) {
           base::Process parent_process(duplicate_handle);
-          exit_code_watcher =
-              std::make_unique<browser_watcher::ExitCodeWatcher>();
+          exit_code_watcher = std::make_unique<ExitCodeWatcher>();
           if (exit_code_watcher->Initialize(std::move(parent_process))) {
             exit_code_watcher->StartWatching();
           }
@@ -380,14 +379,12 @@ int main() {
   // The exit manager is in charge of calling the dtors of singletons.
   base::AtExitManager exit_manager;
 
-  // Only enable High DPI support for browser and GPU process.
-  if (process_type.empty() || process_type == switches::kGpuProcess)
-    base::win::EnableHighDPISupport();
-
   if (AttemptFastNotify(*command_line))
     return 0;
 
-  RemoveAppCompatFlagsEntry();
+  if (!command_line->HasSwitch(switches::kNoAppCompatClear)) {
+    RemoveAppCompatFlagsEntry();
+  }
 
   // Load and launch the chrome dll. *Everything* happens inside.
   VLOG(1) << "About to load main DLL.";

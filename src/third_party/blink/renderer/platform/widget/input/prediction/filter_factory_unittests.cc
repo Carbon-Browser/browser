@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -35,7 +35,7 @@ class FilterFactoryTest : public testing::Test {
   }
 
   FilterType GetFilterTypeFromName(const std::string& filter_name) {
-    return factory_->GetFilterTypeFromName(filter_name);
+    return FilterFactory::GetFilterTypeFromName(filter_name);
   }
 
   std::unique_ptr<ui::InputFilter> CreateFilter(

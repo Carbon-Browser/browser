@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,13 +7,13 @@
 
 #include <vector>
 
-#include "components/keyed_service/content/browser_context_keyed_service_factory.h"
+#include "chrome/browser/profiles/profile_keyed_service_factory.h"
 
 class Profile;
 
 namespace base {
 template <typename T>
-struct DefaultSingletonTraits;
+class NoDestructor;
 }  // namespace base
 
 namespace syncer {
@@ -21,7 +21,7 @@ class DeviceInfoSyncService;
 class DeviceInfoTracker;
 }  // namespace syncer
 
-class DeviceInfoSyncServiceFactory : public BrowserContextKeyedServiceFactory {
+class DeviceInfoSyncServiceFactory : public ProfileKeyedServiceFactory {
  public:
   static syncer::DeviceInfoSyncService* GetForProfile(Profile* profile);
   static DeviceInfoSyncServiceFactory* GetInstance();
@@ -37,7 +37,7 @@ class DeviceInfoSyncServiceFactory : public BrowserContextKeyedServiceFactory {
       std::vector<const syncer::DeviceInfoTracker*>* trackers);
 
  private:
-  friend struct base::DefaultSingletonTraits<DeviceInfoSyncServiceFactory>;
+  friend base::NoDestructor<DeviceInfoSyncServiceFactory>;
 
   DeviceInfoSyncServiceFactory();
   ~DeviceInfoSyncServiceFactory() override;

@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,20 +6,16 @@
 
 #import <Foundation/Foundation.h>
 
-#include "base/strings/sys_string_conversions.h"
-#include "base/strings/utf_string_conversions.h"
-#include "components/infobars/core/infobar.h"
-#include "components/prefs/pref_service.h"
-#include "components/reading_list/core/reading_list_model.h"
-#include "components/ukm/ios/ukm_url_recorder.h"
-#include "ios/chrome/browser/browser_state/chrome_browser_state.h"
+#import "base/strings/sys_string_conversions.h"
+#import "base/strings/utf_string_conversions.h"
+#import "components/infobars/core/infobar.h"
+#import "components/prefs/pref_service.h"
+#import "components/reading_list/core/reading_list_model.h"
+#import "components/ukm/ios/ukm_url_recorder.h"
+#import "ios/chrome/browser/shared/model/browser_state/chrome_browser_state.h"
 #import "ios/chrome/browser/ui/reading_list/reading_list_constants.h"
 #import "ios/web/public/web_state.h"
-#include "services/metrics/public/cpp/ukm_builders.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
+#import "services/metrics/public/cpp/ukm_builders.h"
 
 // static
 IOSAddToReadingListInfobarDelegate*
@@ -84,9 +80,9 @@ void IOSAddToReadingListInfobarDelegate::InfoBarDismissed() {
 }
 
 bool IOSAddToReadingListInfobarDelegate::Accept() {
-  model_->AddEntry(url_, base::UTF16ToUTF8(title_),
-                   reading_list::ADDED_VIA_CURRENT_APP,
-                   base::Minutes(estimated_read_time_));
+  model_->AddOrReplaceEntry(url_, base::UTF16ToUTF8(title_),
+                            reading_list::ADDED_VIA_CURRENT_APP,
+                            base::Minutes(estimated_read_time_));
   ukm::SourceId sourceID = ukm::GetSourceIdForWebStateDocument(web_state_);
   if (sourceID != ukm::kInvalidSourceId) {
     ukm::builders::IOS_PageAddedToReadingList(sourceID)

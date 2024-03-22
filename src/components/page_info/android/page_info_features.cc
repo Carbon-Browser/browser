@@ -1,8 +1,9 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "base/android/jni_string.h"
+#include "components/content_settings/core/common/features.h"
 #include "components/page_info/android/jni_headers/PageInfoFeatures_jni.h"
 #include "components/page_info/core/features.h"
 
@@ -15,7 +16,7 @@ namespace {
 // in other locations in the code base (e.g. content_features.h), and must be
 // replicated in the same order in PageInfoFeatures.java.
 const base::Feature* kFeaturesExposedToJava[] = {
-    &kPageInfoHistory,
+    &content_settings::features::kUserBypassUI,
     &kPageInfoStoreInfo,
 };
 

@@ -17,170 +17,87 @@
 
 package org.chromium.components.adblock;
 
-import android.content.Context;
-import android.content.res.Resources;
-import android.util.Log;
-import android.webkit.URLUtil;
-
-import androidx.annotation.NonNull;
-import androidx.annotation.Nullable;
 import androidx.annotation.UiThread;
 
-import org.chromium.base.ContextUtils;
-import org.chromium.base.ThreadUtils;
-import org.chromium.base.annotations.CalledByNative;
-import org.chromium.base.annotations.NativeMethods;
-import org.chromium.chrome.browser.preferences.Pref;
-import org.chromium.chrome.browser.profiles.Profile;
-import org.chromium.components.user_prefs.UserPrefs;
+import org.jni_zero.CalledByNative;
+import org.jni_zero.NativeMethods;
 
-import java.io.UnsupportedEncodingException;
-import java.net.MalformedURLException;
+import org.chromium.base.ThreadUtils;
+import org.chromium.base.library_loader.LibraryLoader;
+import org.chromium.content_public.browser.BrowserContextHandle;
+
+// import org.chromium.chrome.browser.rewards.RewardsAPIBridge;
+
 import java.net.URL;
-import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collections;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import java.util.concurrent.CopyOnWriteArraySet;
-import org.chromium.chrome.browser.rewards.RewardsAPIBridge;
 
 /**
- * @brief Main access point for java UI code to access Filer Engine.
- * It calls its native counter part also AdblockController. Stores
- * settings prefs.
- * It lives in UI thread on the browser process.
+ * DEPRECATED, please use {@link FilteringConfiguration} instead.
+ *
+ * @brief Main access point for java UI code to control ad filtering. It calls its native counter
+ *     part also AdblockController. It lives in UI thread on the browser process.
  */
-public final class AdblockController {
+@Deprecated
+public final class AdblockController { // SHAMU NEED TO TRACK ADS BLOCKED
     private static final String TAG = AdblockController.class.getSimpleName();
-    private final static String ITEMS_DELIMITER = ",";
+    private ResourceClassificationNotifier mResourceClassificationNotifier;
+    private FilteringConfiguration mFilteringConfiguration;
+    private BrowserContextHandle mBrowserContextHandle;
+
+    // private RewardsAPIBridge mRewardsBridge;
+
+    private URL mAcceptableAds;
 
     private static AdblockController sInstance;
 
-    private final Set<AdBlockedObserver> mOnAdBlockedObservers;
-    private final Set<SubscriptionUpdateObserver> mSubscriptionUpdateObservers;
-
-    private List<Subscription> mRecommendedSubscriptions;
-
-    public static class FilterMatchCheckParams {
-        private URL mUrl;
-        private AdblockContentType mType;
-        private URL mDocumentUrl;
-        private String mSiteKey;
-
-        public FilterMatchCheckParams(
-                URL url, AdblockContentType type, URL documentUrl, String siteKey) {
-            assert url != null;
-            mUrl = url;
-            mType = type;
-            mDocumentUrl = documentUrl;
-            mSiteKey = siteKey;
+    private AdblockController(BrowserContextHandle contextHandle) {
+        // mRewardsBridge = RewardsAPIBridge.getInstance();
+        mBrowserContextHandle = contextHandle;
+        mResourceClassificationNotifier =
+                ResourceClassificationNotifier.getInstance(mBrowserContextHandle);
+        mFilteringConfiguration =
+                FilteringConfiguration.createConfiguration("adblock", mBrowserContextHandle);
+        try {
+            mAcceptableAds =
+                    new URL("https://easylist-downloads.adblockplus.org/exceptionrules.txt");
+        } catch (java.net.MalformedURLException e) {
+            mAcceptableAds = null;
         }
-
-        public URL url() {
-            return mUrl;
-        }
-
-        public AdblockContentType type() {
-            return mType;
-        }
-
-        public URL documentUrl() {
-            return mDocumentUrl;
-        }
-
-        public String siteKey() {
-            return mSiteKey;
-        }
-    }
-
-    public AdblockController() {
-        mRecommendedSubscriptions = new ArrayList<Subscription>();
-        mOnAdBlockedObservers = new CopyOnWriteArraySet<>();
-        mSubscriptionUpdateObservers = new CopyOnWriteArraySet<>();
     }
 
     /**
      * @return The singleton object.
      */
-    public static AdblockController getInstance() {
+    public static AdblockController getInstance(BrowserContextHandle contextHandle) {
+        // Make sure native libraries are ready to avoid org.chromium.base.JniException
+        LibraryLoader.getInstance().ensureInitialized();
         ThreadUtils.assertOnUiThread();
         if (sInstance == null) {
-            sInstance = new AdblockController();
-            AdblockControllerJni.get().bind(sInstance);
+            sInstance = new AdblockController(contextHandle);
         }
         return sInstance;
-    }
-
-    public void setHasAdblockCountersObservers(boolean hasObservers) {
-        nativeSetHasAdblockCountersObservers(hasObservers);
-    }
-
-    private native void nativeSetHasAdblockCountersObservers(boolean hasObservers);
-
-    public interface AdBlockedObserver {
-        /**
-         * "Ad allowed" event for a request which would be blocked but there
-         * was an allowlisting filter found.
-         *
-         * It should not block the UI thread for too long.
-         * @param info contains auxiliary information about the resource.
-         */
-        @UiThread
-        void onAdAllowed(AdblockCounters.ResourceInfo info);
-
-        /**
-         * "Ad blocked" event for a request which was blocked.
-         *
-         * It should not block the UI thread for too long.
-         * @param info contains auxiliary information about the resource.
-         */
-        @UiThread
-        void onAdBlocked(AdblockCounters.ResourceInfo info);
-
-        /**
-         * "Page allowed" event for an allowlisted domain (page).
-         *
-         * It should not block the UI thread for too long.
-         * @param info contains auxiliary information about the resource.
-         */
-        @UiThread
-        void onPageAllowed(AdblockCounters.ResourceInfo info);
-
-        /**
-         * "Popup allowed" event for a popup which would be blocked but there
-         * was an allowlisting filter found.
-         *
-         * It should not block the UI thread for too long.
-         * @param info contains auxiliary information about the resource.
-         */
-        @UiThread
-        void onPopupAllowed(AdblockCounters.ResourceInfo info);
-
-        /**
-         * "Popup blocked" event for a popup which was blocked.
-         *
-         * It should not block the UI thread for too long.
-         * @param info contains auxiliary information about the resource.
-         */
-        @UiThread
-        void onPopupBlocked(AdblockCounters.ResourceInfo info);
-    }
-
-    public interface SubscriptionUpdateObserver {
-        @UiThread
-        void onSubscriptionDownloaded(final URL url);
     }
 
     public static class Subscription {
         private URL mUrl;
         private String mTitle;
+        private String mVersion = "";
+        private String[] mLanguages = {};
 
-        public Subscription(URL url, String title) {
+        public Subscription(final URL url, final String title, final String version) {
             this.mUrl = url;
             this.mTitle = title;
+            this.mVersion = version;
+        }
+
+        @CalledByNative("Subscription")
+        public Subscription(
+                final URL url, final String title, final String version, final String[] languages) {
+            this.mUrl = url;
+            this.mTitle = title;
+            this.mVersion = version;
+            this.mLanguages = languages;
         }
 
         public String title() {
@@ -191,8 +108,16 @@ public final class AdblockController {
             return mUrl;
         }
 
+        public String version() {
+            return mVersion;
+        }
+
+        public String[] languages() {
+            return mLanguages;
+        }
+
         @Override
-        public boolean equals(Object object) {
+        public boolean equals(final Object object) {
             if (object == null) return false;
             if (getClass() != object.getClass()) return false;
 
@@ -201,389 +126,139 @@ public final class AdblockController {
         }
     }
 
-    public enum ConnectionType {
-        // All WiFi networks
-        WIFI("wifi"),
-        // Any connection
-        ANY("any");
-
-        private String mValue;
-
-        private ConnectionType(String value) {
-            this.mValue = value;
-        }
-
-        static public ConnectionType fromString(String val) {
-            if (val.equals(ConnectionType.WIFI.getValue())) return ConnectionType.WIFI;
-
-            assert val.equals(ConnectionType.ANY.getValue());
-            return ConnectionType.ANY;
-        }
-
-        public String getValue() {
-            return mValue;
-        }
-    }
-
-    @UiThread
-    public void setEnabled(boolean enabled) {
-        AdblockControllerJni.get().setAdblockEnabled(enabled);
-    }
-
-    @UiThread
-    public boolean isEnabled() {
-        return AdblockControllerJni.get().isAdblockEnabled();
-    }
-
     @UiThread
     public void setAcceptableAdsEnabled(boolean enabled) {
-        AdblockControllerJni.get().setAcceptableAdsEnabled(enabled);
+        if (enabled) mFilteringConfiguration.addFilterList(mAcceptableAds);
+        else mFilteringConfiguration.removeFilterList(mAcceptableAds);
     }
 
     @UiThread
     public boolean isAcceptableAdsEnabled() {
-        return AdblockControllerJni.get().isAcceptableAdsEnabled();
+        return mFilteringConfiguration.getFilterLists().contains(mAcceptableAds);
     }
 
     @UiThread
-    public void setMoreOptionsEnabled(boolean enabled) {
-        UserPrefs.get(Profile.getLastUsedRegularProfile())
-                .setBoolean(Pref.ADBLOCK_MORE_OPTIONS_ENABLED, enabled);
+    public List<Subscription> getRecommendedSubscriptions() {
+        return (List<Subscription>)
+                (List<?>) Arrays.asList(AdblockControllerJni.get().getRecommendedSubscriptions());
     }
 
     @UiThread
-    public boolean areMoreOptionsEnabled() {
-        return UserPrefs.get(Profile.getLastUsedRegularProfile())
-                .getBoolean(Pref.ADBLOCK_MORE_OPTIONS_ENABLED);
+    public void installSubscription(final URL url) {
+        mFilteringConfiguration.addFilterList(url);
     }
 
     @UiThread
-    public ConnectionType getAllowedConnectionType() {
-        // TODO(mpawlowski) call AdblockControllerJni, not read prefs directly
-        return ConnectionType.fromString(UserPrefs.get(Profile.getLastUsedRegularProfile())
-                                                 .getString(Pref.ADBLOCK_ALLOWED_CONNECTION_TYPE));
+    public void uninstallSubscription(final URL url) {
+        mFilteringConfiguration.removeFilterList(url);
     }
 
     @UiThread
-    public void setAllowedConnectionType(ConnectionType type) {
-        // TODO(mpawlowski) call AdblockControllerJni, not write prefs directly
-        UserPrefs.get(Profile.getLastUsedRegularProfile())
-                .setString(Pref.ADBLOCK_ALLOWED_CONNECTION_TYPE, type.getValue());
+    public List<Subscription> getInstalledSubscriptions() {
+        return (List<Subscription>)
+                (List<?>)
+                        Arrays.asList(
+                                AdblockControllerJni.get()
+                                        .getInstalledSubscriptions(mBrowserContextHandle));
     }
 
+    /**
+     * @throws IllegalStateException when called on removed FilteringConfiguration.
+     */
     @UiThread
-    public List<Subscription> getRecommendedSubscriptions(Context context) {
-        if (mRecommendedSubscriptions.isEmpty()) {
-            final Map<String, String> localeToTitle = getLocaleToTitleMap(context);
-            String[] recommendedSubscriptions =
-                    AdblockControllerJni.get().getRecommendedSubscriptions();
-            for (String subscription : recommendedSubscriptions) {
-                String title = null;
-                String languages = AdblockControllerJni.get().getRecommendedSubscriptionLanguages(
-                        subscription);
-                if (languages != null && !languages.isEmpty()) {
-                    final String[] separatedLanguages = languages.split(",");
-                    for (String language : separatedLanguages) {
-                        title = localeToTitle.get(language);
-                        if (title != null && !title.isEmpty()) break;
-                    }
-                }
-                title = title != null
-                        ? title
-                        : AdblockControllerJni.get().getRecommendedSubscriptionTitle(subscription);
-                try {
-                    Subscription s =
-                            new Subscription(new URL(URLUtil.guessUrl(subscription)), title);
-                    mRecommendedSubscriptions.add(s);
-                } catch (MalformedURLException e) {
-                    Log.e(TAG, "Error parsing url: " + subscription);
-                }
-            }
-        }
-
-        return mRecommendedSubscriptions;
+    public void setEnabled(boolean enabled) throws IllegalStateException {
+        mFilteringConfiguration.setEnabled(enabled);
     }
 
+    /**
+     * @throws IllegalStateException when called on removed FilteringConfiguration.
+     */
     @UiThread
-    public boolean isRecommendedSubscriptionsAvailable() {
-        return !mRecommendedSubscriptions.isEmpty();
+    public boolean isEnabled() throws IllegalStateException {
+        return mFilteringConfiguration.isEnabled();
     }
 
+    /**
+     * @throws IllegalStateException when called on removed FilteringConfiguration.
+     */
     @UiThread
-    public void selectSubscription(final Subscription subscription) {
-        AdblockControllerJni.get().selectSubscription(subscription.url().toString());
+    public void removeFilterList(final URL url) throws IllegalStateException {
+        mFilteringConfiguration.removeFilterList(url);
     }
 
+    /**
+     * @throws IllegalStateException when called on removed FilteringConfiguration.
+     */
     @UiThread
-    public void unselectSubscription(final Subscription subscription) {
-        AdblockControllerJni.get().unselectSubscription(subscription.url().toString());
+    public List<URL> getFilterLists() throws IllegalStateException {
+        return mFilteringConfiguration.getFilterLists();
     }
 
+    /**
+     * @throws IllegalStateException when called on removed FilteringConfiguration.
+     */
     @UiThread
-    public List<Subscription> getSelectedSubscriptions() {
-        String[] selectedSubscriptions = AdblockControllerJni.get().getSelectedSubscriptions();
-
-        List<Subscription> recommended =
-                getRecommendedSubscriptions(ContextUtils.getApplicationContext());
-        List<Subscription> result = new ArrayList<Subscription>();
-        for (String selectedSubscriptionURL : selectedSubscriptions) {
-            int index = -1;
-            try {
-                Subscription selected = new Subscription(new URL(selectedSubscriptionURL), "");
-                index = recommended.indexOf(selected);
-            } catch (MalformedURLException e) {
-                Log.e(TAG, "Invalid subscription URL: " + selectedSubscriptionURL);
-            }
-            if (index != -1) {
-                result.add(recommended.get(index));
-            }
-        }
-        return result;
+    public void addAllowedDomain(final String domain) throws IllegalStateException {
+        mFilteringConfiguration.addAllowedDomain(domain);
     }
 
+    /**
+     * @throws IllegalStateException when called on removed FilteringConfiguration.
+     */
     @UiThread
-    public String getSelectedSubscriptionVersion(final Subscription subscription) {
-        return AdblockControllerJni.get().getSelectedSubscriptionVersion(
-                subscription.url().toString());
+    public void removeAllowedDomain(final String domain) throws IllegalStateException {
+        mFilteringConfiguration.removeAllowedDomain(domain);
     }
 
+    /**
+     * @throws IllegalStateException when called on removed FilteringConfiguration.
+     */
     @UiThread
-    public void addCustomSubscription(final URL url) {
-        AdblockControllerJni.get().addCustomSubscription(url.toString());
+    public List<String> getAllowedDomains() throws IllegalStateException {
+        return mFilteringConfiguration.getAllowedDomains();
     }
 
+    /**
+     * @throws IllegalStateException when called on removed FilteringConfiguration.
+     */
     @UiThread
-    public void removeCustomSubscription(final URL url) {
-        AdblockControllerJni.get().removeCustomSubscription(url.toString());
+    public void addCustomFilter(final String filter) throws IllegalStateException {
+        mFilteringConfiguration.addCustomFilter(filter);
     }
 
+    /**
+     * @throws IllegalStateException when called on removed FilteringConfiguration.
+     */
     @UiThread
-    public List<URL> getCustomSubscriptions() {
-        String[] subscriptions = AdblockControllerJni.get().getCustomSubscriptions();
-        return transform(subscriptions);
+    public void removeCustomFilter(final String filter) throws IllegalStateException {
+        mFilteringConfiguration.removeCustomFilter(filter);
     }
 
+    /**
+     * @throws IllegalStateException when called on removed FilteringConfiguration.
+     */
     @UiThread
-    public void addAllowedDomain(final String domain) {
-        String sanitizedDomain = sanitizeSite(domain);
-        if (sanitizedDomain == null) return;
-        AdblockControllerJni.get().addAllowedDomain(sanitizedDomain);
+    public List<String> getCustomFilters() throws IllegalStateException {
+        return mFilteringConfiguration.getCustomFilters();
     }
 
-    @UiThread
-    public void removeAllowedDomain(final String domain) {
-        AdblockControllerJni.get().removeAllowedDomain(domain);
-    }
-
-    @UiThread
-    public List<String> getAllowedDomains() {
-        List<String> allowedDomains = Arrays.asList(AdblockControllerJni.get().getAllowedDomains());
-        Collections.sort(allowedDomains);
-        return allowedDomains;
-    }
-
-    @UiThread
-    public void addOnAdBlockedObserver(final AdBlockedObserver observer) {
-        mOnAdBlockedObservers.add(observer);
-        setHasAdblockCountersObservers(mOnAdBlockedObservers.size() != 0);
-    }
-
-    @UiThread
-    public void removeOnAdBlockedObserver(final AdBlockedObserver observer) {
-        mOnAdBlockedObservers.remove(observer);
-        setHasAdblockCountersObservers(mOnAdBlockedObservers.size() != 0);
-    }
+    public interface SubscriptionUpdateObserver
+            extends FilteringConfiguration.SubscriptionUpdateObserver {}
 
     @UiThread
     public void addSubscriptionUpdateObserver(final SubscriptionUpdateObserver observer) {
-        mSubscriptionUpdateObservers.add(observer);
+        mFilteringConfiguration.addSubscriptionUpdateObserver(observer);
     }
 
     @UiThread
     public void removeSubscriptionUpdateObserver(final SubscriptionUpdateObserver observer) {
-        mSubscriptionUpdateObservers.remove(observer);
-    }
-
-    @UiThread
-    public void composeFilterSuggestions(@NonNull final AdblockElement element,
-            @NonNull final AdblockComposeFilterSuggestionsCallback callback) {
-        AdblockControllerJni.get().composeFilterSuggestions(element, callback);
-    }
-
-    @UiThread
-    public void addCustomFilter(final String filter) {
-        AdblockControllerJni.get().addCustomFilter(filter);
-    }
-
-    @UiThread
-    public void removeCustomFilter(final String filter) {
-        AdblockControllerJni.get().removeCustomFilter(filter);
-    }
-
-    @UiThread
-    public List<String> getCustomFilters() {
-        return Arrays.asList(AdblockControllerJni.get().getCustomFilters());
-    }
-
-    private String sanitizeSite(String site) {
-        // |site| is raw user input. We expect it to be either a domain or a URL.
-        try {
-            URL candidate = new URL(URLUtil.guessUrl(site));
-            return candidate.getHost();
-        } catch (java.net.MalformedURLException e) {
-        }
-        // Could not parse |site| as URL or domain.
-        return null;
-    }
-
-    private List<URL> transform(String[] urls) {
-        if (urls == null) return null;
-
-        List<URL> result = new ArrayList<URL>();
-        for (String url : urls) {
-            try {
-                result.add(new URL(URLUtil.guessUrl(url)));
-            } catch (MalformedURLException e) {
-                Log.e(TAG, "Error parsing url: " + url);
-            }
-        }
-
-        return result;
-    }
-
-    private String[] transform(List<URL> urls) {
-        if (urls == null) return null;
-
-        String[] result = new String[urls.size()];
-        for (int i = 0; i < urls.size(); ++i) {
-            result[i] = urls.get(i).toString();
-        }
-        return result;
-    }
-
-    private Map<String, String> getLocaleToTitleMap(final Context context) {
-        final Resources resources = context.getResources();
-        final String[] locales =
-                resources.getStringArray(R.array.fragment_adblock_general_locale_title);
-        final String separator = resources.getString(R.string.fragment_adblock_general_separator);
-        final Map<String, String> localeToTitle = new HashMap<>(locales.length);
-        for (final String localeAndTitlePair : locales) {
-            // in `String.split()` separator is a regexp, but we want to treat it as a string
-            final int separatorIndex = localeAndTitlePair.indexOf(separator);
-            final String locale = localeAndTitlePair.substring(0, separatorIndex);
-            final String title = localeAndTitlePair.substring(separatorIndex + 1);
-            localeToTitle.put(locale, title);
-        }
-
-        return localeToTitle;
-    }
-
-    @CalledByNative
-    private void adMatchedCallback(final String requestUrl, boolean wasBlocked,
-            final String[] parentFrameUrls, final String subscriptionUrl, final int contentType,
-            final int tabId) {
-        ThreadUtils.assertOnUiThread();
-        final List<String> parentsList = Arrays.asList(parentFrameUrls);
-        final AdblockCounters.ResourceInfo resourceInfo = new AdblockCounters.ResourceInfo(
-                requestUrl, parentsList, subscriptionUrl, contentType, tabId);
-        Log.d(TAG,
-                "Adblock: adMatchedCallback() notifies " + mOnAdBlockedObservers.size()
-                        + " listeners about " + resourceInfo.toString()
-                        + (wasBlocked ? " getting blocked" : " being allowed"));
-        for (final AdBlockedObserver observer : mOnAdBlockedObservers) {
-            if (wasBlocked) {
-                observer.onAdBlocked(resourceInfo);
-            } else {
-                observer.onAdAllowed(resourceInfo);
-            }
-        }
-
-        if (wasBlocked) RewardsAPIBridge.getInstance().logAdBlocked();
-    }
-
-    @CalledByNative
-    private void pageAllowedCallback(
-            final String requestUrl, final String subscriptionUrl, final int tabId) {
-        ThreadUtils.assertOnUiThread();
-        final AdblockCounters.ResourceInfo resourceInfo =
-                new AdblockCounters.ResourceInfo(requestUrl, new ArrayList(), subscriptionUrl,
-                        AdblockContentType.CONTENT_TYPE_OTHER.getValue(), tabId);
-        Log.d(TAG,
-                "Adblock: pageAllowedCallback() notifies " + mOnAdBlockedObservers.size()
-                        + " listeners about " + resourceInfo.toString());
-        for (final AdBlockedObserver observer : mOnAdBlockedObservers) {
-            observer.onPageAllowed(resourceInfo);
-        }
-    }
-
-    @CalledByNative
-    private void popupMatchedCallback(final String requestUrl, boolean wasBlocked,
-            final String openerUrl, final String subscription, final int tabId) {
-        ThreadUtils.assertOnUiThread();
-        final List<String> parentsList = Arrays.asList(openerUrl);
-        final AdblockCounters.ResourceInfo resourceInfo =
-                new AdblockCounters.ResourceInfo(requestUrl, parentsList, subscription,
-                        AdblockContentType.CONTENT_TYPE_OTHER.getValue(), tabId);
-        Log.d(TAG,
-                "Adblock: popupMatchedCallback() notifies " + mOnAdBlockedObservers.size()
-                        + " listeners about " + resourceInfo.toString()
-                        + (wasBlocked ? " getting blocked" : " being allowed"));
-        for (final AdBlockedObserver observer : mOnAdBlockedObservers) {
-            if (wasBlocked) {
-                observer.onPopupBlocked(resourceInfo);
-            } else {
-                observer.onPopupAllowed(resourceInfo);
-            }
-        }
-
-        if (wasBlocked) RewardsAPIBridge.getInstance().logAdBlocked();
-    }
-
-    @CalledByNative
-    private void subscriptionUpdatedCallback(final String url) {
-        ThreadUtils.assertOnUiThread();
-        try {
-            URL subscriptionUrl = new URL(URLUtil.guessUrl(url));
-            for (final SubscriptionUpdateObserver observer : mSubscriptionUpdateObservers) {
-                observer.onSubscriptionDownloaded(subscriptionUrl);
-            }
-        } catch (MalformedURLException e) {
-            Log.e(TAG, "Error parsing subscription url: " + url);
-        }
-    }
-
-    public void bindInstance(AdblockController instance) {
-        ThreadUtils.assertOnUiThread();
-        if (sInstance == null) {
-            sInstance = instance;
-            AdblockControllerJni.get().bind(sInstance);
-        }
+        mFilteringConfiguration.removeSubscriptionUpdateObserver(observer);
     }
 
     @NativeMethods
     interface Natives {
-        void bind(AdblockController caller);
-        boolean isAdblockEnabled();
-        void setAdblockEnabled(boolean aa_enabled);
-        boolean isAcceptableAdsEnabled();
-        void setAcceptableAdsEnabled(boolean aa_enabled);
-        void selectSubscription(String url);
-        String[] getSelectedSubscriptions();
-        void unselectSubscription(String url);
-        void addCustomSubscription(String url);
-        void removeCustomSubscription(String url);
-        String[] getCustomSubscriptions();
-        void addAllowedDomain(String domain);
-        void removeAllowedDomain(String domain);
-        String[] getAllowedDomains();
-        String[] getRecommendedSubscriptions();
-        String getRecommendedSubscriptionTitle(String subscription);
-        String getRecommendedSubscriptionLanguages(String subscription);
-        String getSelectedSubscriptionVersion(String subscription);
-        void composeFilterSuggestions(
-                AdblockElement element, AdblockComposeFilterSuggestionsCallback callback);
-        void addCustomFilter(String filter);
-        void removeCustomFilter(String filter);
-        String[] getCustomFilters();
+        Object[] getInstalledSubscriptions(BrowserContextHandle contextHandle);
+
+        Object[] getRecommendedSubscriptions();
     }
 }

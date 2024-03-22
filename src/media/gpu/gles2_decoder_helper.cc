@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -81,20 +81,14 @@ class GLES2DecoderHelperImpl : public GLES2DecoderHelper {
     return decoder_->GetGLContext();
   }
 
-  gpu::Mailbox CreateMailbox(AbstractTexture* texture) override {
+ private:
+  gpu::Mailbox CreateLegacyMailbox(AbstractTexture* texture) override {
     DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
-    gpu::Mailbox mailbox = gpu::Mailbox::Generate();
+    gpu::Mailbox mailbox = gpu::Mailbox::GenerateLegacyMailbox();
     mailbox_manager_->ProduceTexture(mailbox, texture->GetTextureBase());
     return mailbox;
   }
 
-  void ProduceTexture(const gpu::Mailbox& mailbox,
-                      AbstractTexture* texture) override {
-    DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
-    mailbox_manager_->ProduceTexture(mailbox, texture->GetTextureBase());
-  }
-
- private:
   raw_ptr<gpu::DecoderContext> decoder_;
   raw_ptr<gpu::MailboxManager> mailbox_manager_;
   THREAD_CHECKER(thread_checker_);

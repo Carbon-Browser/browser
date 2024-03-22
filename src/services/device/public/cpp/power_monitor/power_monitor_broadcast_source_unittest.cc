@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,9 +6,9 @@
 
 #include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/test/power_monitor_test.h"
 #include "base/test/task_environment.h"
-#include "base/threading/sequenced_task_runner_handle.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
 namespace device {
@@ -26,7 +26,7 @@ class PowerMonitorBroadcastSourceTest : public testing::Test {
 
   void SetUp() override {
     auto power_monitor_source = std::make_unique<PowerMonitorBroadcastSource>(
-        base::SequencedTaskRunnerHandle::Get());
+        base::SequencedTaskRunner::GetCurrentDefault());
     power_monitor_source_ptr_ = power_monitor_source.get();
     base::PowerMonitor::Initialize(std::move(power_monitor_source));
     power_monitor_source_ptr_->Init(mojo::NullRemote());
@@ -44,7 +44,8 @@ class PowerMonitorBroadcastSourceTest : public testing::Test {
   base::test::SingleThreadTaskEnvironment task_environment_;
 
  private:
-  raw_ptr<PowerMonitorBroadcastSource> power_monitor_source_ptr_;
+  raw_ptr<PowerMonitorBroadcastSource, DanglingUntriaged>
+      power_monitor_source_ptr_;
 };
 
 TEST_F(PowerMonitorBroadcastSourceTest, PowerMessageReceiveBroadcast) {

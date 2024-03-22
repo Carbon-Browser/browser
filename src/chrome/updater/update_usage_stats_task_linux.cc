@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,8 +9,8 @@
 
 namespace updater {
 
-bool UpdateUsageStatsTask::UsageStatsAllowed(
-    const std::vector<std::string>& app_ids) const {
+bool OtherAppUsageStatsAllowed(const std::vector<std::string>& app_ids,
+                               UpdaterScope scope) {
   // TODO(crbug.com/1296311): Implement.
   return false;
 }

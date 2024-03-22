@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -19,10 +19,12 @@
 #include "ui/gfx/geometry/point.h"
 #include "ui/gfx/geometry/size.h"
 #include "ui/gfx/image/image_skia.h"
+#include "ui/views/accessibility/view_accessibility.h"
 #include "ui/views/border.h"
 #include "ui/views/layout/box_layout.h"
 #include "ui/views/test/ax_event_counter.h"
 #include "ui/views/test/views_test_base.h"
+#include "ui/views/test/views_test_utils.h"
 #include "ui/views/widget/widget.h"
 
 namespace {
@@ -73,6 +75,8 @@ class ImageViewTest : public ViewsTestBase,
   }
 
   void TearDown() override {
+    // Null out the raw_ptr so it doesn't dangle during teardown.
+    image_view_ = nullptr;
     widget_.Close();
     ViewsTestBase::TearDown();
   }
@@ -102,7 +106,7 @@ TEST_P(ImageViewTest, CenterAlignment) {
   bitmap.allocN32Pixels(kImageSkiaSize, kImageSkiaSize);
   gfx::ImageSkia image_skia = gfx::ImageSkia::CreateFrom1xBitmap(bitmap);
   image_view()->SetImage(image_skia);
-  widget()->GetContentsView()->Layout();
+  views::test::RunScheduledLayout(image_view());
   EXPECT_NE(gfx::Size(), image_skia.size());
 
   // With no changes to the size / padding of |image_view|, the origin of
@@ -112,11 +116,11 @@ TEST_P(ImageViewTest, CenterAlignment) {
   // Test insets are always respected in LTR and RTL.
   constexpr int kInset = 5;
   image_view()->SetBorder(CreateEmptyBorder(kInset));
-  widget()->GetContentsView()->Layout();
+  views::test::RunScheduledLayout(image_view());
   EXPECT_EQ(kInset, CurrentImageOriginForParam());
 
   SetRTL(true);
-  widget()->GetContentsView()->Layout();
+  views::test::RunScheduledLayout(image_view());
   EXPECT_EQ(kInset, CurrentImageOriginForParam());
 
   // Check this still holds true when the insets are asymmetrical.
@@ -124,11 +128,11 @@ TEST_P(ImageViewTest, CenterAlignment) {
   constexpr int kTrailingInset = 6;
   image_view()->SetBorder(CreateEmptyBorder(gfx::Insets::TLBR(
       kLeadingInset, kLeadingInset, kTrailingInset, kTrailingInset)));
-  widget()->GetContentsView()->Layout();
+  views::test::RunScheduledLayout(image_view());
   EXPECT_EQ(kLeadingInset, CurrentImageOriginForParam());
 
   SetRTL(false);
-  widget()->GetContentsView()->Layout();
+  views::test::RunScheduledLayout(image_view());
   EXPECT_EQ(kLeadingInset, CurrentImageOriginForParam());
 }
 
@@ -160,6 +164,71 @@ TEST_P(ImageViewTest, SetAccessibleNameNotifiesAccessibilityEvent) {
   const std::string& name =
       data.GetStringAttribute(ax::mojom::StringAttribute::kName);
   EXPECT_EQ(test_tooltip_text, base::ASCIIToUTF16(name));
+}
+
+TEST_P(ImageViewTest, AccessibleNameFromTooltipText) {
+  // Initially there is no name and no tooltip text.
+  // The role should always be image, regardless of whether or not there is
+  // presentable information. It's the "ignored" state which should change.
+  ui::AXNodeData data;
+  image_view()->GetAccessibleNodeData(&data);
+  EXPECT_EQ(data.GetString16Attribute(ax::mojom::StringAttribute::kName),
+            std::u16string());
+  EXPECT_EQ(image_view()->GetAccessibleName(), std::u16string());
+  EXPECT_EQ(image_view()->GetTooltipText(), std::u16string());
+  EXPECT_EQ(data.role, ax::mojom::Role::kImage);
+  EXPECT_TRUE(image_view()->GetViewAccessibility().IsIgnored());
+
+  // Setting the tooltip text when there is no accessible name should result in
+  // the tooltip text being used for the accessible name and the "ignored" state
+  // being removed.
+  data = ui::AXNodeData();
+  std::u16string tooltip_text = u"Tooltip Text";
+  image_view()->SetTooltipText(tooltip_text);
+  image_view()->GetAccessibleNodeData(&data);
+  EXPECT_EQ(data.GetString16Attribute(ax::mojom::StringAttribute::kName),
+            tooltip_text);
+  EXPECT_EQ(image_view()->GetAccessibleName(), tooltip_text);
+  EXPECT_EQ(image_view()->GetTooltipText(), tooltip_text);
+  EXPECT_EQ(data.role, ax::mojom::Role::kImage);
+  EXPECT_FALSE(image_view()->GetViewAccessibility().IsIgnored());
+
+  // Setting the accessible name to a non-empty string should replace the name
+  // from the tooltip text.
+  data = ui::AXNodeData();
+  std::u16string accessible_name = u"Accessible Name";
+  image_view()->SetAccessibleName(accessible_name);
+  image_view()->GetAccessibleNodeData(&data);
+  EXPECT_EQ(data.GetString16Attribute(ax::mojom::StringAttribute::kName),
+            accessible_name);
+  EXPECT_EQ(image_view()->GetAccessibleName(), accessible_name);
+  EXPECT_EQ(image_view()->GetTooltipText(), tooltip_text);
+  EXPECT_EQ(data.role, ax::mojom::Role::kImage);
+  EXPECT_FALSE(image_view()->GetViewAccessibility().IsIgnored());
+
+  // Setting the accessible name to an empty string should cause the tooltip
+  // text to be used as the name.
+  data = ui::AXNodeData();
+  image_view()->SetAccessibleName(std::u16string());
+  image_view()->GetAccessibleNodeData(&data);
+  EXPECT_EQ(data.GetString16Attribute(ax::mojom::StringAttribute::kName),
+            tooltip_text);
+  EXPECT_EQ(image_view()->GetAccessibleName(), tooltip_text);
+  EXPECT_EQ(image_view()->GetTooltipText(), tooltip_text);
+  EXPECT_EQ(data.role, ax::mojom::Role::kImage);
+  EXPECT_FALSE(image_view()->GetViewAccessibility().IsIgnored());
+
+  // Setting the tooltip to an empty string without setting a new accessible
+  // name should cause the view to become "ignored" again.
+  data = ui::AXNodeData();
+  image_view()->SetTooltipText(std::u16string());
+  image_view()->GetAccessibleNodeData(&data);
+  EXPECT_EQ(data.GetString16Attribute(ax::mojom::StringAttribute::kName),
+            std::u16string());
+  EXPECT_EQ(image_view()->GetAccessibleName(), std::u16string());
+  EXPECT_EQ(image_view()->GetTooltipText(), std::u16string());
+  EXPECT_EQ(data.role, ax::mojom::Role::kImage);
+  EXPECT_TRUE(image_view()->GetViewAccessibility().IsIgnored());
 }
 
 INSTANTIATE_TEST_SUITE_P(All,

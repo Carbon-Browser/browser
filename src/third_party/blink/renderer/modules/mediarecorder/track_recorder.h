@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -40,6 +40,19 @@ void TrackRecorder<MediaStreamSink>::OnReadyStateChanged(
   if (state == WebMediaStreamSource::kReadyStateEnded)
     std::move(track_ended_cb_).Run();
 }
+
+// It is muxer container type for the video and audio types.
+enum class MediaTrackContainerType {
+  kNone,
+  kVideoMp4,
+  kVideoWebM,
+  kVidoMatroska,
+  kAudioMp4,
+  kAudioWebM,
+};
+
+MODULES_EXPORT MediaTrackContainerType
+GetMediaContainerTypeFromString(const String& type);
 
 }  // namespace blink
 

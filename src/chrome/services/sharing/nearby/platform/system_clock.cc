@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -19,7 +19,6 @@
 #include "base/system/sys_info.h"
 #endif  // BUILDFLAG(IS_MAC) || BUILDFLAG(IS_POSIX)
 
-namespace location {
 namespace nearby {
 
 void SystemClock::Init() {}
@@ -50,4 +49,3 @@ Exception SystemClock::Sleep(absl::Duration duration) {
 }
 
 }  // namespace nearby
-}  // namespace location

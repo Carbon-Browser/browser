@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,7 +13,7 @@
 namespace account_manager {
 
 // Type of an account, based on the authentication backend of the account.
-// Loosely based on //ash/components/account_manager/tokens.proto
+// Loosely based on //components/account_manager_core/chromeos/tokens.proto.
 enum class AccountType : int {
   // Gaia account (aka Google account) - including enterprise and consumer
   // accounts.

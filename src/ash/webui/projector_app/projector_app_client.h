@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,10 +7,13 @@
 
 #include <set>
 
-#include "base/callback.h"
+#include "ash/webui/projector_app/pending_screencast.h"
+#include "ash/webui/projector_app/public/mojom/projector_types.mojom.h"
 #include "base/files/file_path.h"
+#include "base/functional/callback.h"
 #include "base/observer_list_types.h"
 #include "base/time/time.h"
+#include "base/values.h"
 
 namespace network {
 namespace mojom {
@@ -22,69 +25,19 @@ namespace signin {
 class IdentityManager;
 }  // namespace signin
 
-namespace base {
-class Value;
-}  // namespace base
-
 namespace ash {
 
-struct ProjectorScreencast;
-
+class UntrustedAnnotatorPageHandlerImpl;
+struct AnnotatorTool;
 struct NewScreencastPrecondition;
-
-struct PendingScreencast {
-  PendingScreencast();
-  explicit PendingScreencast(const base::FilePath& container_dir);
-  PendingScreencast(const base::FilePath& container_dir,
-                    const std::string& name,
-                    int64_t total_size_in_bytes,
-                    int64_t bytes_transferred);
-  PendingScreencast(const PendingScreencast&);
-  PendingScreencast& operator=(const PendingScreencast&);
-  ~PendingScreencast();
-
-  base::Value ToValue() const;
-  bool operator==(const PendingScreencast& rhs) const;
-
-  // The container path of the screencast. It's a relative path of drive, looks
-  // like "/root/projector_data/abc".
-  base::FilePath container_dir;
-  // The display name of screencast. If `container_dir` is
-  // "/root/projector_data/abc", the `name` is "abc".
-  std::string name;
-  // The total size of a screencast in bytes, including the media file and the
-  // metadata file under `container_dir`.
-  int64_t total_size_in_bytes = 0;
-  // The bytes have been transferred to drive.
-  int64_t bytes_transferred = 0;
-
-  // The media file created time.
-  base::Time created_time;
-
-  // True after observing drivefs::mojom::DriveError::kCantUploadStorageFull for
-  // the first time. Screencast's status might go through error -> uploading ->
-  // error -> ... -> uploaded, but it will display the error state until
-  // successfully uploaded to avoid over commnucation with user.
-  bool upload_failed = false;
-};
-
-struct PendingScreencastSetComparator {
-  bool operator()(const PendingScreencast& a, const PendingScreencast& b) const;
-};
-
-// The set to store pending screencasts.
-using PendingScreencastSet =
-    std::set<PendingScreencast, PendingScreencastSetComparator>;
 
 // Defines interface to access Browser side functionalities for the
 // ProjectorApp.
 class ProjectorAppClient {
  public:
-  // The callback used by GetScreencast API, which involves multiple async
-  // steps.
-  using OnGetScreencastCallback =
-      base::OnceCallback<void(std::unique_ptr<ProjectorScreencast>,
-                              const std::string& errorMsg)>;
+  // The callback used by the GetVideo() API.
+  using OnGetVideoCallback =
+      base::OnceCallback<void(projector::mojom::GetVideoResultPtr result)>;
 
   // Interface for observing events on the ProjectorAppClient.
   class Observer : public base::CheckedObserver {
@@ -96,7 +49,7 @@ class ProjectorAppClient {
 
     // Observes the pending screencast state change events.
     virtual void OnScreencastsPendingStatusChanged(
-        const PendingScreencastSet& pending_screencast) = 0;
+        const PendingScreencastContainerSet& pending_screencast_containers) = 0;
 
     // Notifies the observer the SODA binary and language pack download and
     // installation progress.
@@ -130,7 +83,8 @@ class ProjectorAppClient {
       const NewScreencastPrecondition& precondition) = 0;
 
   // Returns pending screencast uploaded by primary user.
-  virtual const PendingScreencastSet& GetPendingScreencasts() const = 0;
+  virtual const PendingScreencastContainerSet& GetPendingScreencasts()
+      const = 0;
 
   // Checks if device is eligible to trigger SODA installer.
   virtual bool ShouldDownloadSoda() const = 0;
@@ -153,10 +107,41 @@ class ProjectorAppClient {
   // Triggers the opening of the Chrome feedback dialog.
   virtual void OpenFeedbackDialog() const = 0;
 
-  // TODO(b/236857019): Wire up ProjectorMessageHandler.
-  // Populates a screencast object in |callback| for given |screencast_id|.
-  virtual void GetScreencast(const std::string& screencast_id,
-                             OnGetScreencastCallback callback) = 0;
+  // Launches the given DriveFS video file with `video_file_id` into the
+  // Projector app. The `resource_key` is an additional security token needed to
+  // gain access to link-shared files. Since the `resource_key` is currently
+  // only used by Googlers, the `resource_key` might be empty.
+  virtual void GetVideo(const std::string& video_file_id,
+                        const std::optional<std::string>& resource_key,
+                        OnGetVideoCallback callback) const = 0;
+
+  // Registers the AnnotatorPageHandlerImpl that is owned by the WebUI that
+  // contains the Projector annotator.
+  virtual void SetAnnotatorPageHandler(
+      UntrustedAnnotatorPageHandlerImpl* handler) = 0;
+
+  // Resets the stored AnnotatorPageHandlerImpl if it matches the one that is
+  // passed in.
+  virtual void ResetAnnotatorPageHandler(
+      UntrustedAnnotatorPageHandlerImpl* handler) = 0;
+
+  // Sets the tool inside the annotator WebUI.
+  virtual void SetTool(const AnnotatorTool& tool) = 0;
+
+  // Clears the contents of the annotator canvas.
+  virtual void Clear() = 0;
+
+  // Called with true by the initiation and false by the destruction of
+  // projector trusted UI .
+  virtual void NotifyAppUIActive(bool active) = 0;
+
+  // Toggles to suppress/resume the system notification for `screencast_paths`.
+  virtual void ToggleFileSyncingNotificationForPaths(
+      const std::vector<base::FilePath>& screencast_paths,
+      bool suppress) = 0;
+
+  // Triggers reauth dialog for the given `email`.
+  virtual void HandleAccountReauth(const std::string& email) = 0;
 
  protected:
   ProjectorAppClient();

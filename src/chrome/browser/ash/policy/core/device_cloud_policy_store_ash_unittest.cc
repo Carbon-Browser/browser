@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,20 +8,20 @@
 #include <memory>
 #include <string>
 
-#include "ash/components/tpm/install_attributes.h"
 #include "ash/constants/ash_switches.h"
-#include "base/bind.h"
 #include "base/command_line.h"
 #include "base/compiler_specific.h"
+#include "base/functional/bind.h"
 #include "base/run_loop.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/task/single_thread_task_runner.h"
 #include "chrome/browser/ash/settings/device_settings_test_helper.h"
 #include "chrome/test/base/scoped_testing_local_state.h"
 #include "chrome/test/base/testing_browser_process.h"
+#include "chromeos/ash/components/dbus/dbus_thread_manager.h"
 #include "chromeos/ash/components/dbus/userdataauth/fake_install_attributes_client.h"
 #include "chromeos/ash/components/dbus/userdataauth/install_attributes_util.h"
+#include "chromeos/ash/components/install_attributes/install_attributes.h"
 #include "chromeos/components/onc/onc_test_utils.h"
-#include "chromeos/dbus/dbus_thread_manager.h"
 #include "components/policy/core/common/cloud/cloud_policy_constants.h"
 #include "components/policy/core/common/cloud/mock_cloud_policy_store.h"
 #include "components/policy/core/common/cloud/test/policy_builder.h"
@@ -67,7 +67,7 @@ class DeviceCloudPolicyStoreAshTest : public ash::DeviceSettingsTestBase {
         ash::InstallAttributesClient::Get());
     store_ = std::make_unique<DeviceCloudPolicyStoreAsh>(
         device_settings_service_.get(), install_attributes_.get(),
-        base::ThreadTaskRunnerHandle::Get());
+        base::SingleThreadTaskRunner::GetCurrentDefault());
     store_->AddObserver(&observer_);
 
     base::RunLoop loop;
@@ -138,7 +138,7 @@ class DeviceCloudPolicyStoreAshTest : public ash::DeviceSettingsTestBase {
         ash::FakeInstallAttributesClient::Get());
     store_ = std::make_unique<DeviceCloudPolicyStoreAsh>(
         device_settings_service_.get(), install_attributes_.get(),
-        base::ThreadTaskRunnerHandle::Get());
+        base::SingleThreadTaskRunner::GetCurrentDefault());
     store_->AddObserver(&observer_);
   }
 
@@ -343,6 +343,24 @@ TEST_F(DeviceCloudPolicyStoreAshTest, InstallInitialPolicyNotEnterprise) {
   FlushDeviceSettings();
   ExpectFailure(CloudPolicyStore::STATUS_BAD_STATE);
   EXPECT_EQ(std::string(), store_->policy_signature_public_key());
+}
+
+TEST_F(DeviceCloudPolicyStoreAshTest, InstallInitialPolicyBadDomain) {
+  PrepareNewSigningKey();
+  device_policy_->policy_data().set_username("bad_owner@bad_domain.com");
+  device_policy_->Build();
+  store_->InstallInitialPolicy(device_policy_->policy());
+  FlushDeviceSettings();
+  ExpectFailure(CloudPolicyStore::STATUS_VALIDATION_ERROR);
+}
+
+TEST_F(DeviceCloudPolicyStoreAshTest, InstallInitialPolicyBadDeviceId) {
+  PrepareNewSigningKey();
+  device_policy_->policy_data().set_device_id("bad_device_id");
+  device_policy_->Build();
+  store_->InstallInitialPolicy(device_policy_->policy());
+  FlushDeviceSettings();
+  ExpectFailure(CloudPolicyStore::STATUS_VALIDATION_ERROR);
 }
 
 TEST_F(DeviceCloudPolicyStoreAshTest, StoreDeviceBlockDevmodeAllowed) {

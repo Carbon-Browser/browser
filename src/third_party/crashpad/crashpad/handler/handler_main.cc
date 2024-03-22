@@ -1,4 +1,4 @@
-// Copyright 2014 The Crashpad Authors. All rights reserved.
+// Copyright 2014 The Crashpad Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -71,7 +71,7 @@
 #include <libgen.h>
 #include <signal.h>
 
-#include "base/mac/scoped_mach_port.h"
+#include "base/apple/scoped_mach_port.h"
 #include "handler/mac/crash_report_exception_handler.h"
 #include "handler/mac/exception_handler_server.h"
 #include "handler/mac/file_limit_annotation.h"
@@ -1029,7 +1029,10 @@ int HandlerMain(int argc,
     upload_thread_options.watch_pending_reports = options.periodic_tasks;
 
     upload_thread.Reset(new CrashReportUploadThread(
-        database.get(), options.url, upload_thread_options));
+        database.get(),
+        options.url,
+        upload_thread_options,
+        CrashReportUploadThread::ProcessPendingReportsObservationCallback()));
     upload_thread.Get()->Start();
   }
 
@@ -1110,7 +1113,7 @@ int HandlerMain(int argc,
     CloseStdinAndStdout();
   }
 
-  base::mac::ScopedMachReceiveRight receive_right;
+  base::apple::ScopedMachReceiveRight receive_right;
 
   if (options.handshake_fd >= 0) {
     receive_right.reset(

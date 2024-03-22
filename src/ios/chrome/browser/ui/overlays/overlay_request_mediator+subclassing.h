@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,7 +9,7 @@
 
 #include <memory>
 
-#include "ios/chrome/browser/overlays/public/overlay_response.h"
+#include "ios/chrome/browser/overlays/model/public/overlay_response.h"
 
 // Exposes shared functionality for OverlayRequestMediator subclasses.
 @interface OverlayRequestMediator (Subclassing)

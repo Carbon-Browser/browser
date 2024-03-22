@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -99,7 +99,7 @@ class VkTestXkbKeyboardLayoutEngine : public XkbKeyboardLayoutEngine {
                                int flags,
                                char16_t character) const {
     KeyboardCode key_code = DifficultKeyboardCode(
-        dom_code, flags, key_code_converter_.DomCodeToXkbKeyCode(dom_code),
+        dom_code, flags, key_code_converter_->DomCodeToXkbKeyCode(dom_code),
         flags, CharacterToKeySym(character), character);
     if (key_code == VKEY_UNKNOWN) {
       DomKey dummy_dom_key;

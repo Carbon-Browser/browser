@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -55,8 +55,11 @@ public class FontPreloadingWorkaround {
         try {
             // The workaround is only needed if the metadata key actually exists for the package
             // name associated with this application context.
-            ApplicationInfo appInfo = appContext.getPackageManager().getApplicationInfo(
-                    appContext.getPackageName(), PackageManager.GET_META_DATA);
+            ApplicationInfo appInfo =
+                    appContext
+                            .getPackageManager()
+                            .getApplicationInfo(
+                                    appContext.getPackageName(), PackageManager.GET_META_DATA);
             if (appInfo.metaData == null || !appInfo.metaData.containsKey(FONT_PRELOADING_KEY)) {
                 return;
             }
@@ -74,9 +77,11 @@ public class FontPreloadingWorkaround {
             Object packageManager = packageManagerGetter.invoke(null);
 
             // Make the proxy.
-            Object wrappedPackageManager = Proxy.newProxyInstance(packageManagerClassLoader,
-                    new Class[] {packageManagerInterface},
-                    new PackageManagerWrapper(packageManager));
+            Object wrappedPackageManager =
+                    Proxy.newProxyInstance(
+                            packageManagerClassLoader,
+                            new Class[] {packageManagerInterface},
+                            new PackageManagerWrapper(packageManager));
 
             // Replace the real object with the proxy.
             packageManagerField.set(null, wrappedPackageManager);

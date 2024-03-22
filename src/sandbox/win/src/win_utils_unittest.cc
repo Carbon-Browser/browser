@@ -1,4 +1,4 @@
-// Copyright (c) 2011 The Chromium Authors. All rights reserved.
+// Copyright 2011 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,22 +6,24 @@
 
 #include <windows.h>
 
+#include <ntstatus.h>
 #include <psapi.h>
 
-#include <algorithm>
 #include <vector>
 
+#include "base/containers/contains.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
 #include "base/files/scoped_temp_dir.h"
+#include "base/format_macros.h"
 #include "base/numerics/safe_conversions.h"
 #include "base/path_service.h"
 #include "base/rand_util.h"
 #include "base/strings/string_util_win.h"
 #include "base/strings/stringprintf.h"
+#include "base/strings/utf_string_conversions.h"
 #include "base/win/scoped_handle.h"
 #include "base/win/scoped_process_information.h"
-#include "base/win/windows_version.h"
 #include "sandbox/win/src/nt_internals.h"
 #include "sandbox/win/tests/common/test_utils.h"
 #include "testing/gtest/include/gtest/gtest.h"
@@ -52,6 +54,11 @@ bool GetModuleList(HANDLE process, std::vector<HMODULE>* result) {
     return true;
   }
   modules.resize(size_needed / sizeof(HMODULE));
+  // Avoid the undefined-behavior of calling modules[0] on an empty list. This
+  // can happen if the process has not yet started or has already exited.
+  if (modules.size() == 0) {
+    return false;
+  }
   if (EnumProcessModules(
           process, &modules[0],
           base::checked_cast<DWORD>(modules.size() * sizeof(HMODULE)),
@@ -64,22 +71,24 @@ bool GetModuleList(HANDLE process, std::vector<HMODULE>* result) {
 }
 
 std::wstring GetRandomName() {
-  return base::StringPrintf(L"chrome_%08X%08X", base::RandUint64(),
-                            base::RandUint64());
+  return base::ASCIIToWide(
+      base::StringPrintf("chrome_%016" PRIX64 "%016" PRIX64, base::RandUint64(),
+                         base::RandUint64()));
 }
 
 void CompareHandlePath(const base::win::ScopedHandle& handle,
                        const std::wstring& expected_path) {
-  std::wstring path;
-  ASSERT_TRUE(GetPathFromHandle(handle.Get(), &path));
-  EXPECT_TRUE(base::EqualsCaseInsensitiveASCII(path, expected_path));
+  auto path = GetPathFromHandle(handle.Get());
+  ASSERT_TRUE(path.has_value());
+  EXPECT_TRUE(base::EqualsCaseInsensitiveASCII(path.value(), expected_path));
 }
 
 void CompareHandleType(const base::win::ScopedHandle& handle,
                        const std::wstring& expected_type) {
-  std::wstring type_name;
-  ASSERT_TRUE(GetTypeNameFromHandle(handle.Get(), &type_name));
-  EXPECT_TRUE(base::EqualsCaseInsensitiveASCII(type_name, expected_type));
+  auto type_name = GetTypeNameFromHandle(handle.Get());
+  ASSERT_TRUE(type_name);
+  EXPECT_TRUE(
+      base::EqualsCaseInsensitiveASCII(type_name.value(), expected_type));
 }
 
 void FindHandle(const ProcessHandleMap& handle_map,
@@ -87,12 +96,10 @@ void FindHandle(const ProcessHandleMap& handle_map,
                 const base::win::ScopedHandle& handle) {
   ProcessHandleMap::const_iterator entry = handle_map.find(type_name);
   ASSERT_NE(handle_map.end(), entry);
-  const std::vector<HANDLE>& handles = entry->second;
-  EXPECT_NE(handles.cend(),
-            std::find(handles.cbegin(), handles.cend(), handle.Get()));
+  EXPECT_TRUE(base::Contains(entry->second, handle.Get()));
 }
 
-void TestCurrentProcessHandles(absl::optional<ProcessHandleMap> (*func)()) {
+void TestCurrentProcessHandles(std::optional<ProcessHandleMap> (*func)()) {
   std::wstring random_name = GetRandomName();
   ASSERT_FALSE(random_name.empty());
   base::win::ScopedHandle event_handle(
@@ -104,7 +111,7 @@ void TestCurrentProcessHandles(absl::optional<ProcessHandleMap> (*func)()) {
       PIPE_UNLIMITED_INSTANCES, 0, 0, NMPWAIT_USE_DEFAULT_WAIT, nullptr));
   ASSERT_TRUE(pipe_handle.IsValid());
 
-  absl::optional<ProcessHandleMap> handle_map = func();
+  std::optional<ProcessHandleMap> handle_map = func();
   ASSERT_TRUE(handle_map);
   EXPECT_LE(2U, handle_map->size());
   FindHandle(*handle_map, L"Event", event_handle);
@@ -229,7 +236,11 @@ TEST(WinUtils, GetProcessBaseAddress) {
   using sandbox::GetProcessBaseAddress;
   STARTUPINFO start_info = {};
   PROCESS_INFORMATION proc_info = {};
-  WCHAR command_line[] = L"notepad";
+  // The child process for this test must be a GUI app so that WaitForInputIdle
+  // can be used to guarantee that the child process has started but has not
+  // exited. notepad was used but will fail on Windows 11 if the store version
+  // of notepad is not installed.
+  WCHAR command_line[] = L"calc";
   start_info.cb = sizeof(start_info);
   start_info.dwFlags = STARTF_USESHOWWINDOW;
   start_info.wShowWindow = SW_HIDE;
@@ -279,9 +290,9 @@ TEST(WinUtils, ConvertToLongPath) {
   // it was disabled in the filesystem setup.
   EXPECT_NE(temp_path.value().length(), ::wcslen(short_path));
 
-  std::wstring short_form_native_path;
-  EXPECT_TRUE(sandbox::GetNtPathFromWin32Path(std::wstring(short_path),
-                                              &short_form_native_path));
+  auto short_form_native_path =
+      sandbox::GetNtPathFromWin32Path(std::wstring(short_path));
+  EXPECT_TRUE(short_form_native_path);
   // NT short path: "\Device\HarddiskVolume4\PROGRA~3\%TEMP%\TEST_C~1.EXE"
 
   // Test 1: convert win32 short path to long:
@@ -292,24 +303,21 @@ TEST(WinUtils, ConvertToLongPath) {
 
   // Test 2: convert native short path to long:
   std::wstring drive_letter = temp_path.value().substr(0, 3);
-  std::wstring test2(short_form_native_path);
+  std::wstring test2(short_form_native_path.value());
   EXPECT_TRUE(sandbox::ConvertToLongPath(&test2, &drive_letter));
 
-  size_t index = short_form_native_path.find_first_of(
+  size_t index = short_form_native_path->find_first_of(
       L'\\', ::wcslen(L"\\Device\\HarddiskVolume"));
   EXPECT_TRUE(index != std::wstring::npos);
-  std::wstring expected_result = short_form_native_path.substr(0, index + 1);
+  std::wstring expected_result = short_form_native_path->substr(0, index + 1);
   expected_result.append(temp_path.value().substr(3));
   EXPECT_TRUE(::wcsicmp(expected_result.c_str(), test2.c_str()) == 0);
   // Expected result: "\Device\HarddiskVolumeX\ProgramData\%TEMP%\test_calc.exe"
 }
 
 TEST(WinUtils, GetPathAndTypeFromHandle) {
-  std::wstring invalid_handle;
-  EXPECT_FALSE(GetPathFromHandle(nullptr, &invalid_handle));
-  EXPECT_TRUE(invalid_handle.empty());
-  EXPECT_FALSE(GetTypeNameFromHandle(nullptr, &invalid_handle));
-  EXPECT_TRUE(invalid_handle.empty());
+  EXPECT_FALSE(GetPathFromHandle(nullptr));
+  EXPECT_FALSE(GetTypeNameFromHandle(nullptr));
   std::wstring random_name = GetRandomName();
   ASSERT_FALSE(random_name.empty());
   std::wstring event_name = L"Global\\" + random_name;
@@ -328,13 +336,7 @@ TEST(WinUtils, GetPathAndTypeFromHandle) {
 }
 
 TEST(WinUtils, GetCurrentProcessHandles) {
-  if (base::win::GetVersion() < base::win::Version::WIN8) {
-    ASSERT_FALSE(GetCurrentProcessHandles());
-    EXPECT_EQ(DWORD{ERROR_INVALID_PARAMETER}, ::GetLastError());
-  } else {
-    TestCurrentProcessHandles(GetCurrentProcessHandles);
-  }
-  TestCurrentProcessHandles(GetCurrentProcessHandlesWin7);
+  TestCurrentProcessHandles(GetCurrentProcessHandles);
 }
 
 }  // namespace sandbox

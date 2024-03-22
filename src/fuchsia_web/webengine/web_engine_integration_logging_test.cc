@@ -1,20 +1,19 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include <fuchsia/logger/cpp/fidl.h>
+#include <fidl/fuchsia.logger/cpp/fidl.h>
 
 #include <cstring>
 
+#include <optional>
 #include "base/containers/contains.h"
-#include "base/fuchsia/fuchsia_logging.h"
-#include "base/fuchsia/process_context.h"
 #include "base/fuchsia/test_log_listener_safe.h"
 #include "base/strings/string_piece.h"
 #include "base/strings/stringprintf.h"
-#include "base/test/bind.h"
 #include "fuchsia_web/common/test/frame_test_util.h"
-#include "fuchsia_web/webengine/test/context_provider_test_connector.h"
+#include "fuchsia_web/webengine/test/context_provider_for_test.h"
+#include "fuchsia_web/webengine/test/isolated_archivist.h"
 #include "fuchsia_web/webengine/web_engine_integration_test_base.h"
 
 namespace {
@@ -45,76 +44,36 @@ std::string NormalizeConsoleLogMessage(base::StringPiece original) {
 class WebEngineIntegrationLoggingTest : public WebEngineIntegrationTestBase {
  protected:
   WebEngineIntegrationLoggingTest()
-      : isolated_archivist_service_dir_(
-            StartIsolatedArchivist(archivist_controller_.NewRequest())) {
-    // Redirect the LogSink service to an isolated archivist instance.
-    zx_status_t status = filtered_service_directory()
-                             .outgoing_directory()
-                             ->RemovePublicService<fuchsia::logger::LogSink>();
-    ZX_CHECK(status == ZX_OK, status) << "RemovePublicService";
+      : isolated_archivist_(
+            *filtered_service_directory().outgoing_directory()) {}
 
-    status =
-        filtered_service_directory().outgoing_directory()->AddPublicService(
-            fidl::InterfaceRequestHandler<fuchsia::logger::LogSink>(
-                [this](auto request) {
-                  isolated_archivist_service_dir_.Connect(std::move(request));
-                }));
-    ZX_CHECK(status == ZX_OK, status) << "AddPublicService";
+  ~WebEngineIntegrationLoggingTest() override {
+    // We're about to shut down the realm; unbind to unhook the error handler.
+    frame_.Unbind();
+    context_.Unbind();
   }
 
-  void SetUp() override {
-    WebEngineIntegrationTestBase::SetUp();
-    StartWebEngineForLoggingTest(
-        base::CommandLine(base::CommandLine::NO_PROGRAM));
-
-    log_ = isolated_archivist_service_dir_.Connect<fuchsia::logger::Log>();
+  void StartWebEngine(base::CommandLine command_line) override {
+    context_provider_.emplace(
+        ContextProviderForTest::Create(std::move(command_line)));
+    context_provider_->ptr().set_error_handler(
+        [](zx_status_t status) { FAIL() << zx_status_get_string(status); });
   }
 
-  fuchsia::logger::Log* log() { return log_.get(); }
-
- private:
-  // Starts WebEngine without redirecting its logs.
-  void StartWebEngineForLoggingTest(base::CommandLine command_line) {
-    web_context_provider_ = ConnectContextProviderForLoggingTest(
-        web_engine_controller_.NewRequest(), std::move(command_line));
-    web_context_provider_.set_error_handler(
-        [](zx_status_t status) { ADD_FAILURE(); });
+  fuchsia::web::ContextProvider* GetContextProvider() override {
+    return context_provider_->get();
   }
 
-  // Starts an isolated instance of Archivist to receive and dump log statements
-  // via the fuchsia.logger.Log* APIs.
-  fidl::InterfaceHandle<fuchsia::io::Directory> StartIsolatedArchivist(
-      fidl::InterfaceRequest<fuchsia::sys::ComponentController>
-          component_controller_request) {
-    const char kArchivistUrl[] =
-        "fuchsia-pkg://fuchsia.com/archivist-for-embedding#meta/"
-        "archivist-for-embedding.cmx";
+  fidl::Client<fuchsia_logger::Log>& log() { return isolated_archivist_.log(); }
 
-    fuchsia::sys::LaunchInfo launch_info;
-    launch_info.url = kArchivistUrl;
-
-    fidl::InterfaceHandle<fuchsia::io::Directory> archivist_services_dir;
-    launch_info.directory_request =
-        archivist_services_dir.NewRequest().TakeChannel();
-
-    auto launcher = base::ComponentContextForProcess()
-                        ->svc()
-                        ->Connect<fuchsia::sys::Launcher>();
-    launcher->CreateComponent(std::move(launch_info),
-                              std::move(component_controller_request));
-
-    return archivist_services_dir;
-  }
-
-  fuchsia::sys::ComponentControllerPtr archivist_controller_;
-  sys::ServiceDirectory isolated_archivist_service_dir_;
-
-  fuchsia::logger::LogPtr log_;
+  IsolatedArchivist isolated_archivist_;
+  std::optional<ContextProviderForTest> context_provider_;
 };
 
 // Verifies that calling messages from console.debug() calls go to the Fuchsia
 // system log when the script log level is set to DEBUG.
 TEST_F(WebEngineIntegrationLoggingTest, SetJavaScriptLogLevel_DEBUG) {
+  StartWebEngine(base::CommandLine(base::CommandLine::NO_PROGRAM));
   base::SimpleTestLogListener log_listener;
   log_listener.ListenToLog(log(), nullptr);
 
@@ -132,21 +91,21 @@ TEST_F(WebEngineIntegrationLoggingTest, SetJavaScriptLogLevel_DEBUG) {
   navigation_listener()->RunUntilTitleEquals("ended");
 
   // Run until the message passed to console.debug() is received.
-  absl::optional<fuchsia::logger::LogMessage> logged_message =
+  std::optional<fuchsia_logger::LogMessage> logged_message =
       log_listener.RunUntilMessageReceived(kLogTestPageDebugMessage);
 
   ASSERT_TRUE(logged_message.has_value());
 
   // console.debug() should map to Fuchsia's DEBUG log severity.
-  EXPECT_EQ(logged_message->severity,
-            static_cast<int32_t>(fuchsia::logger::LogLevelFilter::DEBUG));
+  EXPECT_EQ(logged_message->severity(),
+            static_cast<int32_t>(fuchsia_logger::LogLevelFilter::kDebug));
 
   // Verify that the Frame's |debug_name| is amongst the log message tags.
-  EXPECT_FALSE(logged_message->tags.empty());
-  EXPECT_TRUE(base::Contains(logged_message->tags, kFrameLogTag));
+  EXPECT_FALSE(logged_message->tags().empty());
+  EXPECT_TRUE(base::Contains(logged_message->tags(), kFrameLogTag));
 
   // Verify that the message is formatted as expected.
-  EXPECT_EQ(NormalizeConsoleLogMessage(logged_message->msg),
+  EXPECT_EQ(NormalizeConsoleLogMessage(logged_message->msg()),
             base::StringPrintf("[http://127.0.0.1:%s/console_logging.html(8)] "
                                "This is a debug() message.",
                                kNormalizedPortNumber));

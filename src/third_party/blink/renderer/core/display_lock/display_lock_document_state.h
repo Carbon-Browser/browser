@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -86,6 +86,14 @@ class CORE_EXPORT DisplayLockDocumentState final
   // Notify the display locks that selection was removed.
   void NotifySelectionRemoved();
 
+  // Notify the display locks that view transition pseudo elements have
+  // changed.
+  void NotifyViewTransitionPseudoTreeChanged();
+
+  // Updates only the ancestor locks of the view transition elements. This is an
+  // optimization to be used by the display lock context.
+  void UpdateViewTransitionElementAncestorLocks();
+
   // This is called when the forced scope is created or destroyed in
   // |ScopedForcedUpdate::Impl|. This is used to ensure that we can create new
   // locks that are immediately forced by the existing forced scope.
@@ -138,7 +146,7 @@ class CORE_EXPORT DisplayLockDocumentState final
 
     void ForceLockIfNeeded(Element* new_locked_element);
     DisplayLockUtilities::ScopedForcedUpdate::Impl* Chain() const {
-      return chain_;
+      return chain_.Get();
     }
 
     void Trace(Visitor* visitor) const {
@@ -162,7 +170,7 @@ class CORE_EXPORT DisplayLockDocumentState final
 
     void ForceLockIfNeeded(Element* new_locked_element);
     DisplayLockUtilities::ScopedForcedUpdate::Impl* Chain() const {
-      return chain_;
+      return chain_.Get();
     }
 
     void Trace(Visitor* visitor) const {
@@ -176,20 +184,6 @@ class CORE_EXPORT DisplayLockDocumentState final
   };
 
   void NotifyPrintingOrPreviewChanged();
-  void UnlockShapingDeferredElements();
-  // Unlock shaping-deferred elements so that |target| can return the precise
-  // value of |property_id|.
-  // If |property_id| is kInvalid, this function unlocks elements necessary for
-  // any geometry of the target node.
-  void UnlockShapingDeferredElements(
-      const Node& target,
-      CSSPropertyID property_id = CSSPropertyID::kInvalid);
-  // Unlock shaping-deferred elements so that |object| can return the precise
-  // width.
-  void UnlockToDetermineWidth(const LayoutObject& object);
-  // Unlock shaping-deferred elements so that |object| can return the precise
-  // height.
-  void UnlockToDetermineHeight(const LayoutObject& object);
 
   base::TimeTicks GetLockUpdateTimestamp();
 
@@ -210,23 +204,21 @@ class CORE_EXPORT DisplayLockDocumentState final
   // returns false.
   bool MarkAncestorContextsHaveTopLayerElement(Element*);
 
-  void UnlockShapingDeferredInclusiveDescendants(const LayoutObject& ancestor);
-
   Member<Document> document_;
 
   Member<IntersectionObserver> intersection_observer_ = nullptr;
   HeapHashSet<WeakMember<DisplayLockContext>> display_lock_contexts_;
+
+  // Contains all of the currently forced node infos, each of which represents
+  // the node that caused the scope to be created.
+  HeapVector<ForcedNodeInfo> forced_node_infos_;
+  HeapVector<ForcedRangeInfo> forced_range_infos_;
 
   int locked_display_lock_count_ = 0;
   int display_lock_blocking_all_activation_count_ = 0;
 
   // If greater than 0, then the activatable locks are forced.
   int activatable_display_locks_forced_ = 0;
-
-  // Contains all of the currently forced node infos, each of which represents
-  // the node that caused the scope to be created.
-  HeapVector<ForcedNodeInfo> forced_node_infos_;
-  HeapVector<ForcedRangeInfo> forced_range_infos_;
 
   bool printing_ = false;
 

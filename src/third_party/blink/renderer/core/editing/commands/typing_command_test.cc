@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -22,6 +22,27 @@ namespace blink {
 
 class TypingCommandTest : public EditingTestBase {};
 
+// http://crbug.com/1322746
+TEST_F(TypingCommandTest, DeleteInsignificantText) {
+  InsertStyleElement(
+      "b { display: inline-block; width: 100px; }"
+      "div { width: 100px; }");
+  Selection().SetSelection(
+      SetSelectionTextToBody("<div contenteditable>"
+                             "|<b><pre></pre></b> <a>abc</a>"
+                             "</div>"),
+      SetSelectionOptions());
+  EditingState editing_state;
+  TypingCommand::ForwardDeleteKeyPressed(GetDocument(), &editing_state);
+  ASSERT_FALSE(editing_state.IsAborted());
+
+  EXPECT_EQ(
+      "<div contenteditable>"
+      "|\u00A0<a>abc</a>"
+      "</div>",
+      GetSelectionTextFromBody());
+}
+
 // This is a regression test for https://crbug.com/585048
 TEST_F(TypingCommandTest, insertLineBreakWithIllFormedHTML) {
   SetBodyContent("<div contenteditable></div>");
@@ -35,12 +56,12 @@ TEST_F(TypingCommandTest, insertLineBreakWithIllFormedHTML) {
   Element* tr = GetDocument().CreateRawElement(html_names::kTrTag);
   Element* input2 = GetDocument().CreateRawElement(html_names::kInputTag);
   Element* header = GetDocument().CreateRawElement(html_names::kHeaderTag);
-  Element* rbc = GetDocument().CreateElementForBinding("rbc");
+  Element* rbc = GetDocument().CreateElementForBinding(AtomicString("rbc"));
   input2->AppendChild(header);
   tr->AppendChild(input2);
   tr->AppendChild(rbc);
 
-  Element* div = GetDocument().QuerySelector("div");
+  Element* div = GetDocument().QuerySelector(AtomicString("div"));
   div->AppendChild(input1);
   div->AppendChild(tr);
 
@@ -95,6 +116,24 @@ TEST_F(TypingCommandTest, ForwardDeleteInvalidatesSelection) {
       "<svg></svg>"
       "</q>",
       GetSelectionTextFromBody());
+}
+
+// crbug.com/1382250
+TEST_F(TypingCommandTest, ForwardDeleteAtTableEnd) {
+  SetBodyContent("<table contenteditable></table>");
+  Element* table = GetDocument().QuerySelector(AtomicString("table"));
+  table->setTextContent("a");
+  UpdateAllLifecyclePhasesForTest();
+  Selection().SetSelection(SelectionInDOMTree::Builder()
+                               .Collapse(Position(table->firstChild(), 1))
+                               .Build(),
+                           SetSelectionOptions());
+
+  // Should not crash.
+  EditingState editing_state;
+  TypingCommand::ForwardDeleteKeyPressed(GetDocument(), &editing_state);
+
+  EXPECT_EQ("<table contenteditable>a|</table>", GetSelectionTextFromBody());
 }
 
 }  // namespace blink

@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,9 +7,7 @@
 #include "base/no_destructor.h"
 #include "chrome/browser/content_settings/host_content_settings_map_factory.h"
 #include "chrome/browser/file_system_access/chrome_file_system_access_permission_context.h"
-#include "chrome/browser/profiles/incognito_helpers.h"
 #include "chrome/browser/profiles/profile.h"
-#include "components/keyed_service/content/browser_context_dependency_manager.h"
 
 // static
 ChromeFileSystemAccessPermissionContext*
@@ -36,24 +34,24 @@ FileSystemAccessPermissionContextFactory::GetInstance() {
 
 FileSystemAccessPermissionContextFactory::
     FileSystemAccessPermissionContextFactory()
-    : BrowserContextKeyedServiceFactory(
+    : ProfileKeyedServiceFactory(
           "FileSystemAccessPermissionContext",
-          BrowserContextDependencyManager::GetInstance()) {
+          ProfileSelections::Builder()
+              .WithRegular(ProfileSelection::kOwnInstance)
+              // TODO(crbug.com/1418376): Check if this service is needed in
+              // Guest mode.
+              .WithGuest(ProfileSelection::kOwnInstance)
+              .Build()) {
   DependsOn(HostContentSettingsMapFactory::GetInstance());
 }
 
 FileSystemAccessPermissionContextFactory::
     ~FileSystemAccessPermissionContextFactory() = default;
 
-content::BrowserContext*
-FileSystemAccessPermissionContextFactory::GetBrowserContextToUse(
-    content::BrowserContext* context) const {
-  return chrome::GetBrowserContextOwnInstanceInIncognito(context);
-}
-
-KeyedService* FileSystemAccessPermissionContextFactory::BuildServiceInstanceFor(
+std::unique_ptr<KeyedService>
+FileSystemAccessPermissionContextFactory::BuildServiceInstanceForBrowserContext(
     content::BrowserContext* profile) const {
-  return new ChromeFileSystemAccessPermissionContext(profile);
+  return std::make_unique<ChromeFileSystemAccessPermissionContext>(profile);
 }
 
 void FileSystemAccessPermissionContextFactory::BrowserContextShutdown(

@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,18 +7,18 @@
 #include <utility>
 
 #include "ash/constants/ash_switches.h"
-#include "base/bind.h"
 #include "base/check.h"
 #include "base/command_line.h"
 #include "base/files/dir_reader_posix.h"
 #include "base/files/file_path.h"
+#include "base/functional/bind.h"
 #include "base/memory/ref_counted.h"
 #include "base/run_loop.h"
 #include "base/values.h"
-#include "chrome/browser/ash/login/test/embedded_policy_test_server_mixin.h"
 #include "chrome/browser/ash/policy/core/browser_policy_connector_ash.h"
 #include "chrome/browser/ash/policy/core/device_cloud_policy_store_ash.h"
 #include "chrome/browser/ash/policy/core/device_policy_cros_browser_test.h"
+#include "chrome/browser/ash/policy/test_support/embedded_policy_test_server_mixin.h"
 #include "chrome/browser/ash/settings/device_settings_service.h"
 #include "chrome/browser/browser_process.h"
 #include "chrome/browser/browser_process_platform_part.h"
@@ -47,6 +47,7 @@
 #include "crypto/sha2.h"
 #include "extensions/browser/extension_registry.h"
 #include "extensions/browser/extension_system.h"
+#include "extensions/browser/updater/extension_downloader_test_helper.h"
 #include "extensions/common/constants.h"
 #include "extensions/common/extension.h"
 #include "extensions/common/switches.h"
@@ -115,7 +116,7 @@ class KeyRotationDeviceCloudPolicyTest : public DevicePolicyCrosBrowserTest {
     g_browser_process->platform_part()
         ->browser_policy_connector_ash()
         ->GetDeviceCloudPolicyManager()
-        ->RefreshPolicies();
+        ->RefreshPolicies(PolicyFetchReason::kTest);
   }
 
   std::string GetOwnerPublicKey() const {
@@ -244,12 +245,6 @@ class SigninExtensionsDeviceCloudPolicyBrowserTest
       "extensions/signin_screen_managed_storage/extension.crx";
   static constexpr const char* kTestExtensionUpdateManifestPath =
       "/extensions/signin_screen_managed_storage/update_manifest.xml";
-  static constexpr const char* kTestExtensionUpdateManifest =
-      R"(<gupdate xmlns='http://www.google.com/update2/response' protocol='2.0'>
-           <app appid='$1'>
-             <updatecheck codebase='http://$2/$3' version='1.0' />
-           </app>
-         </gupdate>)";
   static constexpr const char* kFakePolicyPath = "/test-policy.json";
   static constexpr const char* kFakePolicy =
       "{\"string-policy\": {\"Value\": \"value\"}}";
@@ -274,12 +269,8 @@ class SigninExtensionsDeviceCloudPolicyBrowserTest
     command_line->AppendSwitch(ash::switches::kLoginManager);
     command_line->AppendSwitch(ash::switches::kForceLoginManagerInTests);
     // The test app has to be allowlisted for sign-in screen.
-    // This test is intentionally not migrated to the new
-    // kAllowlistedExtensionID switch to test that the deprecated one keeps
-    // working.
     command_line->AppendSwitchASCII(
-        extensions::switches::kDEPRECATED_AllowlistedExtensionID,
-        kTestExtensionId);
+        extensions::switches::kAllowlistedExtensionID, kTestExtensionId);
   }
 
   void SetUpInProcessBrowserTestFixture() override {
@@ -322,11 +313,14 @@ class SigninExtensionsDeviceCloudPolicyBrowserTest
     // Create update manifest for the test extension, setting the extension URL
     // with a test server URL pointing to the extension under the test data
     // path.
-    std::string manifest_response = base::ReplaceStringPlaceholders(
-        kTestExtensionUpdateManifest,
-        {kTestExtensionId, embedded_test_server()->host_port_pair().ToString(),
-         kTestExtensionPath},
-        nullptr);
+    std::string manifest_response = extensions::CreateUpdateManifest(
+        {extensions::UpdateManifestItem(kTestExtensionId)
+             .version("1.0")
+             .codebase(base::ReplaceStringPlaceholders(
+                 "http://$1/$2",
+                 {embedded_test_server()->host_port_pair().ToString(),
+                  kTestExtensionPath},
+                 nullptr))});
 
     auto response = std::make_unique<net::test_server::BasicHttpResponse>();
     response->set_content_type("text/xml");

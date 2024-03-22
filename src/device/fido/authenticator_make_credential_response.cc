@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,7 +11,9 @@
 #include "device/fido/attestation_statement_formats.h"
 #include "device/fido/attested_credential_data.h"
 #include "device/fido/authenticator_data.h"
+#include "device/fido/fido_constants.h"
 #include "device/fido/fido_parsing_utils.h"
+#include "device/fido/large_blob.h"
 #include "device/fido/p256_public_key.h"
 #include "device/fido/public_key.h"
 
@@ -62,10 +64,10 @@ AuthenticatorMakeCredentialResponse::CreateFromU2fRegisterResponse(
 }
 
 AuthenticatorMakeCredentialResponse::AuthenticatorMakeCredentialResponse(
-    absl::optional<FidoTransportProtocol> transport_used,
-    AttestationObject attestation_object)
-    : attestation_object_(std::move(attestation_object)),
-      transport_used_(transport_used) {}
+    absl::optional<FidoTransportProtocol> in_transport_used,
+    AttestationObject in_attestation_object)
+    : attestation_object(std::move(in_attestation_object)),
+      transport_used(in_transport_used) {}
 
 AuthenticatorMakeCredentialResponse::AuthenticatorMakeCredentialResponse(
     AuthenticatorMakeCredentialResponse&& that) = default;
@@ -79,38 +81,18 @@ AuthenticatorMakeCredentialResponse::~AuthenticatorMakeCredentialResponse() =
 
 std::vector<uint8_t>
 AuthenticatorMakeCredentialResponse::GetCBOREncodedAttestationObject() const {
-  return cbor::Writer::Write(AsCBOR(attestation_object_))
+  return cbor::Writer::Write(AsCBOR(attestation_object))
       .value_or(std::vector<uint8_t>());
-}
-
-void AuthenticatorMakeCredentialResponse::EraseAttestationStatement(
-    AttestationObject::AAGUID erase_aaguid) {
-  attestation_object_.EraseAttestationStatement(erase_aaguid);
-}
-
-bool AuthenticatorMakeCredentialResponse::IsSelfAttestation() {
-  return attestation_object_.IsSelfAttestation();
-}
-
-bool AuthenticatorMakeCredentialResponse::
-    IsAttestationCertificateInappropriatelyIdentifying() {
-  return attestation_object_
-      .IsAttestationCertificateInappropriatelyIdentifying();
 }
 
 const std::array<uint8_t, kRpIdHashLength>&
 AuthenticatorMakeCredentialResponse::GetRpIdHash() const {
-  return attestation_object_.rp_id_hash();
-}
-
-void AuthenticatorMakeCredentialResponse::set_large_blob_key(
-    const base::span<const uint8_t, kLargeBlobKeyLength> large_blob_key) {
-  large_blob_key_ = fido_parsing_utils::Materialize(large_blob_key);
+  return attestation_object.rp_id_hash();
 }
 
 std::vector<uint8_t> AsCTAPStyleCBORBytes(
     const AuthenticatorMakeCredentialResponse& response) {
-  const AttestationObject& object = response.attestation_object();
+  const AttestationObject& object = response.attestation_object;
   cbor::Value::MapValue map;
   map.emplace(1, object.attestation_statement().format_name());
   map.emplace(2, object.authenticator_data().SerializeToByteArray());
@@ -118,8 +100,40 @@ std::vector<uint8_t> AsCTAPStyleCBORBytes(
   if (response.enterprise_attestation_returned) {
     map.emplace(4, true);
   }
-  if (response.large_blob_key()) {
-    map.emplace(5, cbor::Value(*response.large_blob_key()));
+  if (response.large_blob_type == LargeBlobSupportType::kKey) {
+    // Chrome ignores the value of the large blob key on make credential
+    // requests.
+    map.emplace(5, cbor::Value(std::array<uint8_t, kLargeBlobKeyLength>()));
+  }
+  cbor::Value::MapValue unsigned_extension_outputs;
+  if (response.prf_enabled) {
+    cbor::Value::MapValue prf;
+    prf.emplace(kExtensionPRFEnabled, true);
+    if (response.prf_results) {
+      const std::vector<uint8_t>& results = *response.prf_results;
+      cbor::Value::MapValue prf_results;
+      if (results.size() == 32) {
+        prf_results.emplace(kExtensionPRFFirst, results);
+      } else {
+        CHECK_EQ(results.size(), 64u);
+        prf_results.emplace(kExtensionPRFFirst,
+                            std::vector<uint8_t>(&results[0], &results[32]));
+        prf_results.emplace(
+            kExtensionPRFSecond,
+            std::vector<uint8_t>(results.begin() + 32, results.end()));
+      }
+      prf.emplace(kExtensionPRFResults, std::move(prf_results));
+    }
+    unsigned_extension_outputs.emplace(kExtensionPRF, std::move(prf));
+  }
+  if (response.large_blob_type == LargeBlobSupportType::kExtension) {
+    cbor::Value::MapValue large_blob_ext;
+    large_blob_ext.emplace(kExtensionLargeBlobSupported, true);
+    unsigned_extension_outputs.emplace(kExtensionLargeBlob,
+                                       std::move(large_blob_ext));
+  }
+  if (!unsigned_extension_outputs.empty()) {
+    map.emplace(6, std::move(unsigned_extension_outputs));
   }
   auto encoded_bytes = cbor::Writer::Write(cbor::Value(std::move(map)));
   DCHECK(encoded_bytes);

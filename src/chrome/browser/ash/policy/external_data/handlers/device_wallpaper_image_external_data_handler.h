@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,6 +8,7 @@
 #include <memory>
 #include <string>
 
+#include "base/memory/raw_ptr.h"
 #include "chrome/browser/ash/policy/external_data/handlers/device_cloud_external_data_policy_handler.h"
 
 class PrefRegistrySimple;
@@ -43,7 +44,7 @@ class DeviceWallpaperImageExternalDataHandler final
   void Shutdown() override;
 
  private:
-  PrefService* const local_state_;
+  const raw_ptr<PrefService, DanglingUntriaged | ExperimentalAsh> local_state_;
 
   std::unique_ptr<DeviceCloudExternalDataPolicyObserver>
       device_wallpaper_image_observer_;

@@ -1,4 +1,4 @@
-// Copyright 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,8 +8,8 @@
 #include <string>
 #include <utility>
 
-#include "base/callback_helpers.h"
 #include "base/check_op.h"
+#include "base/functional/callback_helpers.h"
 #include "base/time/time.h"
 
 // If queue grows bigger than 150ms we start dropping packets.

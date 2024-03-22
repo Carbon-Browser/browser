@@ -1,16 +1,24 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/metrics/variations/chrome_variations_service_client.h"
 
+#include "base/feature_list.h"
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
-#include "build/config/chromebox_for_meetings/buildflags.h"
 #include "chrome/browser/browser_process.h"
 #include "chrome/browser/google/google_brand.h"
+#include "chrome/browser/metrics/variations/google_groups_updater_service_factory.h"
 #include "chrome/browser/net/system_network_context_manager.h"
+#include "chrome/browser/profiles/profile_attributes_storage.h"
+#include "chrome/browser/profiles/profile_manager.h"
 #include "chrome/common/channel_info.h"
+#include "chrome/common/pref_names.h"
+#include "components/prefs/scoped_user_pref_update.h"
+#include "components/variations/pref_names.h"
+#include "components/variations/seed_response.h"
+#include "components/variations/service/google_groups_updater_service.h"
 #include "components/variations/service/variations_service_client.h"
 #include "components/version_info/version_info.h"
 #include "services/network/public/cpp/shared_url_loader_factory.h"
@@ -19,9 +27,20 @@
 #include "chrome/browser/upgrade_detector/build_state.h"
 #endif
 
+#if BUILDFLAG(IS_ANDROID)
+#include "components/variations/android/variations_seed_bridge.h"
+#endif
+
 #if BUILDFLAG(IS_CHROMEOS_ASH)
-#include "ash/components/tpm/install_attributes.h"
 #include "chrome/browser/ash/settings/cros_settings.h"
+#include "chromeos/ash/components/install_attributes/install_attributes.h"
+#endif
+
+#if BUILDFLAG(IS_CHROMEOS_LACROS)
+#include "base/check_is_test.h"
+#include "chrome/browser/policy/chrome_browser_policy_connector.h"
+#include "chromeos/crosapi/mojom/device_settings_service.mojom.h"
+#include "chromeos/startup/browser_params_proxy.h"
 #endif
 
 #if BUILDFLAG(IS_WIN) || BUILDFLAG(IS_MAC)
@@ -61,17 +80,31 @@ bool ChromeVariationsServiceClient::OverridesRestrictParameter(
   ash::CrosSettings::Get()->GetString(ash::kVariationsRestrictParameter,
                                       parameter);
   return true;
+#elif BUILDFLAG(IS_CHROMEOS_LACROS)
+  // The device settings is passed from Ash to Lacros via
+  // crosapi::mojom::BrowserInitParams. However, crosapi is disabled for Lacros
+  // browser_tests, there is no valid device settings in this situation.
+  // Note: This code path is invoked when browser test starts the browser for
+  // branded Lacros build, see crbug.com/1474764.
+  if (!g_browser_process->browser_policy_connector()->GetDeviceSettings()) {
+    CHECK_IS_TEST();  // IN-TEST
+    CHECK(chromeos::BrowserParamsProxy::Get()
+              ->IsCrosapiDisabledForTesting());  // IN-TEST
+    return false;
+  }
+
+  const absl::optional<std::string>& policy_value =
+      g_browser_process->browser_policy_connector()
+          ->GetDeviceSettings()
+          ->device_variations_restrict_parameter;
+  if (!policy_value) {
+    return false;
+  }
+
+  *parameter = *policy_value;
+  return true;
 #else
   return false;
-#endif
-}
-
-variations::Study::FormFactor
-ChromeVariationsServiceClient::GetCurrentFormFactor() {
-#if BUILDFLAG(PLATFORM_CFM)
-  return variations::Study::MEET_DEVICE;
-#else
-  return variations::VariationsServiceClient::GetCurrentFormFactor();
 #endif
 }
 
@@ -87,4 +120,43 @@ bool ChromeVariationsServiceClient::IsEnterprise() {
 
 version_info::Channel ChromeVariationsServiceClient::GetChannel() {
   return chrome::GetChannel();
+}
+
+std::unique_ptr<variations::SeedResponse>
+ChromeVariationsServiceClient::TakeSeedFromNativeVariationsSeedStore() {
+#if BUILDFLAG(IS_ANDROID)
+  std::unique_ptr<variations::SeedResponse> seed =
+      variations::android::GetVariationsFirstRunSeed();
+  variations::android::ClearJavaFirstRunPrefs();
+  return seed;
+#else
+  return nullptr;
+#endif
+}
+
+// Remove any profiles from variations prefs that no longer exist in the
+// ProfileAttributesStorage source-of-truth.
+void ChromeVariationsServiceClient::
+    RemoveGoogleGroupsFromPrefsForDeletedProfiles(PrefService* local_state) {
+  // Get the list of profiles in attribute storage.
+  base::flat_set<std::string> profile_keys =
+      ProfileAttributesStorage::GetAllProfilesKeys(local_state);
+
+  // Get the current value of the local state dict.
+  const base::Value::Dict& cached_profiles =
+      local_state->GetDict(variations::prefs::kVariationsGoogleGroups);
+  std::vector<std::string> variations_profiles_to_delete;
+  for (std::pair<const std::string&, const base::Value&> profile :
+       cached_profiles) {
+    if (!profile_keys.contains(profile.first)) {
+      variations_profiles_to_delete.push_back(profile.first);
+    }
+  }
+
+  ScopedDictPrefUpdate variations_prefs_update(
+      local_state, variations::prefs::kVariationsGoogleGroups);
+  base::Value::Dict& variations_prefs_dict = variations_prefs_update.Get();
+  for (const auto& profile : variations_profiles_to_delete) {
+    variations_prefs_dict.Remove(profile);
+  }
 }

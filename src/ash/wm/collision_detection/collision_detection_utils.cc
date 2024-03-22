@@ -1,19 +1,15 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "ash/wm/collision_detection/collision_detection_utils.h"
 
 #include "ash/app_list/app_list_controller_impl.h"
-#include "ash/capture_mode/capture_mode_camera_controller.h"
 #include "ash/capture_mode/capture_mode_controller.h"
-#include "ash/capture_mode/capture_mode_session.h"
-#include "ash/constants/ash_features.h"
 #include "ash/keyboard/ui/keyboard_ui_controller.h"
 #include "ash/public/cpp/shelf_types.h"
 #include "ash/public/cpp/shell_window_ids.h"
 #include "ash/shelf/shelf.h"
-#include "ash/shelf/shelf_layout_manager.h"
 #include "ash/shell.h"
 #include "ash/system/message_center/ash_message_popup_collection.h"
 #include "ash/wm/work_area_insets.h"
@@ -42,6 +38,12 @@ DEFINE_UI_CLASS_PROPERTY_KEY(
 bool ShouldIgnoreWindowForCollision(
     const aura::Window* window,
     CollisionDetectionUtils::RelativePriority priority) {
+  if (!window->IsVisible() && !window->GetTargetBounds().IsEmpty()) {
+    return true;
+  }
+  if (window->is_destroying()) {
+    return true;
+  }
   if (window->GetProperty(kIgnoreForWindowCollisionDetection))
     return true;
 
@@ -115,10 +117,16 @@ std::vector<gfx::Rect> CollectCollisionRects(
     auto* hotseat_widget = shelf->hotseat_widget();
     if (hotseat_widget) {
       auto* hotseat_window = hotseat_widget->GetNativeWindow();
-      gfx::Rect hotseat_rect{root_window->bounds().x(),
-                             hotseat_window->GetTargetBounds().y(),
-                             root_window->bounds().width(),
-                             hotseat_window->GetTargetBounds().height()};
+      gfx::Rect hotseat_rect =
+          shelf->IsHorizontalAlignment()
+              ? gfx::Rect(root_window->bounds().x(),
+                          hotseat_window->GetTargetBounds().y(),
+                          root_window->bounds().width(),
+                          hotseat_window->GetTargetBounds().height())
+              : gfx::Rect(hotseat_window->GetTargetBounds().x(),
+                          root_window->bounds().y(),
+                          hotseat_window->GetTargetBounds().width(),
+                          root_window->bounds().height());
       if (hotseat_widget->state() != HotseatState::kHidden &&
           hotseat_widget->state() != HotseatState::kNone &&
           !ShouldIgnoreWindowForCollision(hotseat_window, priority)) {
@@ -172,36 +180,15 @@ std::vector<gfx::Rect> CollectCollisionRects(
         /*parent=*/root_window));
   }
 
-  // Check the capture bar if capture mode is active.
-  auto* capture_mode_controller = CaptureModeController::Get();
-  if (capture_mode_controller->IsActive()) {
-    aura::Window* capture_bar_window =
-        capture_mode_controller->capture_mode_session()
-            ->capture_mode_bar_widget()
-            ->GetNativeWindow();
-    rects.push_back(ComputeCollisionRectFromBounds(
-        capture_bar_window->GetTargetBounds(), capture_bar_window->parent()));
-  }
-
-  // Check the camera preview if it exists.
-  auto* capture_mode_camera_controller =
-      capture_mode_controller->camera_controller();
-  auto* camera_preview_widget =
-      capture_mode_camera_controller
-          ? capture_mode_camera_controller->camera_preview_widget()
-          : nullptr;
-  if (camera_preview_widget && camera_preview_widget->IsVisible()) {
-    aura::Window* camera_preview_window =
-        camera_preview_widget->GetNativeWindow();
-    rects.push_back(
-        ComputeCollisionRectFromBounds(camera_preview_window->GetTargetBounds(),
-                                       camera_preview_window->parent()));
+  for (auto* window :
+       CaptureModeController::Get()->GetWindowsForCollisionAvoidance()) {
+    rects.push_back(ComputeCollisionRectFromBounds(window->GetTargetBounds(),
+                                                   window->parent()));
   }
 
   // Avoid clamshell-mode launcher bubble.
   auto* app_list_controller = Shell::Get()->app_list_controller();
-  if (features::IsProductivityLauncherEnabled() &&
-      !Shell::Get()->IsInTabletMode() &&
+  if (app_list_controller && !Shell::Get()->IsInTabletMode() &&
       app_list_controller->GetTargetVisibility(display.id())) {
     aura::Window* window = app_list_controller->GetWindow();
     if (window) {

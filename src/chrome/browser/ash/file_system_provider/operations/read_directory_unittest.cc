@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,9 +9,9 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
 #include "base/files/file.h"
 #include "base/files/file_path.h"
+#include "base/functional/bind.h"
 #include "base/json/json_reader.h"
 #include "base/values.h"
 #include "chrome/browser/ash/file_system_provider/icon_set.h"
@@ -86,8 +86,7 @@ class CallbackLogger {
 };
 
 // Returns the request value as |result| in case of successful parse.
-void CreateRequestValueFromJSON(const std::string& json,
-                                std::unique_ptr<RequestValue>* result) {
+void CreateRequestValueFromJSON(const std::string& json, RequestValue* result) {
   using extensions::api::file_system_provider_internal::
       ReadDirectoryRequestedSuccess::Params;
 
@@ -95,10 +94,10 @@ void CreateRequestValueFromJSON(const std::string& json,
   ASSERT_TRUE(parsed_json.has_value()) << parsed_json.error().message;
 
   ASSERT_TRUE(parsed_json->is_list());
-  std::unique_ptr<Params> params(Params::Create(parsed_json->GetList()));
-  ASSERT_TRUE(params.get());
-  *result = RequestValue::CreateForReadDirectorySuccess(std::move(params));
-  ASSERT_TRUE(result->get());
+  absl::optional<Params> params = Params::Create(parsed_json->GetList());
+  ASSERT_TRUE(params.has_value());
+  *result = RequestValue::CreateForReadDirectorySuccess(std::move(*params));
+  ASSERT_TRUE(result->is_valid());
 }
 
 }  // namespace
@@ -125,12 +124,9 @@ TEST_F(FileSystemProviderOperationsReadDirectoryTest, Execute) {
   CallbackLogger callback_logger;
 
   ReadDirectory read_directory(
-      NULL, file_system_info_, base::FilePath(kDirectoryPath),
+      &dispatcher, file_system_info_, base::FilePath(kDirectoryPath),
       base::BindRepeating(&CallbackLogger::OnReadDirectory,
                           base::Unretained(&callback_logger)));
-  read_directory.SetDispatchEventImplForTesting(
-      base::BindRepeating(&util::LoggingDispatchEventImpl::OnDispatchEventImpl,
-                          base::Unretained(&dispatcher)));
 
   EXPECT_TRUE(read_directory.Execute(kRequestId));
 
@@ -145,12 +141,12 @@ TEST_F(FileSystemProviderOperationsReadDirectoryTest, Execute) {
   const base::Value* options_as_value = &event_args[0];
   ASSERT_TRUE(options_as_value->is_dict());
 
-  ReadDirectoryRequestedOptions options;
-  ASSERT_TRUE(
-      ReadDirectoryRequestedOptions::Populate(*options_as_value, &options));
-  EXPECT_EQ(kFileSystemId, options.file_system_id);
-  EXPECT_EQ(kRequestId, options.request_id);
-  EXPECT_EQ(kDirectoryPath, options.directory_path);
+  auto options =
+      ReadDirectoryRequestedOptions::FromValue(options_as_value->GetDict());
+  ASSERT_TRUE(options);
+  EXPECT_EQ(kFileSystemId, options->file_system_id);
+  EXPECT_EQ(kRequestId, options->request_id);
+  EXPECT_EQ(kDirectoryPath, options->directory_path);
 }
 
 TEST_F(FileSystemProviderOperationsReadDirectoryTest, Execute_NoListener) {
@@ -158,12 +154,9 @@ TEST_F(FileSystemProviderOperationsReadDirectoryTest, Execute_NoListener) {
   CallbackLogger callback_logger;
 
   ReadDirectory read_directory(
-      NULL, file_system_info_, base::FilePath(kDirectoryPath),
+      &dispatcher, file_system_info_, base::FilePath(kDirectoryPath),
       base::BindRepeating(&CallbackLogger::OnReadDirectory,
                           base::Unretained(&callback_logger)));
-  read_directory.SetDispatchEventImplForTesting(
-      base::BindRepeating(&util::LoggingDispatchEventImpl::OnDispatchEventImpl,
-                          base::Unretained(&dispatcher)));
 
   EXPECT_FALSE(read_directory.Execute(kRequestId));
 }
@@ -173,12 +166,9 @@ TEST_F(FileSystemProviderOperationsReadDirectoryTest, OnSuccess) {
   CallbackLogger callback_logger;
 
   ReadDirectory read_directory(
-      NULL, file_system_info_, base::FilePath(kDirectoryPath),
+      &dispatcher, file_system_info_, base::FilePath(kDirectoryPath),
       base::BindRepeating(&CallbackLogger::OnReadDirectory,
                           base::Unretained(&callback_logger)));
-  read_directory.SetDispatchEventImplForTesting(
-      base::BindRepeating(&util::LoggingDispatchEventImpl::OnDispatchEventImpl,
-                          base::Unretained(&dispatcher)));
 
   EXPECT_TRUE(read_directory.Execute(kRequestId));
 
@@ -198,7 +188,7 @@ TEST_F(FileSystemProviderOperationsReadDirectoryTest, OnSuccess) {
       "  false,\n"  // has_more
       "  0\n"       // execution_time
       "]\n";
-  std::unique_ptr<RequestValue> request_value;
+  RequestValue request_value;
   ASSERT_NO_FATAL_FAILURE(CreateRequestValueFromJSON(input, &request_value));
 
   const bool has_more = false;
@@ -220,12 +210,9 @@ TEST_F(FileSystemProviderOperationsReadDirectoryTest,
   CallbackLogger callback_logger;
 
   ReadDirectory read_directory(
-      NULL, file_system_info_, base::FilePath(kDirectoryPath),
+      &dispatcher, file_system_info_, base::FilePath(kDirectoryPath),
       base::BindRepeating(&CallbackLogger::OnReadDirectory,
                           base::Unretained(&callback_logger)));
-  read_directory.SetDispatchEventImplForTesting(
-      base::BindRepeating(&util::LoggingDispatchEventImpl::OnDispatchEventImpl,
-                          base::Unretained(&dispatcher)));
 
   EXPECT_TRUE(read_directory.Execute(kRequestId));
 
@@ -245,7 +232,7 @@ TEST_F(FileSystemProviderOperationsReadDirectoryTest,
       "  false,\n"  // has_more
       "  0\n"       // execution_time
       "]\n";
-  std::unique_ptr<RequestValue> request_value;
+  RequestValue request_value;
   ASSERT_NO_FATAL_FAILURE(CreateRequestValueFromJSON(input, &request_value));
 
   const bool has_more = false;
@@ -263,16 +250,13 @@ TEST_F(FileSystemProviderOperationsReadDirectoryTest, OnError) {
   CallbackLogger callback_logger;
 
   ReadDirectory read_directory(
-      NULL, file_system_info_, base::FilePath(kDirectoryPath),
+      &dispatcher, file_system_info_, base::FilePath(kDirectoryPath),
       base::BindRepeating(&CallbackLogger::OnReadDirectory,
                           base::Unretained(&callback_logger)));
-  read_directory.SetDispatchEventImplForTesting(
-      base::BindRepeating(&util::LoggingDispatchEventImpl::OnDispatchEventImpl,
-                          base::Unretained(&dispatcher)));
 
   EXPECT_TRUE(read_directory.Execute(kRequestId));
 
-  read_directory.OnError(kRequestId, std::make_unique<RequestValue>(),
+  read_directory.OnError(kRequestId, RequestValue(),
                          base::File::FILE_ERROR_TOO_MANY_OPENED);
 
   ASSERT_EQ(1u, callback_logger.events().size());

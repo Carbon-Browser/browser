@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -43,7 +43,7 @@ PipeControlMessageProxy::PipeControlMessageProxy(MessageReceiver* receiver)
 
 void PipeControlMessageProxy::NotifyPeerEndpointClosed(
     InterfaceId id,
-    const absl::optional<DisconnectReason>& reason) {
+    const std::optional<DisconnectReason>& reason) {
   Message message(ConstructPeerEndpointClosedMessage(id, reason));
   message.set_heap_profiler_tag(kMessageTag);
   std::ignore = receiver_->Accept(&message);
@@ -66,7 +66,7 @@ void PipeControlMessageProxy::FlushAsync(AsyncFlusher flusher) {
 // static
 Message PipeControlMessageProxy::ConstructPeerEndpointClosedMessage(
     InterfaceId id,
-    const absl::optional<DisconnectReason>& reason) {
+    const std::optional<DisconnectReason>& reason) {
   auto event = pipe_control::PeerAssociatedEndpointClosedEvent::New();
   event->id = id;
   if (reason) {

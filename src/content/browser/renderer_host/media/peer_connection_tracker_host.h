@@ -1,4 +1,4 @@
-// Copyright (c) 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -67,6 +67,7 @@ class PeerConnectionTrackerHost
   void StopEventLog(int lid);
   void GetStandardStats();
   void GetLegacyStats();
+  void GetCurrentState();
 
   void BindReceiver(
       mojo::PendingReceiver<blink::mojom::PeerConnectionTrackerHost>
@@ -97,6 +98,18 @@ class PeerConnectionTrackerHost
   void GetUserMediaFailure(int request_id,
                            const std::string& error,
                            const std::string& error_message) override;
+  void GetDisplayMedia(int request_id,
+                       bool audio,
+                       bool video,
+                       const std::string& audio_constraints,
+                       const std::string& video_constraints) override;
+  void GetDisplayMediaSuccess(int request_id,
+                              const std::string& stream_id,
+                              const std::string& audio_track_info,
+                              const std::string& video_track_info) override;
+  void GetDisplayMediaFailure(int request_id,
+                              const std::string& error,
+                              const std::string& error_message) override;
   void WebRtcEventLogWrite(int lid,
                            const std::vector<uint8_t>& output) override;
   void AddStandardStats(int lid, base::Value::List value) override;

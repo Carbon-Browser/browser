@@ -1,4 +1,4 @@
-# Copyright 2015 The Chromium Authors. All rights reserved.
+# Copyright 2015 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -17,7 +17,6 @@ static_library("version_info") {
   ]
 
   deps = [
-    "//base",
     "//base:sanitizer_buildflags",
     "//build:branding_buildflags",
     "//build:chromeos_buildflags",
@@ -26,6 +25,7 @@ static_library("version_info") {
   public_deps = [
     ":channel",
     ":generate_version_info",
+    "//base",
   ]
 }
 
@@ -49,6 +49,7 @@ static_library("version_string") {
 
 source_set("channel") {
   sources = [ "channel.h" ]
+  public_deps = [ "//base" ]
 }
 
 process_version("generate_version_info") {

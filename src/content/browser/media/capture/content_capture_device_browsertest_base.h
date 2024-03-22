@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -81,7 +81,7 @@ class ContentCaptureDeviceBrowserTestBase : public ContentBrowserTest {
   void ClearCapturedFramesQueue() { capture_stack_.ClearCapturedFramesQueue(); }
 
   bool HasCapturedFramesInQueue() const {
-    return capture_stack_.has_captured_frames();
+    return capture_stack_.HasCapturedFrames();
   }
 
   // Navigates to the test document using a different domain (host). This will

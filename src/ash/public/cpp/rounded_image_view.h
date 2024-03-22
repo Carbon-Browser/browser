@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,6 +6,7 @@
 #define ASH_PUBLIC_CPP_ROUNDED_IMAGE_VIEW_H_
 
 #include "ash/public/cpp/ash_public_export.h"
+#include "ui/base/metadata/metadata_header_macros.h"
 #include "ui/gfx/geometry/size.h"
 #include "ui/gfx/image/image_skia.h"
 #include "ui/views/metadata/view_factory.h"
@@ -15,6 +16,8 @@ namespace ash {
 
 // A custom image view with rounded edges.
 class ASH_PUBLIC_EXPORT RoundedImageView : public views::View {
+  METADATA_HEADER(RoundedImageView, views::View)
+
  public:
   enum class Alignment {
     // The image's drawn portion always contains the image's origin.

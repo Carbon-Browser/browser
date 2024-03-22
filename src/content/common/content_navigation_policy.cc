@@ -1,4 +1,4 @@
-// Copyright (c) 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,12 +10,15 @@
 #include "base/metrics/field_trial_params.h"
 #include "base/system/sys_info.h"
 #include "build/build_config.h"
+#include "content/common/features.h"
 #include "content/public/common/content_features.h"
 #include "content/public/common/content_switches.h"
+#include "net/base/features.h"
 
 namespace features {
-const base::Feature kBackForwardCache_NoMemoryLimit_Trial{
-    "BackForwardCache_NoMemoryLimit_Trial", base::FEATURE_ENABLED_BY_DEFAULT};
+BASE_FEATURE(kBackForwardCache_NoMemoryLimit_Trial,
+             "BackForwardCache_NoMemoryLimit_Trial",
+             base::FEATURE_ENABLED_BY_DEFAULT);
 }
 
 namespace content {
@@ -27,12 +30,11 @@ bool DeviceHasEnoughMemoryForBackForwardCache() {
   // It is important to check the base::FeatureList to avoid activating any
   // field trial groups if BFCache is disabled due to memory threshold.
   if (base::FeatureList::IsEnabled(features::kBackForwardCacheMemoryControls)) {
-    // On Android, BackForwardCache is only enabled for 2GB+ high memory
-    // devices. The default threshold value is set to 1700 MB to account for all
-    // 2GB devices which report lower RAM due to carveouts.
+    // On Android, BackForwardCache is enabled for devices with 1200MB memory or
+    // above.
     int default_memory_threshold_mb =
 #if BUILDFLAG(IS_ANDROID)
-        1700;
+        1200;
 #else
         // Desktop has lower memory limitations compared to Android allowing us
         // to enable BackForwardCache for all devices.
@@ -98,84 +100,8 @@ bool IsBackForwardCacheEnabled() {
   return false;
 }
 
-bool IsSameSiteBackForwardCacheEnabled() {
-  if (!IsBackForwardCacheEnabled())
-    return false;
-
-  // Same-site back-forward cache is enabled by default, but can be disabled
-  // through kBackForwardCache's "enable_same_site" param.
-  static constexpr base::FeatureParam<bool> enable_same_site_back_forward_cache(
-      &features::kBackForwardCache, "enable_same_site", true);
-  return enable_same_site_back_forward_cache.Get();
-}
-
-bool ShouldSkipSameSiteBackForwardCacheForPageWithUnload() {
-  if (!IsSameSiteBackForwardCacheEnabled())
-    return true;
-  static constexpr base::FeatureParam<bool> skip_same_site_if_unload_exists(
-      &features::kBackForwardCache, "skip_same_site_if_unload_exists", false);
-  return skip_same_site_if_unload_exists.Get();
-}
-
 bool CanCrossSiteNavigationsProactivelySwapBrowsingInstances() {
-  return IsProactivelySwapBrowsingInstanceEnabled() ||
-         IsBackForwardCacheEnabled();
-}
-
-const char kProactivelySwapBrowsingInstanceLevelParameterName[] = "level";
-
-constexpr base::FeatureParam<ProactivelySwapBrowsingInstanceLevel>::Option
-    proactively_swap_browsing_instance_levels[] = {
-        {ProactivelySwapBrowsingInstanceLevel::kDisabled, "Disabled"},
-        {ProactivelySwapBrowsingInstanceLevel::kCrossSiteSwapProcess,
-         "CrossSiteSwapProcess"},
-        {ProactivelySwapBrowsingInstanceLevel::kCrossSiteReuseProcess,
-         "CrossSiteReuseProcess"},
-        {ProactivelySwapBrowsingInstanceLevel::kSameSite, "SameSite"}};
-const base::FeatureParam<ProactivelySwapBrowsingInstanceLevel>
-    proactively_swap_browsing_instance_level{
-        &features::kProactivelySwapBrowsingInstance,
-        kProactivelySwapBrowsingInstanceLevelParameterName,
-        ProactivelySwapBrowsingInstanceLevel::kDisabled,
-        &proactively_swap_browsing_instance_levels};
-
-std::string GetProactivelySwapBrowsingInstanceLevelName(
-    ProactivelySwapBrowsingInstanceLevel level) {
-  return proactively_swap_browsing_instance_level.GetName(level);
-}
-
-std::array<std::string,
-           static_cast<size_t>(ProactivelySwapBrowsingInstanceLevel::kMaxValue)>
-ProactivelySwapBrowsingInstanceFeatureEnabledLevelValues() {
-  return {
-      GetProactivelySwapBrowsingInstanceLevelName(
-          ProactivelySwapBrowsingInstanceLevel::kCrossSiteSwapProcess),
-      GetProactivelySwapBrowsingInstanceLevelName(
-          ProactivelySwapBrowsingInstanceLevel::kCrossSiteReuseProcess),
-      GetProactivelySwapBrowsingInstanceLevelName(
-          ProactivelySwapBrowsingInstanceLevel::kSameSite),
-  };
-}
-
-ProactivelySwapBrowsingInstanceLevel GetProactivelySwapBrowsingInstanceLevel() {
-  if (base::FeatureList::IsEnabled(features::kProactivelySwapBrowsingInstance))
-    return proactively_swap_browsing_instance_level.Get();
-  return ProactivelySwapBrowsingInstanceLevel::kDisabled;
-}
-
-bool IsProactivelySwapBrowsingInstanceEnabled() {
-  return GetProactivelySwapBrowsingInstanceLevel() >=
-         ProactivelySwapBrowsingInstanceLevel::kCrossSiteSwapProcess;
-}
-
-bool IsProactivelySwapBrowsingInstanceWithProcessReuseEnabled() {
-  return GetProactivelySwapBrowsingInstanceLevel() >=
-         ProactivelySwapBrowsingInstanceLevel::kCrossSiteReuseProcess;
-}
-
-bool IsProactivelySwapBrowsingInstanceOnSameSiteNavigationEnabled() {
-  return GetProactivelySwapBrowsingInstanceLevel() >=
-         ProactivelySwapBrowsingInstanceLevel::kSameSite;
+  return IsBackForwardCacheEnabled();
 }
 
 const char kRenderDocumentLevelParameterName[] = "level";
@@ -183,6 +109,7 @@ const char kRenderDocumentLevelParameterName[] = "level";
 constexpr base::FeatureParam<RenderDocumentLevel>::Option
     render_document_levels[] = {
         {RenderDocumentLevel::kCrashedFrame, "crashed-frame"},
+        {RenderDocumentLevel::kNonLocalRootSubframe, "non-local-root-subframe"},
         {RenderDocumentLevel::kSubframe, "subframe"},
         {RenderDocumentLevel::kAllFrames, "all-frames"}};
 const base::FeatureParam<RenderDocumentLevel> render_document_level{
@@ -199,8 +126,26 @@ std::string GetRenderDocumentLevelName(RenderDocumentLevel level) {
   return render_document_level.GetName(level);
 }
 
-bool ShouldCreateNewHostForSameSiteSubframe() {
-  return GetRenderDocumentLevel() >= RenderDocumentLevel::kSubframe;
+bool ShouldCreateNewRenderFrameHostOnSameSiteNavigation(
+    bool is_main_frame,
+    bool is_local_root,
+    bool has_committed_any_navigation,
+    bool must_be_replaced) {
+  if (must_be_replaced) {
+    return true;
+  }
+  if (!has_committed_any_navigation) {
+    return false;
+  }
+  RenderDocumentLevel level = GetRenderDocumentLevel();
+  if (is_main_frame) {
+    CHECK(is_local_root);
+    return level >= RenderDocumentLevel::kAllFrames;
+  }
+  if (is_local_root) {
+    return level >= RenderDocumentLevel::kSubframe;
+  }
+  return level >= RenderDocumentLevel::kNonLocalRootSubframe;
 }
 
 bool ShouldCreateNewHostForAllFrames() {
@@ -212,6 +157,69 @@ bool ShouldSkipEarlyCommitPendingForCrashedFrame() {
       base::FeatureList::IsEnabled(
           features::kSkipEarlyCommitPendingForCrashedFrame);
   return skip_early_commit_pending_for_crashed_frame;
+}
+
+static constexpr base::FeatureParam<NavigationQueueingFeatureLevel>::Option
+    kNavigationQueueingFeatureLevels[] = {
+        {NavigationQueueingFeatureLevel::kNone, "none"},
+        {NavigationQueueingFeatureLevel::kAvoidRedundantCancellations,
+         "avoid-redundant"},
+        {NavigationQueueingFeatureLevel::kFull, "full"}};
+const base::FeatureParam<NavigationQueueingFeatureLevel>
+    kNavigationQueueingFeatureLevelParam{
+        &features::kQueueNavigationsWhileWaitingForCommit, "queueing_level",
+        NavigationQueueingFeatureLevel::kFull,
+        &kNavigationQueueingFeatureLevels};
+
+NavigationQueueingFeatureLevel GetNavigationQueueingFeatureLevel() {
+  if (GetRenderDocumentLevel() >= RenderDocumentLevel::kNonLocalRootSubframe) {
+    // When RenderDocument is enabled with a level of "non-local-root-subframe"
+    // or more, navigation queueing needs to be enabled too, to avoid crashes.
+    return NavigationQueueingFeatureLevel::kFull;
+  }
+  if (base::FeatureList::IsEnabled(
+          features::kQueueNavigationsWhileWaitingForCommit)) {
+    return kNavigationQueueingFeatureLevelParam.Get();
+  }
+  return NavigationQueueingFeatureLevel::kNone;
+}
+
+bool ShouldAvoidRedundantNavigationCancellations() {
+  // If the experimental early RenderFrameHost swap for history navigations is
+  // turned on, this must return true so that when the old RFH is unloaded as
+  // part of the early swap, this doesn't cancel the navigation that's still
+  // ongoing in the new RFH.
+  if (base::FeatureList::IsEnabled(
+          features::kEarlyDocumentSwapForBackForwardTransitions)) {
+    return true;
+  }
+
+  return GetNavigationQueueingFeatureLevel() >=
+         NavigationQueueingFeatureLevel::kAvoidRedundantCancellations;
+}
+
+bool ShouldQueueNavigationsWhenPendingCommitRFHExists() {
+  return GetNavigationQueueingFeatureLevel() ==
+         NavigationQueueingFeatureLevel::kFull;
+}
+
+bool ShouldRestrictCanAccessDataForOriginToUIThread() {
+  // Only restrict calls to the UI thread if:
+  // - the feature is enabled
+  // - the new blob URL support is enabled
+  // - ChildProcessSecurityPolicy's requested file set is checked in
+  //   CanRequestURL() rather than CanCommitURL(). This feature is required for
+  //   some tests for pass with Citadel checks.
+  return base::FeatureList::IsEnabled(
+             features::kRestrictCanAccessDataForOriginToUIThread) &&
+         base::FeatureList::IsEnabled(
+             net::features::kSupportPartitionedBlobUrl) &&
+         base::FeatureList::IsEnabled(
+             features::kRequestFileSetCheckedInCanRequestURL);
+}
+
+bool ShouldCreateSiteInstanceForDataUrls() {
+  return base::FeatureList::IsEnabled(features::kSiteInstanceGroupsForDataUrls);
 }
 
 }  // namespace content

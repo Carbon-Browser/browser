@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -31,17 +31,23 @@ class VideoAutoFullscreenFrameHost : public FakeLocalFrameHost {
   void EnterFullscreen(mojom::blink::FullscreenOptionsPtr options,
                        EnterFullscreenCallback callback) override {
     std::move(callback).Run(true);
-    Thread::Current()->GetTaskRunner()->PostTask(
-        FROM_HERE,
-        WTF::Bind([](WebViewImpl* web_view) { web_view->DidEnterFullscreen(); },
-                  WTF::Unretained(web_view_)));
+    web_view_->MainFrameImpl()
+        ->GetTaskRunner(TaskType::kInternalNavigationAssociated)
+        ->PostTask(FROM_HERE, WTF::BindOnce(
+                                  [](WebViewImpl* web_view) {
+                                    web_view->DidEnterFullscreen();
+                                  },
+                                  WTF::Unretained(web_view_)));
   }
 
   void ExitFullscreen() override {
-    Thread::Current()->GetTaskRunner()->PostTask(
-        FROM_HERE,
-        WTF::Bind([](WebViewImpl* web_view) { web_view->DidExitFullscreen(); },
-                  WTF::Unretained(web_view_)));
+    web_view_->MainFrameImpl()
+        ->GetTaskRunner(TaskType::kInternalNavigationAssociated)
+        ->PostTask(FROM_HERE, WTF::BindOnce(
+                                  [](WebViewImpl* web_view) {
+                                    web_view->DidExitFullscreen();
+                                  },
+                                  WTF::Unretained(web_view_)));
   }
 
   void set_web_view(WebViewImpl* web_view) { web_view_ = web_view; }
@@ -60,7 +66,7 @@ class VideoAutoFullscreenFrameClient
       WebMediaPlayerEncryptedMediaClient*,
       WebContentDecryptionModule*,
       const WebString& sink_id,
-      const cc::LayerTreeSettings& settings,
+      const cc::LayerTreeSettings* settings,
       scoped_refptr<base::TaskRunner> compositor_worker_task_runner) final {
     return new EmptyWebMediaPlayer();
   }
@@ -81,7 +87,8 @@ class VideoAutoFullscreen : public testing::Test,
         web_view_helper_.GetWebView()->MainFrameImpl(), "about:blank");
     GetDocument()->write("<body><video></video></body>");
 
-    video_ = To<HTMLVideoElement>(*GetDocument()->QuerySelector("video"));
+    video_ = To<HTMLVideoElement>(
+        *GetDocument()->QuerySelector(AtomicString("video")));
 
     frame_host_.set_web_view(GetWebView());
   }
@@ -104,7 +111,7 @@ class VideoAutoFullscreen : public testing::Test,
 };
 
 TEST_F(VideoAutoFullscreen, PlayTriggersFullscreenWithoutPlaysInline) {
-  Video()->SetSrc("http://example.com/foo.mp4");
+  Video()->SetSrc(AtomicString("http://example.com/foo.mp4"));
 
   LocalFrame::NotifyUserActivation(
       GetFrame(), mojom::UserActivationNotificationType::kTest);
@@ -118,7 +125,7 @@ TEST_F(VideoAutoFullscreen, PlayTriggersFullscreenWithoutPlaysInline) {
 
 TEST_F(VideoAutoFullscreen, PlayDoesNotTriggerFullscreenWithPlaysInline) {
   Video()->SetBooleanAttribute(html_names::kPlaysinlineAttr, true);
-  Video()->SetSrc("http://example.com/foo.mp4");
+  Video()->SetSrc(AtomicString("http://example.com/foo.mp4"));
 
   LocalFrame::NotifyUserActivation(
       GetFrame(), mojom::UserActivationNotificationType::kTest);
@@ -131,7 +138,7 @@ TEST_F(VideoAutoFullscreen, PlayDoesNotTriggerFullscreenWithPlaysInline) {
 }
 
 TEST_F(VideoAutoFullscreen, ExitFullscreenPausesWithoutPlaysInline) {
-  Video()->SetSrc("http://example.com/foo.mp4");
+  Video()->SetSrc(AtomicString("http://example.com/foo.mp4"));
 
   LocalFrame::NotifyUserActivation(
       GetFrame(), mojom::UserActivationNotificationType::kTest);
@@ -151,7 +158,7 @@ TEST_F(VideoAutoFullscreen, ExitFullscreenPausesWithoutPlaysInline) {
 
 TEST_F(VideoAutoFullscreen, ExitFullscreenDoesNotPauseWithPlaysInline) {
   Video()->SetBooleanAttribute(html_names::kPlaysinlineAttr, true);
-  Video()->SetSrc("http://example.com/foo.mp4");
+  Video()->SetSrc(AtomicString("http://example.com/foo.mp4"));
 
   LocalFrame::NotifyUserActivation(
       GetFrame(), mojom::UserActivationNotificationType::kTest);
@@ -173,7 +180,7 @@ TEST_F(VideoAutoFullscreen, ExitFullscreenDoesNotPauseWithPlaysInline) {
 // This test is disabled because it requires adding a fake activation in
 // production code (crbug.com/1082258).
 TEST_F(VideoAutoFullscreen, DISABLED_OnPlayTriggersFullscreenWithoutGesture) {
-  Video()->SetSrc("http://example.com/foo.mp4");
+  Video()->SetSrc(AtomicString("http://example.com/foo.mp4"));
 
   LocalFrame::NotifyUserActivation(
       GetFrame(), mojom::UserActivationNotificationType::kTest);

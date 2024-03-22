@@ -1,14 +1,16 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef EXTENSIONS_COMMON_FEATURES_FEATURE_H_
 #define EXTENSIONS_COMMON_FEATURES_FEATURE_H_
 
+#include <map>
 #include <set>
 #include <string>
 
 #include "base/strings/string_piece.h"
+#include "extensions/common/context_data.h"
 #include "extensions/common/hashed_extension_id.h"
 #include "extensions/common/manifest.h"
 #include "extensions/common/mojom/manifest.mojom-shared.h"
@@ -17,7 +19,7 @@ class GURL;
 
 namespace extensions {
 
-constexpr int kUnspecifiedContextId = -1;
+inline constexpr int kUnspecifiedContextId = -1;
 
 class Extension;
 
@@ -43,6 +45,7 @@ class Feature {
     WEBUI_UNTRUSTED_CONTEXT,
     LOCK_SCREEN_EXTENSION_CONTEXT,
     OFFSCREEN_EXTENSION_CONTEXT,
+    USER_SCRIPT_CONTEXT,
   };
 
   // The platforms the feature is supported in.
@@ -75,9 +78,28 @@ class Feature {
     MISSING_COMMAND_LINE_SWITCH,
     FEATURE_FLAG_DISABLED,
     REQUIRES_DEVELOPER_MODE,
+    MISSING_DELEGATED_AVAILABILITY_CHECK,
+    FAILED_DELEGATED_AVAILABILITY_CHECK,
   };
 
-  // Container for AvailabiltyResult that also exposes a user-visible error
+  // Shorthand for delegated availability check handler function signature. The
+  // function signature's arguments should contain all of the arguments passed
+  // into IsAvailableToContextImpl().
+  using DelegatedAvailabilityCheckHandler =
+      base::RepeatingCallback<bool(const std::string& api_full_name,
+                                   const Extension* extension,
+                                   Context context,
+                                   const GURL& url,
+                                   Platform platform,
+                                   int context_id,
+                                   bool check_developer_mode,
+                                   const ContextData& context_data)>;
+
+  // Mapping Feature::name() to override function.
+  using FeatureDelegatedAvailabilityCheckMap =
+      std::map<std::string, DelegatedAvailabilityCheckHandler>;
+
+  // Container for AvailabilityResult that also exposes a user-visible error
   // message in cases where the feature is not available.
   class Availability {
    public:
@@ -115,6 +137,14 @@ class Feature {
   // Tests whether this is an internal API or not.
   virtual bool IsInternal() const = 0;
 
+  // Returns if this feature's availability requires a delegated availability
+  // check.
+  virtual bool RequiresDelegatedAvailabilityCheck() const = 0;
+
+  // Sets the feature availability override handler to use.
+  virtual void SetDelegatedAvailabilityCheckHandler(
+      DelegatedAvailabilityCheckHandler handler) = 0;
+
   // Returns true if the feature is available to be parsed into a new extension
   // manifest.
   Availability IsAvailableToManifest(const HashedExtensionId& hashed_id,
@@ -140,27 +170,32 @@ class Feature {
   Availability IsAvailableToContext(const Extension* extension,
                                     Context context,
                                     const GURL& url,
-                                    int context_id) const {
+                                    int context_id,
+                                    const ContextData& context_data) const {
     return IsAvailableToContext(extension, context, url, GetCurrentPlatform(),
-                                context_id);
+                                context_id, context_data);
   }
 
   Availability IsAvailableToContext(const Extension* extension,
                                     Context context,
                                     const GURL& url,
                                     Platform platform,
-                                    int context_id) const {
+                                    int context_id,
+                                    const ContextData& context_data) const {
     return IsAvailableToContextImpl(extension, context, url, platform,
-                                    context_id, true);
+                                    context_id, true, context_data);
   }
 
-  Availability IsAvailableToContextIgnoringDevMode(const Extension* extension,
-                                                   Context context,
-                                                   const GURL& url,
-                                                   Platform platform,
-                                                   int context_id) const {
-    return IsAvailableToContextImpl(extension, context, url, platform,
-                                    context_id, false);
+  Availability IsAvailableToContextIgnoringDevMode(
+      const Extension* extension,
+      Context context,
+      const GURL& url,
+      Platform platform,
+      int context_id,
+      const ContextData& context_data) const {
+    return IsAvailableToContextImpl(
+        extension, context, url, platform, context_id,
+        /*check_developer_mode=*/false, context_data);
   }
   // Returns true if the feature is available to the current environment,
   // without needing to know information about an Extension or any other
@@ -176,16 +211,25 @@ class Feature {
   virtual bool IsIdInBlocklist(const HashedExtensionId& hashed_id) const = 0;
   virtual bool IsIdInAllowlist(const HashedExtensionId& hashed_id) const = 0;
 
+  bool HasDelegatedAvailabilityCheckHandlerForTesting() const;
+
  protected:
   friend class SimpleFeature;
   friend class ComplexFeature;
+
+  // These parameters should be kept in sync with
+  // DelegatedAvailabilityCheckHandler.
   virtual Availability IsAvailableToContextImpl(
       const Extension* extension,
       Context context,
       const GURL& url,
       Platform platform,
       int context_id,
-      bool check_developer_mode) const = 0;
+      bool check_developer_mode,
+      const ContextData& context_data) const = 0;
+
+  // Gets whether a feature availability override handler has been set.
+  virtual bool HasDelegatedAvailabilityCheckHandler() const = 0;
 
   std::string name_;
   std::string alias_;

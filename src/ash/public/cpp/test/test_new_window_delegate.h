@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -27,7 +27,9 @@ class ASH_PUBLIC_EXPORT TestNewWindowDelegate : public NewWindowDelegate {
       aura::Window* source_window,
       const ui::OSExchangeData& drop_data,
       NewWindowForDetachingTabCallback closure) override;
-  void OpenUrl(const GURL& url, OpenUrlFrom from) override;
+  void OpenUrl(const GURL& url,
+               OpenUrlFrom from,
+               Disposition disposition) override;
   void OpenCalculator() override;
   void OpenFileManager() override;
   void OpenDownloadsFolder() override;
@@ -36,6 +38,7 @@ class ASH_PUBLIC_EXPORT TestNewWindowDelegate : public NewWindowDelegate {
   void OpenGetHelp() override;
   void RestoreTab() override;
   void ShowKeyboardShortcutViewer() override;
+  void ShowShortcutCustomizationApp() override;
   void ShowTaskManager() override;
   void OpenFeedbackPage(FeedbackSource source,
                         const std::string& description_template) override;

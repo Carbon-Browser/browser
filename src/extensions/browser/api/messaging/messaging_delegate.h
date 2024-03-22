@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,17 +6,13 @@
 #define EXTENSIONS_BROWSER_API_MESSAGING_MESSAGING_DELEGATE_H_
 
 #include <memory>
+#include <optional>
 #include <string>
-
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
 #include "base/memory/weak_ptr.h"
 #include "extensions/browser/api/messaging/message_port.h"
 
 class GURL;
-
-namespace base {
-class DictionaryValue;
-}
 
 namespace content {
 class BrowserContext;
@@ -47,7 +43,7 @@ class MessagingDelegate {
 
   // If web_contents is a tab, returns a dictionary representing its tab.
   // Otherwise returns nullptr.
-  virtual std::unique_ptr<base::DictionaryValue> MaybeGetTabInfo(
+  virtual std::optional<base::Value::Dict> MaybeGetTabInfo(
       content::WebContents* web_contents);
 
   // Returns the WebContents for the given tab ID, if found.

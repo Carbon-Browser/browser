@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,8 @@
 
 #include <string>
 
-#include "base/callback_helpers.h"
+#include "base/functional/callback_helpers.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/sequence_checker.h"
 #include "media/audio/audio_input_ipc.h"
@@ -103,7 +104,8 @@ class MODULES_EXPORT MojoAudioInputIPC
   mojo::Receiver<AudioInputStreamClient> stream_client_receiver_{this};
   mojo::Receiver<mojom::blink::RendererAudioInputStreamFactoryClient>
       factory_client_receiver_{this};
-  media::AudioInputIPCDelegate* delegate_ = nullptr;
+  raw_ptr<media::AudioInputIPCDelegate, ExperimentalRenderer> delegate_ =
+      nullptr;
 
   base::WeakPtrFactory<MojoAudioInputIPC> weak_factory_{this};
 };

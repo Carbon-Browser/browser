@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -69,6 +69,7 @@ CompatModeTestBase::CompatModeTestBase()
 CompatModeTestBase::~CompatModeTestBase() = default;
 
 void CompatModeTestBase::SetUp() {
+  display::Screen::SetScreenInstance(&test_screen_);
   views::ViewsTestBase::SetUp();
   pref_delegate_ = std::make_unique<TestArcResizeLockPrefDelegate>();
 
@@ -79,6 +80,7 @@ void CompatModeTestBase::SetUp() {
 
 void CompatModeTestBase::TearDown() {
   views::ViewsTestBase::TearDown();
+  display::Screen::SetScreenInstance(nullptr);
 }
 
 std::unique_ptr<views::Widget> CompatModeTestBase::CreateWidget(bool show) {
@@ -90,7 +92,7 @@ std::unique_ptr<views::Widget> CompatModeTestBase::CreateWidget(bool show) {
 }
 
 std::unique_ptr<views::Widget> CompatModeTestBase::CreateArcWidget(
-    absl::optional<std::string> app_id,
+    std::optional<std::string> app_id,
     bool show) {
   auto widget = CreateWidget(/*show=*/false);
   if (app_id)

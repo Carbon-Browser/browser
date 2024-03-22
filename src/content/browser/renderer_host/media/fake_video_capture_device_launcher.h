@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -17,13 +17,16 @@ class FakeVideoCaptureDeviceLauncher
   FakeVideoCaptureDeviceLauncher(media::VideoCaptureSystem* system);
   ~FakeVideoCaptureDeviceLauncher() override;
 
-  void LaunchDeviceAsync(const std::string& device_id,
-                         blink::mojom::MediaStreamType stream_type,
-                         const media::VideoCaptureParams& params,
-                         base::WeakPtr<media::VideoFrameReceiver> receiver,
-                         base::OnceClosure connection_lost_cb,
-                         Callbacks* callbacks,
-                         base::OnceClosure done_cb) override;
+  void LaunchDeviceAsync(
+      const std::string& device_id,
+      blink::mojom::MediaStreamType stream_type,
+      const media::VideoCaptureParams& params,
+      base::WeakPtr<media::VideoFrameReceiver> receiver,
+      base::OnceClosure connection_lost_cb,
+      Callbacks* callbacks,
+      base::OnceClosure done_cb,
+      mojo::PendingRemote<video_capture::mojom::VideoEffectsManager>
+          video_effects_manager) override;
   void AbortLaunch() override;
 
  private:

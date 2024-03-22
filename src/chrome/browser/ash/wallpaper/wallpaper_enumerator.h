@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,8 +7,8 @@
 
 #include <vector>
 
-#include "base/callback_forward.h"
 #include "base/files/file_path.h"
+#include "base/functional/callback_forward.h"
 
 class Profile;
 
@@ -23,6 +23,10 @@ void EnumerateLocalWallpaperFiles(
     Profile* profile,
     base::OnceCallback<void(const std::vector<base::FilePath>&)> callback);
 
+void EnumerateJpegFilesFromDir(
+    Profile* profile,
+    const base::FilePath& wallpaper_dir,
+    base::OnceCallback<void(const std::vector<base::FilePath>&)> callback);
 }  // namespace ash
 
 #endif  // CHROME_BROWSER_ASH_WALLPAPER_WALLPAPER_ENUMERATOR_H_

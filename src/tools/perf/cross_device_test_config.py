@@ -1,4 +1,4 @@
-# Copyright 2021 The Chromium Authors. All rights reserved.
+# Copyright 2021 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -57,6 +57,20 @@ TARGET_DEVICES = {
             'Speedometer2': 10,
         },
     },
+    'android-go-wembley-perf': {
+        'jetstream2': {
+            'JetStream2': 5,
+        },
+        'system_health.common_mobile': {
+            # timeToFirstContentfulPaint
+            'background:social:facebook:2019': 10,
+            # cputimeToFirstContentfulPaint
+            'load:search:google:2018': 10
+        },
+        'speedometer2': {
+            'Speedometer2': 10,
+        },
+    },
     'android-pixel4-perf': {
         'jetstream2': {
             'JetStream2': 5,
@@ -73,17 +87,11 @@ TARGET_DEVICES = {
             'Speedometer2': 20,
         },
     },
-    'android-pixel4a_power-perf': {
-        'power.mobile': {
-            'browse:media:flickr_infinite_scroll:2019': 10,
-            'browse:media:tiktok_infinite_scroll:2021': 10,
-            'browse:social:pinterest_infinite_scroll:2021': 10,
-            'browse:social:tumblr_infinite_scroll:2018': 10,
-            'browse:tech:discourse_infinite_scroll:2018': 10,
-        }
-    },
     'linux-perf': {
         'jetstream2': {
+            'JetStream2': 5,
+        },
+        'jetstream2-nominorms': {
             'JetStream2': 5,
         },
         'system_health.common_desktop': {
@@ -93,6 +101,9 @@ TARGET_DEVICES = {
             'browse:media:youtubetv:2019': 10
         },
         'speedometer2': {
+            'Speedometer2': 20,
+        },
+        'speedometer2-nominorms': {
             'Speedometer2': 20,
         },
     },
@@ -139,8 +150,31 @@ TARGET_DEVICES = {
         'jetstream2': {
             'JetStream2': 5,
         },
+        'jetstream2-nominorms': {
+            'JetStream2': 5,
+        },
         'speedometer2': {
             'Speedometer2': 20,
+        },
+        'speedometer2-nominorms': {
+            'Speedometer2': 20,
+        },
+        'speedometer3': {
+            'Speedometer3': 20,
+        },
+        'speedometer3-nominorms': {
+            'Speedometer3': 20,
+        },
+    },
+    'mac-m1_mini_2020-perf-pgo': {
+        'jetstream2': {
+            'JetStream2': 4,
+        },
+        'speedometer2': {
+            'Speedometer2': 4,
+        },
+        'speedometer3': {
+            'Speedometer3': 4,
         },
     },
 }

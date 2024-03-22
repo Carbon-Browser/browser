@@ -1,17 +1,21 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "ash/system/phonehub/camera_roll_thumbnail.h"
 
-#include "ash/components/multidevice/logging/logging.h"
-#include "ash/components/phonehub/camera_roll_manager.h"
-#include "ash/components/phonehub/user_action_recorder.h"
+#include "ash/constants/ash_features.h"
 #include "ash/resources/vector_icons/vector_icons.h"
+#include "ash/style/ash_color_id.h"
 #include "ash/style/ash_color_provider.h"
-#include "base/bind.h"
+#include "base/functional/bind.h"
+#include "chromeos/ash/components/multidevice/logging/logging.h"
+#include "chromeos/ash/components/phonehub/camera_roll_manager.h"
+#include "chromeos/ash/components/phonehub/user_action_recorder.h"
+#include "third_party/skia/include/core/SkRRect.h"
 #include "ui/base/metadata/metadata_impl_macros.h"
 #include "ui/color/color_id.h"
+#include "ui/color/color_provider.h"
 #include "ui/gfx/paint_vector_icon.h"
 #include "ui/views/controls/highlight_path_generator.h"
 
@@ -74,8 +78,7 @@ void CameraRollThumbnail::PaintButtonContents(gfx::Canvas* canvas) {
   if (video_type_) {
     cc::PaintFlags flags;
     flags.setAntiAlias(true);
-    flags.setColor(color_provider->GetBaseLayerColor(
-        AshColorProvider::BaseLayerType::kTransparent80));
+    flags.setColor(GetColorProvider()->GetColor(kColorAshShieldAndBase80));
     flags.setStyle(cc::PaintFlags::kFill_Style);
     canvas->DrawCircle(kCameraRollThumbnailVideoCircleOrigin,
                        kCameraRollThumbnailVideoCircleRadius, flags);
@@ -104,6 +107,12 @@ void CameraRollThumbnail::ShowContextMenuForViewImpl(
 }
 
 void CameraRollThumbnail::ButtonPressed() {
+  if (base::TimeTicks::Now() - download_throttle_timestamp_ <
+      features::kPhoneHubCameraRollThrottleInterval.Get()) {
+    return;
+  }
+
+  download_throttle_timestamp_ = base::TimeTicks::Now();
   phone_hub_metrics::LogCameraRollContentClicked(index_, GetMediaType());
   DownloadRequested();
 }

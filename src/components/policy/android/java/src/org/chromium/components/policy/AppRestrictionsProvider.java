@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,16 +7,17 @@ package org.chromium.components.policy;
 import android.content.Context;
 import android.content.Intent;
 import android.os.Bundle;
-import android.os.SystemClock;
 import android.os.UserManager;
 
-import org.chromium.base.metrics.RecordHistogram;
+import org.chromium.base.Log;
 
 /**
  * Concrete app restriction provider, that uses the default android mechanism to retrieve the
  * restrictions.
  */
 public class AppRestrictionsProvider extends AbstractAppRestrictionsProvider {
+    private static final String TAG = "AppResProvider";
+
     /**
      * Get the app restriction information from provided user manager, and record some timing
      * metrics on its runtime.
@@ -28,9 +29,12 @@ public class AppRestrictionsProvider extends AbstractAppRestrictionsProvider {
     public static Bundle getApplicationRestrictionsFromUserManager(
             UserManager userManager, String packageName) {
         try {
-            return userManager.getApplicationRestrictions(packageName);
+            Bundle bundle = userManager.getApplicationRestrictions(packageName);
+            Log.i(TAG, "#getApplicationRestrictionsFromUserManager() " + bundle);
+            return bundle;
         } catch (SecurityException e) {
             // Android bug may throw SecurityException. See crbug.com/886814.
+            Log.i(TAG, "#getApplicationRestrictionsFromUserManager() " + e.getMessage());
             return new Bundle();
         }
     }
@@ -45,19 +49,7 @@ public class AppRestrictionsProvider extends AbstractAppRestrictionsProvider {
 
     @Override
     protected Bundle getApplicationRestrictions(String packageName) {
-        long startTime = SystemClock.elapsedRealtime();
-        Bundle bundle = getApplicationRestrictionsFromUserManager(mUserManager, packageName);
-        long endTime = SystemClock.elapsedRealtime();
-        long duration = endTime - startTime;
-        RecordHistogram.recordTimesHistogram("Enterprise.AppRestrictionLoadTime2", duration);
-        if (bundle.isEmpty()) {
-            RecordHistogram.recordTimesHistogram(
-                    "Enterprise.AppRestrictionLoadTime2.EmptyBundle", duration);
-        } else {
-            RecordHistogram.recordTimesHistogram(
-                    "Enterprise.AppRestrictionLoadTime2.NonEmptyBundle", duration);
-        }
-        return bundle;
+        return getApplicationRestrictionsFromUserManager(mUserManager, packageName);
     }
 
     @Override

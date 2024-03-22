@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -301,7 +301,8 @@ void DynamicModuleResolver::ResolveDynamically(
   modulator_->FetchTree(url, module_type, execution_context->Fetcher(),
                         mojom::blink::RequestContextType::SCRIPT,
                         network::mojom::RequestDestination::kScript, options,
-                        ModuleScriptCustomFetchType::kNone, tree_client);
+                        ModuleScriptCustomFetchType::kNone, tree_client,
+                        referrer_info.BaseURL().GetString());
 
   // Steps 6-9 are implemented at
   // DynamicImportTreeClient::NotifyModuleLoadFinished.

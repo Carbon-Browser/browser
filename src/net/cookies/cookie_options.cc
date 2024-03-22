@@ -1,4 +1,4 @@
-// Copyright (c) 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,9 +8,7 @@
 
 #include <tuple>
 
-#include "base/metrics/histogram_functions.h"
 #include "net/cookies/cookie_util.h"
-#include "net/cookies/same_party_context.h"
 
 namespace net {
 
@@ -101,8 +99,6 @@ CookieOptions CookieOptions::MakeAllInclusive() {
   options.set_include_httponly();
   options.set_same_site_cookie_context(SameSiteCookieContext::MakeInclusive());
   options.set_do_not_update_access_time();
-  options.set_same_party_context(SamePartyContext::MakeInclusive());
-  options.set_is_in_nontrivial_first_party_set(true);
   return options;
 }
 

@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,10 +6,15 @@
 
 #include "ash/constants/ash_switches.h"
 #include "ash/constants/notifier_catalogs.h"
+#include "ash/glanceables/post_login_glanceables_metrics_recorder.h"
 #include "ash/public/cpp/notification_utils.h"
+#include "ash/shell.h"
+#include "ash/webui/settings/public/constants/routes.mojom.h"
+#include "ash/wm/desks/templates/saved_desk_controller.h"
 #include "base/command_line.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/strings/string_util.h"
+#include "base/trace_event/trace_event.h"
 #include "chrome/app/vector_icons/vector_icons.h"
 #include "chrome/browser/ash/app_restore/app_restore_arc_task_handler.h"
 #include "chrome/browser/ash/app_restore/full_restore_app_launch_handler.h"
@@ -24,9 +29,8 @@
 #include "chrome/browser/notifications/notification_display_service.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/ui/settings_window_manager_chromeos.h"
-#include "chrome/browser/ui/webui/settings/chromeos/constants/routes.mojom.h"
 #include "chrome/browser/web_applications/web_app_utils.h"
-#include "chrome/grit/chromium_strings.h"
+#include "chrome/grit/branded_strings.h"
 #include "chrome/grit/generated_resources.h"
 #include "components/account_id/account_id.h"
 #include "components/app_restore/app_restore_info.h"
@@ -35,6 +39,8 @@
 #include "components/app_restore/full_restore_utils.h"
 #include "components/prefs/pref_service.h"
 #include "components/strings/grit/components_strings.h"
+#include "components/user_manager/user.h"
+#include "components/user_manager/user_manager.h"
 #include "ui/base/l10n/l10n_util.h"
 #include "ui/chromeos/devicetype_utils.h"
 #include "ui/message_center/public/cpp/notification.h"
@@ -43,10 +49,15 @@
 #undef ENABLED_VLOG_LEVEL
 #define ENABLED_VLOG_LEVEL 1
 
-namespace ash {
-namespace full_restore {
+namespace ash::full_restore {
 
 namespace {
+
+// This flag forces full session restore on startup regardless of potential
+// non-clean shutdown. It could be used in tests to ignore crashes on shutdown.
+constexpr char kForceFullRestoreAndSessionRestoreAfterCrash[] =
+    "force-full-restore-and-session-restore-after-crash";
+
 // If the reboot occurred due to DeviceScheduledRebootPolicy, change the title
 // to notify the user that the device was rebooted by the administrator.
 int GetRestoreNotificationTitleId(Profile* profile) {
@@ -56,6 +67,21 @@ int GetRestoreNotificationTitleId(Profile* profile) {
   }
   return IDS_RESTORE_NOTIFICATION_TITLE;
 }
+
+// Returns true if `profile` is the primary user profile.
+bool IsPrimaryUser(Profile* profile) {
+  return ProfileHelper::Get()->GetUserByProfile(profile) ==
+         user_manager::UserManager::Get()->GetPrimaryUser();
+}
+
+// Will (maybe) initiate an auto launch of an admin template.
+void MaybeInitiateAdminTemplateAutoLaunch() {
+  // The controller is available if the admin template feature is enabled.
+  if (auto* saved_desk_controller = ash::SavedDeskController::Get()) {
+    saved_desk_controller->InitiateAdminTemplateAutoLaunch(base::DoNothing());
+  }
+}
+
 }  // namespace
 
 bool g_restore_for_testing = true;
@@ -93,14 +119,14 @@ bool MaybeCreateFullRestoreServiceForLacros() {
 
 // static
 FullRestoreService* FullRestoreService::GetForProfile(Profile* profile) {
+  TRACE_EVENT0("ui", "FullRestoreService::GetForProfile");
   return static_cast<FullRestoreService*>(
       FullRestoreServiceFactory::GetInstance()->GetForProfile(profile));
 }
 
 // static
 void FullRestoreService::MaybeCloseNotification(Profile* profile) {
-  auto* full_restore_service =
-      ash::full_restore::FullRestoreService::GetForProfile(profile);
+  auto* full_restore_service = FullRestoreService::GetForProfile(profile);
   if (full_restore_service)
     full_restore_service->MaybeCloseNotification();
 }
@@ -134,8 +160,7 @@ FullRestoreService::FullRestoreService(Profile* profile)
 
   // Set profile path before init the restore process to create
   // FullRestoreSaveHandler to observe restore windows.
-  if (ProfileHelper::Get()->GetUserByProfile(profile_) ==
-      user_manager::UserManager::Get()->GetPrimaryUser()) {
+  if (IsPrimaryUser(profile_)) {
     ::full_restore::FullRestoreSaveHandler::GetInstance()
         ->SetPrimaryProfilePath(profile_->GetPath());
 
@@ -203,6 +228,7 @@ void FullRestoreService::Init(bool& show_notification) {
     new_user_pref_handler_ =
         std::make_unique<NewUserRestorePrefHandler>(profile_);
     ::full_restore::FullRestoreSaveHandler::GetInstance()->AllowSave();
+    MaybeInitiateAdminTemplateAutoLaunch();
     return;
   }
 
@@ -215,9 +241,11 @@ void FullRestoreService::Init(bool& show_notification) {
       break;
     case RestoreOption::kAskEveryTime:
       MaybeShowRestoreNotification(kRestoreNotificationId, show_notification);
+      MaybeInitiateAdminTemplateAutoLaunch();
       break;
     case RestoreOption::kDoNotRestore:
       ::full_restore::FullRestoreSaveHandler::GetInstance()->AllowSave();
+      MaybeInitiateAdminTemplateAutoLaunch();
       return;
   }
 }
@@ -233,6 +261,7 @@ void FullRestoreService::OnTransitionedToNewActiveUser(Profile* profile) {
 }
 
 void FullRestoreService::LaunchBrowserWhenReady() {
+  TRACE_EVENT0("ui", "FullRestoreService::LaunchBrowserWhenReady");
   if (!g_restore_for_testing || !app_launch_handler_)
     return;
 
@@ -243,6 +272,13 @@ void FullRestoreService::MaybeCloseNotification(bool allow_save) {
   close_notification_ = true;
   VLOG(1) << "The full restore notification is closed for "
           << profile_->GetPath();
+
+  // The crash notification creates a crash lock for the browser session
+  // restore. So if the notification has been closed and the system is no longer
+  // crash, clear `crashed_lock_`. Otherwise, the crash flag might not be
+  // cleared, and the crash notification might be shown again after the normal
+  // shutdown process.
+  crashed_lock_.reset();
 
   if (notification_ != nullptr && !is_shut_down_) {
     NotificationDisplayService::GetForProfile(profile_)->Close(
@@ -255,6 +291,11 @@ void FullRestoreService::MaybeCloseNotification(bool allow_save) {
     // timer.
     ::full_restore::FullRestoreSaveHandler::GetInstance()->AllowSave();
   }
+}
+
+void FullRestoreService::Restore() {
+  if (app_launch_handler_)
+    app_launch_handler_->SetShouldRestore();
 }
 
 void FullRestoreService::Close(bool by_user) {
@@ -318,24 +359,16 @@ void FullRestoreService::OnAppTerminating() {
   }
   app_launch_handler_.reset();
   ::full_restore::FullRestoreSaveHandler::GetInstance()->SetShutDown();
-
-  // The crash notification creates an crash lock for the browser session
-  // restore. So if the notification has been closed and the system is no longer
-  // crash, clear `crashed_lock_`. Otherwise, the crash flag might not be
-  // cleared, and the crash notification might be shown again after the normal
-  // shutdown process.
-  if (!notification_)
-    crashed_lock_.reset();
 }
 
 void FullRestoreService::OnActionPerformed(AcceleratorAction action) {
   switch (action) {
-    case NEW_INCOGNITO_WINDOW:
-    case NEW_TAB:
-    case NEW_WINDOW:
-    case OPEN_CROSH:
-    case OPEN_DIAGNOSTICS:
-    case RESTORE_TAB:
+    case AcceleratorAction::kNewIncognitoWindow:
+    case AcceleratorAction::kNewTab:
+    case AcceleratorAction::kNewWindow:
+    case AcceleratorAction::kOpenCrosh:
+    case AcceleratorAction::kOpenDiagnostics:
+    case AcceleratorAction::kRestoreTab:
       MaybeCloseNotification();
       return;
     default:
@@ -402,6 +435,13 @@ void FullRestoreService::MaybeShowRestoreNotification(const std::string& id,
   if (!ShouldShowNotification())
     return;
 
+  if (base::CommandLine::ForCurrentProcess()->HasSwitch(
+          kForceFullRestoreAndSessionRestoreAfterCrash)) {
+    LOG(WARNING) << "Full session restore was forced by a debug flag.";
+    Restore();
+    return;
+  }
+
   // If the system is restored from crash, create the crash lock for the browser
   // session restore to help set the browser saving flag.
   ExitTypeService* exit_type_service =
@@ -409,7 +449,7 @@ void FullRestoreService::MaybeShowRestoreNotification(const std::string& id,
   if (id == kRestoreForCrashNotificationId && exit_type_service)
     crashed_lock_ = exit_type_service->CreateCrashedLock();
 
-  auto* accelerator_controller = ash::AcceleratorController::Get();
+  auto* accelerator_controller = AcceleratorController::Get();
   if (accelerator_controller) {
     DCHECK(!accelerator_controller_observer_.IsObserving());
     accelerator_controller_observer_.Observe(accelerator_controller);
@@ -448,7 +488,7 @@ void FullRestoreService::MaybeShowRestoreNotification(const std::string& id,
   else
     message_id = IDS_RESTORE_NOTIFICATION_MESSAGE;
 
-  notification_ = ash::CreateSystemNotification(
+  notification_ = CreateSystemNotificationPtr(
       message_center::NOTIFICATION_TYPE_SIMPLE, id, title,
       l10n_util::GetStringUTF16(message_id),
       l10n_util::GetStringUTF16(IDS_RESTORE_NOTIFICATION_DISPLAY_SOURCE),
@@ -469,11 +509,12 @@ void FullRestoreService::MaybeShowRestoreNotification(const std::string& id,
                                         *notification_,
                                         /*metadata=*/nullptr);
   show_notification = true;
-}
 
-void FullRestoreService::Restore() {
-  if (app_launch_handler_)
-    app_launch_handler_->SetShouldRestore();
+  if (Shell::HasInstance()) {
+    Shell::Get()
+        ->post_login_glanceables_metrics_reporter()
+        ->RecordPostLoginFullRestoreShown();
+  }
 }
 
 void FullRestoreService::RecordRestoreAction(const std::string& notification_id,
@@ -512,5 +553,4 @@ ScopedRestoreForTesting::~ScopedRestoreForTesting() {
   g_restore_for_testing = true;
 }
 
-}  // namespace full_restore
-}  // namespace ash
+}  // namespace ash::full_restore

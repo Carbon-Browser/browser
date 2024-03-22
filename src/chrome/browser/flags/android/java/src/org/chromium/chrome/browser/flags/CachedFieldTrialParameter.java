@@ -1,14 +1,13 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 package org.chromium.chrome.browser.flags;
 
 import androidx.annotation.IntDef;
-import androidx.annotation.VisibleForTesting;
 
-import org.chromium.base.annotations.CheckDiscard;
 import org.chromium.build.BuildConfig;
+import org.chromium.build.annotations.CheckDiscard;
 import org.chromium.chrome.browser.preferences.ChromePreferenceKeys;
 
 import java.lang.annotation.Retention;
@@ -17,15 +16,17 @@ import java.util.HashSet;
 import java.util.Set;
 
 /**
- * A field trial parameter in the variations framework that is cached by {@link CachedFeatureFlags}.
+ * A field trial parameter in the variations framework that is cached to disk be used before native.
  */
 public abstract class CachedFieldTrialParameter {
-    /**
-     * Data types of field trial parameters.
-     */
-    @IntDef({FieldTrialParameterType.STRING, FieldTrialParameterType.BOOLEAN,
-            FieldTrialParameterType.INT, FieldTrialParameterType.DOUBLE,
-            FieldTrialParameterType.ALL})
+    /** Data types of field trial parameters. */
+    @IntDef({
+        FieldTrialParameterType.STRING,
+        FieldTrialParameterType.BOOLEAN,
+        FieldTrialParameterType.INT,
+        FieldTrialParameterType.DOUBLE,
+        FieldTrialParameterType.ALL
+    })
     @Retention(RetentionPolicy.SOURCE)
     public @interface FieldTrialParameterType {
         int STRING = 0;
@@ -117,10 +118,9 @@ public abstract class CachedFieldTrialParameter {
      * Forces a field trial parameter value for testing. This is only for the annotation processor
      * to use. Tests should use "PARAMETER.setForTesting()" instead.
      */
-    @VisibleForTesting
     public static void setForTesting(
             String featureName, String variationName, String stringVariationValue) {
-        CachedFeatureFlags.setOverrideTestValue(
-                generateSharedPreferenceKey(featureName, variationName), stringVariationValue);
+        String preferenceKey = generateSharedPreferenceKey(featureName, variationName);
+        ValuesOverridden.setOverrideForTesting(preferenceKey, stringVariationValue);
     }
 }

@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,12 +6,6 @@
 #define COMPONENTS_PERMISSIONS_CONTEXTS_PAYMENT_HANDLER_PERMISSION_CONTEXT_H_
 
 #include "components/permissions/permission_context_base.h"
-
-class GURL;
-
-namespace permissions {
-class PermissionRequestID;
-}
 
 namespace content {
 class WebContents;
@@ -35,12 +29,8 @@ class PaymentHandlerPermissionContext
  private:
   // PermissionContextBase
   void DecidePermission(
-      const permissions::PermissionRequestID& id,
-      const GURL& requesting_origin,
-      const GURL& embedding_origin,
-      bool user_gesture,
+      permissions::PermissionRequestData request_data,
       permissions::BrowserPermissionCallback callback) override;
-  bool IsRestrictedToSecureOrigins() const override;
 };
 
 }  // namespace payments

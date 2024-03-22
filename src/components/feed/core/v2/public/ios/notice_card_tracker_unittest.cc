@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -69,24 +69,6 @@ TEST_F(IOSNoticeCardTrackerTest,
   NoticeCardTracker tracker(&profile_prefs_);
 
   const int notice_card_index = 0;
-  tracker.OnSliceViewed(notice_card_index);
-  tracker.OnSliceViewed(notice_card_index);
-  tracker.OnSliceViewed(notice_card_index);
-
-  EXPECT_TRUE(tracker.HasAcknowledgedNoticeCard());
-}
-
-TEST_F(IOSNoticeCardTrackerTest,
-       AcknowledgedNoticeCardWhenEnoughViewsAndNoticeCardAt2ndPos) {
-  base::test::ScopedFeatureList scoped_feature_list;
-  scoped_feature_list.InitWithFeatures(
-      /*enabled_features=*/{feed::kInterestFeedNoticeCardAutoDismiss,
-                            feed::
-                                kInterestFeedV2ClicksAndViewsConditionalUpload},
-      /*disabled_features=*/{});
-  NoticeCardTracker tracker(&profile_prefs_);
-
-  const int notice_card_index = 1;
   tracker.OnSliceViewed(notice_card_index);
   tracker.OnSliceViewed(notice_card_index);
   tracker.OnSliceViewed(notice_card_index);

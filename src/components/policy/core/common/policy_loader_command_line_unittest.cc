@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -23,11 +23,12 @@ class PolicyLoaderCommandLineTest : public ::testing::Test {
   void LoadAndVerifyPolicies(PolicyLoaderCommandLine* loader,
                              const base::Value& expected_policies) {
     DCHECK(expected_policies.is_dict());
-    std::unique_ptr<PolicyBundle> bundle = loader->Load();
+    std::unique_ptr<PolicyBundle> bundle =
+        std::make_unique<PolicyBundle>(loader->Load());
     PolicyMap& map =
         bundle->Get(PolicyNamespace(POLICY_DOMAIN_CHROME, std::string()));
-    EXPECT_EQ(expected_policies.DictSize(), map.size());
-    for (auto expected_policy : expected_policies.DictItems()) {
+    EXPECT_EQ(expected_policies.GetDict().size(), map.size());
+    for (auto expected_policy : expected_policies.GetDict()) {
       const PolicyMap::Entry* actual_policy = map.Get(expected_policy.first);
       ASSERT_TRUE(actual_policy);
       EXPECT_EQ(POLICY_LEVEL_MANDATORY, actual_policy->level);
@@ -50,21 +51,21 @@ class PolicyLoaderCommandLineTest : public ::testing::Test {
 
 TEST_F(PolicyLoaderCommandLineTest, NoSwitch) {
   LoadAndVerifyPolicies(CreatePolicyLoader().get(),
-                        base::Value(base::Value::Type::DICTIONARY));
+                        base::Value(base::Value::Type::DICT));
 }
 
 TEST_F(PolicyLoaderCommandLineTest, InvalidSwitch) {
   SetCommandLinePolicy("a");
   LoadAndVerifyPolicies(CreatePolicyLoader().get(),
-                        base::Value(base::Value::Type::DICTIONARY));
+                        base::Value(base::Value::Type::DICT));
 
   SetCommandLinePolicy("a:b");
   LoadAndVerifyPolicies(CreatePolicyLoader().get(),
-                        base::Value(base::Value::Type::DICTIONARY));
+                        base::Value(base::Value::Type::DICT));
 
   SetCommandLinePolicy("[a]");
   LoadAndVerifyPolicies(CreatePolicyLoader().get(),
-                        base::Value(base::Value::Type::DICTIONARY));
+                        base::Value(base::Value::Type::DICT));
 }
 
 TEST_F(PolicyLoaderCommandLineTest, ParseSwitchValue) {

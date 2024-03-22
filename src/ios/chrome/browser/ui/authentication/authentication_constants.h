@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,10 +12,6 @@ extern const CGFloat kAuthenticationHeaderImageHeight;
 
 // Height/Width of the avatar in authentication context.
 extern const CGFloat kAccountProfilePhotoDimension;
-
-// Font sizes
-extern const UIFontTextStyle kAuthenticationTitleFontStyle;
-extern const UIFontTextStyle kAuthenticationTextFontStyle;
 
 // Horizontal margin between the container view and any elements inside.
 extern const CGFloat kAuthenticationHorizontalMargin;
@@ -32,5 +28,8 @@ extern NSString* const kAuthenticationHeaderImageName;
 
 // Accessibility identifier for the Signin/Sync screen.
 extern NSString* const kSigninSyncScreenAccessibilityIdentifier;
+
+// Accessibility identifier for the 'Undo' button in signin snackbar.
+extern NSString* const kSigninSnackbarUndo;
 
 #endif  // IOS_CHROME_BROWSER_UI_AUTHENTICATION_AUTHENTICATION_CONSTANTS_H_

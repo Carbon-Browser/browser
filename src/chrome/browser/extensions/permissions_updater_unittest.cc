@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,9 +7,9 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/files/file_path.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/json/json_file_value_serializer.h"
 #include "base/memory/ref_counted.h"
 #include "base/run_loop.h"
@@ -19,7 +19,6 @@
 #include "chrome/browser/extensions/chrome_test_extension_loader.h"
 #include "chrome/browser/extensions/extension_service.h"
 #include "chrome/browser/extensions/extension_service_test_base.h"
-#include "chrome/browser/extensions/extension_util.h"
 #include "chrome/browser/extensions/permissions_test_util.h"
 #include "chrome/browser/extensions/scripting_permissions_modifier.h"
 #include "chrome/common/chrome_paths.h"
@@ -34,7 +33,6 @@
 #include "extensions/common/extension_features.h"
 #include "extensions/common/permissions/permission_set.h"
 #include "extensions/common/permissions/permissions_data.h"
-#include "extensions/common/value_builder.h"
 #include "extensions/test/permissions_manager_waiter.h"
 #include "extensions/test/test_extension_dir.h"
 #include "testing/gtest/include/gtest/gtest.h"
@@ -47,20 +45,19 @@ namespace extensions {
 namespace {
 
 scoped_refptr<const Extension> CreateExtensionWithOptionalPermissions(
-    std::unique_ptr<base::Value> optional_permissions,
-    std::unique_ptr<base::Value> permissions,
+    base::Value::List optional_permissions,
+    base::Value::List permissions,
     const std::string& name) {
   return ExtensionBuilder()
       .SetLocation(mojom::ManifestLocation::kInternal)
       .SetManifest(
-          DictionaryBuilder()
+          base::Value::Dict()
               .Set("name", name)
               .Set("description", "foo")
               .Set("manifest_version", 2)
               .Set("version", "0.1.2.3")
               .Set("permissions", std::move(permissions))
-              .Set("optional_permissions", std::move(optional_permissions))
-              .Build())
+              .Set("optional_permissions", std::move(optional_permissions)))
       .SetID(crx_file::id_util::GenerateId(name))
       .Build();
 }
@@ -71,31 +68,6 @@ void AddPattern(URLPatternSet* extent, const std::string& pattern) {
   int schemes = URLPattern::SCHEME_ALL;
   extent->AddPattern(URLPattern(schemes, pattern));
 }
-
-class PermissionsUpdaterTestDelegate : public PermissionsUpdater::Delegate {
- public:
-  PermissionsUpdaterTestDelegate() {}
-
-  PermissionsUpdaterTestDelegate(const PermissionsUpdaterTestDelegate&) =
-      delete;
-  PermissionsUpdaterTestDelegate& operator=(
-      const PermissionsUpdaterTestDelegate&) = delete;
-
-  ~PermissionsUpdaterTestDelegate() override {}
-
-  // PermissionsUpdater::Delegate
-  void InitializePermissions(
-      const Extension* extension,
-      std::unique_ptr<const PermissionSet>* granted_permissions) override {
-    // Remove the cookie permission.
-    APIPermissionSet api_permission_set =
-        (*granted_permissions)->apis().Clone();
-    api_permission_set.erase(APIPermissionID::kCookie);
-    *granted_permissions = std::make_unique<PermissionSet>(
-        std::move(api_permission_set), ManifestPermissionSet(), URLPatternSet(),
-        URLPatternSet());
-  }
-};
 
 }  // namespace
 
@@ -110,10 +82,9 @@ TEST_F(PermissionsUpdaterTest, GrantAndRevokeOptionalPermissions) {
       ExtensionBuilder("permissions")
           .AddPermissions({"management", "http://a.com/*"})
           .SetManifestKey("optional_permissions",
-                          ListBuilder()
+                          base::Value::List()
                               .Append("http://*.c.com/*")
-                              .Append("notifications")
-                              .Build())
+                              .Append("notifications"))
           .Build();
 
   {
@@ -158,10 +129,12 @@ TEST_F(PermissionsUpdaterTest, GrantAndRevokeOptionalPermissions) {
         .GrantOptionalPermissions(*extension, delta, base::DoNothing());
     waiter.WaitForExtensionPermissionsUpdate(base::BindOnce(
         [](scoped_refptr<const Extension> extension, PermissionSet* delta,
-           const UpdatedExtensionPermissionsInfo& info) {
-          ASSERT_EQ(extension.get(), info.extension);
-          ASSERT_EQ(UpdatedExtensionPermissionsInfo::ADDED, info.reason);
-          ASSERT_EQ(*delta, info.permissions);
+           const Extension& actual_extension,
+           const PermissionSet& actual_permissions,
+           PermissionsManager::UpdateReason actual_reason) {
+          ASSERT_EQ(extension.get()->id(), actual_extension.id());
+          ASSERT_EQ(*delta, actual_permissions);
+          ASSERT_EQ(PermissionsManager::UpdateReason::kAdded, actual_reason);
         },
         extension, &delta));
 
@@ -194,10 +167,12 @@ TEST_F(PermissionsUpdaterTest, GrantAndRevokeOptionalPermissions) {
                                    base::DoNothing());
     waiter.WaitForExtensionPermissionsUpdate(base::BindOnce(
         [](scoped_refptr<const Extension> extension, PermissionSet* delta,
-           const UpdatedExtensionPermissionsInfo& info) {
-          ASSERT_EQ(extension.get(), info.extension);
-          ASSERT_EQ(UpdatedExtensionPermissionsInfo::REMOVED, info.reason);
-          ASSERT_EQ(*delta, info.permissions);
+           const Extension& actual_extension,
+           const PermissionSet& actual_permissions,
+           PermissionsManager::UpdateReason actual_reason) {
+          ASSERT_EQ(extension.get()->id(), actual_extension.id());
+          ASSERT_EQ(*delta, actual_permissions);
+          ASSERT_EQ(PermissionsManager::UpdateReason::kRemoved, actual_reason);
         },
         extension, &delta));
 
@@ -240,13 +215,14 @@ TEST_F(PermissionsUpdaterTest, RevokingPermissions) {
 
   {
     // Test revoking optional permissions.
-    ListBuilder optional_permissions;
-    optional_permissions.Append("tabs").Append("cookies").Append("management");
-    ListBuilder required_permissions;
+    auto optional_permissions =
+        base::Value::List().Append("tabs").Append("cookies").Append(
+            "management");
+    base::Value::List required_permissions;
     required_permissions.Append("topSites");
     scoped_refptr<const Extension> extension =
-        CreateExtensionWithOptionalPermissions(optional_permissions.Build(),
-                                               required_permissions.Build(),
+        CreateExtensionWithOptionalPermissions(std::move(optional_permissions),
+                                               std::move(required_permissions),
                                                "My Extension");
 
     PermissionsUpdater updater(profile());
@@ -301,12 +277,12 @@ TEST_F(PermissionsUpdaterTest, RevokingPermissions) {
     URLPatternSet default_policy_allowed_hosts;
     URLPatternSet policy_blocked_hosts;
     URLPatternSet policy_allowed_hosts;
-    ListBuilder optional_permissions;
-    ListBuilder required_permissions;
-    required_permissions.Append("tabs").Append("http://*/*");
+    base::Value::List optional_permissions;
+    base::Value::List required_permissions =
+        base::Value::List().Append("tabs").Append("http://*/*");
     scoped_refptr<const Extension> extension =
-        CreateExtensionWithOptionalPermissions(optional_permissions.Build(),
-                                               required_permissions.Build(),
+        CreateExtensionWithOptionalPermissions(std::move(optional_permissions),
+                                               std::move(required_permissions),
                                                "ExtensionSettings");
     AddPattern(&default_policy_blocked_hosts, "http://*.google.com/*");
     PermissionsUpdater updater(profile());
@@ -394,34 +370,6 @@ TEST_F(PermissionsUpdaterTest, RevokingPermissions) {
   }
 }
 
-// Test that the permissions updater delegate works - in this test it removes
-// the cookies permission.
-TEST_F(PermissionsUpdaterTest, Delegate) {
-  InitializeEmptyExtensionService();
-
-  ListBuilder required_permissions;
-  required_permissions.Append("tabs").Append("management").Append("cookies");
-  scoped_refptr<const Extension> extension =
-      CreateExtensionWithOptionalPermissions(
-          std::make_unique<base::ListValue>(), required_permissions.Build(),
-          "My Extension");
-
-  PermissionsUpdater::SetPlatformDelegate(
-      std::make_unique<PermissionsUpdaterTestDelegate>());
-  PermissionsUpdater updater(profile());
-  updater.InitializePermissions(extension.get());
-
-  EXPECT_TRUE(
-      extension->permissions_data()->HasAPIPermission(APIPermissionID::kTab));
-  EXPECT_TRUE(extension->permissions_data()->HasAPIPermission(
-      APIPermissionID::kManagement));
-  EXPECT_FALSE(extension->permissions_data()->HasAPIPermission(
-      APIPermissionID::kCookie));
-
-  // Unset the delegate.
-  PermissionsUpdater::SetPlatformDelegate(nullptr);
-}
-
 TEST_F(PermissionsUpdaterTest,
        UpdatingRuntimeGrantedPermissionsWithOptionalPermissions) {
   InitializeEmptyExtensionService();
@@ -429,7 +377,7 @@ TEST_F(PermissionsUpdaterTest,
   scoped_refptr<const Extension> extension =
       ExtensionBuilder("extension")
           .SetManifestKey("optional_permissions",
-                          extensions::ListBuilder().Append("tabs").Build())
+                          base::Value::List().Append("tabs"))
           .Build();
 
   PermissionsUpdater updater(profile());
@@ -553,8 +501,8 @@ TEST_F(PermissionsUpdaterTest, RevokingPermissionsWithRuntimeHostPermissions) {
     SCOPED_TRACE(test_name);
     scoped_refptr<const Extension> extension =
         CreateExtensionWithOptionalPermissions(
-            std::make_unique<base::ListValue>(),
-            ListBuilder().Append(test_case.permission).Build(), test_name);
+            base::Value::List(),
+            base::Value::List().Append(test_case.permission), test_name);
     PermissionsUpdater updater(profile());
     updater.InitializePermissions(extension.get());
 
@@ -813,8 +761,9 @@ TEST_F(PermissionsUpdaterTest,
 
   scoped_refptr<const Extension> extension =
       CreateExtensionWithOptionalPermissions(
-          /*optional=*/ListBuilder().Append("tabs").Build(),
-          /*required=*/ListBuilder().Append("https://example.com/*").Build(),
+          /*optional_permissions=*/base::Value::List().Append("tabs"),
+          /*permissions=*/
+          base::Value::List().Append("https://example.com/*"),
           "optional grant");
   ASSERT_TRUE(extension);
 
@@ -986,16 +935,14 @@ TEST_F(PermissionsUpdaterTest, DesiredActivePermissionsAreFixedOnLoad) {
 }
 
 class PermissionsUpdaterTestWithEnhancedHostControls
-    : public PermissionsUpdaterTest,
-      public testing::WithParamInterface<bool> {
+    : public PermissionsUpdaterTest {
  public:
   PermissionsUpdaterTestWithEnhancedHostControls() {
-    const base::Feature& feature =
-        extensions_features::kExtensionsMenuAccessControl;
-    if (GetParam())
-      feature_list_.InitAndEnableFeature(feature);
-    else
-      feature_list_.InitAndDisableFeature(feature);
+    std::vector<base::test::FeatureRef> enabled_features = {
+        extensions_features::kExtensionsMenuAccessControl,
+        extensions_features::kExtensionsMenuAccessControlWithPermittedSites};
+    std::vector<base::test::FeatureRef> disabled_features = {};
+    feature_list_.InitWithFeatures(enabled_features, disabled_features);
   }
   ~PermissionsUpdaterTestWithEnhancedHostControls() override = default;
 
@@ -1003,13 +950,9 @@ class PermissionsUpdaterTestWithEnhancedHostControls
   base::test::ScopedFeatureList feature_list_;
 };
 
-INSTANTIATE_TEST_SUITE_P(All,
-                         PermissionsUpdaterTestWithEnhancedHostControls,
-                         testing::Bool());
-
 // Tests the behavior of revoking permissions from the extension while the
 // user has specified a set of sites that all extensions are allowed to run on.
-TEST_P(PermissionsUpdaterTestWithEnhancedHostControls,
+TEST_F(PermissionsUpdaterTestWithEnhancedHostControls,
        RevokingPermissionsWithUserPermittedSites) {
   InitializeEmptyExtensionService();
 
@@ -1080,20 +1023,6 @@ TEST_P(PermissionsUpdaterTestWithEnhancedHostControls,
   // Withhold host permissions from the extension.
   ScriptingPermissionsModifier(profile(), extension)
       .SetWithholdHostPermissions(true);
-
-  // If the enhanced host controls feature is disabled, then both hosts are
-  // withheld.
-  if (!GetParam()) {
-    EXPECT_EQ(PermissionsData::PageAccess::kWithheld,
-              get_site_access(first_url));
-    EXPECT_EQ(PermissionsData::PageAccess::kWithheld,
-              get_site_access(second_url));
-    // There's nothing more we need to test in this case.
-    return;
-  }
-
-  // Otherwise, the feature is enabled, and user host settings are considered
-  // in the permissions adjustment.
 
   // The extension should be allowed to run on `first_url`, since the
   // user indicated all extensions can always run there. However, it should not

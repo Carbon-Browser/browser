@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,6 +10,7 @@
 #include "ui/aura/window.h"
 #include "ui/aura/window_tree_host.h"
 #include "ui/display/display.h"
+#include "ui/display/tablet_state.h"
 #include "ui/ozone/public/ozone_platform.h"
 #include "ui/ozone/public/platform_screen.h"
 
@@ -18,18 +19,10 @@ namespace aura {
 ScreenOzone::ScreenOzone() {
   DCHECK(!display::Screen::HasScreen());
   display::Screen::SetScreenInstance(this);
-}
 
-ScreenOzone::~ScreenOzone() {
-  display::Screen::SetScreenInstance(nullptr);
-}
-
-void ScreenOzone::Initialize() {
   auto* platform = ui::OzonePlatform::GetInstance();
   platform_screen_ = platform->CreateScreen();
   if (platform_screen_) {
-    // Gives a chance to the derived classes to do pre-early initialization.
-    OnBeforePlatformScreenInit();
     // Separate `CreateScreen` from `InitScreen` so that synchronous observers
     // that call into `Screen` functions below have a valid `platform_screen_`.
     platform->InitScreen(platform_screen_.get());
@@ -37,6 +30,10 @@ void ScreenOzone::Initialize() {
     NOTREACHED()
         << "PlatformScreen is not implemented for this ozone platform.";
   }
+}
+
+ScreenOzone::~ScreenOzone() {
+  display::Screen::SetScreenInstance(nullptr);
 }
 
 // static
@@ -148,6 +145,17 @@ base::Value::List ScreenOzone::GetGpuExtraInfo(
   return platform_screen_->GetGpuExtraInfo(gpu_extra_info);
 }
 
+#if BUILDFLAG(IS_CHROMEOS_LACROS)
+display::TabletState ScreenOzone::GetTabletState() const {
+  return platform_screen_->GetTabletState();
+}
+
+void ScreenOzone::OverrideTabletStateForTesting(
+    display::TabletState tablet_state) {
+  platform_screen_->OnTabletStateChanged(tablet_state);
+}
+#endif
+
 gfx::NativeWindow ScreenOzone::GetNativeWindowFromAcceleratedWidget(
     gfx::AcceleratedWidget widget) const {
   return nullptr;
@@ -163,21 +171,6 @@ gfx::AcceleratedWidget ScreenOzone::GetAcceleratedWidgetForWindow(
     return gfx::kNullAcceleratedWidget;
 
   return host->GetAcceleratedWidget();
-}
-
-void ScreenOzone::OnBeforePlatformScreenInit() {}
-
-ScopedScreenOzone::ScopedScreenOzone(const base::Location& location)
-    : ScopedNativeScreen(/*call_maybe_init=*/false, location) {
-  MaybeInit();
-}
-
-ScopedScreenOzone::~ScopedScreenOzone() = default;
-
-display::Screen* ScopedScreenOzone::CreateScreen() {
-  auto* screen = new ScreenOzone();
-  screen->Initialize();
-  return screen;
 }
 
 }  // namespace aura

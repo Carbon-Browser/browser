@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -16,9 +16,12 @@
  *   icon: (string|undefined),
  *   subtype: !string,
  *   extensions: (!Array<!string>|undefined),
- *   mime: (string|undefined)
+ *   mime: (string|undefined),
+ *   encrypted: (boolean|undefined),
+ *   originalMimeType: (string|undefined)
  * }}
  */
+// @ts-ignore:  error TS7005: Variable 'FileExtensionType' implicitly has an 'any' type.
 export let FileExtensionType;
 {%- endraw %}
 

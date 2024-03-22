@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,10 +7,11 @@
 
 #include <stdint.h>
 
+#include "base/memory/raw_ptr.h"
 #include "base/time/default_clock.h"
 #include "base/time/time.h"
 
-namespace ui {
+namespace ash {
 
 class TypingSessionManager {
  public:
@@ -38,11 +39,11 @@ class TypingSessionManager {
 
   base::Time last_user_action_time_;
 
-  base::Clock* clock_;
+  raw_ptr<base::Clock, ExperimentalAsh> clock_;
 
   bool is_active_;
 };
 
-}  // namespace ui
+}  // namespace ash
 
 #endif  // UI_BASE_IME_ASH_TYPING_SESSION_MANAGER_H_

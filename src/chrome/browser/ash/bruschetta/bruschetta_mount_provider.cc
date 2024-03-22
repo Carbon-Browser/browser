@@ -1,12 +1,15 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/ash/bruschetta/bruschetta_mount_provider.h"
 
 #include "base/logging.h"
+#include "base/notreached.h"
 #include "chrome/browser/ash/bruschetta/bruschetta_launcher.h"
+#include "chrome/browser/ash/bruschetta/bruschetta_pref_names.h"
 #include "chrome/browser/ash/bruschetta/bruschetta_service.h"
+#include "chrome/browser/ash/bruschetta/bruschetta_util.h"
 #include "chrome/browser/ash/guest_os/guest_os_session_tracker.h"
 #include "chrome/browser/ash/profiles/profile_helper.h"
 
@@ -23,7 +26,15 @@ Profile* BruschettaMountProvider::profile() {
 }
 
 std::string BruschettaMountProvider::DisplayName() {
-  return "Bruschetta";
+  auto config = GetConfigForGuest(profile_, guest_id_,
+                                  prefs::PolicyEnabledState::BLOCKED);
+  if (!config.has_value() || !config.value()) {
+    // If the config doesn't exist this provider should have been removed.
+    NOTREACHED();
+    return {};
+  }
+
+  return *config.value()->FindString(prefs::kPolicyNameKey);
 }
 
 guest_os::GuestId BruschettaMountProvider::GuestId() {
@@ -46,9 +57,13 @@ BruschettaMountProvider::CreateFileWatcher(base::FilePath mount_path,
 void BruschettaMountProvider::Prepare(PrepareCallback callback) {
   auto* service = BruschettaService::GetForProfile(profile_);
   auto launcher = service->GetLauncher(guest_id_.vm_name);
-  launcher->EnsureRunning(base::BindOnce(&BruschettaMountProvider::OnRunning,
-                                         weak_ptr_factory_.GetWeakPtr(),
-                                         std::move(callback)));
+  if (launcher) {
+    launcher->EnsureRunning(base::BindOnce(&BruschettaMountProvider::OnRunning,
+                                           weak_ptr_factory_.GetWeakPtr(),
+                                           std::move(callback)));
+  } else {
+    std::move(callback).Run(false, {}, {}, {});
+  }
 }
 
 void BruschettaMountProvider::OnRunning(PrepareCallback callback,
@@ -58,9 +73,9 @@ void BruschettaMountProvider::OnRunning(PrepareCallback callback,
     std::move(callback).Run(false, 0, 0, base::FilePath());
     return;
   }
+  auto* tracker = guest_os::GuestOsSessionTracker::GetForProfile(profile_);
 
-  auto info = guest_os::GuestOsSessionTracker::GetForProfile(profile_)->GetInfo(
-      guest_id_);
+  auto info = tracker->GetInfo(guest_id_);
   if (!info) {
     // Shouldn't happen unless you managed to shutdown the VM at the same
     // instant as you booted it.
@@ -68,10 +83,11 @@ void BruschettaMountProvider::OnRunning(PrepareCallback callback,
     std::move(callback).Run(false, 0, 0, base::FilePath());
     return;
   }
-
-  // TODO(b/217469540): Once the sftp changes in garcon land, change the port
-  // from hardcoded 1234 to the real value.
-  std::move(callback).Run(true, info->cid, 1234, info->homedir);
+  unmount_subscription_ = tracker->RunOnShutdown(
+      guest_id_, base::BindOnce(&BruschettaMountProvider::Unmount,
+                                weak_ptr_factory_.GetWeakPtr()));
+  std::move(callback).Run(true, info->cid, info->sftp_vsock_port,
+                          info->homedir);
 }
 
 }  // namespace bruschetta

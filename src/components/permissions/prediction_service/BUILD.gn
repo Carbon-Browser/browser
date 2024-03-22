@@ -1,4 +1,4 @@
-# Copyright 2020 The Chromium Authors. All rights reserved.
+# Copyright 2020 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -6,7 +6,10 @@ import("//components/optimization_guide/features.gni")
 import("//third_party/protobuf/proto_library.gni")
 
 proto_library("prediction_service_messages_proto") {
-  sources = [ "prediction_service_messages.proto" ]
+  sources = [
+    "prediction_model_metadata.proto",
+    "prediction_service_messages.proto",
+  ]
 }
 
 source_set("prediction_service") {
@@ -38,6 +41,8 @@ source_set("prediction_service") {
       "prediction_model_executor.h",
       "prediction_model_handler.cc",
       "prediction_model_handler.h",
+      "prediction_model_handler_provider.cc",
+      "prediction_model_handler_provider.h",
     ]
 
     deps += [

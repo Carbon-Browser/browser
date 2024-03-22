@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,7 +9,7 @@ function testReadCharacteristicValue() {
     chrome.test.sendMessage('fail');
     chrome.test.fail(error);
   }
-  chrome.test.assertTrue(characteristic != null, '\'characteristic\' is null');
+  chrome.test.assertNe(null, characteristic, '\'characteristic\' is null');
   chrome.test.assertEq(charId, characteristic.instanceId);
 
   chrome.test.succeed();

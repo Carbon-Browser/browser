@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -49,12 +49,13 @@ FeedbackUploaderFactory::FeedbackUploaderFactory()
 
 FeedbackUploaderFactory::~FeedbackUploaderFactory() {}
 
-KeyedService* FeedbackUploaderFactory::BuildServiceInstanceFor(
+std::unique_ptr<KeyedService>
+FeedbackUploaderFactory::BuildServiceInstanceForBrowserContext(
     content::BrowserContext* context) const {
   // The returned FeedbackUploader lifetime is bound to that of BrowserContext
   // by the KeyedServiceFactory infrastructure. The FeedbackUploader will be
   // destroyed before the BrowserContext, thus base::Unretained() usage is safe.
-  return new FeedbackUploader(
+  return std::make_unique<FeedbackUploader>(
       context->IsOffTheRecord(), context->GetPath(),
       base::BindOnce(&CreateURLLoaderFactoryForBrowserContext,
                      base::Unretained(context)));

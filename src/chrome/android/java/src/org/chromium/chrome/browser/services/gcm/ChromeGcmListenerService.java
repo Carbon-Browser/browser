@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,7 +6,7 @@ package org.chromium.chrome.browser.services.gcm;
 
 import android.annotation.SuppressLint;
 
-import org.chromium.base.annotations.IdentifierNameString;
+import org.chromium.build.annotations.IdentifierNameString;
 import org.chromium.chrome.browser.base.SplitCompatGcmListenerService;
 
 /**
@@ -15,8 +15,7 @@ import org.chromium.chrome.browser.base.SplitCompatGcmListenerService;
  */
 @SuppressLint("MissingFirebaseInstanceTokenRefresh")
 public class ChromeGcmListenerService extends SplitCompatGcmListenerService {
-    @IdentifierNameString
-    private static String sImplClassName =
+    private static @IdentifierNameString String sImplClassName =
             "org.chromium.chrome.browser.services.gcm.ChromeGcmListenerServiceImpl";
 
     public ChromeGcmListenerService() {

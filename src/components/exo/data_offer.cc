@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,8 +8,8 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
 #include "base/i18n/icu_string_conversions.h"
 #include "base/memory/ref_counted_memory.h"
 #include "base/memory/scoped_refptr.h"
@@ -19,15 +19,11 @@
 #include "base/strings/string_util.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/task/thread_pool.h"
-#include "build/chromeos_buildflags.h"
 #include "components/exo/data_device.h"
 #include "components/exo/data_exchange_delegate.h"
 #include "components/exo/data_offer_delegate.h"
 #include "components/exo/data_offer_observer.h"
 #include "net/base/filename_util.h"
-#include "third_party/skia/include/core/SkEncodedImageFormat.h"
-#include "third_party/skia/include/core/SkImageEncoder.h"
-#include "third_party/skia/include/core/SkStream.h"
 #include "ui/base/clipboard/clipboard.h"
 #include "ui/base/clipboard/clipboard_buffer.h"
 #include "ui/base/clipboard/clipboard_constants.h"
@@ -78,7 +74,7 @@ scoped_refptr<base::RefCountedString> EncodeAsRefCountedString(
   base::UTF16ToCodepage(text, charset.c_str(),
                         base::OnStringConversionError::SUBSTITUTE,
                         &encoded_text);
-  return base::RefCountedString::TakeString(&encoded_text);
+  return base::MakeRefCounted<base::RefCountedString>(std::move(encoded_text));
 }
 
 DataOffer::AsyncSendDataCallback AsyncEncodeAsRefCountedString(
@@ -92,12 +88,11 @@ DataOffer::AsyncSendDataCallback AsyncEncodeAsRefCountedString(
       text, charset);
 }
 
-#if BUILDFLAG(IS_CHROMEOS_ASH)
 void ReadDataTransferEndpointFromClipboard(
     const std::string& charset,
     const ui::DataTransferEndpoint data_dst,
     DataOffer::SendDataCallback callback) {
-  const ui::DataTransferEndpoint* data_src =
+  absl::optional<ui::DataTransferEndpoint> data_src =
       ui::Clipboard::GetForCurrentThread()->GetSource(
           ui::ClipboardBuffer::kCopyPaste);
 
@@ -113,7 +108,6 @@ void ReadDataTransferEndpointFromClipboard(
 
   std::move(callback).Run(EncodeAsRefCountedString(encoded_endpoint, charset));
 }
-#endif  // BUILDFLAG(IS_CHROMEOS_ASH)
 
 void ReadTextFromClipboard(const std::string& charset,
                            const ui::DataTransferEndpoint data_dst,
@@ -140,7 +134,8 @@ void ReadRTFFromClipboard(const ui::DataTransferEndpoint data_dst,
   std::string text;
   ui::Clipboard::GetForCurrentThread()->ReadRTF(ui::ClipboardBuffer::kCopyPaste,
                                                 &data_dst, &text);
-  std::move(callback).Run(base::RefCountedString::TakeString(&text));
+  std::move(callback).Run(
+      base::MakeRefCounted<base::RefCountedString>(std::move(text)));
 }
 
 void OnReceivePNGFromClipboard(DataOffer::SendDataCallback callback,
@@ -242,7 +237,6 @@ void DataOffer::SetDropData(DataExchangeDelegate* data_exchange_delegate,
   ui::EndpointType endpoint_type =
       data_exchange_delegate->GetDataTransferEndpointType(target);
 
-#if BUILDFLAG(IS_CHROMEOS_ASH)
   // Drag & Drop source metadata (if any) is synced between Ash and Lacros by
   // encoding the metadata into a custom MIME type.
   if (endpoint_type == ui::EndpointType::kLacros && data.GetSource()) {
@@ -253,7 +247,6 @@ void DataOffer::SetDropData(DataExchangeDelegate* data_exchange_delegate,
         AsyncEncodeAsRefCountedString(encoded_endpoint, kUTF8));
     delegate_->OnOffer(ui::kMimeTypeDataTransferEndpoint);
   }
-#endif  // BUILDFLAG(IS_CHROMEOS_ASH)
 
   const std::string uri_list_mime_type =
       data_exchange_delegate->GetMimeTypeForUriList(endpoint_type);
@@ -305,7 +298,8 @@ void DataOffer::SetDropData(DataExchangeDelegate* data_exchange_delegate,
            DataOffer::SendDataCallback callback) {
           std::move(callback).Run(std::move(contents));
         },
-        base::RefCountedString::TakeString(&file_contents));
+        base::MakeRefCounted<base::RefCountedString>(std::move(file_contents)));
+
     data_callbacks_.emplace(mime_type, std::move(callback));
     delegate_->OnOffer(mime_type);
   }
@@ -352,7 +346,6 @@ void DataOffer::SetClipboardData(DataExchangeDelegate* data_exchange_delegate,
   DCHECK_EQ(0u, data_callbacks_.size());
   const ui::DataTransferEndpoint data_dst(endpoint_type);
 
-#if BUILDFLAG(IS_CHROMEOS_ASH)
   // Clipboard source metadata (if any) is synced between Ash and Lacros by
   // encoding the metadata into a custom MIME type.
   if (endpoint_type == ui::EndpointType::kLacros &&
@@ -363,7 +356,6 @@ void DataOffer::SetClipboardData(DataExchangeDelegate* data_exchange_delegate,
         base::BindOnce(&ReadDataTransferEndpointFromClipboard,
                        std::string(kUTF8), data_dst));
   }
-#endif  // BUILDFLAG(IS_CHROMEOS_ASH)
 
   if (data.IsFormatAvailable(ui::ClipboardFormatType::PlainTextType(),
                              ui::ClipboardBuffer::kCopyPaste, &data_dst)) {
@@ -403,17 +395,10 @@ void DataOffer::SetClipboardData(DataExchangeDelegate* data_exchange_delegate,
                             base::BindOnce(&ReadPNGFromClipboard, data_dst));
   }
 
-  // We accept the filenames pickle from FilesApp, or text/uri-list from apps.
+  // For clipboard, FilesApp filenames pickle is already converted to files
+  // in VolumeManager::OnClipboardDataChanged().
   std::vector<ui::FileInfo> filenames;
-  std::string buf;
-  data.ReadData(ui::ClipboardFormatType::WebCustomDataType(), &data_dst, &buf);
-  if (!buf.empty()) {
-    base::Pickle pickle(buf.data(), static_cast<int>(buf.size()));
-    filenames = data_exchange_delegate->ParseFileSystemSources(
-        data.GetSource(ui::ClipboardBuffer::kCopyPaste), pickle);
-  }
-  if (filenames.empty() &&
-      data.IsFormatAvailable(ui::ClipboardFormatType::FilenamesType(),
+  if (data.IsFormatAvailable(ui::ClipboardFormatType::FilenamesType(),
                              ui::ClipboardBuffer::kCopyPaste, &data_dst)) {
     data.ReadFilenames(ui::ClipboardBuffer::kCopyPaste, &data_dst, &filenames);
   }

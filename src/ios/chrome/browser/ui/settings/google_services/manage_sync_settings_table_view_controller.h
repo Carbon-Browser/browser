@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -39,6 +39,10 @@
 // Service delegate.
 @property(nonatomic, weak) id<ManageSyncSettingsServiceDelegate>
     serviceDelegate;
+
+// Tells the controller if it is being viewed for a signed-in not syncing
+// account or not.
+@property(nonatomic, assign) BOOL isAccountStateSignedIn;
 
 @end
 

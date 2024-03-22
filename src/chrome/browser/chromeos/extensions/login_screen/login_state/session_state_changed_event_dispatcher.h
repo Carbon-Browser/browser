@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -58,8 +58,8 @@ class SessionStateChangedEventDispatcher
   }
   static const bool kServiceIsNULLWhileTesting = true;
 
-  raw_ptr<content::BrowserContext> browser_context_;
-  raw_ptr<EventRouter> event_router_;
+  raw_ptr<content::BrowserContext, DanglingUntriaged> browser_context_;
+  raw_ptr<EventRouter, DanglingUntriaged> event_router_;
 
   // Receives mojo messages from ash.
   mojo::Receiver<crosapi::mojom::SessionStateChangedEventObserver> receiver_{

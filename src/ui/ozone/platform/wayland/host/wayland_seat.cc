@@ -1,10 +1,8 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "ui/ozone/platform/wayland/host/wayland_seat.h"
-
-#include <idle-client-protocol.h>
 
 #include "base/logging.h"
 #include "ui/events/ozone/layout/keyboard_layout_engine_manager.h"
@@ -18,11 +16,8 @@ namespace ui {
 
 namespace {
 constexpr uint32_t kMinVersion = 1;
-constexpr uint32_t kMaxVersion = 5;
+constexpr uint32_t kMaxVersion = 8;
 }  // namespace
-
-// static
-constexpr char WaylandSeat::kInterfaceName[];
 
 // static
 void WaylandSeat::Instantiate(WaylandConnection* connection,
@@ -30,15 +25,15 @@ void WaylandSeat::Instantiate(WaylandConnection* connection,
                               uint32_t name,
                               const std::string& interface,
                               uint32_t version) {
-  DCHECK_EQ(interface, kInterfaceName);
+  CHECK_EQ(interface, kInterfaceName) << "Expected \"" << kInterfaceName
+                                      << "\" but got \"" << interface << "\"";
 
   if (connection->seat_ ||
       !wl::CanBind(interface, version, kMinVersion, kMaxVersion)) {
     return;
   }
 
-  auto seat =
-      wl::Bind<struct wl_seat>(registry, name, std::min(version, kMaxVersion));
+  auto seat = wl::Bind<wl_seat>(registry, name, std::min(version, kMaxVersion));
   if (!seat) {
     LOG(ERROR) << "Failed to bind to wl_seat global";
     return;
@@ -56,8 +51,8 @@ WaylandSeat::WaylandSeat(wl_seat* seat, WaylandConnection* connection)
   DCHECK(obj_);
 
   static constexpr wl_seat_listener kSeatListener = {
-      &Capabilities,
-      &Name,
+      .capabilities = &OnCapabilities,
+      .name = &OnName,
   };
   wl_seat_add_listener(wl_object(), &kSeatListener, this);
 }
@@ -81,21 +76,21 @@ bool WaylandSeat::RefreshKeyboard() {
 }
 
 // static
-void WaylandSeat::Capabilities(void* data,
-                               wl_seat* seat,
-                               uint32_t capabilities) {
-  auto* self = static_cast<WaylandSeat*>(data);
-  self->OnCapabilities(data, seat, capabilities);
-}
-
-// static
-void WaylandSeat::Name(void* data, wl_seat* seat, const char* name) {
-  NOTIMPLEMENTED_LOG_ONCE();
-}
-
 void WaylandSeat::OnCapabilities(void* data,
                                  wl_seat* seat,
                                  uint32_t capabilities) {
+  auto* self = static_cast<WaylandSeat*>(data);
+  self->HandleCapabilities(data, seat, capabilities);
+}
+
+// static
+void WaylandSeat::OnName(void* data, wl_seat* seat, const char* name) {
+  NOTIMPLEMENTED_LOG_ONCE();
+}
+
+void WaylandSeat::HandleCapabilities(void* data,
+                                     wl_seat* seat,
+                                     uint32_t capabilities) {
   DCHECK(connection_->event_source());
 
   if (capabilities & WL_SEAT_CAPABILITY_KEYBOARD) {
@@ -132,7 +127,8 @@ void WaylandSeat::OnCapabilities(void* data,
   }
 
   connection_->UpdateInputDevices();
-  connection_->ScheduleFlush();
+  connection_->UpdateCursor();
+  connection_->Flush();
 }
 
 }  // namespace ui

@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -22,6 +22,8 @@
 
 class Profile;
 class TabMatcher;
+class AutocompleteScoringModelService;
+class OnDeviceTailModelService;
 
 namespace content {
 class StoragePartition;
@@ -53,15 +55,16 @@ class ChromeAutocompleteProviderClient : public AutocompleteProviderClient {
   history_clusters::HistoryClustersService* GetHistoryClustersService()
       override;
   scoped_refptr<history::TopSites> GetTopSites() override;
-  bookmarks::BookmarkModel* GetBookmarkModel() override;
+  bookmarks::BookmarkModel* GetLocalOrSyncableBookmarkModel() override;
+  bookmarks::BookmarkModel* GetAccountBookmarkModel() override;
   history::URLDatabase* GetInMemoryDatabase() override;
   InMemoryURLIndex* GetInMemoryURLIndex() override;
   TemplateURLService* GetTemplateURLService() override;
   const TemplateURLService* GetTemplateURLService() const override;
   RemoteSuggestionsService* GetRemoteSuggestionsService(
       bool create_if_necessary) const override;
-  DocumentSuggestionsService* GetDocumentSuggestionsService(
-      bool create_if_necessary) const override;
+  ZeroSuggestCacheService* GetZeroSuggestCacheService() override;
+  const ZeroSuggestCacheService* GetZeroSuggestCacheService() const override;
   OmniboxPedalProvider* GetPedalProvider() const override;
   scoped_refptr<ShortcutsBackend> GetShortcutsBackend() override;
   scoped_refptr<ShortcutsBackend> GetShortcutsBackendIfExists() override;
@@ -77,7 +80,13 @@ class ChromeAutocompleteProviderClient : public AutocompleteProviderClient {
   OmniboxTriggeredFeatureService* GetOmniboxTriggeredFeatureService()
       const override;
   signin::IdentityManager* GetIdentityManager() const override;
+  AutocompleteScoringModelService* GetAutocompleteScoringModelService()
+      const override;
+  OnDeviceTailModelService* GetOnDeviceTailModelService() const override;
+  ProviderStateService* GetProviderStateService() const override;
   bool IsOffTheRecord() const override;
+  bool IsIncognitoProfile() const override;
+  bool IsGuestSession() const override;
   bool SearchSuggestEnabled() const override;
   bool AllowDeletingBrowserHistory() const override;
   bool IsPersonalizedUrlDataCollectionActive() const override;
@@ -107,6 +116,7 @@ class ChromeAutocompleteProviderClient : public AutocompleteProviderClient {
   void OpenIncognitoClearBrowsingDataDialog() override;
   void CloseIncognitoWindows() override;
   void PromptPageTranslation() override;
+  bool OpenJourneys(const std::string& query) override;
 
   // For testing.
   void set_storage_partition(content::StoragePartition* storage_partition) {

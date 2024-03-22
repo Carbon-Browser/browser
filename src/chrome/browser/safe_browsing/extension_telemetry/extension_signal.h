@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,11 +11,19 @@ namespace safe_browsing {
 
 // Signal types.
 // These values are persisted to logs. Entries should not be renumbered and
-// numeric values should never be reused.
+// numeric values should never be reused. They should be kept in sync with
+// SBExtensionTelemetrySignalsSignalType enum definition in
+// /tools/metrics/histograms/enums.xml
 enum class ExtensionSignalType {
   kTabsExecuteScript = 0,
   kRemoteHostContacted = 1,
-  kMaxValue = kRemoteHostContacted,
+  kCookiesGetAll = 2,
+  kPasswordReuse = 3,
+  kPotentialPasswordTheft = 4,
+  kCookiesGet = 5,
+  kDeclarativeNetRequest = 6,
+  kTabsApi = 7,
+  kMaxValue = kTabsApi,
 };
 
 // An abstract signal. Subclasses provide type-specific functionality to
@@ -27,7 +35,7 @@ class ExtensionSignal {
   // Returns the type of the signal.
   virtual ExtensionSignalType GetType() const = 0;
 
-  const extensions::ExtensionId& extension_id() { return extension_id_; }
+  const extensions::ExtensionId& extension_id() const { return extension_id_; }
 
  protected:
   explicit ExtensionSignal(const extensions::ExtensionId& extension_id)

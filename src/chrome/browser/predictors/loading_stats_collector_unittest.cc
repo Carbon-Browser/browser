@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -53,8 +53,8 @@ class LoadingStatsCollectorTest : public testing::Test {
   std::unique_ptr<base::HistogramTester> histogram_tester_;
   std::unique_ptr<ukm::TestAutoSetUkmRecorder> ukm_recorder_;
 
-  const net::NetworkIsolationKey network_isolation_key_ =
-      net::NetworkIsolationKey::CreateTransient();
+  const net::NetworkAnonymizationKey network_anonymization_key_ =
+      net::NetworkAnonymizationKey::CreateTransient();
 };
 
 LoadingStatsCollectorTest::LoadingStatsCollectorTest() = default;
@@ -85,7 +85,7 @@ void LoadingStatsCollectorTest::TestRedirectStatusHistogram(
   const std::string& script_url = "https://cdn.google.com/script.js";
   PreconnectPrediction prediction = CreatePreconnectPrediction(
       GURL(prediction_url).host(), initial_url != prediction_url,
-      {{url::Origin::Create(GURL(script_url)), 1, network_isolation_key_}});
+      {{url::Origin::Create(GURL(script_url)), 1, network_anonymization_key_}});
   EXPECT_CALL(*mock_predictor_, PredictPreconnectOrigins(GURL(initial_url), _))
       .WillOnce(DoAll(SetArgPointee<1>(prediction), Return(true)));
 
@@ -115,10 +115,11 @@ TEST_F(LoadingStatsCollectorTest, TestPreconnectPrecisionRecallMetrics) {
   // Predicts 4 origins: 2 useful, 2 useless.
   PreconnectPrediction prediction = CreatePreconnectPrediction(
       GURL(main_frame_url).host(), false,
-      {{url::Origin::Create(GURL(main_frame_url)), 1, network_isolation_key_},
-       {url::Origin::Create(GURL(gen(1))), 1, network_isolation_key_},
-       {url::Origin::Create(GURL(gen(2))), 1, network_isolation_key_},
-       {url::Origin::Create(GURL(gen(3))), 0, network_isolation_key_}});
+      {{url::Origin::Create(GURL(main_frame_url)), 1,
+        network_anonymization_key_},
+       {url::Origin::Create(GURL(gen(1))), 1, network_anonymization_key_},
+       {url::Origin::Create(GURL(gen(2))), 1, network_anonymization_key_},
+       {url::Origin::Create(GURL(gen(3))), 0, network_anonymization_key_}});
   EXPECT_CALL(*mock_predictor_,
               PredictPreconnectOrigins(GURL(main_frame_url), _))
       .WillOnce(DoAll(SetArgPointee<1>(prediction), Return(true)));
@@ -235,10 +236,10 @@ TEST_F(LoadingStatsCollectorTest,
       CreatePreconnectPrediction(
           GURL(main_frame_url).host(), false,
           {{url::Origin::Create(GURL(main_frame_url)), 1,
-            network_isolation_key_},
-           {url::Origin::Create(GURL(gen(1))), 1, network_isolation_key_},
-           {url::Origin::Create(GURL(gen(2))), 1, network_isolation_key_},
-           {url::Origin::Create(GURL(gen(3))), 0, network_isolation_key_}});
+            network_anonymization_key_},
+           {url::Origin::Create(GURL(gen(1))), 1, network_anonymization_key_},
+           {url::Origin::Create(GURL(gen(2))), 1, network_anonymization_key_},
+           {url::Origin::Create(GURL(gen(3))), 0, network_anonymization_key_}});
   optimization_guide_prediction->predicted_subresources = {
       GURL(gen(1)), GURL(gen(2)), GURL(gen(3)), GURL(gen(4))};
 

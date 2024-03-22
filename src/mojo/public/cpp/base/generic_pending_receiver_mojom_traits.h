@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -20,7 +20,7 @@ struct COMPONENT_EXPORT(MOJO_BASE_SHARED_TRAITS)
   static bool IsNull(const GenericPendingReceiver& receiver);
   static void SetToNull(GenericPendingReceiver* receiver);
 
-  static base::StringPiece interface_name(
+  static std::string_view interface_name(
       const GenericPendingReceiver& receiver) {
     DCHECK(receiver.interface_name().has_value());
     return receiver.interface_name().value();

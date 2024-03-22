@@ -1,4 +1,4 @@
-// Copyright (c) 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -15,24 +15,30 @@
 #include "content/public/browser/render_widget_host_view.h"
 #include "content/public/browser/web_contents.h"
 #include "content/public/test/browser_test.h"
-#include "ui/accessibility/platform/ax_platform_node.h"
+#include "content/public/test/scoped_accessibility_mode_override.h"
 #include "ui/accessibility/platform/ax_platform_node_base.h"
 #include "ui/views/accessibility/view_accessibility.h"
 
 class AuraLinuxAccessibilityInProcessBrowserTest : public InProcessBrowserTest {
  protected:
-  AuraLinuxAccessibilityInProcessBrowserTest()
-      : ax_mode_setter_(ui::kAXModeComplete) {}
+  AuraLinuxAccessibilityInProcessBrowserTest() = default;
 
-  AuraLinuxAccessibilityInProcessBrowserTest(
-      const AuraLinuxAccessibilityInProcessBrowserTest&) = delete;
-  AuraLinuxAccessibilityInProcessBrowserTest& operator=(
-      const AuraLinuxAccessibilityInProcessBrowserTest&) = delete;
+  void PreRunTestOnMainThread() override {
+    ax_mode_override_ =
+        std::make_unique<content::ScopedAccessibilityModeOverride>(
+            ui::kAXModeComplete);
+    InProcessBrowserTest::PreRunTestOnMainThread();
+  }
+
+  void PostRunTestOnMainThread() override {
+    InProcessBrowserTest::PostRunTestOnMainThread();
+    ax_mode_override_.reset();
+  }
 
   void VerifyEmbedRelationships();
 
  private:
-  ui::testing::ScopedAxModeSetter ax_mode_setter_;
+  std::unique_ptr<content::ScopedAccessibilityModeOverride> ax_mode_override_;
 };
 
 IN_PROC_BROWSER_TEST_F(AuraLinuxAccessibilityInProcessBrowserTest,

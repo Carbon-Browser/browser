@@ -1,13 +1,14 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include "chrome/browser/ui/app_list/arc/arc_data_removal_dialog.h"
+#include "base/memory/raw_ptr.h"
+#include "chrome/browser/ash/app_list/arc/arc_data_removal_dialog.h"
 
+#include "chrome/browser/ash/app_list/app_service/app_service_app_icon_loader.h"
+#include "chrome/browser/ash/app_list/arc/arc_app_utils.h"
 #include "chrome/browser/ash/arc/session/arc_session_manager.h"
 #include "chrome/browser/ash/arc/session/arc_session_manager_observer.h"
-#include "chrome/browser/ui/app_list/app_service/app_service_app_icon_loader.h"
-#include "chrome/browser/ui/app_list/arc/arc_app_utils.h"
 #include "chrome/browser/ui/views/chrome_layout_provider.h"
 #include "chrome/grit/generated_resources.h"
 #include "components/constrained_window/constrained_window_views.h"
@@ -51,19 +52,22 @@ class DataRemovalConfirmationDialog : public views::DialogDelegateView,
   ~DataRemovalConfirmationDialog() override;
 
   // AppIconLoaderDelegate:
-  void OnAppImageUpdated(const std::string& app_id,
-                         const gfx::ImageSkia& image) override;
+  void OnAppImageUpdated(
+      const std::string& app_id,
+      const gfx::ImageSkia& image,
+      bool is_placeholder_icon,
+      const absl::optional<gfx::ImageSkia>& badge_image) override;
 
   // ArcSessionManagerObserver:
   void OnArcPlayStoreEnabledChanged(bool enabled) override;
 
  private:
   // UI hierarchy owned.
-  views::ImageView* icon_view_ = nullptr;
+  raw_ptr<views::ImageView, ExperimentalAsh> icon_view_ = nullptr;
 
   std::unique_ptr<AppServiceAppIconLoader> icon_loader_;
 
-  Profile* const profile_;
+  const raw_ptr<Profile, ExperimentalAsh> profile_;
 
   DataRemovalConfirmationCallback confirm_callback_;
 };
@@ -131,7 +135,9 @@ DataRemovalConfirmationDialog::~DataRemovalConfirmationDialog() {
 
 void DataRemovalConfirmationDialog::OnAppImageUpdated(
     const std::string& app_id,
-    const gfx::ImageSkia& image) {
+    const gfx::ImageSkia& image,
+    bool is_placeholder_icon,
+    const absl::optional<gfx::ImageSkia>& badge_image) {
   DCHECK(!image.isNull());
   DCHECK_EQ(image.width(), kArcAppIconSize);
   DCHECK_EQ(image.height(), kArcAppIconSize);

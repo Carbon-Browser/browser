@@ -1,9 +1,10 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "services/network/test/test_data_pipe_getter.h"
-#include "base/bind.h"
+#include "base/functional/bind.h"
+#include "base/task/sequenced_task_runner.h"
 
 #include <algorithm>
 #include <utility>
@@ -40,7 +41,7 @@ void TestDataPipeGetter::Read(mojo::ScopedDataPipeProducerHandle pipe,
   pipe_ = std::move(pipe);
   handle_watcher_ = std::make_unique<mojo::SimpleWatcher>(
       FROM_HERE, mojo::SimpleWatcher::ArmingPolicy::MANUAL,
-      base::SequencedTaskRunnerHandle::Get());
+      base::SequencedTaskRunner::GetCurrentDefault());
   handle_watcher_->Watch(
       pipe_.get(),
       // Don't bother watching for close - rely on read pipes for errors.

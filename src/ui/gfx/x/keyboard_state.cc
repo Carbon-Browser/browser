@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -62,8 +62,8 @@ class CoreKeyboardState : public KeyboardState {
     auto min_keycode = static_cast<uint8_t>(connection_->setup().min_keycode);
     auto max_keycode = static_cast<uint8_t>(connection_->setup().max_keycode);
     int count = max_keycode - min_keycode + 1;
-    DCHECK_EQ(count * keyboard_mapping_.keysyms_per_keycode,
-              static_cast<int>(keyboard_mapping_.keysyms.size()));
+    DUMP_WILL_BE_CHECK_EQ(count * keyboard_mapping_.keysyms_per_keycode,
+                          static_cast<int>(keyboard_mapping_.keysyms.size()));
     for (size_t i = 0; i < keyboard_mapping_.keysyms.size(); i++) {
       auto keycode = min_keycode + i / keyboard_mapping_.keysyms_per_keycode;
       if (keyboard_mapping_.keysyms[i] == static_cast<KeySym>(keysym))

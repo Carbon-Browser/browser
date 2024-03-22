@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,11 +6,14 @@
 
 #include <memory>
 
+#include "ash/constants/ash_features.h"
+#include "base/memory/weak_ptr.h"
 #include "chrome/browser/ash/assistant/assistant_util.h"
 #include "chrome/browser/ash/login/users/chrome_user_manager_util.h"
+#include "chrome/browser/ash/login/wizard_context.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/profiles/profile_manager.h"
-#include "chrome/browser/ui/webui/chromeos/login/assistant_optin_flow_screen_handler.h"
+#include "chrome/browser/ui/webui/ash/login/assistant_optin_flow_screen_handler.h"
 #include "chromeos/ash/components/assistant/buildflags.h"
 
 namespace ash {
@@ -37,32 +40,32 @@ std::string AssistantOptInFlowScreen::GetResultString(Result result) {
 }
 
 AssistantOptInFlowScreen::AssistantOptInFlowScreen(
-    AssistantOptInFlowScreenView* view,
+    base::WeakPtr<AssistantOptInFlowScreenView> view,
     const ScreenExitCallback& exit_callback)
     : BaseScreen(AssistantOptInFlowScreenView::kScreenId,
                  OobeScreenPriority::DEFAULT),
-      view_(view),
+      view_(std::move(view)),
       exit_callback_(exit_callback) {
   DCHECK(view_);
-  if (view_)
-    view_->Bind(this);
 }
 
-AssistantOptInFlowScreen::~AssistantOptInFlowScreen() {
-  if (view_)
-    view_->Unbind();
-}
+AssistantOptInFlowScreen::~AssistantOptInFlowScreen() = default;
 
-bool AssistantOptInFlowScreen::MaybeSkip(WizardContext* context) {
-  if (context->skip_post_login_screens_for_tests || !g_libassistant_enabled ||
-      chrome_user_manager_util::IsPublicSessionOrEphemeralLogin()) {
+bool AssistantOptInFlowScreen::MaybeSkip(WizardContext& context) {
+  if (features::IsOobeSkipAssistantEnabled()) {
+    exit_callback_.Run(Result::NOT_APPLICABLE);
+    return true;
+  }
+
+  if (context.skip_post_login_screens_for_tests || !g_libassistant_enabled ||
+      chrome_user_manager_util::IsManagedGuestSessionOrEphemeralLogin()) {
     exit_callback_.Run(Result::NOT_APPLICABLE);
     return true;
   }
 
   if (::assistant::IsAssistantAllowedForProfile(
           ProfileManager::GetActiveUserProfile()) ==
-      chromeos::assistant::AssistantAllowedState::ALLOWED) {
+      assistant::AssistantAllowedState::ALLOWED) {
     return false;
   }
 
@@ -75,17 +78,6 @@ void AssistantOptInFlowScreen::ShowImpl() {
     view_->Show();
 }
 
-void AssistantOptInFlowScreen::HideImpl() {
-  if (view_)
-    view_->Hide();
-}
-
-void AssistantOptInFlowScreen::OnViewDestroyed(
-    AssistantOptInFlowScreenView* view) {
-  if (view_ == view)
-    view_ = nullptr;
-}
-
 // static
 std::unique_ptr<base::AutoReset<bool>>
 AssistantOptInFlowScreen::ForceLibAssistantEnabledForTesting(bool enabled) {
@@ -93,12 +85,12 @@ AssistantOptInFlowScreen::ForceLibAssistantEnabledForTesting(bool enabled) {
                                                  enabled);
 }
 
-void AssistantOptInFlowScreen::OnUserActionDeprecated(
-    const std::string& action_id) {
+void AssistantOptInFlowScreen::OnUserAction(const base::Value::List& args) {
+  const std::string& action_id = args[0].GetString();
   if (action_id == kFlowFinished)
     exit_callback_.Run(Result::NEXT);
   else
-    BaseScreen::OnUserActionDeprecated(action_id);
+    BaseScreen::OnUserAction(args);
 }
 
 }  // namespace ash

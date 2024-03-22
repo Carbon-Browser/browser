@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,26 +7,22 @@
 #include <errno.h>
 #include <sys/socket.h>
 
-#include <algorithm>
 #include <atomic>
 #include <limits>
 #include <memory>
 #include <tuple>
 
-#include "base/bind.h"
-#include "base/containers/queue.h"
-#include "base/cpu_reduction_experiment.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/logging.h"
-#include "base/memory/ref_counted.h"
 #include "base/message_loop/message_pump_for_io.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/synchronization/lock.h"
 #include "base/task/current_thread.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/task/task_runner.h"
 #include "base/time/time.h"
 #include "build/build_config.h"
-#include "mojo/core/core.h"
 #include "mojo/public/cpp/platform/socket_utils_posix.h"
 
 #if !BUILDFLAG(IS_NACL)
@@ -125,12 +121,8 @@ ChannelPosix::ChannelPosix(
     : Channel(delegate, handle_policy),
       self_(this),
       io_task_runner_(io_task_runner) {
-  if (connection_params.server_endpoint().is_valid())
-    server_ = connection_params.TakeServerEndpoint();
-  else
-    socket_ = connection_params.TakeEndpoint().TakePlatformHandle().TakeFD();
-
-  CHECK(server_.is_valid() || socket_.is_valid());
+  socket_ = connection_params.TakeEndpoint().TakePlatformHandle().TakeFD();
+  CHECK(socket_.is_valid());
 }
 
 ChannelPosix::~ChannelPosix() {
@@ -154,16 +146,10 @@ void ChannelPosix::ShutDownImpl() {
 }
 
 void ChannelPosix::Write(MessagePtr message) {
-  bool log_histograms = true;
-#if !defined(MOJO_CORE_SHARED_LIBRARY)
-  static base::CpuReductionExperimentFilter filter;
-  log_histograms = filter.ShouldLogHistograms();
-#endif
-  if (log_histograms) {
+  if (ShouldRecordSubsampledHistograms()) {
     UMA_HISTOGRAM_COUNTS_100000("Mojo.Channel.WriteMessageSize",
                                 message->data_num_bytes());
-    UMA_HISTOGRAM_COUNTS_100("Mojo.Channel.WriteMessageHandles",
-                             message->NumHandlesForTransit());
+    LogHistogramForIPCMetrics(MessageType::kSent);
   }
 
   bool write_error = false;
@@ -201,15 +187,23 @@ bool ChannelPosix::GetReadPlatformHandles(const void* payload,
                                           bool* deferred) {
   if (num_handles > std::numeric_limits<uint16_t>::max())
     return false;
-  if (incoming_fds_.size() < num_handles)
-    return true;
 
-  handles->resize(num_handles);
-  for (size_t i = 0; i < num_handles; ++i) {
-    handles->at(i) = PlatformHandle(std::move(incoming_fds_.front()));
-    incoming_fds_.pop_front();
+  return GetReadPlatformHandlesForIpcz(num_handles, *handles);
+}
+
+bool ChannelPosix::GetReadPlatformHandlesForIpcz(
+    size_t num_handles,
+    std::vector<PlatformHandle>& handles) {
+  if (incoming_fds_.size() < num_handles) {
+    return true;
   }
 
+  DCHECK(handles.empty());
+  handles.reserve(num_handles);
+  while (num_handles--) {
+    handles.emplace_back(std::move(incoming_fds_.front()));
+    incoming_fds_.pop_front();
+  }
   return true;
 }
 
@@ -219,19 +213,13 @@ void ChannelPosix::StartOnIOThread() {
   read_watcher_ =
       std::make_unique<base::MessagePumpForIO::FdWatchController>(FROM_HERE);
   base::CurrentThread::Get()->AddDestructionObserver(this);
-  if (server_.is_valid()) {
-    base::CurrentIOThread::Get()->WatchFileDescriptor(
-        server_.platform_handle().GetFD().get(), false /* persistent */,
-        base::MessagePumpForIO::WATCH_READ, read_watcher_.get(), this);
-  } else {
-    write_watcher_ =
-        std::make_unique<base::MessagePumpForIO::FdWatchController>(FROM_HERE);
-    base::CurrentIOThread::Get()->WatchFileDescriptor(
-        socket_.get(), true /* persistent */,
-        base::MessagePumpForIO::WATCH_READ, read_watcher_.get(), this);
-    base::AutoLock lock(write_lock_);
-    FlushOutgoingMessagesNoLock();
-  }
+  write_watcher_ =
+      std::make_unique<base::MessagePumpForIO::FdWatchController>(FROM_HERE);
+  base::CurrentIOThread::Get()->WatchFileDescriptor(
+      socket_.get(), true /* persistent */, base::MessagePumpForIO::WATCH_READ,
+      read_watcher_.get(), this);
+  base::AutoLock lock(write_lock_);
+  FlushOutgoingMessagesNoLock();
 }
 
 void ChannelPosix::WaitForWriteOnIOThread() {
@@ -262,10 +250,8 @@ void ChannelPosix::ShutDownOnIOThread() {
   write_watcher_.reset();
   if (leak_handle_) {
     std::ignore = socket_.release();
-    server_.TakePlatformHandle().release();
   } else {
     socket_.reset();
-    std::ignore = server_.TakePlatformHandle();
   }
 #if BUILDFLAG(IS_IOS)
   fds_to_close_.clear();
@@ -282,24 +268,6 @@ void ChannelPosix::WillDestroyCurrentMessageLoop() {
 }
 
 void ChannelPosix::OnFileCanReadWithoutBlocking(int fd) {
-  if (server_.is_valid()) {
-    CHECK_EQ(fd, server_.platform_handle().GetFD().get());
-#if !BUILDFLAG(IS_NACL)
-    read_watcher_.reset();
-    base::CurrentThread::Get()->RemoveDestructionObserver(this);
-
-    AcceptSocketConnection(server_.platform_handle().GetFD().get(), &socket_);
-    std::ignore = server_.TakePlatformHandle();
-    if (!socket_.is_valid()) {
-      OnError(Error::kConnectionFailed);
-      return;
-    }
-    StartOnIOThread();
-#else
-    NOTREACHED();
-#endif
-    return;
-  }
   CHECK_EQ(fd, socket_.get());
 
   bool validation_error = false;
@@ -364,10 +332,6 @@ void ChannelPosix::OnFileCanWriteWithoutBlocking(int fd) {
 // cannot be written, it's queued and a wait is initiated to write the message
 // ASAP on the I/O thread.
 bool ChannelPosix::WriteNoLock(MessageView message_view) {
-  if (server_.is_valid()) {
-    outgoing_messages_.emplace_front(std::move(message_view));
-    return true;
-  }
   size_t bytes_written = 0;
   std::vector<PlatformHandleInTransit> handles = message_view.TakeHandles();
   size_t num_handles = handles.size();
@@ -547,8 +511,6 @@ bool ChannelPosix::WriteOutgoingMessagesWithWritev() {
     num_iovs_set++;
   }
 
-  UMA_HISTOGRAM_COUNTS_1000("Mojo.Channel.WritevBatchedMessages", num_iovs_set);
-
   size_t iov_offset = 0;
   while (iov_offset < num_iovs_set) {
     ssize_t bytes_written = SocketWritev(socket_.get(), &iov[iov_offset],
@@ -675,9 +637,7 @@ bool ChannelPosix::CloseHandles(const int* fds, size_t num_fds) {
   if (!num_fds)
     return false;
 
-  auto start = std::find_if(
-      fds_to_close_.begin(), fds_to_close_.end(),
-      [&fds](const base::ScopedFD& fd) { return fd.get() == fds[0]; });
+  auto start = base::ranges::find(fds_to_close_, fds[0], &base::ScopedFD::get);
   if (start == fds_to_close_.end())
     return false;
 

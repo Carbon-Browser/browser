@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,7 +13,6 @@
 #include <memory>
 
 #include "base/no_destructor.h"
-#include "build/build_config.h"
 #include "components/crash/core/app/crash_reporter_client.h"
 
 class ChromeCrashReporterClient : public crash_reporter::CrashReporterClient {

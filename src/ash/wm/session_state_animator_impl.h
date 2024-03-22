@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,6 +7,7 @@
 
 #include "ash/ash_export.h"
 #include "ash/wm/session_state_animator.h"
+#include "base/memory/raw_ptr.h"
 #include "ui/aura/window.h"
 
 namespace ui {
@@ -39,7 +40,7 @@ class ASH_EXPORT SessionStateAnimatorImpl : public SessionStateAnimator {
     bool RootWindowIsAnimated(SessionStateAnimator::AnimationType type) const;
 
    private:
-    SessionStateAnimatorImpl* animator_;  // not owned
+    raw_ptr<SessionStateAnimatorImpl, ExperimentalAsh> animator_;  // not owned
   };
 
   SessionStateAnimatorImpl();
@@ -63,7 +64,6 @@ class ASH_EXPORT SessionStateAnimatorImpl : public SessionStateAnimator {
                                   base::OnceClosure callback) override;
   AnimationSequence* BeginAnimationSequence(
       AnimationCallback callback) override;
-  void AbortAllAnimations(int container_mask) override;
   bool IsWallpaperHidden() const override;
   void ShowWallpaper() override;
   void HideWallpaper() override;

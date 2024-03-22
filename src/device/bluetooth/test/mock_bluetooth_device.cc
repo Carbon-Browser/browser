@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -40,9 +40,13 @@ MockBluetoothDevice::MockBluetoothDevice(MockBluetoothAdapter* adapter,
   ON_CALL(*this, GetNameForDisplay())
       .WillByDefault(
           Return(base::UTF8ToUTF16(name_ ? name_.value() : "Unnamed Device")));
+  ON_CALL(*this, GetType()).WillByDefault(ReturnPointee(&transport_));
   ON_CALL(*this, GetDeviceType())
       .WillByDefault(Return(BluetoothDeviceType::UNKNOWN));
   ON_CALL(*this, IsPaired()).WillByDefault(ReturnPointee(&paired_));
+#if BUILDFLAG(IS_CHROMEOS)
+  ON_CALL(*this, IsBonded()).WillByDefault(ReturnPointee(&paired_));
+#endif  // BUILDFLAG(IS_CHROMEOS)
   ON_CALL(*this, IsConnected()).WillByDefault(ReturnPointee(&connected_));
   ON_CALL(*this, IsGattConnected()).WillByDefault(ReturnPointee(&connected_));
   ON_CALL(*this, IsConnectable()).WillByDefault(Return(false));

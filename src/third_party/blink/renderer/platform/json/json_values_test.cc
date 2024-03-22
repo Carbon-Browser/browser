@@ -1,9 +1,10 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "third_party/blink/renderer/platform/json/json_values.h"
 
+#include "base/memory/raw_ref.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "third_party/blink/renderer/platform/wtf/text/string_builder.h"
 
@@ -15,10 +16,10 @@ class JSONValueDeletionVerifier : public JSONValue {
  public:
   JSONValueDeletionVerifier(int& counter) : counter_(counter) {}
 
-  ~JSONValueDeletionVerifier() override { ++counter_; }
+  ~JSONValueDeletionVerifier() override { ++(*counter_); }
 
  private:
-  int& counter_;
+  const raw_ref<int, ExperimentalRenderer> counter_;
 };
 
 }  // namespace

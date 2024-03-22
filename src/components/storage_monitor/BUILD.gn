@@ -1,4 +1,4 @@
-# Copyright 2014 The Chromium Authors. All rights reserved.
+# Copyright 2014 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -52,6 +52,9 @@ static_library("storage_monitor") {
       "Foundation.framework",
       "ImageCaptureCore.framework",
     ]
+    weak_frameworks = [
+      "UniformTypeIdentifiers.framework",  # macOS 11
+    ]
   } else if (is_chromeos_ash) {
     # For Chrome OS, |is_linux| is also true. Put this in an else-if block above
     # the |is_linux| else-if block, so they do not clash.
@@ -59,7 +62,10 @@ static_library("storage_monitor") {
       "storage_monitor_chromeos.cc",
       "storage_monitor_chromeos.h",
     ]
-    deps += [ "//ash/components/disks" ]
+    deps += [
+      "//chromeos/ash/components/dbus/cros_disks",
+      "//chromeos/ash/components/disks",
+    ]
 
     if (use_dbus) {
       sources += [
@@ -162,6 +168,9 @@ source_set("unit_tests") {
       "image_capture_device_manager_unittest.mm",
       "storage_monitor_mac_unittest.mm",
     ]
+    weak_frameworks = [
+      "UniformTypeIdentifiers.framework",  # macOS 11
+    ]
   }
 
   if (is_chromeos_ash) {
@@ -181,6 +190,6 @@ source_set("unit_tests") {
     }
   }
   if (is_chromeos_ash) {
-    deps += [ "//ash/components/disks:test_support" ]
+    deps += [ "//chromeos/ash/components/disks:test_support" ]
   }
 }

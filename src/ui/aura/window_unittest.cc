@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -293,7 +293,7 @@ class DestroyOrphanDelegate : public TestWindowDelegate {
   }
 
  private:
-  raw_ptr<Window> window_;
+  raw_ptr<Window, DanglingUntriaged> window_;
 };
 
 // Used in verifying mouse capture.
@@ -1912,7 +1912,7 @@ TEST_F(WindowTest, DeleteLayoutManagerBeforeOwnedProps) {
   {
     Window w(nullptr);
     w.Init(ui::LAYER_NOT_DRAWN);
-    w.SetLayoutManager(new DeletionTestLayoutManager(&tracker));
+    w.SetLayoutManager(std::make_unique<DeletionTestLayoutManager>(&tracker));
     w.SetProperty(kDeletionTestPropertyKey,
                   std::make_unique<DeletionTestProperty>(&tracker));
   }
@@ -1979,7 +1979,7 @@ class WindowObserverTest : public WindowTest,
 
   struct WindowBoundsInfo {
     int changed_count = 0;
-    Window* window = nullptr;
+    raw_ptr<Window, DanglingUntriaged> window = nullptr;
     gfx::Rect old_bounds;
     gfx::Rect new_bounds;
     ui::PropertyChangeReason reason =
@@ -1988,27 +1988,27 @@ class WindowObserverTest : public WindowTest,
 
   struct WindowOpacityInfo {
     int changed_count = 0;
-    Window* window = nullptr;
+    raw_ptr<Window, DanglingUntriaged> window = nullptr;
     ui::PropertyChangeReason reason =
         ui::PropertyChangeReason::NOT_FROM_ANIMATION;
   };
 
   struct WindowTargetTransformChangingInfo {
     int changed_count = 0;
-    Window* window = nullptr;
+    raw_ptr<Window, DanglingUntriaged> window = nullptr;
     gfx::Transform new_transform;
   };
 
   struct WindowTransformedInfo {
     int changed_count = 0;
-    Window* window = nullptr;
+    raw_ptr<Window, DanglingUntriaged> window = nullptr;
     ui::PropertyChangeReason reason =
         ui::PropertyChangeReason::NOT_FROM_ANIMATION;
   };
 
   struct CountAndWindow {
     int count = 0;
-    Window* window = nullptr;
+    raw_ptr<Window, DanglingUntriaged> window = nullptr;
   };
 
   WindowObserverTest() = default;
@@ -2379,7 +2379,7 @@ TEST_F(WindowObserverTest, WindowAlphaShapeChanged) {
   shape->emplace_back(0, 0, 10, 20);
 
   EXPECT_EQ(0, alpha_shape_info().count);
-  EXPECT_EQ(nullptr, alpha_shape_info().window);
+  EXPECT_EQ(nullptr, alpha_shape_info().window.get());
   window->layer()->SetAlphaShape(std::move(shape));
   EXPECT_EQ(1, alpha_shape_info().count);
   EXPECT_EQ(window.get(), alpha_shape_info().window);
@@ -3006,8 +3006,8 @@ class DeleteOnVisibilityChangedObserver : public WindowObserver {
   }
 
  private:
-  raw_ptr<Window> to_observe_;
-  raw_ptr<Window> to_delete_;
+  raw_ptr<Window, DanglingUntriaged> to_observe_;
+  raw_ptr<Window, DanglingUntriaged> to_delete_;
 };
 
 TEST_F(WindowTest, DeleteParentWindowFromOnWindowVisibiltyChanged) {
@@ -3752,9 +3752,7 @@ class WindowActualScreenBoundsTest
 
   void OnTranslationAnimationProgressed(const gfx::Rect& child_initial_bounds,
                                         const gfx::Transform& transform) const {
-    gfx::RectF current_screen_bounds(child_initial_bounds);
-    transform.TransformRect(&current_screen_bounds);
-    EXPECT_EQ(gfx::ToEnclosedRect(current_screen_bounds),
+    EXPECT_EQ(transform.MapRect(child_initial_bounds),
               child_->GetActualBoundsInScreen());
   }
 

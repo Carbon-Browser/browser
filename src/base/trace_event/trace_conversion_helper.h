@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -103,23 +103,23 @@ std::string ValueToStringHelper(base::internal::priority_tag<0>,
 // is also |std::is_integral|, so we need to test |bool| before testing for
 // integral.
 template <typename T>
-typename std::enable_if<std::is_same<T, bool>::value>::type
-SetTracedValueArgHelper(base::internal::priority_tag<6>,
-                        TracedValue* traced_value,
-                        const char* name,
-                        const T& value) {
+std::enable_if_t<std::is_same_v<T, bool>> SetTracedValueArgHelper(
+    base::internal::priority_tag<6>,
+    TracedValue* traced_value,
+    const char* name,
+    const T& value) {
   traced_value->SetBoolean(name, value);
 }
 
-// std::is_integral<bool>::value == true
+// std::is_integral_v<bool> == true
 // This needs to be considered only when T is not bool (has higher
 // base::internal::priority_tag).
 template <typename T>
-typename std::enable_if<std::is_integral<T>::value>::type
-SetTracedValueArgHelper(base::internal::priority_tag<5>,
-                        TracedValue* traced_value,
-                        const char* name,
-                        const T& value) {
+std::enable_if_t<std::is_integral_v<T>> SetTracedValueArgHelper(
+    base::internal::priority_tag<5>,
+    TracedValue* traced_value,
+    const char* name,
+    const T& value) {
   // Avoid loss of precision.
   if (sizeof(int) < sizeof(value)) {
     // TODO(crbug.com/1111787): Add 64-bit support to TracedValue.
@@ -131,31 +131,31 @@ SetTracedValueArgHelper(base::internal::priority_tag<5>,
 
 // Any floating point type is converted to double.
 template <typename T>
-typename std::enable_if<std::is_floating_point<T>::value>::type
-SetTracedValueArgHelper(base::internal::priority_tag<4>,
-                        TracedValue* traced_value,
-                        const char* name,
-                        const T& value) {
+std::enable_if_t<std::is_floating_point_v<T>> SetTracedValueArgHelper(
+    base::internal::priority_tag<4>,
+    TracedValue* traced_value,
+    const char* name,
+    const T& value) {
   traced_value->SetDouble(name, static_cast<double>(value));
 }
 
 // |void*| is traced natively.
 template <typename T>
-typename std::enable_if<std::is_same<T, void*>::value>::type
-SetTracedValueArgHelper(base::internal::priority_tag<3>,
-                        TracedValue* traced_value,
-                        const char* name,
-                        const T& value) {
+std::enable_if_t<std::is_same_v<T, void*>> SetTracedValueArgHelper(
+    base::internal::priority_tag<3>,
+    TracedValue* traced_value,
+    const char* name,
+    const T& value) {
   traced_value->SetPointer(name, value);
 }
 
 // |const char*| is traced natively.
 template <typename T>
-typename std::enable_if<std::is_same<T, const char*>::value>::type
-SetTracedValueArgHelper(base::internal::priority_tag<2>,
-                        TracedValue* traced_value,
-                        const char* name,
-                        const T& value) {
+std::enable_if_t<std::is_same_v<T, const char*>> SetTracedValueArgHelper(
+    base::internal::priority_tag<2>,
+    TracedValue* traced_value,
+    const char* name,
+    const T& value) {
   traced_value->SetString(name, value);
 }
 
@@ -189,24 +189,6 @@ std::string ValueToString(const ValueType& value,
                           std::string fallback_value = "<value>") {
   return internal::ValueToStringHelper(base::internal::priority_tag<5>(), value,
                                        std::move(fallback_value));
-}
-
-// ToTracedValue helpers simplify using |AsValueInto| method to capture by
-// eliminating the need to create TracedValue manually. Also supports passing
-// pointers, including null ones.
-template <typename T>
-std::unique_ptr<TracedValue> ToTracedValue(T& value) {
-  std::unique_ptr<TracedValue> result = std::make_unique<TracedValue>();
-  // AsValueInto might not be const-only, so do not use const references.
-  value.AsValueInto(result.get());
-  return result;
-}
-
-template <typename T>
-std::unique_ptr<TracedValue> ToTracedValue(T* value) {
-  if (!value)
-    return TracedValue::Build({{"this", "nullptr"}});
-  return ToTracedValue(*value);
 }
 
 // Method to trace |value| into the given |traced_value|. Support types where

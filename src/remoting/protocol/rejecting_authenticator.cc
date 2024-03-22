@@ -1,21 +1,19 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "remoting/protocol/rejecting_authenticator.h"
 
-#include "base/callback.h"
 #include "base/check_op.h"
+#include "base/functional/callback.h"
 #include "base/notreached.h"
 #include "remoting/protocol/channel_authenticator.h"
 #include "third_party/libjingle_xmpp/xmllite/xmlelement.h"
 
-namespace remoting {
-namespace protocol {
+namespace remoting::protocol {
 
 RejectingAuthenticator::RejectingAuthenticator(RejectionReason rejection_reason)
-    : rejection_reason_(rejection_reason) {
-}
+    : rejection_reason_(rejection_reason) {}
 
 RejectingAuthenticator::~RejectingAuthenticator() = default;
 
@@ -26,8 +24,8 @@ bool RejectingAuthenticator::started() const {
   return true;
 }
 
-Authenticator::RejectionReason
-RejectingAuthenticator::rejection_reason() const {
+Authenticator::RejectionReason RejectingAuthenticator::rejection_reason()
+    const {
   DCHECK_EQ(state_, REJECTED);
   return rejection_reason_;
 }
@@ -40,7 +38,8 @@ void RejectingAuthenticator::ProcessMessage(
   std::move(resume_callback).Run();
 }
 
-std::unique_ptr<jingle_xmpp::XmlElement> RejectingAuthenticator::GetNextMessage() {
+std::unique_ptr<jingle_xmpp::XmlElement>
+RejectingAuthenticator::GetNextMessage() {
   NOTREACHED();
   return nullptr;
 }
@@ -56,5 +55,4 @@ RejectingAuthenticator::CreateChannelAuthenticator() const {
   return nullptr;
 }
 
-}  // namespace protocol
-}  // namespace remoting
+}  // namespace remoting::protocol

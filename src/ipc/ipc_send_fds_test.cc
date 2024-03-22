@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -26,7 +26,6 @@ extern "C" {
 #include "base/synchronization/waitable_event.h"
 #include "base/task/single_thread_task_runner.h"
 #include "base/threading/thread.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "ipc/ipc_message_attachment_set.h"
 #include "ipc/ipc_message_utils.h"
 #include "ipc/ipc_test_base.h"
@@ -208,13 +207,10 @@ DEFINE_IPC_CHANNEL_MOJO_TEST_CLIENT_WITH_CUSTOM_FIXTURE(
   ASSERT_LE(0, IGNORE_EINTR(close(fd)));
 
   // Enable the sandbox.
-  char* error_buff = NULL;
-  int error = sandbox::Seatbelt::Init(
-      sandbox::Seatbelt::kProfilePureComputation, SANDBOX_NAMED, &error_buff);
-  ASSERT_EQ(0, error);
-  ASSERT_FALSE(error_buff);
-
-  sandbox::Seatbelt::FreeError(error_buff);
+  std::string error;
+  ASSERT_TRUE(sandbox::Seatbelt::Init(
+      sandbox::Seatbelt::kProfilePureComputation, SANDBOX_NAMED, &error))
+      << error;
 
   // Make sure sandbox is really enabled.
   ASSERT_EQ(-1, open(kDevZeroPath, O_RDONLY))

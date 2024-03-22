@@ -1,9 +1,9 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 import {CustomElement} from 'chrome://resources/js/custom_element.js';
-import {loadTimeData} from 'chrome://resources/js/load_time_data.m.js';
+import {loadTimeData} from 'chrome://resources/js/load_time_data.js';
 
 import {getTemplate} from './tab_group.html.js';
 import {TabGroupVisualData} from './tab_strip.mojom-webui.js';
@@ -54,13 +54,13 @@ export class TabGroupElement extends CustomElement {
   }
 
   private onClickChip_() {
-    if (!this.dataset.groupId) {
+    if (!this.dataset['groupId']) {
       return;
     }
 
     const boundingBox = this.$('#chip')!.getBoundingClientRect();
     this.tabsApi_.showEditDialogForGroup(
-        this.dataset.groupId, boundingBox.left, boundingBox.top,
+        this.dataset['groupId'], boundingBox.left, boundingBox.top,
         boundingBox.width, boundingBox.height);
   }
 

@@ -1,4 +1,4 @@
-// Copyright (c) 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,15 +9,15 @@
 #include <string>
 #include <vector>
 
+#include "base/functional/callback_forward.h"
+#include "base/values.h"
 
 namespace base {
-class DictionaryValue;
 class FilePath;
-class ListValue;
 class TimeDelta;
-class Value;
-}
+}  // namespace base
 
+class FedCmTracker;
 class FrameTracker;
 struct Geoposition;
 class JavaScriptDialogManager;
@@ -31,7 +31,10 @@ struct TouchEvent;
 
 class WebView {
  public:
-  virtual ~WebView() {}
+  typedef base::RepeatingCallback<Status(bool* is_condition_met)>
+      ConditionalFunc;
+
+  virtual ~WebView() = default;
 
   virtual bool IsServiceWorker() const = 0;
 
@@ -41,11 +44,13 @@ class WebView {
   // Return true if the web view was crashed.
   virtual bool WasCrashed() = 0;
 
-  // Make DevToolsCient connect to DevTools if it is disconnected.
-  virtual Status ConnectIfNecessary() = 0;
-
-  // Make DevToolsCient set up DevTools.
-  virtual Status SetUpDevTools() = 0;
+  // Handles events until the given function reports the condition is met
+  // and there are no more received events to handle. If the given
+  // function ever returns an error, returns immediately with the error.
+  // If the condition is not met within |timeout|, kTimeout status
+  // is returned eventually. If |timeout| is 0, this function will not block.
+  virtual Status HandleEventsUntil(const ConditionalFunc& conditional_func,
+                                   const Timeout& timeout) = 0;
 
   // Handles events that have been received but not yet handled.
   virtual Status HandleReceivedEvents() = 0;
@@ -65,20 +70,25 @@ class WebView {
   // Resume the current page.
   virtual Status Resume(const Timeout* timeout) = 0;
 
+  virtual Status StartBidiServer(std::string bidi_mapper_string) = 0;
+
+  // Send the BiDi command to the BiDiMapper
+  virtual Status PostBidiCommand(base::Value::Dict command) = 0;
+
   // Send a command to the DevTools debugger
   virtual Status SendCommand(const std::string& cmd,
-                             const base::DictionaryValue& params) = 0;
+                             const base::Value::Dict& params) = 0;
 
   // Send a command to the DevTools debugger. Received from WebSocket
   virtual Status SendCommandFromWebSocket(const std::string& cmd,
-                                          const base::DictionaryValue& params,
+                                          const base::Value::Dict& params,
                                           const int client_cmd_id) = 0;
 
   // Send a command to the DevTools debugger and wait for the result
   virtual Status SendCommandAndGetResult(
-          const std::string& cmd,
-          const base::DictionaryValue& params,
-          std::unique_ptr<base::Value>* value) = 0;
+      const std::string& cmd,
+      const base::Value::Dict& params,
+      std::unique_ptr<base::Value>* value) = 0;
 
   // Navigate |delta| steps forward in the browser history. A negative value
   // will navigate back in the history. If the delta exceeds the number of items
@@ -89,12 +99,12 @@ class WebView {
   // the result. |frame| is a frame ID or an empty string for the main frame.
   // If the expression evaluates to a element, it will be bound to a unique ID
   // (per frame) and the ID will be returned.
-  // |awaitPromise| controls awaitPromise parameter for Command
+  // |await_promise| controls awaitPromise parameter for Command
   // send to devtools backend
   // |result| will never be NULL on success.
   virtual Status EvaluateScript(const std::string& frame,
                                 const std::string& expression,
-                                const bool awaitPromise,
+                                const bool await_promise,
                                 std::unique_ptr<base::Value>* result) = 0;
 
   // Calls a JavaScript function in a specified frame with the given args and
@@ -105,19 +115,8 @@ class WebView {
   // |result| will never be NULL on success.
   virtual Status CallFunction(const std::string& frame,
                               const std::string& function,
-                              const base::ListValue& args,
+                              const base::Value::List& args,
                               std::unique_ptr<base::Value>* result) = 0;
-
-  // Calls a JavaScript function in a specified frame with the given args and
-  // two callbacks. The first may be invoked with a value to return to the user.
-  // The second may be used to report an error. This function waits until
-  // one of the callbacks is invoked or the timeout occurs.
-  // |result| will never be NULL on success.
-  virtual Status CallAsyncFunction(const std::string& frame,
-                                   const std::string& function,
-                                   const base::ListValue& args,
-                                   const base::TimeDelta& timeout,
-                                   std::unique_ptr<base::Value>* result) = 0;
 
   // Same as |CallAsyncFunction|, except no additional error callback is passed
   // to the function. Also, |kJavaScriptError| or |kScriptTimeout| is used
@@ -126,7 +125,7 @@ class WebView {
   virtual Status CallUserAsyncFunction(
       const std::string& frame,
       const std::string& function,
-      const base::ListValue& args,
+      const base::Value::List& args,
       const base::TimeDelta& timeout,
       std::unique_ptr<base::Value>* result) = 0;
 
@@ -136,7 +135,7 @@ class WebView {
   // |result| will never be NULL on success.
   virtual Status CallUserSyncScript(const std::string& frame,
                                     const std::string& script,
-                                    const base::ListValue& args,
+                                    const base::Value::List& args,
                                     const base::TimeDelta& timeout,
                                     std::unique_ptr<base::Value>* result) = 0;
 
@@ -145,7 +144,7 @@ class WebView {
   // frame.
   virtual Status GetFrameByFunction(const std::string& frame,
                                     const std::string& function,
-                                    const base::ListValue& args,
+                                    const base::Value::List& args,
                                     std::string* out_frame) = 0;
 
   // Dispatch a sequence of mouse events.
@@ -184,9 +183,9 @@ class WebView {
                            const std::string& value,
                            const std::string& domain,
                            const std::string& path,
-                           const std::string& sameSite,
+                           const std::string& same_site,
                            bool secure,
-                           bool httpOnly,
+                           bool http_only,
                            double expiry) = 0;
 
   // Waits until all pending navigations have completed in the given frame.
@@ -223,11 +222,10 @@ class WebView {
       const std::string& download_directory) = 0;
 
   // Captures the visible portions of the web view as a base64-encoded PNG.
-  virtual Status CaptureScreenshot(
-      std::string* screenshot,
-      const base::DictionaryValue& params) = 0;
+  virtual Status CaptureScreenshot(std::string* screenshot,
+                                   const base::Value::Dict& params) = 0;
 
-  virtual Status PrintToPDF(const base::DictionaryValue& params,
+  virtual Status PrintToPDF(const base::Value::Dict& params,
                             std::string* pdf) = 0;
 
   // Set files in a file input element.
@@ -264,6 +262,9 @@ class WebView {
   virtual bool IsNonBlocking() const = 0;
 
   virtual FrameTracker* GetFrameTracker() const = 0;
+
+  // On success, sets *tracker to the FedCmTracker.
+  virtual Status GetFedCmTracker(FedCmTracker** out_tracker) = 0;
 
   virtual std::unique_ptr<base::Value> GetCastSinks() = 0;
 

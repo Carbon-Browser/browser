@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,11 +6,11 @@
 
 #include <Windows.h>
 
-#include <algorithm>
 #include <vector>
 
 #include "base/check.h"
 #include "base/memory/scoped_refptr.h"
+#include "base/ranges/algorithm.h"
 #include "base/win/startup_information.h"
 #include "base/win/windows_version.h"
 #include "sandbox/win/src/app_container.h"
@@ -60,8 +60,7 @@ void StartupInformationHelper::SetStdHandles(HANDLE stdout_handle,
 
 void StartupInformationHelper::AddInheritedHandle(HANDLE handle) {
   if (handle != INVALID_HANDLE_VALUE) {
-    auto it = std::find(inherited_handle_list_.begin(),
-                        inherited_handle_list_.end(), handle);
+    auto it = base::ranges::find(inherited_handle_list_, handle);
     if (it == inherited_handle_list_.end())
       inherited_handle_list_.push_back(handle);
   }
@@ -69,8 +68,6 @@ void StartupInformationHelper::AddInheritedHandle(HANDLE handle) {
 
 void StartupInformationHelper::SetAppContainer(
     scoped_refptr<AppContainer> container) {
-  // Only supported for Windows 8+.
-  DCHECK(base::win::GetVersion() >= base::win::Version::WIN8);
   // LowPrivilegeAppContainer only supported for Windows 10+
   DCHECK(!container->GetEnableLowPrivilegeAppContainer() ||
          base::win::GetVersion() >= base::win::Version::WIN10_RS1);
@@ -83,8 +80,8 @@ void StartupInformationHelper::AddJobToAssociate(HANDLE job_handle) {
   job_handle_list_.push_back(job_handle);
 }
 
-int StartupInformationHelper::CountAttributes() {
-  int attribute_count = 0;
+DWORD StartupInformationHelper::CountAttributes() {
+  DWORD attribute_count = 0;
   if (mitigations_[0] || mitigations_[1])
     ++attribute_count;
 
@@ -195,6 +192,14 @@ bool StartupInformationHelper::BuildStartupInformation() {
 
   CHECK(expected_attributes == 0);
   return true;
+}
+
+void StartupInformationHelper::SetFilterEnvironment(bool filter) {
+  filter_environment_ = filter;
+}
+
+bool StartupInformationHelper::IsEnvironmentFiltered() {
+  return filter_environment_;
 }
 
 }  // namespace sandbox

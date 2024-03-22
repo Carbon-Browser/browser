@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,9 +11,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.TimeoutException;
 
-/**
- * Controller to manage getting language preferences from device.
- */
+/** Controller to manage getting language preferences from device. */
 public final class LanguageProfileController {
     private static final String TAG = "ULP";
     private static final int TIMEOUT_IN_SECONDS = 60;
@@ -21,9 +19,7 @@ public final class LanguageProfileController {
     private LanguageProfileDelegate mDelegate;
     private LanguageProfileMetricsLogger mLogger = new LanguageProfileMetricsLogger();
 
-    /**
-     * @param delegate LanguageProfileDelegate to use.
-     */
+    /** @param delegate LanguageProfileDelegate to use. */
     public LanguageProfileController(LanguageProfileDelegate delegate) {
         mDelegate = delegate;
     }

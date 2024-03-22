@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -23,6 +23,7 @@ JavaCrashKey& GetCrashKey(int index) {
       {"emulated_modules", JavaCrashKey::Tag::kArray},
       {"dynamic_module_dex_name", JavaCrashKey::Tag::kArray},
       {"partner_customization_config", JavaCrashKey::Tag::kArray},
+      {"first_run", JavaCrashKey::Tag::kArray},
   };
   static_assert(
       std::size(crash_keys) == static_cast<size_t>(CrashKeyIndex::NUM_ENTRIES),

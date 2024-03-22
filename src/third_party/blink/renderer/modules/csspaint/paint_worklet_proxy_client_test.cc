@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,6 +8,7 @@
 #include <utility>
 
 #include "base/synchronization/waitable_event.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/test/test_simple_task_runner.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "third_party/blink/renderer/bindings/core/v8/worker_or_worklet_script_controller.h"
@@ -61,8 +62,8 @@ class PaintWorkletProxyClientTest : public RenderingTest {
     dispatcher_ = std::make_unique<PaintWorkletPaintDispatcher>();
     fake_compositor_thread_runner_ = base::MakeRefCounted<FakeTaskRunner>();
     proxy_client_ = MakeGarbageCollected<PaintWorkletProxyClient>(
-        1, paint_worklet_, dispatcher_->GetWeakPtr(),
-        fake_compositor_thread_runner_);
+        1, paint_worklet_, GetFrame().GetTaskRunner(TaskType::kInternalDefault),
+        dispatcher_->GetWeakPtr(), fake_compositor_thread_runner_);
     reporting_proxy_ = std::make_unique<WorkerReportingProxy>();
   }
 
@@ -137,15 +138,17 @@ class PaintWorkletProxyClientTest : public RenderingTest {
 
 TEST_F(PaintWorkletProxyClientTest, PaintWorkletProxyClientConstruction) {
   PaintWorkletProxyClient* proxy_client =
-      MakeGarbageCollected<PaintWorkletProxyClient>(1, nullptr, nullptr,
-                                                    nullptr);
+      MakeGarbageCollected<PaintWorkletProxyClient>(
+          1, nullptr, GetFrame().GetTaskRunner(TaskType::kInternalDefault),
+          nullptr, nullptr);
   EXPECT_EQ(proxy_client->worklet_id_, 1);
   EXPECT_EQ(proxy_client->paint_dispatcher_, nullptr);
 
   auto dispatcher = std::make_unique<PaintWorkletPaintDispatcher>();
 
   proxy_client = MakeGarbageCollected<PaintWorkletProxyClient>(
-      1, nullptr, dispatcher->GetWeakPtr(), nullptr);
+      1, nullptr, GetFrame().GetTaskRunner(TaskType::kInternalDefault),
+      dispatcher->GetWeakPtr(), nullptr);
   EXPECT_EQ(proxy_client->worklet_id_, 1);
   EXPECT_NE(proxy_client->paint_dispatcher_, nullptr);
 }
@@ -184,7 +187,7 @@ TEST_F(PaintWorkletProxyClientTest, AddGlobalScopes) {
       CreateThreadAndProvidePaintWorkletProxyClient(
           &GetDocument(), reporting_proxy_.get(), proxy_client_);
 
-  EXPECT_TRUE(proxy_client_->GetGlobalScopesForTesting().IsEmpty());
+  EXPECT_TRUE(proxy_client_->GetGlobalScopesForTesting().empty());
 
   base::WaitableEvent waitable_event;
   PostCrossThreadTask(
@@ -225,8 +228,8 @@ void RunPaintTestOnWorklet(WorkerThread* thread,
       base::MakeRefCounted<CSSPaintWorkletInput>(
           "foo", gfx::SizeF(100, 100), 1.0f, 1, std::move(data),
           std::move(input_arguments), std::move(property_keys));
-  sk_sp<PaintRecord> record = proxy_client->Paint(input.get(), {});
-  EXPECT_NE(record, nullptr);
+  PaintRecord record = proxy_client->Paint(input.get(), {});
+  EXPECT_FALSE(record.empty());
 
   waitable_event->Signal();
 }

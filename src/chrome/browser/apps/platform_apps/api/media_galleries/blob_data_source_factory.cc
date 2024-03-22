@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,7 +6,7 @@
 
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/memory/raw_ptr.h"
 #include "content/public/browser/browser_context.h"
 #include "extensions/browser/blob_reader.h"
@@ -45,7 +45,7 @@ class BlobMediaDataSource : public chrome::mojom::MediaDataSource {
                         int64_t position,
                         int64_t length) {
     BlobReader::Read(
-        browser_context_, blob_uuid_,
+        browser_context_->GetBlobRemote(blob_uuid_),
         base::BindOnce(&BlobMediaDataSource::OnBlobReaderDone,
                        weak_factory_.GetWeakPtr(), std::move(callback)),
         position, length);

@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,9 +7,7 @@
 #include "net/http/http_util.h"
 #include "services/network/public/cpp/cors/cors.h"
 
-namespace network {
-
-namespace cors {
+namespace network::cors {
 
 std::vector<std::string> CorsUnsafeNotForbiddenRequestHeaderNames(
     const net::HttpRequestHeaders::HeaderVector& headers,
@@ -21,7 +19,7 @@ std::vector<std::string> CorsUnsafeNotForbiddenRequestHeaderNames(
   size_t safe_list_value_size = 0;
 
   for (const auto& header : headers) {
-    if (!net::HttpUtil::IsSafeHeader(header.key))
+    if (!net::HttpUtil::IsSafeHeader(header.key, header.value))
       continue;
 
     const std::string name = base::ToLowerASCII(header.key);
@@ -46,6 +44,4 @@ std::vector<std::string> CorsUnsafeNotForbiddenRequestHeaderNames(
   return header_names;
 }
 
-}  // namespace cors
-
-}  // namespace network
+}  // namespace network::cors

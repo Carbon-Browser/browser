@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -42,7 +42,7 @@ WebContentsDisplayObserverView::~WebContentsDisplayObserverView() {
   if (widget_)
     widget_->RemoveObserver(this);
   BrowserList::RemoveObserver(this);
-  CHECK(!IsInObserverList());
+  CHECK(!WidgetObserver::IsInObserverList());
 }
 
 void WebContentsDisplayObserverView::OnBrowserSetLastActive(Browser* browser) {

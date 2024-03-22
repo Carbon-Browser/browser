@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,8 +6,6 @@
 #define IOS_CHROME_BROWSER_UI_SAFE_MODE_SAFE_MODE_VIEW_CONTROLLER_H_
 
 #import <UIKit/UIKit.h>
-
-@class PrimaryActionButton;
 
 // A protocol required by delegates of the SafeModeViewController.
 @protocol SafeModeViewControllerDelegate

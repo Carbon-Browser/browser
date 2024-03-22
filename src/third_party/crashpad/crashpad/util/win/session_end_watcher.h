@@ -1,4 +1,4 @@
-// Copyright 2017 The Crashpad Authors. All rights reserved.
+// Copyright 2017 The Crashpad Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -30,7 +30,7 @@ namespace crashpad {
 //! loop required to monitor for this message.
 //!
 //! Users should subclass this class and receive notifications by implementing
-//! the SessionEndWatcherEvent() method.
+//! the SessionEnding() method.
 class SessionEndWatcher : public Thread {
  public:
   SessionEndWatcher();

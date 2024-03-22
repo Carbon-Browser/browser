@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,8 +11,6 @@
 #include "chrome/browser/profiles/profile_manager.h"
 #include "chrome/browser/profiles/profile_theme_update_service.h"
 #include "chrome/browser/themes/theme_service_factory.h"
-#include "components/keyed_service/content/browser_context_dependency_manager.h"
-#include "components/keyed_service/content/browser_context_keyed_service_factory.h"
 
 // static
 ProfileThemeUpdateService* ProfileThemeUpdateServiceFactory::GetForProfile(
@@ -29,23 +27,28 @@ ProfileThemeUpdateServiceFactory::GetInstance() {
 }
 
 ProfileThemeUpdateServiceFactory::ProfileThemeUpdateServiceFactory()
-    : BrowserContextKeyedServiceFactory(
+    : ProfileKeyedServiceFactory(
           "ProfileThemeUpdateServiceFactory",
-          BrowserContextDependencyManager::GetInstance()) {
+          ProfileSelections::Builder()
+              .WithRegular(ProfileSelection::kOriginalOnly)
+              // TODO(crbug.com/1418376): Check if this service is needed in
+              // Guest mode.
+              .WithGuest(ProfileSelection::kOriginalOnly)
+              .Build()) {
   DependsOn(ThemeServiceFactory::GetInstance());
 }
 
 ProfileThemeUpdateServiceFactory::~ProfileThemeUpdateServiceFactory() = default;
 
-KeyedService* ProfileThemeUpdateServiceFactory::BuildServiceInstanceFor(
+std::unique_ptr<KeyedService>
+ProfileThemeUpdateServiceFactory::BuildServiceInstanceForBrowserContext(
     content::BrowserContext* context) const {
-
   ProfileManager* profile_manager = g_browser_process->profile_manager();
   if (!profile_manager)
     return nullptr;  // Some tests don't have a profile manager.
 
   Profile* profile = Profile::FromBrowserContext(context);
-  return new ProfileThemeUpdateService(
+  return std::make_unique<ProfileThemeUpdateService>(
       profile, &profile_manager->GetProfileAttributesStorage());
 }
 

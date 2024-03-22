@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,23 +6,75 @@
 
 #include "base/command_line.h"
 #include "base/metrics/field_trial_params.h"
+#include "content/common/features.h"
 #include "content/public/common/content_features.h"
 #include "content/public/common/content_switches.h"
 
 namespace content {
 
-bool IsFedCmAutoSigninEnabled() {
-  return GetFieldTrialParamByFeatureAsBool(
-      features::kFedCm, features::kFedCmAutoSigninFieldTrialParamName, false);
+bool IsFedCmAuthzEnabled() {
+  return base::FeatureList::IsEnabled(features::kFedCmAuthz);
 }
 
-bool IsFedCmIdpSignoutEnabled() {
-  return GetFieldTrialParamByFeatureAsBool(
-      features::kFedCm, features::kFedCmIdpSignoutFieldTrialParamName, false);
+bool IsFedCmMultipleIdentityProvidersEnabled() {
+  return base::FeatureList::IsEnabled(
+      features::kFedCmMultipleIdentityProviders);
 }
 
-bool IsFedCmManifestValidationEnabled() {
-  return base::FeatureList::IsEnabled(features::kFedCmManifestValidation);
+FedCmIdpSigninStatusMode GetFedCmIdpSigninStatusFlag() {
+  if (base::FeatureList::IsEnabled(features::kFedCmIdpSigninStatusEnabled)) {
+    return FedCmIdpSigninStatusMode::ENABLED;
+  }
+  if (base::FeatureList::IsEnabled(features::kFedCmIdpSigninStatusMetrics)) {
+    return FedCmIdpSigninStatusMode::METRICS_ONLY;
+  }
+  return FedCmIdpSigninStatusMode::DISABLED;
+}
+
+bool IsFedCmMetricsEndpointEnabled() {
+  return base::FeatureList::IsEnabled(features::kFedCmMetricsEndpoint);
+}
+
+bool IsFedCmSelectiveDisclosureEnabled() {
+  return base::FeatureList::IsEnabled(features::kFedCmSelectiveDisclosure);
+}
+
+bool IsFedCmIdPRegistrationEnabled() {
+  return base::FeatureList::IsEnabled(features::kFedCmIdPRegistration);
+}
+
+bool IsFedCmWithoutWellKnownEnforcementEnabled() {
+  return base::FeatureList::IsEnabled(
+      features::kFedCmWithoutWellKnownEnforcement);
+}
+
+bool IsWebIdentityDigitalCredentialsEnabled() {
+  return base::FeatureList::IsEnabled(features::kWebIdentityDigitalCredentials);
+}
+
+bool IsFedCmAutoSelectedFlagEnabled() {
+  return base::FeatureList::IsEnabled(features::kFedCmAutoSelectedFlag);
+}
+
+bool IsFedCmDomainHintEnabled() {
+  return base::FeatureList::IsEnabled(features::kFedCmDomainHint);
+}
+
+bool IsFedCmErrorEnabled() {
+  return base::FeatureList::IsEnabled(features::kFedCmError);
+}
+
+bool IsFedCmDisconnectEnabled() {
+  return base::FeatureList::IsEnabled(features::kFedCmDisconnect);
+}
+
+bool IsFedCmAddAccountEnabled() {
+  return base::FeatureList::IsEnabled(features::kFedCmAddAccount);
+}
+
+bool IsFedCmExemptIdpWithThirdPartyCookiesEnabled() {
+  return base::FeatureList::IsEnabled(
+      features::kFedCmExemptIdpWithThirdPartyCookies);
 }
 
 }  // namespace content

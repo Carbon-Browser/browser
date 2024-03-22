@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -76,6 +76,23 @@ CanvasImageSource* ToCanvasImageSource(const V8CanvasImageSource* value,
 
   NOTREACHED();
   return nullptr;
+}
+
+bool WouldTaintCanvasOrigin(CanvasImageSource* image_source) {
+  // Don't taint the canvas on data URLs. This special case is needed here
+  // because CanvasImageSource::WouldTaintOrigin() can return false for data
+  // URLs due to restrictions on SVG foreignObject nodes as described in
+  // https://crbug.com/294129.
+  // TODO(crbug.com/294129): Remove the restriction on foreignObject nodes, then
+  // this logic isn't needed, CanvasImageSource::SourceURL() isn't needed, and
+  // this function can just be image_source->WouldTaintOrigin().
+  const KURL& source_url = image_source->SourceURL();
+  const bool has_url = (source_url.IsValid() && !source_url.IsAboutBlankURL());
+  if (has_url && source_url.ProtocolIsData()) {
+    return false;
+  }
+
+  return image_source->WouldTaintOrigin();
 }
 
 }  // namespace blink

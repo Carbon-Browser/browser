@@ -1,4 +1,4 @@
-# Copyright 2021 The Chromium Authors. All rights reserved.
+# Copyright 2021 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -8,8 +8,6 @@ import socket
 import sys
 import xmlrpc.client
 
-# TODO(crbug.com/1233612): Query XML RPC server port once the server propgate
-# the value.
 _UPDATER_XML_RPC_PORT = 9090
 
 # Errors that might be raised when interacting with the RPC server.

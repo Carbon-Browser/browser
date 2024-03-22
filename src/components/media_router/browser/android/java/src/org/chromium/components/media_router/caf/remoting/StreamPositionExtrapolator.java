@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,8 +10,6 @@ package org.chromium.components.media_router.caf.remoting;
  * position.
  */
 public class StreamPositionExtrapolator {
-    private static final String TAG = "MediaFling";
-
     private long mDuration;
     private long mLastKnownPosition;
     private long mTimestamp;
@@ -58,8 +56,9 @@ public class StreamPositionExtrapolator {
         if (mTimestamp == 0) return 0;
         if (!mIsPlaying) return Math.max(mLastKnownPosition, 0);
 
-        long interpolatedStreamPosition = mLastKnownPosition
-                + (long) (mPlaybackRate * (System.currentTimeMillis() - mTimestamp));
+        long interpolatedStreamPosition =
+                mLastKnownPosition
+                        + (long) (mPlaybackRate * (System.currentTimeMillis() - mTimestamp));
         if (mDuration >= 0) {
             // Don't limit if mDuration is negative, which means the remote media is streamed
             // instead of buffered.

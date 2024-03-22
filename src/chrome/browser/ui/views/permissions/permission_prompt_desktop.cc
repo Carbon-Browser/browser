@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -19,7 +19,7 @@ PermissionPromptDesktop::PermissionPromptDesktop(
 PermissionPromptDesktop::~PermissionPromptDesktop() = default;
 
 bool PermissionPromptDesktop::UpdateBrowser() {
-  Browser* current_browser = chrome::FindBrowserWithWebContents(web_contents_);
+  Browser* current_browser = chrome::FindBrowserWithTab(web_contents_);
   // Browser for |web_contents_| might change when for example the tab was
   // dragged to another window.
   bool was_browser_changed = false;
@@ -31,8 +31,9 @@ bool PermissionPromptDesktop::UpdateBrowser() {
   return was_browser_changed;
 }
 
-void PermissionPromptDesktop::UpdateAnchor() {
+bool PermissionPromptDesktop::UpdateAnchor() {
   UpdateBrowser();
+  return true;
 }
 
 permissions::PermissionPrompt::TabSwitchingBehavior
@@ -41,8 +42,17 @@ PermissionPromptDesktop::GetTabSwitchingBehavior() {
       kDestroyPromptButKeepRequestPending;
 }
 
+absl::optional<gfx::Rect> PermissionPromptDesktop::GetViewBoundsInScreen()
+    const {
+  return absl::nullopt;
+}
+
 views::Widget* PermissionPromptDesktop::GetPromptBubbleWidgetForTesting() {
   return nullptr;
+}
+
+bool PermissionPromptDesktop::ShouldFinalizeRequestAfterDecided() const {
+  return true;
 }
 
 LocationBarView* PermissionPromptDesktop::GetLocationBarView() {

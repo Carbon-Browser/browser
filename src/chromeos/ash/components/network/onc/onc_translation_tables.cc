@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,6 +7,7 @@
 #include <cstddef>
 
 #include "base/logging.h"
+#include "base/memory/raw_ptr_exclusion.h"
 #include "base/strings/string_piece.h"
 #include "chromeos/ash/components/network/network_type_pattern.h"
 #include "chromeos/ash/components/network/tether_constants.h"
@@ -33,7 +34,8 @@ const FieldTranslationEntry eap_fields[] = {
     // { ::onc::eap::kOuter, shill::kEapMethodProperty },
     {::onc::eap::kPassword, shill::kEapPasswordProperty},
     {::onc::eap::kSaveCredentials, shill::kSaveCredentialsProperty},
-    {::onc::eap::kServerCAPEMs, shill::kEapCaCertPemProperty},
+    // This field is converted during translation, see onc_translator_*.
+    // {::onc::eap::kServerCAPEMs, shill::kEapCaCertPemProperty},
     {::onc::eap::kSubjectMatch, shill::kEapSubjectMatchProperty},
     // This field is converted during translation, see onc_translator_*.
     // {::onc::eap::kSubjectAlternativeNameMatch,
@@ -121,6 +123,7 @@ const FieldTranslationEntry openvpn_fields[] = {
     {nullptr}};
 
 const FieldTranslationEntry wireguard_fields[] = {
+    {::onc::wireguard::kIPAddresses, shill::kWireGuardIPAddress},
     {::onc::wireguard::kPublicKey, shill::kWireGuardPublicKey},
     {::onc::wireguard::kPrivateKey, shill::kWireGuardPrivateKey},
     {::onc::wireguard::kPeers, shill::kWireGuardPeers},
@@ -161,6 +164,8 @@ const FieldTranslationEntry tether_fields[] = {
 const FieldTranslationEntry wifi_fields[] = {
     {::onc::wifi::kAutoConnect, shill::kAutoConnectProperty},
     {::onc::wifi::kBSSID, shill::kWifiBSsid},
+    {::onc::wifi::kBSSIDAllowlist, shill::kWifiBSSIDAllowlist},
+    {::onc::wifi::kBSSIDRequested, shill::kWifiBSSIDRequested},
     // This dictionary is converted during translation, see onc_translator_*.
     // { ::onc::wifi::kEAP, shill::kEap*},
     {::onc::wifi::kFrequency, shill::kWifiFrequency},
@@ -172,6 +177,8 @@ const FieldTranslationEntry wifi_fields[] = {
     // { ::onc::wifi::kSecurity, shill::kSecurityClassProperty },
     {::onc::wifi::kSignalStrength, shill::kSignalStrengthProperty},
     {::onc::wifi::kSignalStrengthRssi, shill::kWifiSignalStrengthRssiProperty},
+    {::onc::wifi::kPasspointId, shill::kPasspointIDProperty},
+    {::onc::wifi::kPasspointMatchType, shill::kPasspointMatchTypeProperty},
     {nullptr}};
 
 const FieldTranslationEntry cellular_apn_fields[] = {
@@ -179,10 +186,17 @@ const FieldTranslationEntry cellular_apn_fields[] = {
     {::onc::cellular_apn::kName, shill::kApnNameProperty},
     {::onc::cellular_apn::kUsername, shill::kApnUsernameProperty},
     {::onc::cellular_apn::kPassword, shill::kApnPasswordProperty},
-    {::onc::cellular_apn::kAuthentication, shill::kApnAuthenticationProperty},
+    // This field is converted during translation, see onc_translator_*.
+    // {::onc::cellular_apn::kAuthentication,
+    // shill::kApnAuthenticationProperty},
     {::onc::cellular_apn::kLocalizedName, shill::kApnLocalizedNameProperty},
     {::onc::cellular_apn::kLanguage, shill::kApnLanguageProperty},
     {::onc::cellular_apn::kAttach, shill::kApnAttachProperty},
+    // This field is converted during translation, see onc_translator_*.
+    // {::onc::cellular_apn::kIpType, shill::kApnIpTypeProperty},
+    {::onc::cellular_apn::kId, shill::kApnIdProperty},
+    // This field is converted during translation, see onc_translator_*.
+    // {::onc::cellular_apn::kApnTypes, shill::kApnTypesProperty},
     {nullptr}};
 
 const FieldTranslationEntry cellular_found_network_fields[] = {
@@ -281,43 +295,53 @@ const FieldTranslationEntry static_or_saved_ipconfig_fields[] = {
     {nullptr}};
 
 struct OncValueTranslationEntry {
-  const OncValueSignature* onc_signature;
-  const FieldTranslationEntry* field_translation_table;
+  // This field is not a raw_ptr<> because it was filtered by the rewriter
+  // for: #global-scope
+  RAW_PTR_EXCLUSION const chromeos::onc::OncValueSignature* onc_signature;
+  // This field is not a raw_ptr<> because it was filtered by the rewriter
+  // for: #global-scope
+  RAW_PTR_EXCLUSION const FieldTranslationEntry* field_translation_table;
 };
 
 const OncValueTranslationEntry onc_value_translation_table[] = {
-    {&kEAPSignature, eap_fields},
-    {&kIPsecSignature, ipsec_fields},
-    {&kL2TPSignature, l2tp_fields},
-    {&kXAUTHSignature, xauth_fields},
-    {&kOpenVPNSignature, openvpn_fields},
-    {&kWireGuardSignature, wireguard_fields},
-    {&kWireGuardPeerSignature, wireguard_peer_fields},
-    {&kARCVPNSignature, arc_vpn_fields},
-    {&kVerifyX509Signature, verify_x509_fields},
-    {&kVPNSignature, vpn_fields},
-    {&kTetherSignature, tether_fields},
-    {&kTetherWithStateSignature, tether_fields},
-    {&kWiFiSignature, wifi_fields},
-    {&kWiFiWithStateSignature, wifi_fields},
-    {&kCellularApnSignature, cellular_apn_fields},
-    {&kCellularFoundNetworkSignature, cellular_found_network_fields},
-    {&kCellularPaymentPortalSignature, cellular_payment_portal_fields},
-    {&kCellularProviderSignature, cellular_provider_fields},
-    {&kSIMLockStatusSignature, sim_lock_status_fields},
-    {&kCellularSignature, cellular_fields},
-    {&kCellularWithStateSignature, cellular_fields},
-    {&kNetworkWithStateSignature, network_fields},
-    {&kNetworkConfigurationSignature, network_fields},
-    {&kIPConfigSignature, ipconfig_fields},
-    {&kSavedIPConfigSignature, static_or_saved_ipconfig_fields},
-    {&kStaticIPConfigSignature, static_or_saved_ipconfig_fields},
+    {&chromeos::onc::kEAPSignature, eap_fields},
+    {&chromeos::onc::kIPsecSignature, ipsec_fields},
+    {&chromeos::onc::kL2TPSignature, l2tp_fields},
+    {&chromeos::onc::kXAUTHSignature, xauth_fields},
+    {&chromeos::onc::kOpenVPNSignature, openvpn_fields},
+    {&chromeos::onc::kWireGuardSignature, wireguard_fields},
+    {&chromeos::onc::kWireGuardPeerSignature, wireguard_peer_fields},
+    {&chromeos::onc::kARCVPNSignature, arc_vpn_fields},
+    {&chromeos::onc::kVerifyX509Signature, verify_x509_fields},
+    {&chromeos::onc::kVPNSignature, vpn_fields},
+    {&chromeos::onc::kTetherSignature, tether_fields},
+    {&chromeos::onc::kTetherWithStateSignature, tether_fields},
+    {&chromeos::onc::kWiFiSignature, wifi_fields},
+    {&chromeos::onc::kWiFiWithStateSignature, wifi_fields},
+    {&chromeos::onc::kCellularApnSignature, cellular_apn_fields},
+    {&chromeos::onc::kCellularFoundNetworkSignature,
+     cellular_found_network_fields},
+    {&chromeos::onc::kCellularPaymentPortalSignature,
+     cellular_payment_portal_fields},
+    {&chromeos::onc::kCellularProviderSignature, cellular_provider_fields},
+    {&chromeos::onc::kSIMLockStatusSignature, sim_lock_status_fields},
+    {&chromeos::onc::kCellularSignature, cellular_fields},
+    {&chromeos::onc::kCellularWithStateSignature, cellular_fields},
+    {&chromeos::onc::kNetworkWithStateSignature, network_fields},
+    {&chromeos::onc::kNetworkConfigurationSignature, network_fields},
+    {&chromeos::onc::kIPConfigSignature, ipconfig_fields},
+    {&chromeos::onc::kSavedIPConfigSignature, static_or_saved_ipconfig_fields},
+    {&chromeos::onc::kStaticIPConfigSignature, static_or_saved_ipconfig_fields},
     {nullptr}};
 
 struct NestedShillDictionaryEntry {
-  const OncValueSignature* onc_signature;
+  // This field is not a raw_ptr<> because it was filtered by the rewriter
+  // for: #global-scope
+  RAW_PTR_EXCLUSION const chromeos::onc::OncValueSignature* onc_signature;
   // nullptr terminated list of Shill property keys.
-  const char* const* shill_property_path;
+  // This field is not a raw_ptr<> because it was filtered by the rewriter
+  // for: #global-scope
+  RAW_PTR_EXCLUSION const char* const* shill_property_path;
 };
 
 const char* cellular_apn_path_entries[] = {shill::kCellularApnProperty,
@@ -327,8 +351,8 @@ const char* static_ip_config_path_entries[] = {shill::kStaticIPConfigProperty,
                                                nullptr};
 
 const NestedShillDictionaryEntry nested_shill_dictionaries[] = {
-    {&kCellularApnSignature, cellular_apn_path_entries},
-    {&kStaticIPConfigSignature, static_ip_config_path_entries},
+    {&chromeos::onc::kCellularApnSignature, cellular_apn_path_entries},
+    {&chromeos::onc::kStaticIPConfigSignature, static_ip_config_path_entries},
     {nullptr}};
 
 // Translation of the EAP.Inner field in case of EAP.Outer == PEAP
@@ -371,11 +395,11 @@ const StringTranslationEntry kVPNTypeTable[] = {
     {nullptr}};
 
 const StringTranslationEntry kWiFiSecurityTable[] = {
-    {::onc::wifi::kSecurityNone, shill::kSecurityNone},
-    {::onc::wifi::kWEP_PSK, shill::kSecurityWep},
-    {::onc::wifi::kWPA_PSK, shill::kSecurityPsk},
-    {::onc::wifi::kWPA_EAP, shill::kSecurity8021x},
-    {::onc::wifi::kWEP_8021X, shill::kSecurityWep},
+    {::onc::wifi::kSecurityNone, shill::kSecurityClassNone},
+    {::onc::wifi::kWEP_PSK, shill::kSecurityClassWep},
+    {::onc::wifi::kWPA_PSK, shill::kSecurityClassPsk},
+    {::onc::wifi::kWPA_EAP, shill::kSecurityClass8021x},
+    {::onc::wifi::kWEP_8021X, shill::kSecurityClassWep},
     {nullptr}};
 
 const StringTranslationEntry kEAPOuterTable[] = {
@@ -429,6 +453,19 @@ const StringTranslationEntry kIKEv2AuthenticationTypeTable[] = {
     {::onc::ipsec::kEAP, shill::kIKEv2AuthenticationTypeEAP},
     {nullptr}};
 
+const StringTranslationEntry kApnAuthenticationTranslationTable[] = {
+    {::onc::cellular_apn::kAuthenticationAutomatic, ""},
+    {::onc::cellular_apn::kAuthenticationPap, shill::kApnAuthenticationPap},
+    {::onc::cellular_apn::kAuthenticationChap, shill::kApnAuthenticationChap},
+    {nullptr}};
+
+const StringTranslationEntry kApnIpTypeTranslationTable[] = {
+    {::onc::cellular_apn::kIpTypeAutomatic, ""},
+    {::onc::cellular_apn::kIpTypeIpv4, shill::kApnIpTypeV4},
+    {::onc::cellular_apn::kIpTypeIpv6, shill::kApnIpTypeV6},
+    {::onc::cellular_apn::kIpTypeIpv4Ipv6, shill::kApnIpTypeV4V6},
+    {nullptr}};
+
 // This must contain only Shill Device properties and no Service properties.
 // For Service properties see cellular_fields.
 const FieldTranslationEntry kCellularDeviceTable[] = {
@@ -463,11 +500,12 @@ const FieldTranslationEntry kIPsecIKEv2Table[] = {
     {nullptr}};
 
 const FieldTranslationEntry* GetFieldTranslationTable(
-    const OncValueSignature& onc_signature) {
+    const chromeos::onc::OncValueSignature& onc_signature) {
   for (const OncValueTranslationEntry* it = onc_value_translation_table;
        it->onc_signature != nullptr; ++it) {
-    if (it->onc_signature == &onc_signature)
+    if (it->onc_signature == &onc_signature) {
       return it->field_translation_table;
+    }
   }
   return nullptr;
 }
@@ -497,7 +535,7 @@ const StringTranslationEntry* GetEapInnerTranslationTableForOncOuter(
 }
 
 std::vector<std::string> GetPathToNestedShillDictionary(
-    const OncValueSignature& onc_signature) {
+    const chromeos::onc::OncValueSignature& onc_signature) {
   std::vector<std::string> shill_property_path;
   for (const NestedShillDictionaryEntry* it = nested_shill_dictionaries;
        it->onc_signature != nullptr; ++it) {
@@ -517,8 +555,9 @@ bool GetShillPropertyName(const std::string& onc_field_name,
                           std::string* shill_property_name) {
   for (const FieldTranslationEntry* it = table; it->onc_field_name != nullptr;
        ++it) {
-    if (it->onc_field_name != onc_field_name)
+    if (it->onc_field_name != onc_field_name) {
       continue;
+    }
     *shill_property_name = it->shill_property_name;
     return true;
   }
@@ -529,8 +568,9 @@ bool TranslateStringToShill(const StringTranslationEntry table[],
                             const std::string& onc_value,
                             std::string* shill_value) {
   for (int i = 0; table[i].onc_value != nullptr; ++i) {
-    if (onc_value != table[i].onc_value)
+    if (onc_value != table[i].onc_value) {
       continue;
+    }
     *shill_value = table[i].shill_value;
     return true;
   }
@@ -544,8 +584,9 @@ bool TranslateStringToONC(const StringTranslationEntry table[],
                           const std::string& shill_value,
                           std::string* onc_value) {
   for (int i = 0; table[i].shill_value != nullptr; ++i) {
-    if (shill_value != table[i].shill_value)
+    if (shill_value != table[i].shill_value) {
       continue;
+    }
     *onc_value = table[i].onc_value;
     return true;
   }

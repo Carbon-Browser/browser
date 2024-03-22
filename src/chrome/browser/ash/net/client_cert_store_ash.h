@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -64,10 +64,5 @@ class ClientCertStoreAsh : public net::ClientCertStore {
 };
 
 }  // namespace ash
-
-// TODO(https://crbug.com/1164001): remove after the migration is finished.
-namespace chromeos {
-using ::ash::ClientCertStoreAsh;
-}
 
 #endif  // CHROME_BROWSER_ASH_NET_CLIENT_CERT_STORE_ASH_H_

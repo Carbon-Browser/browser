@@ -1,9 +1,8 @@
-# Copyright 2016 The Chromium Authors. All rights reserved.
+# Copyright 2016 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
 source_set("net") {
-  configs += [ "//build/config/compiler:enable_arc" ]
   sources = [
     "accept_language_pref_watcher.h",
     "accept_language_pref_watcher.mm",
@@ -30,8 +29,8 @@ source_set("net") {
     "//components/pref_registry",
     "//components/prefs",
     "//components/update_client",
-    "//ios/chrome/browser",
-    "//ios/chrome/browser/browser_state",
+    "//ios/chrome/browser/shared/model/browser_state",
+    "//ios/chrome/browser/shared/model/prefs:pref_names",
     "//ios/net",
     "//ios/web/common",
     "//net",
@@ -42,7 +41,6 @@ source_set("net") {
     ":crurl",
     ":net_types",
   ]
-  allow_circular_includes_from = [ "//ios/chrome/browser" ]
 }
 
 source_set("net_types") {
@@ -51,7 +49,6 @@ source_set("net_types") {
     "//base",
     "//net",
   ]
-  configs += [ "//build/config/compiler:enable_arc" ]
 }
 
 source_set("crurl") {
@@ -59,16 +56,14 @@ source_set("crurl") {
     "crurl.h",
     "crurl.mm",
   ]
+  public_deps = [ "//base" ]
   deps = [
-    "//base",
     "//net",
     "//url",
   ]
-  configs += [ "//build/config/compiler:enable_arc" ]
 }
 
 source_set("unit_tests") {
-  configs += [ "//build/config/compiler:enable_arc" ]
   testonly = true
   sources = [ "retryable_url_fetcher_unittest.mm" ]
   deps = [
@@ -83,16 +78,12 @@ source_set("unit_tests") {
 }
 
 source_set("eg2_tests") {
-  configs += [
-    "//build/config/compiler:enable_arc",
-    "//build/config/ios:xctest_config",
-  ]
+  configs += [ "//build/config/ios:xctest_config" ]
   testonly = true
   sources = [ "cookies_egtest.mm" ]
   deps = [
     "//ios/chrome/test/earl_grey:eg_test_support+eg2",
     "//ios/testing/earl_grey:eg_test_support+eg2",
-    "//ios/third_party/earl_grey2:test_lib",
     "//net:test_support",
     "//ui/base",
     "//url",

@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -16,7 +16,7 @@ ResizeObserverController* ResizeObserverController::From(
     LocalDOMWindow& window) {
   auto* controller = FromIfExists(window);
   if (!controller) {
-    controller = MakeGarbageCollected<ResizeObserverController>();
+    controller = MakeGarbageCollected<ResizeObserverController>(window);
     Supplement<LocalDOMWindow>::ProvideTo(window, controller);
   }
   return controller;
@@ -27,10 +27,18 @@ ResizeObserverController* ResizeObserverController::FromIfExists(
   return Supplement<LocalDOMWindow>::From<ResizeObserverController>(window);
 }
 
-ResizeObserverController::ResizeObserverController() : Supplement(nullptr) {}
+ResizeObserverController::ResizeObserverController(LocalDOMWindow& window)
+    : Supplement(window) {}
 
 void ResizeObserverController::AddObserver(ResizeObserver& observer) {
-  observers_.insert(&observer);
+  switch (observer.Delivery()) {
+    case ResizeObserver::DeliveryTime::kInsertionOrder:
+      observers_.insert(&observer);
+      break;
+    case ResizeObserver::DeliveryTime::kBeforeOthers:
+      observers_.PrependOrMoveToFirst(&observer);
+      break;
+  }
 }
 
 size_t ResizeObserverController::GatherObservations() {
@@ -56,8 +64,7 @@ bool ResizeObserverController::SkippedObservations() {
 void ResizeObserverController::DeliverObservations() {
   // Copy is needed because m_observers might get modified during
   // deliverObservations.
-  HeapVector<Member<ResizeObserver>> observers;
-  CopyToVector(observers_, observers);
+  HeapVector<Member<ResizeObserver>> observers(observers_);
 
   for (auto& observer : observers) {
     if (observer) {

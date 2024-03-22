@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,18 +8,22 @@
 #include "chrome/browser/apps/app_deduplication_service/app_deduplication_service.h"
 #include "chrome/browser/apps/app_deduplication_service/app_deduplication_service_factory.h"
 #include "chrome/browser/apps/app_service/app_service_proxy_factory.h"
-#include "chrome/browser/ash/profiles/profile_helper.h"
 #include "chrome/browser/profiles/incognito_helpers.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/common/chrome_features.h"
 #include "components/keyed_service/content/browser_context_dependency_manager.h"
+#include "google_apis/google_api_keys.h"
 
 namespace {
+
 static constexpr const char* kAppDeduplicationService =
     "AppDeduplicationService";
+
+bool g_skip_api_key_check = false;
+
 }  // namespace
 
-namespace apps {
+namespace apps::deduplication {
 
 // static
 AppDeduplicationService* AppDeduplicationServiceFactory::GetForProfile(
@@ -41,7 +45,22 @@ AppDeduplicationServiceFactory* AppDeduplicationServiceFactory::GetInstance() {
 // app deduplication.
 bool AppDeduplicationServiceFactory::
     IsAppDeduplicationServiceAvailableForProfile(Profile* profile) {
-  return AppServiceProxyFactory::IsAppServiceAvailableForProfile(profile);
+  if (base::FeatureList::IsEnabled(features::kAppDeduplicationServiceFondue)) {
+    // Ensure that the build uses the Google-internal file containing the
+    // official API keys, which are required to make queries to the Almanac.
+    if (!google_apis::IsGoogleChromeAPIKeyUsed() && !g_skip_api_key_check) {
+      return false;
+    }
+    return AppServiceProxyFactory::IsAppServiceAvailableForProfile(profile);
+  }
+
+  return false;
+}
+
+// static
+void AppDeduplicationServiceFactory::SkipApiKeyCheckForTesting(
+    bool skip_api_key_check) {
+  g_skip_api_key_check = skip_api_key_check;
 }
 
 AppDeduplicationServiceFactory::AppDeduplicationServiceFactory()
@@ -53,13 +72,14 @@ AppDeduplicationServiceFactory::AppDeduplicationServiceFactory()
 
 AppDeduplicationServiceFactory::~AppDeduplicationServiceFactory() = default;
 
-KeyedService* AppDeduplicationServiceFactory::BuildServiceInstanceFor(
+std::unique_ptr<KeyedService>
+AppDeduplicationServiceFactory::BuildServiceInstanceForBrowserContext(
     content::BrowserContext* context) const {
   Profile* const profile = Profile::FromBrowserContext(context);
   if (!IsAppDeduplicationServiceAvailableForProfile(profile)) {
     return nullptr;
   }
-  return new AppDeduplicationService(profile);
+  return std::make_unique<AppDeduplicationService>(profile);
 }
 
 content::BrowserContext* AppDeduplicationServiceFactory::GetBrowserContextToUse(
@@ -74,4 +94,9 @@ content::BrowserContext* AppDeduplicationServiceFactory::GetBrowserContextToUse(
   return BrowserContextKeyedServiceFactory::GetBrowserContextToUse(context);
 }
 
-}  // namespace apps
+bool AppDeduplicationServiceFactory::ServiceIsCreatedWithBrowserContext()
+    const {
+  return true;
+}
+
+}  // namespace apps::deduplication

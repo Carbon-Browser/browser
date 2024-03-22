@@ -1,4 +1,4 @@
-// Copyright (c) 2011 The Chromium Authors. All rights reserved.
+// Copyright 2011 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -68,7 +68,7 @@ class DownloadShelfContextMenu : public ui::SimpleMenuModel::Delegate {
   ui::SimpleMenuModel* GetMaybeMaliciousMenuModel(bool is_download);
   ui::SimpleMenuModel* GetMaliciousMenuModel(bool is_download);
   ui::SimpleMenuModel* GetDeepScanningMenuModel(bool is_download);
-  ui::SimpleMenuModel* GetMixedContentDownloadMenuModel();
+  ui::SimpleMenuModel* GetInsecureDownloadMenuModel();
 
   void AddAutoOpenToMenu(ui::SimpleMenuModel* model);
 
@@ -83,7 +83,7 @@ class DownloadShelfContextMenu : public ui::SimpleMenuModel::Delegate {
   std::unique_ptr<ui::SimpleMenuModel> maybe_malicious_download_menu_model_;
   std::unique_ptr<ui::SimpleMenuModel> malicious_download_menu_model_;
   std::unique_ptr<ui::SimpleMenuModel> deep_scanning_menu_model_;
-  std::unique_ptr<ui::SimpleMenuModel> mixed_content_download_menu_model_;
+  std::unique_ptr<ui::SimpleMenuModel> insecure_download_menu_model_;
 
   // Whether or not a histogram has been emitted recording which
   // Download commands were enabled

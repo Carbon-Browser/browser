@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,13 +6,13 @@
 #include <string>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/command_line.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/run_loop.h"
 #include "base/threading/platform_thread.h"
 #include "build/build_config.h"
-#include "content/browser/generic_sensor/sensor_provider_proxy_impl.h"
+#include "content/browser/generic_sensor/web_contents_sensor_provider_proxy.h"
 #include "content/public/browser/browser_thread.h"
 #include "content/public/browser/render_frame_host.h"
 #include "content/public/browser/web_contents.h"
@@ -44,13 +44,13 @@ using device::FakeSensorProvider;
 class DeviceSensorBrowserTest : public ContentBrowserTest {
  public:
   DeviceSensorBrowserTest() {
-    SensorProviderProxyImpl::OverrideSensorProviderBinderForTesting(
+    WebContentsSensorProviderProxy::OverrideSensorProviderBinderForTesting(
         base::BindRepeating(&DeviceSensorBrowserTest::BindSensorProvider,
                             base::Unretained(this)));
   }
 
   ~DeviceSensorBrowserTest() override {
-    SensorProviderProxyImpl::OverrideSensorProviderBinderForTesting(
+    WebContentsSensorProviderProxy::OverrideSensorProviderBinderForTesting(
         base::NullCallback());
   }
 
@@ -371,7 +371,7 @@ IN_PROC_BROWSER_TEST_F(DeviceSensorBrowserTest,
   EXPECT_TRUE(NavigateIframeToURL(shell()->web_contents(),
                                   "cross_origin_iframe", iframe_url));
 
-  console_observer.Wait();
+  ASSERT_TRUE(console_observer.Wait());
   EXPECT_EQ(kWarningMessage, console_observer.GetMessageAt(0u));
 }
 

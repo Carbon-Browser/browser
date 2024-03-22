@@ -1,11 +1,11 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include <utility>
 
-#include "base/callback.h"
-#include "base/callback_helpers.h"
+#include "base/functional/callback.h"
+#include "base/functional/callback_helpers.h"
 #include "components/services/app_service/public/cpp/app_types.h"
 #include "components/services/app_service/public/cpp/icon_cache.h"
 #include "components/services/app_service/public/cpp/icon_types.h"
@@ -32,8 +32,7 @@ class AppsIconCacheTest : public testing::Test {
 
    private:
     std::unique_ptr<Releaser> LoadIconFromIconKey(
-        apps::AppType app_type,
-        const std::string& app_id,
+        const std::string& id,
         const apps::IconKey& icon_key,
         apps::IconType icon_type,
         int32_t size_hint_in_dip,
@@ -104,8 +103,8 @@ class AppsIconCacheTest : public testing::Test {
     HitOrMiss expect_hom = kHit;
     if (gc_policy == apps::IconCache::GarbageCollectionPolicy::kExplicit) {
       if (remove_icon) {
-        cache.RemoveIcon(apps::AppType::kWeb, "cherry");
-        cache.RemoveIcon(apps::AppType::kWeb, "apricot");
+        cache.RemoveIcon("cherry");
+        cache.RemoveIcon("apricot");
         expect_hom = kMiss;
       } else {
         cache.SweepReleasedIcons();
@@ -118,7 +117,7 @@ class AppsIconCacheTest : public testing::Test {
 
     if (gc_policy == apps::IconCache::GarbageCollectionPolicy::kExplicit) {
       if (remove_icon) {
-        cache.RemoveIcon(apps::AppType::kWeb, "cherry");
+        cache.RemoveIcon("cherry");
       } else {
         cache.SweepReleasedIcons();
       }
@@ -194,7 +193,7 @@ class AppsIconCacheTest : public testing::Test {
 
     if (gc_policy == apps::IconCache::GarbageCollectionPolicy::kExplicit) {
       if (remove_icon) {
-        cache.RemoveIcon(apps::AppType::kWeb, "watermelon");
+        cache.RemoveIcon("watermelon");
       } else {
         cache.SweepReleasedIcons();
       }

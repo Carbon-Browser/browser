@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,9 +7,9 @@
 
 #include <memory>
 
-#include "base/callback_forward.h"
 #include "base/callback_list.h"
 #include "base/files/file_path.h"
+#include "base/functional/callback_forward.h"
 #include "base/memory/weak_ptr.h"
 #include "base/task/sequenced_task_runner.h"
 #include "chromeos/crosapi/mojom/cert_database.mojom.h"
@@ -76,7 +76,8 @@ class CertDbInitializerIOImpl : public net::NSSCertDatabase::Observer {
   void InitializeReadOnlyNssCertDatabase(base::OnceClosure init_callback);
 
   // net::NSSCertDatabase::Observer
-  void OnCertDBChanged() override;
+  void OnTrustStoreChanged() override;
+  void OnClientCertStoreChanged() override;
 
  private:
   void DidLoadSoftwareNssDb(base::OnceClosure load_callback,

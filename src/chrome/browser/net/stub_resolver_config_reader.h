@@ -1,9 +1,11 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CHROME_BROWSER_NET_STUB_RESOLVER_CONFIG_READER_H_
 #define CHROME_BROWSER_NET_STUB_RESOLVER_CONFIG_READER_H_
+
+#include <string>
 
 #include "base/memory/raw_ptr.h"
 #include "base/sequence_checker.h"
@@ -67,6 +69,13 @@ class StubResolverConfigReader {
 
   // Returns true if there are parental controls detected on the device.
   virtual bool ShouldDisableDohForParentalControls();
+
+#if BUILDFLAG(IS_CHROMEOS_ASH)
+  // If the URI templates for the DNS-over-HTTPS resolver contain user or device
+  // identifiers (which are hashed before being used), this method returns the
+  // plain text version of the URI templates. Otherwise returns nullopt.
+  absl::optional<std::string> GetDohWithIdentifiersDisplayServers();
+#endif
 
 #if BUILDFLAG(IS_ANDROID)
   // Updates the android owned state and network service if the device/prfile is

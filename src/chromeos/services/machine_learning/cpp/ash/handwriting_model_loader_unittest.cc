@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,14 +6,14 @@
 
 #include <string>
 
-#include "ash/constants/ash_switches.h"
-#include "base/bind.h"
 #include "base/command_line.h"
+#include "base/functional/bind.h"
 #include "base/run_loop.h"
 #include "base/test/scoped_command_line.h"
 #include "base/test/task_environment.h"
-#include "chromeos/dbus/dlcservice/fake_dlcservice_client.h"
+#include "chromeos/ash/components/dbus/dlcservice/fake_dlcservice_client.h"
 #include "chromeos/services/machine_learning/public/cpp/fake_service_connection.h"
+#include "chromeos/services/machine_learning/public/cpp/ml_switches.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "third_party/cros_system_api/dbus/service_constants.h"
 
@@ -77,7 +77,7 @@ class HandwritingModelLoaderTest : public testing::Test {
   // Sets "ondevice_handwriting" value.
   void SetSwitchValue(const std::string& switch_value) {
     base::CommandLine::ForCurrentProcess()->AppendSwitchASCII(
-        ash::switches::kOndeviceHandwritingSwitch, switch_value);
+        ::switches::kOndeviceHandwritingSwitch, switch_value);
   }
 
  private:
@@ -85,7 +85,7 @@ class HandwritingModelLoaderTest : public testing::Test {
       TaskEnvironment::MainThreadType::DEFAULT,
       TaskEnvironment::ThreadPoolExecutionMode::QUEUED};
   ScopedCommandLine scoped_command_line_;
-  chromeos::FakeDlcserviceClient fake_client_;
+  ash::FakeDlcserviceClient fake_client_;
   chromeos::machine_learning::FakeServiceConnectionImpl
       fake_service_connection_;
   LoadHandwritingModelResult result_;

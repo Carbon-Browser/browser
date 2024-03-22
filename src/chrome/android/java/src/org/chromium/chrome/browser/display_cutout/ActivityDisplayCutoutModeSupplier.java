@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,7 +6,6 @@ package org.chromium.chrome.browser.display_cutout;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
-import androidx.annotation.VisibleForTesting;
 
 import org.chromium.base.UnownedUserDataKey;
 import org.chromium.base.supplier.ObservableSupplier;
@@ -24,6 +23,7 @@ public class ActivityDisplayCutoutModeSupplier extends UnownedUserDataSupplier<I
     /** The key for accessing this object on an {@link org.chromium.base.UnownedUserDataHost}. */
     private static final UnownedUserDataKey<ActivityDisplayCutoutModeSupplier> KEY =
             new UnownedUserDataKey<>(ActivityDisplayCutoutModeSupplier.class);
+
     private static ObservableSupplierImpl<Integer> sInstanceForTesting;
 
     public static @Nullable ObservableSupplier<Integer> from(@NonNull WindowAndroid window) {
@@ -36,7 +36,6 @@ public class ActivityDisplayCutoutModeSupplier extends UnownedUserDataSupplier<I
     }
 
     /** Sets an instance for testing. */
-    @VisibleForTesting
     public static void setInstanceForTesting(Integer mode) {
         if (sInstanceForTesting == null) {
             sInstanceForTesting = new ObservableSupplierImpl<>();

@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -65,7 +65,7 @@ BadgeManagerDelegateWin::BadgeManagerDelegateWin(Profile* profile,
                                                  BadgeManager* badge_manager)
     : BadgeManagerDelegate(profile, badge_manager) {}
 
-void BadgeManagerDelegateWin::OnAppBadgeUpdated(const web_app::AppId& app_id) {
+void BadgeManagerDelegateWin::OnAppBadgeUpdated(const webapps::AppId& app_id) {
   const auto& content_and_alt =
       GetBadgeContentAndAlt(badge_manager()->GetBadgeValue(app_id));
 

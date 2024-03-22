@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -152,8 +152,7 @@ base::flat_set<MediaSink::Id> CastAppAvailabilityTracker::GetAvailableSinks(
 
 CastAppAvailabilityTracker::CapabilitiesAndAvailabilityMap::
     CapabilitiesAndAvailabilityMap(const MediaSinkInternal& sink)
-    : capabilities(BitwiseOr<cast_channel::CastDeviceCapability>::FromBits(
-          sink.cast_data().capabilities)) {}
+    : capabilities(sink.cast_data().capabilities) {}
 
 CastAppAvailabilityTracker::CapabilitiesAndAvailabilityMap::
     CapabilitiesAndAvailabilityMap(const CapabilitiesAndAvailabilityMap&) =

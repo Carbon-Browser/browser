@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -27,12 +27,6 @@ void SelectorFragmentAnchor::Trace(Visitor* visitor) const {
 }
 
 bool SelectorFragmentAnchor::Invoke() {
-  // Wait until the page has been made visible before searching.
-  if (!frame_->GetPage()->IsPageVisible() && !page_has_been_visible_) {
-    return true;
-  }
-  page_has_been_visible_ = true;
-
   return InvokeSelector();
 }
 

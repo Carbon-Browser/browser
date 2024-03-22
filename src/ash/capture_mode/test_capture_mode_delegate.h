@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,10 +9,10 @@
 #include <memory>
 
 #include "ash/public/cpp/capture_mode/capture_mode_delegate.h"
-#include "base/callback.h"
-#include "base/callback_forward.h"
 #include "base/files/file_path.h"
 #include "base/files/scoped_temp_dir.h"
+#include "base/functional/callback.h"
+#include "base/functional/callback_forward.h"
 #include "components/viz/common/surfaces/frame_sink_id.h"
 #include "ui/gfx/geometry/size.h"
 #include "ui/gfx/image/image_skia.h"
@@ -31,6 +31,8 @@ class TestCaptureModeDelegate : public CaptureModeDelegate {
   TestCaptureModeDelegate(const TestCaptureModeDelegate&) = delete;
   TestCaptureModeDelegate& operator=(const TestCaptureModeDelegate&) = delete;
   ~TestCaptureModeDelegate() override;
+
+  bool is_session_active() const { return is_session_active_; }
 
   recording::RecordingServiceTestApi* recording_service() const {
     return recording_service_.get();
@@ -51,6 +53,9 @@ class TestCaptureModeDelegate : public CaptureModeDelegate {
   }
   void set_is_camera_disabled_by_policy(bool value) {
     is_camera_disabled_by_policy_ = value;
+  }
+  void set_is_audio_capture_disabled_by_policy(bool value) {
+    is_audio_capture_disabled_by_policy_ = value;
   }
   void set_fake_drive_fs_free_bytes(int64_t bytes) {
     fake_drive_fs_free_bytes_ = bytes;
@@ -75,6 +80,13 @@ class TestCaptureModeDelegate : public CaptureModeDelegate {
   // Requests a video frame from the video capturer and waits for it to be
   // delivered to the service.
   void RequestAndWaitForVideoFrame();
+
+  // Returns true if there is an ongoing recording and the recording service is
+  // currently recording audio.
+  bool IsDoingAudioRecording() const;
+
+  // Returns the number of audio capturers owned by the recording service.
+  int GetNumberOfAudioCapturers() const;
 
   // CaptureModeDelegate:
   base::FilePath GetUserDefaultDownloadsFolder() const override;
@@ -112,6 +124,16 @@ class TestCaptureModeDelegate : public CaptureModeDelegate {
       override;
   void GetDriveFsFreeSpaceBytes(OnGotDriveFsFreeSpace callback) override;
   bool IsCameraDisabledByPolicy() const override;
+  bool IsAudioCaptureDisabledByPolicy() const override;
+  void RegisterVideoConferenceManagerClient(
+      crosapi::mojom::VideoConferenceManagerClient* client,
+      const base::UnguessableToken& client_id) override;
+  void UnregisterVideoConferenceManagerClient(
+      const base::UnguessableToken& client_id) override;
+  void UpdateVideoConferenceManager(
+      crosapi::mojom::VideoConferenceMediaUsageStatusPtr status) override;
+  void NotifyDeviceUsedWhileDisabled(
+      crosapi::mojom::VideoConferenceMediaDevice device) override;
 
  private:
   std::unique_ptr<recording::RecordingServiceTestApi> recording_service_;
@@ -119,10 +141,12 @@ class TestCaptureModeDelegate : public CaptureModeDelegate {
   base::ScopedTempDir fake_downloads_dir_;
   base::OnceClosure on_session_state_changed_callback_;
   base::OnceClosure on_recording_started_callback_;
+  bool is_session_active_ = false;
   bool is_allowed_by_dlp_ = true;
   bool is_allowed_by_policy_ = true;
   bool should_save_after_dlp_check_ = true;
   bool is_camera_disabled_by_policy_ = false;
+  bool is_audio_capture_disabled_by_policy_ = false;
   base::ScopedTempDir fake_drive_fs_mount_path_;
   base::ScopedTempDir fake_android_files_path_;
   base::ScopedTempDir fake_linux_files_path_;

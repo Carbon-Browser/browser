@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,8 +7,10 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
 #include "base/containers/contains.h"
+#include "base/functional/bind.h"
+#include "base/memory/raw_ptr.h"
+#include "base/strings/string_split.h"
 #include "base/task/thread_pool.h"
 #include "chrome/browser/ash/login/session/user_session_manager.h"
 #include "chrome/browser/browser_process.h"
@@ -47,7 +49,7 @@ struct SwitchLanguageData {
   locale_util::LanguageSwitchResult result;
   const bool enable_locale_keyboard_layouts;
   const bool login_layouts_only;
-  Profile* profile;
+  raw_ptr<Profile, DanglingUntriaged | ExperimentalAsh> profile;
 };
 
 // Runs on ThreadPool thread under PostTaskAndReply().
@@ -154,8 +156,8 @@ void SwitchLanguage(const std::string& locale,
 }
 
 bool IsAllowedLanguage(const std::string& language, const PrefService* prefs) {
-  base::Value::ConstListView allowed_languages =
-      prefs->GetList(prefs::kAllowedLanguages)->GetListDeprecated();
+  const base::Value::List& allowed_languages =
+      prefs->GetList(prefs::kAllowedLanguages);
 
   // Empty list means all languages are allowed.
   if (allowed_languages.empty())
@@ -179,7 +181,7 @@ bool IsNativeUILanguage(const std::string& locale) {
 
 void RemoveDisallowedLanguagesFromPreferred(PrefService* prefs) {
   // Do nothing if all languages are allowed
-  if (prefs->GetList(prefs::kAllowedLanguages)->GetListDeprecated().empty())
+  if (prefs->GetList(prefs::kAllowedLanguages).empty())
     return;
 
   std::vector<std::string> preferred_languages =
@@ -216,8 +218,8 @@ std::string GetAllowedFallbackUILanguage(const PrefService* prefs) {
   }
 
   // Check the allowed UI locales and return the first valid entry.
-  base::Value::ConstListView allowed_languages =
-      prefs->GetList(prefs::kAllowedLanguages)->GetListDeprecated();
+  const base::Value::List& allowed_languages =
+      prefs->GetList(prefs::kAllowedLanguages);
   for (const base::Value& value : allowed_languages) {
     const std::string& locale = value.GetString();
     if (IsAllowedUILanguage(locale, prefs))

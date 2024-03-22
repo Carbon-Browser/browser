@@ -85,7 +85,7 @@ static bool ParseFontSize(const CharacterType* characters,
 
   // Step 8
   int value = CharactersToInt(digits_start, position - digits_start,
-                              WTF::NumberParsingOptions::kNone, nullptr);
+                              WTF::NumberParsingOptions(), nullptr);
 
   // Step 9
   if (mode == kRelativePlus) {
@@ -107,7 +107,7 @@ static bool ParseFontSize(const CharacterType* characters,
 }
 
 static bool ParseFontSize(const String& input, int& size) {
-  if (input.IsEmpty())
+  if (input.empty())
     return false;
 
   if (input.Is8Bit())
@@ -128,7 +128,7 @@ static const CSSValueList* CreateFontFaceValueWithPool(
     if (auto* parsed_value_list = DynamicTo<CSSValueList>(parsed_value))
       entry.stored_value->value = parsed_value_list;
   }
-  return entry.stored_value->value;
+  return entry.stored_value->value.Get();
 }
 
 bool HTMLFontElement::CssValueFromFontSizeNumber(const String& s,
@@ -186,10 +186,10 @@ void HTMLFontElement::CollectStyleForPresentationAttribute(
     }
   } else if (name == html_names::kColorAttr) {
     AddHTMLColorToStyle(style, CSSPropertyID::kColor, value);
-  } else if (name == html_names::kFaceAttr && !value.IsEmpty()) {
+  } else if (name == html_names::kFaceAttr && !value.empty()) {
     if (const CSSValueList* font_face_value = CreateFontFaceValueWithPool(
             value, GetExecutionContext()->GetSecureContextMode())) {
-      style->SetProperty(CSSPropertyValue(
+      style->SetLonghandProperty(CSSPropertyValue(
           CSSPropertyName(CSSPropertyID::kFontFamily), *font_face_value));
     }
   } else {

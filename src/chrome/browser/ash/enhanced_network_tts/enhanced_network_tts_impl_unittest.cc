@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,8 @@
 #include <map>
 #include <vector>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
+#include "base/memory/raw_ptr.h"
 #include "base/test/task_environment.h"
 #include "chrome/browser/ash/enhanced_network_tts/enhanced_network_tts_constants.h"
 #include "chrome/browser/ash/enhanced_network_tts/enhanced_network_tts_test_utils.h"
@@ -143,7 +144,7 @@ class TestAudioDataObserverImpl : public mojom::AudioDataObserver {
     receiver_.Bind(std::move(receiver));
   }
 
-  // ash::enhanced_network_tts::mojom::AudioDataObserver:
+  // mojom::AudioDataObserver:
   void OnAudioDataReceived(mojom::TtsResponsePtr response) override {
     received_responses_.push_back(std::move(response));
   }
@@ -180,7 +181,7 @@ class EnhancedNetworkTtsImplTest : public testing::Test {
 
   TestAudioDataObserverImpl* GetTestingObserverPtr() { return &observer_; }
 
-  EnhancedNetworkTtsImpl* enhanced_network_tts_impl_;
+  raw_ptr<EnhancedNetworkTtsImpl, ExperimentalAsh> enhanced_network_tts_impl_;
   std::unique_ptr<data_decoder::test::InProcessDataDecoder>
       in_process_data_decoder_;
   base::test::TaskEnvironment test_task_env_;

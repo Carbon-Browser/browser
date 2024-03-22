@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -36,6 +36,7 @@ public class ClassLoaderContextWrapperFactory {
 
     @SuppressWarnings("StaticFieldLeak")
     private static Context sLightModeResourceOverrideContext;
+
     @SuppressWarnings("StaticFieldLeak")
     private static Context sDarkModeResourceOverrideContext;
 
@@ -152,8 +153,9 @@ public class ClassLoaderContextWrapperFactory {
             int uiMode = getBaseContext().getResources().getConfiguration().uiMode;
             boolean darkModeEnabled =
                     (uiMode & Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES;
-            return darkModeEnabled ? sDarkModeResourceOverrideContext
-                                   : sLightModeResourceOverrideContext;
+            return darkModeEnabled
+                    ? sDarkModeResourceOverrideContext
+                    : sLightModeResourceOverrideContext;
         }
 
         private Context getResourceContext() {

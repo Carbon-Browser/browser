@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -30,7 +30,8 @@ const char kParentsMustBeNormalError[] =
     "Parent items must have type \"normal\"";
 const char kTitleNeededError[] =
     "All menu items except for separators must have a title";
-
+const char kTooManyMenuItems[] =
+    "An extension can create a maximum of * menu items.";
 
 std::string GetIDString(const MenuItem::Id& id) {
   if (id.uid == 0)
@@ -46,11 +47,11 @@ MenuItem* GetParent(MenuItem::Id parent_id,
   if (!parent) {
     *error = ErrorUtils::FormatErrorMessage(
         kCannotFindItemError, GetIDString(parent_id));
-    return NULL;
+    return nullptr;
   }
   if (parent->type() != MenuItem::NORMAL) {
     *error = kParentsMustBeNormalError;
-    return NULL;
+    return nullptr;
   }
   return parent;
 }
@@ -58,52 +59,52 @@ MenuItem* GetParent(MenuItem::Id parent_id,
 MenuItem::ContextList GetContexts(const std::vector<
     extensions::api::context_menus::ContextType>& in_contexts) {
   MenuItem::ContextList contexts;
-  for (size_t i = 0; i < in_contexts.size(); ++i) {
-    switch (in_contexts[i]) {
-      case extensions::api::context_menus::CONTEXT_TYPE_ALL:
+  for (auto context : in_contexts) {
+    switch (context) {
+      case extensions::api::context_menus::ContextType::kAll:
         contexts.Add(extensions::MenuItem::ALL);
         break;
-      case extensions::api::context_menus::CONTEXT_TYPE_PAGE:
+      case extensions::api::context_menus::ContextType::kPage:
         contexts.Add(extensions::MenuItem::PAGE);
         break;
-      case extensions::api::context_menus::CONTEXT_TYPE_SELECTION:
+      case extensions::api::context_menus::ContextType::kSelection:
         contexts.Add(extensions::MenuItem::SELECTION);
         break;
-      case extensions::api::context_menus::CONTEXT_TYPE_LINK:
+      case extensions::api::context_menus::ContextType::kLink:
         contexts.Add(extensions::MenuItem::LINK);
         break;
-      case extensions::api::context_menus::CONTEXT_TYPE_EDITABLE:
+      case extensions::api::context_menus::ContextType::kEditable:
         contexts.Add(extensions::MenuItem::EDITABLE);
         break;
-      case extensions::api::context_menus::CONTEXT_TYPE_IMAGE:
+      case extensions::api::context_menus::ContextType::kImage:
         contexts.Add(extensions::MenuItem::IMAGE);
         break;
-      case extensions::api::context_menus::CONTEXT_TYPE_VIDEO:
+      case extensions::api::context_menus::ContextType::kVideo:
         contexts.Add(extensions::MenuItem::VIDEO);
         break;
-      case extensions::api::context_menus::CONTEXT_TYPE_AUDIO:
+      case extensions::api::context_menus::ContextType::kAudio:
         contexts.Add(extensions::MenuItem::AUDIO);
         break;
-      case extensions::api::context_menus::CONTEXT_TYPE_FRAME:
+      case extensions::api::context_menus::ContextType::kFrame:
         contexts.Add(extensions::MenuItem::FRAME);
         break;
-      case extensions::api::context_menus::CONTEXT_TYPE_LAUNCHER:
+      case extensions::api::context_menus::ContextType::kLauncher:
         // Not available for <webview>.
         contexts.Add(extensions::MenuItem::LAUNCHER);
         break;
-      case extensions::api::context_menus::CONTEXT_TYPE_BROWSER_ACTION:
+      case extensions::api::context_menus::ContextType::kBrowserAction:
         // Not available for <webview>.
         contexts.Add(extensions::MenuItem::BROWSER_ACTION);
         break;
-      case extensions::api::context_menus::CONTEXT_TYPE_PAGE_ACTION:
+      case extensions::api::context_menus::ContextType::kPageAction:
         // Not available for <webview>.
         contexts.Add(extensions::MenuItem::PAGE_ACTION);
         break;
-      case extensions::api::context_menus::CONTEXT_TYPE_ACTION:
+      case extensions::api::context_menus::ContextType::kAction:
         // Not available for <webview>.
         contexts.Add(extensions::MenuItem::ACTION);
         break;
-      case extensions::api::context_menus::CONTEXT_TYPE_NONE:
+      case extensions::api::context_menus::ContextType::kNone:
         NOTREACHED();
     }
   }
@@ -113,15 +114,15 @@ MenuItem::ContextList GetContexts(const std::vector<
 MenuItem::Type GetType(extensions::api::context_menus::ItemType type,
                        MenuItem::Type default_type) {
   switch (type) {
-    case extensions::api::context_menus::ITEM_TYPE_NONE:
+    case extensions::api::context_menus::ItemType::kNone:
       return default_type;
-    case extensions::api::context_menus::ITEM_TYPE_NORMAL:
+    case extensions::api::context_menus::ItemType::kNormal:
       return extensions::MenuItem::NORMAL;
-    case extensions::api::context_menus::ITEM_TYPE_CHECKBOX:
+    case extensions::api::context_menus::ItemType::kCheckbox:
       return extensions::MenuItem::CHECKBOX;
-    case extensions::api::context_menus::ITEM_TYPE_RADIO:
+    case extensions::api::context_menus::ItemType::kRadio:
       return extensions::MenuItem::RADIO;
-    case extensions::api::context_menus::ITEM_TYPE_SEPARATOR:
+    case extensions::api::context_menus::ItemType::kSeparator:
       return extensions::MenuItem::SEPARATOR;
   }
   return extensions::MenuItem::NORMAL;

@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,8 +6,8 @@
 
 #include <memory>
 
-#include "base/bind.h"
 #include "base/feature_list.h"
+#include "base/functional/bind.h"
 #include "base/lazy_instance.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/time/time.h"
@@ -174,8 +174,14 @@ std::string BaseBlockingPage::GetExtraMetricsSuffix(
       return "from_device_v4";
     case safe_browsing::ThreatSource::CLIENT_SIDE_DETECTION:
       return "from_client_side_detection";
-    case safe_browsing::ThreatSource::REAL_TIME_CHECK:
+    case safe_browsing::ThreatSource::URL_REAL_TIME_CHECK:
       return "from_real_time_check";
+    case safe_browsing::ThreatSource::NATIVE_PVER5_REAL_TIME:
+      return "from_hash_prefix_real_time_check_v5";
+    case safe_browsing::ThreatSource::ANDROID_SAFEBROWSING_REAL_TIME:
+      return "from_android_safebrowsing_real_time";
+    case safe_browsing::ThreatSource::ANDROID_SAFEBROWSING:
+      return "from_android_safebrowsing";
     case safe_browsing::ThreatSource::UNKNOWN:
       break;
   }

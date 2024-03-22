@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -221,8 +221,6 @@ TEST(OverlayProcessorOzoneTest, ColorSpaceMismatch) {
 
   candidates[0] = candidate;
 
-  // We do allow color space mismatches as long as the ContentColorUsage is the
-  // same as the primary plane's (and this applies to all platforms).
   primary_plane.color_space = gfx::ColorSpace::CreateHDR10();
   candidates[0].color_space = gfx::ColorSpace::CreateHLG();
   processor.CheckOverlaySupport(&primary_plane, &candidates);
@@ -263,17 +261,10 @@ class TestOverlayProcessorOzone : public OverlayProcessorOzone {
 TEST(OverlayProcessorOzoneTest, ObserveHardwareCapabilites) {
   OverlayCandidateList candidates;
   // Enable 4 overlays
-  const std::vector<base::test::ScopedFeatureList::FeatureAndParams>
-      feature_and_params_list = {{features::kEnableOverlayPrioritization, {}},
-                                 {features::kUseMultipleOverlays,
-                                  {{features::kMaxOverlaysParam, "4"}}}};
+  const std::vector<base::test::FeatureRefAndParams> feature_and_params_list = {
+      {features::kUseMultipleOverlays, {{features::kMaxOverlaysParam, "4"}}}};
   base::test::ScopedFeatureList scoped_features;
   scoped_features.InitWithFeaturesAndParameters(feature_and_params_list, {});
-  // When overlay prioritization is explicitly disabled (Lacros) we should
-  // skip multiple overlays tests.
-  if (!features::IsOverlayPrioritizationEnabled()) {
-    GTEST_SKIP();
-  }
 
   auto fake_candidates_unique = std::make_unique<FakeOverlayCandidatesOzone>();
   auto* fake_candidates = fake_candidates_unique.get();

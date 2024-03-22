@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -70,7 +70,7 @@ class CONTENT_EXPORT NavigationControllerAndroid {
   void GoToNavigationIndex(JNIEnv* env,
                            const base::android::JavaParamRef<jobject>& obj,
                            jint index);
-  void LoadUrl(
+  base::android::ScopedJavaLocalRef<jobject> LoadUrl(
       JNIEnv* env,
       const base::android::JavaParamRef<jobject>& obj,
       const base::android::JavaParamRef<jstring>& url,
@@ -90,7 +90,10 @@ class CONTENT_EXPORT NavigationControllerAndroid {
       const base::android::JavaParamRef<jobject>& j_initiator_origin,
       jboolean has_user_gesture,
       jboolean should_clear_history_list,
-      jlong input_start);
+      const base::android::JavaParamRef<jobject>&
+          j_additional_navigation_params,
+      jlong input_start,
+      jlong navigation_ui_data_ptr);
   void ClearSslPreferences(
       JNIEnv* env,
       const base::android::JavaParamRef<jobject>& /* obj */);
@@ -142,10 +145,6 @@ class CONTENT_EXPORT NavigationControllerAndroid {
                          jint index,
                          const base::android::JavaParamRef<jstring>& jkey,
                          const base::android::JavaParamRef<jstring>& jvalue);
-  jboolean IsEntryMarkedToBeSkipped(
-      JNIEnv* env,
-      const base::android::JavaParamRef<jobject>& obj,
-      jint index);
 
  private:
   void SetUseDesktopUserAgentInternal(bool enabled,

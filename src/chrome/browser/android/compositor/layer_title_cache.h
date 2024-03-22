@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,14 +9,14 @@
 
 #include "base/android/jni_android.h"
 #include "base/android/jni_weak_ref.h"
-#include "base/bind.h"
 #include "base/containers/id_map.h"
+#include "base/functional/bind.h"
 #include "base/memory/raw_ptr.h"
 #include "cc/resources/ui_resource_client.h"
 #include "ui/gfx/geometry/size.h"
 #include "ui/gfx/geometry/transform.h"
 
-namespace cc {
+namespace cc::slim {
 class Layer;
 }
 
@@ -50,7 +50,7 @@ class LayerTitleCache {
 
   void Destroy(JNIEnv* env);
 
-  // Called from Java, updates a native cc::Layer based on the new texture
+  // Called from Java, updates a native cc::slim::Layer based on the new texture
   // information.
   void UpdateLayer(JNIEnv* env,
                    const base::android::JavaParamRef<jobject>& obj,

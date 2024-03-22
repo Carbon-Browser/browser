@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,6 +6,7 @@
 
 #include "chrome/browser/content_settings/host_content_settings_map_factory.h"
 #include "chrome/browser/ui/browser.h"
+#include "chrome/browser/ui/tabs/tab_enums.h"
 #include "chrome/test/base/in_process_browser_test.h"
 #include "chrome/test/base/testing_profile.h"
 #include "chrome/test/base/ui_test_utils.h"
@@ -56,7 +57,7 @@ class PopupOpenerTabHelperBrowserTest : public InProcessBrowserTest {
     int active_index = browser()->tab_strip_model()->active_index();
     content::WebContentsDestroyedWatcher destroyed_watcher(popup);
     browser()->tab_strip_model()->CloseWebContentsAt(
-        active_index, TabStripModel::CLOSE_USER_GESTURE);
+        active_index, TabCloseTypes::CLOSE_USER_GESTURE);
     destroyed_watcher.Wait();
   }
 

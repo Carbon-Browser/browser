@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,14 +6,14 @@
 
 #include <memory>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/task/bind_post_task.h"
+#include "base/task/sequenced_task_runner.h"
 #include "chrome/browser/ash/file_manager/io_task_util.h"
 #include "content/public/browser/browser_task_traits.h"
 #include "content/public/browser/browser_thread.h"
 
 namespace file_manager::io_task {
-
 namespace {
 
 storage::FileSystemOperationRunner::OperationID
@@ -32,8 +32,10 @@ EmptyTrashIOTask::EmptyTrashIOTask(
     blink::StorageKey storage_key,
     Profile* profile,
     scoped_refptr<storage::FileSystemContext> file_system_context,
-    base::FilePath base_path)
-    : file_system_context_(file_system_context),
+    base::FilePath base_path,
+    bool show_notification)
+    : IOTask(show_notification),
+      file_system_context_(file_system_context),
       storage_key_(storage_key),
       profile_(profile),
       base_path_(base_path) {
@@ -63,24 +65,24 @@ void EmptyTrashIOTask::Execute(IOTask::ProgressCallback progress_callback,
   complete_callback_ = std::move(complete_callback);
 
   enabled_trash_locations_ =
-      GenerateEnabledTrashLocationsForProfile(profile_, base_path_);
+      trash::GenerateEnabledTrashLocationsForProfile(profile_, base_path_);
   progress_.state = State::kInProgress;
 
-  TrashPathsMap::const_iterator it = enabled_trash_locations_.cbegin();
+  trash::TrashPathsMap::const_iterator it = enabled_trash_locations_.cbegin();
   if (it == enabled_trash_locations_.end()) {
     Complete(State::kSuccess);
     return;
   }
 
-  RemoveTrashSubDirectory(it, kFilesFolderName);
+  RemoveTrashSubDirectory(it, trash::kFilesFolderName);
 }
 
 void EmptyTrashIOTask::RemoveTrashSubDirectory(
-    TrashPathsMap::const_iterator& trash_location,
+    trash::TrashPathsMap::const_iterator& trash_location,
     const std::string& folder_name_to_remove) {
+  const base::FilePath& trash_parent_path = trash_location->first;
   const base::FilePath trash_path =
-      trash_location->second.trash_parent_path.Append(
-          trash_location->second.relative_folder_path);
+      trash_parent_path.Append(trash_location->second.relative_folder_path);
   const storage::FileSystemURL trash_url =
       file_system_context_->CreateCrackedFileSystemURL(
           storage_key_, storage::FileSystemType::kFileSystemTypeLocal,
@@ -88,12 +90,10 @@ void EmptyTrashIOTask::RemoveTrashSubDirectory(
 
   progress_.outputs.emplace_back(trash_url, absl::nullopt);
 
-  auto complete_callback = base::BindPostTask(
-      base::SequencedTaskRunnerHandle::Get(),
-      base::BindOnce(&EmptyTrashIOTask::OnRemoveTrashSubDirectory,
-                     weak_ptr_factory_.GetWeakPtr(),
-                     base::OwnedRef(trash_location),
-                     std::move(folder_name_to_remove)));
+  auto complete_callback = base::BindPostTaskToCurrentDefault(base::BindOnce(
+      &EmptyTrashIOTask::OnRemoveTrashSubDirectory,
+      weak_ptr_factory_.GetWeakPtr(), base::OwnedRef(trash_location),
+      std::move(folder_name_to_remove)));
 
   content::GetIOThreadTaskRunner({})->PostTaskAndReplyWithResult(
       FROM_HERE,
@@ -104,7 +104,7 @@ void EmptyTrashIOTask::RemoveTrashSubDirectory(
 }
 
 void EmptyTrashIOTask::OnRemoveTrashSubDirectory(
-    TrashPathsMap::const_iterator& it,
+    trash::TrashPathsMap::const_iterator& it,
     const std::string& removed_folder_name,
     base::File::Error status) {
   progress_.outputs[progress_.outputs.size() - 1].error = status;
@@ -113,8 +113,8 @@ void EmptyTrashIOTask::OnRemoveTrashSubDirectory(
     Complete(State::kError);
     return;
   }
-  if (removed_folder_name == kFilesFolderName) {
-    RemoveTrashSubDirectory(it, kInfoFolderName);
+  if (removed_folder_name == trash::kFilesFolderName) {
+    RemoveTrashSubDirectory(it, trash::kInfoFolderName);
     return;
   }
   it++;
@@ -123,14 +123,14 @@ void EmptyTrashIOTask::OnRemoveTrashSubDirectory(
     return;
   }
 
-  RemoveTrashSubDirectory(it, kFilesFolderName);
+  RemoveTrashSubDirectory(it, trash::kFilesFolderName);
 }
 
 // Calls the completion callback for the task. `progress_` should not be
 // accessed after calling this.
 void EmptyTrashIOTask::Complete(State state) {
   progress_.state = state;
-  base::SequencedTaskRunnerHandle::Get()->PostTask(
+  base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE,
       base::BindOnce(std::move(complete_callback_), std::move(progress_)));
 }

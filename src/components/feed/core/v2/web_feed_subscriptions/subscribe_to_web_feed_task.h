@@ -1,10 +1,11 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef COMPONENTS_FEED_CORE_V2_WEB_FEED_SUBSCRIPTIONS_SUBSCRIBE_TO_WEB_FEED_TASK_H_
 #define COMPONENTS_FEED_CORE_V2_WEB_FEED_SUBSCRIPTIONS_SUBSCRIBE_TO_WEB_FEED_TASK_H_
 
+#include "base/memory/raw_ref.h"
 #include "components/feed/core/proto/v2/store.pb.h"
 #include "components/feed/core/proto/v2/wire/web_feeds.pb.h"
 #include "components/feed/core/v2/enums.h"
@@ -26,7 +27,7 @@ class SubscribeToWebFeedTask : public offline_pages::Task {
     WebFeedPageInformation page_info;
     std::string web_feed_id;
     feedwire::webfeed::WebFeedChangeReason change_reason = feedwire::webfeed::
-        WebFeedChangeReason ::WEB_FEED_CHANGE_REASON_UNSPECIFIED;
+        WebFeedChangeReason::WEB_FEED_CHANGE_REASON_UNSPECIFIED;
     // Whether the subscription request will be stored and retried if failed.
     bool durable = false;
   };
@@ -37,6 +38,9 @@ class SubscribeToWebFeedTask : public offline_pages::Task {
     // is its ID.
     std::string followed_web_feed_id;
     feedstore::WebFeedInfo web_feed_info;
+    // The change reason from the request.
+    feedwire::webfeed::WebFeedChangeReason change_reason = feedwire::webfeed::
+        WebFeedChangeReason::WEB_FEED_CHANGE_REASON_UNSPECIFIED;
   };
   SubscribeToWebFeedTask(FeedStream* stream,
                          const OperationToken& operation_token,
@@ -54,7 +58,7 @@ class SubscribeToWebFeedTask : public offline_pages::Task {
   void ReadFeedDataComplete(FeedStore::WebFeedStartupData startup_data);
   void Done(WebFeedSubscriptionRequestStatus status);
 
-  FeedStream& stream_;
+  const raw_ref<FeedStream> stream_;
   OperationToken operation_token_;
   Request request_;
   feedstore::WebFeedInfo subscribed_web_feed_info_;

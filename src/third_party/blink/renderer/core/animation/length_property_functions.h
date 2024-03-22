@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,6 +13,7 @@
 namespace blink {
 
 class ComputedStyle;
+class ComputedStyleBuilder;
 class CSSProperty;
 
 class LengthPropertyFunctions {
@@ -30,7 +31,9 @@ class LengthPropertyFunctions {
   static bool GetLength(const CSSProperty&,
                         const ComputedStyle&,
                         Length& result);
-  static bool SetLength(const CSSProperty&, ComputedStyle&, const Length&);
+  static bool SetLength(const CSSProperty&,
+                        ComputedStyleBuilder&,
+                        const Length&);
 };
 
 }  // namespace blink

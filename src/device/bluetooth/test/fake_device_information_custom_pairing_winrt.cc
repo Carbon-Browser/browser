@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,9 +9,9 @@
 
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/test/bind.h"
-#include "base/threading/sequenced_task_runner_handle.h"
 #include "base/win/async_operation.h"
 #include "device/bluetooth/test/fake_device_pairing_requested_event_args_winrt.h"
 #include "device/bluetooth/test/fake_device_pairing_result_winrt.h"
@@ -23,6 +23,7 @@ namespace {
 using ABI::Windows::Devices::Enumeration::DeviceInformationCustomPairing;
 using ABI::Windows::Devices::Enumeration::DevicePairingKinds;
 using ABI::Windows::Devices::Enumeration::DevicePairingKinds_ConfirmOnly;
+using ABI::Windows::Devices::Enumeration::DevicePairingKinds_ConfirmPinMatch;
 using ABI::Windows::Devices::Enumeration::DevicePairingKinds_ProvidePin;
 using ABI::Windows::Devices::Enumeration::DevicePairingProtectionLevel;
 using ABI::Windows::Devices::Enumeration::DevicePairingRequestedEventArgs;
@@ -45,12 +46,22 @@ FakeDeviceInformationCustomPairingWinrt::
         std::string pin)
     : pairing_(std::move(pairing)), pin_(std::move(pin)) {}
 
-// This ctor used by ConfirmOnly (or ConfirmPinMatch in future) pairing kind
+// This ctor used by ConfirmOnly pairing kind
 FakeDeviceInformationCustomPairingWinrt::
     FakeDeviceInformationCustomPairingWinrt(
         Microsoft::WRL::ComPtr<FakeDeviceInformationPairingWinrt> pairing,
         DevicePairingKinds pairing_kind)
     : pairing_(std::move(pairing)), pairing_kind_(pairing_kind) {}
+
+// This ctor used by ConfirmPinMatch pairing kind
+FakeDeviceInformationCustomPairingWinrt::
+    FakeDeviceInformationCustomPairingWinrt(
+        Microsoft::WRL::ComPtr<FakeDeviceInformationPairingWinrt> pairing,
+        DevicePairingKinds pairing_kind,
+        std::string_view display_pin)
+    : pairing_(std::move(pairing)),
+      pairing_kind_(pairing_kind),
+      display_pin_(display_pin) {}
 
 FakeDeviceInformationCustomPairingWinrt::
     ~FakeDeviceInformationCustomPairingWinrt() = default;
@@ -63,7 +74,7 @@ HRESULT FakeDeviceInformationCustomPairingWinrt::PairAsync(
 
   auto async_op = Make<base::win::AsyncOperation<DevicePairingResult*>>();
   pair_callback_ = async_op->callback();
-  pair_task_runner_ = base::SequencedTaskRunnerHandle::Get();
+  pair_task_runner_ = base::SequencedTaskRunner::GetCurrentDefault();
   *result = async_op.Detach();
 
   pair_task_runner_->PostTask(
@@ -115,6 +126,7 @@ void FakeDeviceInformationCustomPairingWinrt::Complete() {
       is_paired = pin_ == accepted_pin_;
       break;
     case DevicePairingKinds_ConfirmOnly:
+    case DevicePairingKinds_ConfirmPinMatch:
       is_paired = confirmed_;
       break;
     default:

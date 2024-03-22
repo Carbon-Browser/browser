@@ -1,8 +1,8 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import {CommandHandlerFactory, CommandHandlerRemote} from './browser_command.mojom-webui.js';
+import {CommandHandlerFactory, CommandHandlerRemote} from '../browser_command.mojom-webui.js';
 
 /**
  * @fileoverview This file provides a class that exposes the Mojo handler

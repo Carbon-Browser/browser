@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,14 +9,15 @@
 
 #include "build/build_config.h"
 #include "chrome/browser/ui/sync/profile_signin_confirmation_helper.h"
-#include "chrome/browser/ui/views/collected_cookies_views.h"
 #include "chrome/browser/ui/views/hung_renderer_view.h"
 #include "chrome/browser/ui/views/passwords/password_bubble_view_base.h"
+#include "chrome/browser/ui/views/site_data/page_specific_site_data_dialog_controller.h"
 #include "content/public/browser/web_contents.h"
 
 #if defined(TOOLKIT_VIEWS) && !BUILDFLAG(IS_CHROMEOS)
 #include "chrome/browser/ui/views/web_apps/deprecated_apps_dialog_view.h"
 #include "chrome/browser/ui/views/web_apps/force_installed_deprecated_apps_dialog_view.h"
+#include "chrome/browser/ui/views/web_apps/force_installed_preinstalled_deprecated_app_dialog_view.h"
 #endif
 
 // static
@@ -40,7 +41,8 @@ gfx::NativeView TabDialogsViews::GetDialogParentView() const {
 }
 
 void TabDialogsViews::ShowCollectedCookies() {
-  CollectedCookiesViews::CreateAndShowForWebContents(web_contents_);
+  PageSpecificSiteDataDialogController::CreateAndShowForWebContents(
+      web_contents_);
 }
 
 void TabDialogsViews::ShowHungRendererDialog(
@@ -98,5 +100,14 @@ void TabDialogsViews::ShowForceInstalledDeprecatedAppsDialog(
 #if defined(TOOLKIT_VIEWS) && !BUILDFLAG(IS_CHROMEOS)
   ForceInstalledDeprecatedAppsDialogView::CreateAndShowDialog(
       app_id, web_contents, std::move(launch_anyways));
+#endif
+}
+
+void TabDialogsViews::ShowForceInstalledPreinstalledDeprecatedAppDialog(
+    const extensions::ExtensionId& extension_id,
+    content::WebContents* web_contents) {
+#if defined(TOOLKIT_VIEWS) && !BUILDFLAG(IS_CHROMEOS)
+  ForceInstalledPreinstalledDeprecatedAppDialogView::CreateAndShowDialog(
+      extension_id, web_contents);
 #endif
 }

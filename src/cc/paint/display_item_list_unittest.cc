@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -22,10 +22,12 @@
 #include "cc/test/pixel_test_utils.h"
 #include "cc/test/skia_common.h"
 #include "cc/test/test_skcanvas.h"
+#include "skia/ext/font_utils.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "third_party/skia/include/core/SkBitmap.h"
 #include "third_party/skia/include/core/SkColor.h"
+#include "third_party/skia/include/core/SkFont.h"
 #include "third_party/skia/include/core/SkSurface.h"
 #include "third_party/skia/include/core/SkTextBlob.h"
 #include "ui/gfx/geometry/rect.h"
@@ -75,13 +77,13 @@ class DisplayItemListTest : public testing::Test {
   }
 };
 
-#define EXPECT_TRACED_RECT(x, y, width, height, rect_list)              \
-  do {                                                                  \
-    ASSERT_EQ(4u, rect_list->GetListDeprecated().size());               \
-    EXPECT_EQ(x, rect_list->GetListDeprecated()[0].GetIfDouble());      \
-    EXPECT_EQ(y, rect_list->GetListDeprecated()[1].GetIfDouble());      \
-    EXPECT_EQ(width, rect_list->GetListDeprecated()[2].GetIfDouble());  \
-    EXPECT_EQ(height, rect_list->GetListDeprecated()[3].GetIfDouble()); \
+#define EXPECT_TRACED_RECT(x, y, width, height, rect_list) \
+  do {                                                     \
+    ASSERT_EQ(4u, rect_list->size());                      \
+    EXPECT_EQ(x, (*rect_list)[0].GetIfDouble());           \
+    EXPECT_EQ(y, (*rect_list)[1].GetIfDouble());           \
+    EXPECT_EQ(width, (*rect_list)[2].GetIfDouble());       \
+    EXPECT_EQ(height, (*rect_list)[3].GetIfDouble());      \
   } while (false)
 
 // AddToValue should not crash if there are different numbers of visual_rect
@@ -106,34 +108,35 @@ TEST_F(DisplayItemListTest, TraceEmptyVisualRect) {
   // Pass: we don't crash
   std::unique_ptr<base::Value> root = ToBaseValue(list.get(), true);
 
-  const base::DictionaryValue* root_dict;
-  ASSERT_TRUE(root->GetAsDictionary(&root_dict));
-  const base::DictionaryValue* params_dict;
-  ASSERT_TRUE(root_dict->GetDictionary("params", &params_dict));
-  const base::ListValue* items;
-  ASSERT_TRUE(params_dict->GetList("items", &items));
-  ASSERT_EQ(2u, items->GetListDeprecated().size());
+  const base::Value::Dict* root_dict = root->GetIfDict();
+  ASSERT_NE(nullptr, root_dict);
+  const base::Value::Dict* params_dict = root_dict->FindDict("params");
+  ASSERT_NE(nullptr, params_dict);
+  const base::Value::List* items = params_dict->FindList("items");
+  ASSERT_NE(nullptr, items);
+  ASSERT_EQ(2u, items->size());
 
-  const base::Value* item_value;
-  const base::DictionaryValue* item_dict;
-  const base::ListValue* visual_rect;
-  std::string name;
+  const base::Value::Dict* item_dict;
+  const base::Value::List* visual_rect;
+  const std::string* name;
 
-  item_value = &items->GetListDeprecated()[0];
-  ASSERT_TRUE(item_value->is_dict());
-  item_dict = &base::Value::AsDictionaryValue(*item_value);
-  ASSERT_TRUE(item_dict->GetList("visual_rect", &visual_rect));
+  item_dict = ((*items)[0]).GetIfDict();
+  ASSERT_NE(nullptr, item_dict);
+  visual_rect = item_dict->FindList("visual_rect");
+  ASSERT_NE(nullptr, visual_rect);
   EXPECT_TRACED_RECT(0, 0, 0, 0, visual_rect);
-  EXPECT_TRUE(item_dict->GetString("name", &name));
-  EXPECT_EQ("DrawRect", name);
+  name = item_dict->FindString("name");
+  ASSERT_NE(nullptr, name);
+  EXPECT_EQ("DrawRectOp", *name);
 
-  item_value = &items->GetListDeprecated()[1];
-  ASSERT_TRUE(item_value->is_dict());
-  item_dict = &base::Value::AsDictionaryValue(*item_value);
-  ASSERT_TRUE(item_dict->GetList("visual_rect", &visual_rect));
+  item_dict = ((*items)[1]).GetIfDict();
+  ASSERT_NE(nullptr, item_dict);
+  visual_rect = item_dict->FindList("visual_rect");
+  ASSERT_NE(nullptr, visual_rect);
   EXPECT_TRACED_RECT(8, 9, 10, 10, visual_rect);
-  EXPECT_TRUE(item_dict->GetString("name", &name));
-  EXPECT_EQ("DrawRect", name);
+  name = item_dict->FindString("name");
+  ASSERT_NE(nullptr, name);
+  EXPECT_EQ("DrawRectOp", *name);
 }
 
 TEST_F(DisplayItemListTest, SingleUnpairedRange) {
@@ -298,7 +301,7 @@ TEST_F(DisplayItemListTest, TransformPairedRange) {
   {
     list->StartPaint();
     list->push<SaveOp>();
-    list->push<ConcatOp>(transform.GetMatrixAsSkM44());
+    list->push<ConcatOp>(gfx::TransformToSkM44(transform));
     list->EndPaintOfPairedBegin();
   }
 
@@ -335,7 +338,7 @@ TEST_F(DisplayItemListTest, TransformPairedRange) {
       SkRect::MakeLTRB(0.f + first_offset.x(), 0.f + first_offset.y(),
                        60.f + first_offset.x(), 60.f + first_offset.y()),
       red_paint);
-  expected_canvas.setMatrix(transform.matrix().asM33());
+  expected_canvas.setMatrix(gfx::TransformToSkM44(transform));
   expected_canvas.drawRect(
       SkRect::MakeLTRB(50.f + second_offset.x(), 50.f + second_offset.y(),
                        75.f + second_offset.x(), 75.f + second_offset.y()),
@@ -350,7 +353,8 @@ TEST_F(DisplayItemListTest, FilterPairedRange) {
   unsigned char pixels[4 * 100 * 100] = {0};
   auto list = base::MakeRefCounted<DisplayItemList>();
 
-  sk_sp<SkSurface> source_surface = SkSurface::MakeRasterN32Premul(50, 50);
+  sk_sp<SkSurface> source_surface =
+      SkSurfaces::Raster(SkImageInfo::MakeN32Premul(50, 50));
   SkCanvas* source_canvas = source_surface->getCanvas();
   source_canvas->clear(SkColorSetRGB(128, 128, 128));
   PaintImage source_image = PaintImageBuilder::WithDefault()
@@ -382,12 +386,11 @@ TEST_F(DisplayItemListTest, FilterPairedRange) {
     list->push<TranslateOp>(filter_bounds.x(), filter_bounds.y());
 
     PaintFlags flags;
-    flags.setImageFilter(
-        RenderSurfaceFilters::BuildImageFilter(filters, filter_bounds.size()));
+    flags.setImageFilter(RenderSurfaceFilters::BuildImageFilter(filters));
 
     SkRect layer_bounds = gfx::RectFToSkRect(filter_bounds);
     layer_bounds.offset(-filter_bounds.x(), -filter_bounds.y());
-    list->push<SaveLayerOp>(&layer_bounds, &flags);
+    list->push<SaveLayerOp>(layer_bounds, flags);
     list->push<TranslateOp>(-filter_bounds.x(), -filter_bounds.y());
 
     list->EndPaintOfPairedBegin();
@@ -460,45 +463,50 @@ TEST_F(DisplayItemListTest, AsValueWithNoOps) {
 
   // Pass |true| to ask for PaintOps even though there are none.
   std::unique_ptr<base::Value> root = ToBaseValue(list.get(), true);
-  const base::DictionaryValue* root_dict;
-  ASSERT_TRUE(root->GetAsDictionary(&root_dict));
+  const base::Value::Dict* root_dict = root->GetIfDict();
+  ASSERT_NE(nullptr, root_dict);
   // The traced value has a params dictionary as its root.
   {
-    const base::DictionaryValue* params_dict;
-    ASSERT_TRUE(root_dict->GetDictionary("params", &params_dict));
+    const base::Value::Dict* params_dict = root_dict->FindDict("params");
+    ASSERT_NE(nullptr, params_dict);
 
     // The real contents of the traced value is in here.
     {
-      const base::ListValue* params_list;
+      const base::Value::List* params_list;
 
       // The layer_rect field is present by empty.
-      ASSERT_TRUE(params_dict->GetList("layer_rect", &params_list));
+      params_list = params_dict->FindList("layer_rect");
+      ASSERT_NE(nullptr, params_list);
       EXPECT_TRACED_RECT(0, 0, 0, 0, params_list);
 
       // The items list is there but empty.
-      ASSERT_TRUE(params_dict->GetList("items", &params_list));
-      EXPECT_EQ(0u, params_list->GetListDeprecated().size());
+      params_list = params_dict->FindList("items");
+      ASSERT_NE(nullptr, params_list);
+      EXPECT_EQ(0u, params_list->size());
     }
   }
 
   // Pass |false| to not include PaintOps.
   root = ToBaseValue(list.get(), false);
-  ASSERT_TRUE(root->GetAsDictionary(&root_dict));
+  root_dict = root->GetIfDict();
+  ASSERT_NE(nullptr, root_dict);
   // The traced value has a params dictionary as its root.
   {
-    const base::DictionaryValue* params_dict;
-    ASSERT_TRUE(root_dict->GetDictionary("params", &params_dict));
+    const base::Value::Dict* params_dict = root_dict->FindDict("params");
+    ASSERT_NE(nullptr, params_dict);
 
     // The real contents of the traced value is in here.
     {
-      const base::ListValue* params_list;
+      const base::Value::List* params_list;
 
       // The layer_rect field is present by empty.
-      ASSERT_TRUE(params_dict->GetList("layer_rect", &params_list));
+      params_list = params_dict->FindList("layer_rect");
+      ASSERT_NE(nullptr, params_list);
       EXPECT_TRACED_RECT(0, 0, 0, 0, params_list);
 
       // The items list is not there since we asked for no ops.
-      ASSERT_FALSE(params_dict->GetList("items", &params_list));
+      params_list = params_dict->FindList("items");
+      ASSERT_EQ(nullptr, params_list);
     }
   }
 }
@@ -512,7 +520,7 @@ TEST_F(DisplayItemListTest, AsValueWithOps) {
   {
     list->StartPaint();
     list->push<SaveOp>();
-    list->push<ConcatOp>(transform.GetMatrixAsSkM44());
+    list->push<ConcatOp>(gfx::TransformToSkM44(transform));
     list->EndPaintOfPairedBegin();
   }
 
@@ -524,7 +532,7 @@ TEST_F(DisplayItemListTest, AsValueWithOps) {
     PaintFlags red_paint;
     red_paint.setColor(SK_ColorRED);
 
-    list->push<SaveLayerOp>(nullptr, &red_paint);
+    list->push<SaveLayerOp>(red_paint);
     list->push<TranslateOp>(static_cast<float>(offset.x()),
                             static_cast<float>(offset.y()));
     list->push<DrawRectOp>(SkRect::MakeWH(4, 4), red_paint);
@@ -542,68 +550,71 @@ TEST_F(DisplayItemListTest, AsValueWithOps) {
 
   // Pass |true| to ask for PaintOps to be included.
   std::unique_ptr<base::Value> root = ToBaseValue(list.get(), true);
-  const base::DictionaryValue* root_dict;
-  ASSERT_TRUE(root->GetAsDictionary(&root_dict));
+  const base::Value::Dict* root_dict = root->GetIfDict();
+  ASSERT_NE(nullptr, root_dict);
   // The traced value has a params dictionary as its root.
   {
-    const base::DictionaryValue* params_dict;
-    ASSERT_TRUE(root_dict->GetDictionary("params", &params_dict));
+    const base::Value::Dict* params_dict = root_dict->FindDict("params");
+    ASSERT_NE(nullptr, params_dict);
 
     // The real contents of the traced value is in here.
     {
-      const base::ListValue* layer_rect_list;
+      const base::Value::List* layer_rect_list =
+          params_dict->FindList("layer_rect");
       // The layer_rect field is present and has the bounds of the rtree.
-      ASSERT_TRUE(params_dict->GetList("layer_rect", &layer_rect_list));
+      ASSERT_NE(nullptr, layer_rect_list);
       EXPECT_TRACED_RECT(2, 3, 8, 9, layer_rect_list);
 
       // The items list has 3 things in it since we built 3 visual rects.
-      const base::ListValue* items;
-      ASSERT_TRUE(params_dict->GetList("items", &items));
-      ASSERT_EQ(7u, items->GetListDeprecated().size());
+      const base::Value::List* items = params_dict->FindList("items");
+      ASSERT_NE(nullptr, items);
+      ASSERT_EQ(7u, items->size());
 
-      const char* expected_names[] = {"Save",      "Concat",   "SaveLayer",
-                                      "Translate", "DrawRect", "Restore",
-                                      "Restore"};
+      const char* expected_names[] = {
+          "SaveOp",     "ConcatOp",  "SaveLayerOp", "TranslateOp",
+          "DrawRectOp", "RestoreOp", "RestoreOp"};
       bool expected_has_skp[] = {false, true, true, true, true, false, false};
 
       for (int i = 0; i < 7; ++i) {
-        const base::Value& item_value = items->GetListDeprecated()[i];
+        const base::Value& item_value = (*items)[i];
         ASSERT_TRUE(item_value.is_dict());
-        const base::DictionaryValue& item_dict =
-            base::Value::AsDictionaryValue(item_value);
+        const base::Value::Dict& item_dict = item_value.GetDict();
 
-        const base::ListValue* visual_rect;
-        ASSERT_TRUE(item_dict.GetList("visual_rect", &visual_rect));
+        const base::Value::List* visual_rect =
+            item_dict.FindList("visual_rect");
+        ASSERT_NE(nullptr, visual_rect);
         EXPECT_TRACED_RECT(2, 3, 8, 9, visual_rect);
 
-        std::string name;
-        EXPECT_TRUE(item_dict.GetString("name", &name));
-        EXPECT_EQ(expected_names[i], name);
+        const std::string* name = item_dict.FindString("name");
+        EXPECT_NE(nullptr, name);
+        EXPECT_EQ(expected_names[i], *name);
 
-        EXPECT_EQ(
-            expected_has_skp[i],
-            item_dict.GetString("skp64", static_cast<std::string*>(nullptr)));
+        EXPECT_EQ(expected_has_skp[i],
+                  item_dict.FindString("skp64") != nullptr);
       }
     }
   }
 
   // Pass |false| to not include PaintOps.
   root = ToBaseValue(list.get(), false);
-  ASSERT_TRUE(root->GetAsDictionary(&root_dict));
+  root_dict = root->GetIfDict();
+  ASSERT_NE(nullptr, root_dict);
   // The traced value has a params dictionary as its root.
   {
-    const base::DictionaryValue* params_dict;
-    ASSERT_TRUE(root_dict->GetDictionary("params", &params_dict));
+    const base::Value::Dict* params_dict = root_dict->FindDict("params");
+    ASSERT_NE(nullptr, params_dict);
 
     // The real contents of the traced value is in here.
     {
-      const base::ListValue* params_list;
+      const base::Value::List* params_list;
       // The layer_rect field is present and has the bounds of the rtree.
-      ASSERT_TRUE(params_dict->GetList("layer_rect", &params_list));
+      params_list = params_dict->FindList("layer_rect");
+      ASSERT_NE(nullptr, params_list);
       EXPECT_TRACED_RECT(2, 3, 8, 9, params_list);
 
       // The items list is not present since we asked for no ops.
-      ASSERT_FALSE(params_dict->GetList("items", &params_list));
+      params_list = params_dict->FindList("items");
+      ASSERT_EQ(nullptr, params_list);
     }
   }
 }
@@ -1130,7 +1141,7 @@ TEST_F(DisplayItemListTest, TotalOpCount) {
   list->StartPaint();
   list->push<SaveOp>();
   list->push<TranslateOp>(10.f, 20.f);
-  list->push<DrawRecordOp>(sub_list->ReleaseAsRecord());
+  list->push<DrawRecordOp>(sub_list->FinalizeAndReleaseAsRecord());
   list->push<RestoreOp>();
   list->EndPaintOfUnpaired(gfx::Rect());
   EXPECT_EQ(8u, list->TotalOpCount());
@@ -1140,11 +1151,12 @@ TEST_F(DisplayItemListTest, AreaOfDrawText) {
   auto list = base::MakeRefCounted<DisplayItemList>();
   auto sub_list = base::MakeRefCounted<DisplayItemList>();
 
-  auto text_blob1 = SkTextBlob::MakeFromString("ABCD", SkFont());
+  SkFont font = skia::DefaultFont();
+  auto text_blob1 = SkTextBlob::MakeFromString("ABCD", font);
   gfx::Size text_blob1_size(ceilf(text_blob1->bounds().width()),
                             ceilf(text_blob1->bounds().height()));
   auto text_blob1_area = text_blob1_size.width() * text_blob1_size.height();
-  auto text_blob2 = SkTextBlob::MakeFromString("EFG", SkFont());
+  auto text_blob2 = SkTextBlob::MakeFromString("EFG", font);
   gfx::Size text_blob2_size(ceilf(text_blob2->bounds().width()),
                             ceilf(text_blob2->bounds().height()));
   auto text_blob2_area = text_blob2_size.width() * text_blob2_size.height();
@@ -1152,7 +1164,7 @@ TEST_F(DisplayItemListTest, AreaOfDrawText) {
   sub_list->StartPaint();
   sub_list->push<DrawTextBlobOp>(text_blob1, 0.0f, 0.0f, PaintFlags());
   sub_list->EndPaintOfUnpaired(gfx::Rect());
-  auto record = sub_list->ReleaseAsRecord();
+  auto record = sub_list->FinalizeAndReleaseAsRecord();
 
   list->StartPaint();
   list->push<SaveOp>();

@@ -1,4 +1,4 @@
-// Copyright (c) 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -78,10 +78,5 @@ class COMPONENT_EXPORT(OS_INSTALL) OsInstallClient {
 };
 
 }  // namespace ash
-
-// TODO(https://crbug.com/1164001): remove when the migration is finished.
-namespace chromeos {
-using ::ash::OsInstallClient;
-}
 
 #endif  // CHROMEOS_ASH_COMPONENTS_DBUS_OS_INSTALL_OS_INSTALL_CLIENT_H_

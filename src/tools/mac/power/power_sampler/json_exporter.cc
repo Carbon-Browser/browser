@@ -1,8 +1,10 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "tools/mac/power/power_sampler/json_exporter.h"
+
+#include <ostream>
 
 #include "base/files/file.h"
 #include "base/files/file_util.h"

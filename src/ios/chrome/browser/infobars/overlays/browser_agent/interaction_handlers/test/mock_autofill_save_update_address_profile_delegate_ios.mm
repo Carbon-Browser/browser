@@ -1,16 +1,12 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include "ios/chrome/browser/infobars/overlays/browser_agent/interaction_handlers/test/mock_autofill_save_update_address_profile_delegate_ios.h"
+#import "ios/chrome/browser/infobars/overlays/browser_agent/interaction_handlers/test/mock_autofill_save_update_address_profile_delegate_ios.h"
 
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
-
-#import "base/bind.h"
-#include "base/guid.h"
-#include "components/autofill/core/browser/autofill_test_utils.h"
+#import "base/functional/bind.h"
+#import "base/uuid.h"
+#import "components/autofill/core/browser/autofill_test_utils.h"
 
 MockAutofillSaveUpdateAddressProfileDelegateIOS::
     MockAutofillSaveUpdateAddressProfileDelegateIOS(
@@ -18,10 +14,13 @@ MockAutofillSaveUpdateAddressProfileDelegateIOS::
         const autofill::AutofillProfile* original_profile,
         const std::string& locale,
         autofill::AutofillClient::AddressProfileSavePromptCallback callback)
-    : AutofillSaveUpdateAddressProfileDelegateIOS(profile,
-                                                  original_profile,
-                                                  locale,
-                                                  std::move(callback)) {}
+    : AutofillSaveUpdateAddressProfileDelegateIOS(
+          profile,
+          original_profile,
+          /*syncing_user_email=*/std::nullopt,
+          locale,
+          autofill::AutofillClient::SaveAddressProfilePromptOptions{},
+          std::move(callback)) {}
 
 MockAutofillSaveUpdateAddressProfileDelegateIOS::
     ~MockAutofillSaveUpdateAddressProfileDelegateIOS() = default;
@@ -29,8 +28,7 @@ MockAutofillSaveUpdateAddressProfileDelegateIOS::
 #pragma mark - MockAutofillSaveUpdateAddressProfileDelegateIOSFactory
 
 MockAutofillSaveUpdateAddressProfileDelegateIOSFactory::
-    MockAutofillSaveUpdateAddressProfileDelegateIOSFactory()
-    : profile_(base::GenerateGUID(), "https://www.example.com/") {}
+    MockAutofillSaveUpdateAddressProfileDelegateIOSFactory() = default;
 
 MockAutofillSaveUpdateAddressProfileDelegateIOSFactory::
     ~MockAutofillSaveUpdateAddressProfileDelegateIOSFactory() = default;

@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -26,10 +26,14 @@ import org.chromium.ui.modelutil.PropertyModel;
 class ExploreSurfaceViewBinder {
     public static void bind(PropertyModel model, ViewGroup parentView, PropertyKey propertyKey) {
         if (propertyKey == IS_EXPLORE_SURFACE_VISIBLE) {
-            setVisibility(parentView, model,
+            setVisibility(
+                    parentView,
+                    model,
                     model.get(IS_EXPLORE_SURFACE_VISIBLE) && model.get(IS_SHOWING_OVERVIEW));
         } else if (propertyKey == IS_SHOWING_OVERVIEW) {
-            setVisibility(parentView, model,
+            setVisibility(
+                    parentView,
+                    model,
                     model.get(IS_EXPLORE_SURFACE_VISIBLE) && model.get(IS_SHOWING_OVERVIEW));
         } else if (propertyKey == TOP_MARGIN) {
             setTopMargin(model);

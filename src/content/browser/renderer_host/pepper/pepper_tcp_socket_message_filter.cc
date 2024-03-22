@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,11 +7,12 @@
 #include <cstring>
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/logging.h"
 #include "base/memory/ptr_util.h"
 #include "base/metrics/histogram_macros.h"
+#include "base/task/sequenced_task_runner.h"
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
 #include "content/browser/renderer_host/pepper/content_browser_pepper_host_factory.h"
@@ -45,9 +46,9 @@
 #include "ppapi/shared_impl/private/net_address_private_impl.h"
 #include "ppapi/shared_impl/private/ppb_x509_util_shared.h"
 
-#if BUILDFLAG(IS_CHROMEOS_ASH)
-#include "chromeos/ash/components/network/firewall_hole.h"
-#endif  // BUILDFLAG(IS_CHROMEOS_ASH)
+#if BUILDFLAG(IS_CHROMEOS)
+#include "chromeos/components/firewall_hole/firewall_hole.h"
+#endif  // BUILDFLAG(IS_CHROMEOS)
 
 using ppapi::NetAddressPrivateImpl;
 using ppapi::TCPSocketState;
@@ -125,12 +126,6 @@ PepperTCPSocketMessageFilter::~PepperTCPSocketMessageFilter() {
   DCHECK_CURRENTLY_ON(BrowserThread::UI);
   if (host_)
     host_->RemoveInstanceObserver(instance_, this);
-#if BUILDFLAG(IS_CHROMEOS_ASH)
-  // Close the firewall hole on UI thread if there is one.
-  if (firewall_hole_) {
-    GetUIThreadTaskRunner({})->DeleteSoon(FROM_HERE, std::move(firewall_hole_));
-  }
-#endif  // BUILDFLAG(IS_CHROMEOS_ASH)
   --g_num_tcp_filter_instances;
 }
 
@@ -228,7 +223,9 @@ void PepperTCPSocketMessageFilter::OnHostDestroyed() {
 void PepperTCPSocketMessageFilter::OnComplete(
     int result,
     const net::ResolveErrorInfo& resolve_error_info,
-    const absl::optional<net::AddressList>& resolved_addresses) {
+    const absl::optional<net::AddressList>& resolved_addresses,
+    const absl::optional<net::HostResolverEndpointResults>&
+        endpoint_results_with_metadata) {
   DCHECK_CURRENTLY_ON(BrowserThread::UI);
   receiver_.reset();
 
@@ -389,14 +386,19 @@ int32_t PepperTCPSocketMessageFilter::OnMsgConnect(
   if (!render_frame_host)
     return PP_ERROR_FAILED;
 
-  // TODO(mmenke): Pass in correct NetworkIsolationKey.
-  network_context->ResolveHost(net::HostPortPair(host, port),
-                               render_frame_host->GetNetworkIsolationKey(),
-                               nullptr, receiver_.BindNewPipeAndPassRemote());
-  receiver_.set_disconnect_handler(
-      base::BindOnce(&PepperTCPSocketMessageFilter::OnComplete,
-                     base::Unretained(this), net::ERR_NAME_NOT_RESOLVED,
-                     net::ResolveErrorInfo(net::ERR_FAILED), absl::nullopt));
+  // Intentionally using a HostPortPair because scheme isn't specified.
+  // TODO(mmenke): Pass in correct NetworkAnonymizationKey.
+  network_context->ResolveHost(
+      network::mojom::HostResolverHost::NewHostPortPair(
+          net::HostPortPair(host, port)),
+      render_frame_host->GetIsolationInfoForSubresources()
+          .network_anonymization_key(),
+      nullptr, receiver_.BindNewPipeAndPassRemote());
+  receiver_.set_disconnect_handler(base::BindOnce(
+      &PepperTCPSocketMessageFilter::OnComplete, base::Unretained(this),
+      net::ERR_NAME_NOT_RESOLVED, net::ResolveErrorInfo(net::ERR_FAILED),
+      /*resolved_addresses=*/absl::nullopt,
+      /*endpoint_results_with_metadata=*/absl::nullopt));
 
   state_.SetPendingTransition(TCPSocketState::CONNECT);
   host_resolve_context_ = context->MakeReplyMessageContext();
@@ -1037,12 +1039,12 @@ void PepperTCPSocketMessageFilter::OnListenCompleted(
 
   DCHECK(state_.IsPending(TCPSocketState::LISTEN));
 
-#if BUILDFLAG(IS_CHROMEOS_ASH)
+#if BUILDFLAG(IS_CHROMEOS)
   if (pp_result == PP_OK) {
     OpenFirewallHole(context);
     return;
   }
-#endif  // BUILDFLAG(IS_CHROMEOS_ASH)
+#endif  // BUILDFLAG(IS_CHROMEOS)
 
   SendListenReply(context, pp_result);
   state_.CompletePendingTransition(pp_result == PP_OK);
@@ -1188,14 +1190,14 @@ void PepperTCPSocketMessageFilter::SetStreams(
           base::Unretained(this)));
 }
 
-#if BUILDFLAG(IS_CHROMEOS_ASH)
+#if BUILDFLAG(IS_CHROMEOS)
 void PepperTCPSocketMessageFilter::OpenFirewallHole(
     const ppapi::host::ReplyMessageContext& context) {
   DCHECK_CURRENTLY_ON(BrowserThread::UI);
   pepper_socket_utils::OpenTCPFirewallHole(
       bind_output_ip_endpoint_,
-      base::BindOnce(&PepperTCPSocketMessageFilter::OnFirewallHoleOpened, this,
-                     context));
+      base::BindOnce(&PepperTCPSocketMessageFilter::OnFirewallHoleOpened,
+                     weak_ptr_factory_.GetWeakPtr(), context));
 }
 
 void PepperTCPSocketMessageFilter::OnFirewallHoleOpened(
@@ -1209,7 +1211,7 @@ void PepperTCPSocketMessageFilter::OnFirewallHoleOpened(
   SendListenReply(context, PP_OK);
   state_.CompletePendingTransition(true);
 }
-#endif  // BUILDFLAG(IS_CHROMEOS_ASH)
+#endif  // BUILDFLAG(IS_CHROMEOS)
 
 void PepperTCPSocketMessageFilter::SendBindReply(
     const ppapi::host::ReplyMessageContext& context,
@@ -1231,9 +1233,6 @@ void PepperTCPSocketMessageFilter::SendConnectReply(
     int32_t pp_result,
     const PP_NetAddress_Private& local_addr,
     const PP_NetAddress_Private& remote_addr) {
-  UMA_HISTOGRAM_BOOLEAN("Pepper.PluginContextSecurity.TCPConnect",
-                        is_potentially_secure_plugin_context_);
-
   ppapi::host::ReplyMessageContext reply_context(context);
   reply_context.params.set_result(pp_result);
   SendReply(reply_context,
@@ -1333,10 +1332,10 @@ void PepperTCPSocketMessageFilter::Close() {
   weak_ptr_factory_.InvalidateWeakPtrs();
   state_.DoTransition(TCPSocketState::CLOSE, true);
 
-#if BUILDFLAG(IS_CHROMEOS_ASH)
+#if BUILDFLAG(IS_CHROMEOS)
   // Close the firewall hole, it is no longer needed.
   firewall_hole_.reset();
-#endif  // BUILDFLAG(IS_CHROMEOS_ASH)
+#endif  // BUILDFLAG(IS_CHROMEOS)
 
   // Make sure there are no further callbacks from Mojo, which could end up in a
   // double free (Add ref on the UI thread, while a deletion is pending on the

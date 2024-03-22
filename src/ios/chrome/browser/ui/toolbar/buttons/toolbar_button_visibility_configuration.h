@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,7 +8,7 @@
 #import <UIKit/UIKit.h>
 
 #import "ios/chrome/browser/ui/toolbar/buttons/toolbar_component_options.h"
-#import "ios/chrome/browser/ui/toolbar/buttons/toolbar_type.h"
+#import "ios/chrome/browser/ui/toolbar/public/toolbar_type.h"
 
 // Toolbar button configuration object giving access to visibility mask for each
 // button.
@@ -40,7 +40,7 @@
 @property(nonatomic, readonly)
     ToolbarComponentVisibility contractButtonVisibility;
 @property(nonatomic, readonly)
-    ToolbarComponentVisibility searchButtonVisibility;
+    ToolbarComponentVisibility newTabButtonVisibility;
 @property(nonatomic, readonly)
     ToolbarComponentVisibility locationBarLeadingButtonVisibility;
 

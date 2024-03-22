@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,7 +11,8 @@
 
 #include "ash/components/arc/arc_features_parser.h"
 #include "ash/components/arc/mojom/webapk.mojom.h"
-#include "base/callback.h"
+#include "base/functional/callback.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/time/time.h"
 #include "base/timer/timer.h"
@@ -62,7 +63,7 @@ class WebApkInstallTask {
   void OnArcFeaturesLoaded(std::unique_ptr<webapk::WebApk> webapk,
                            absl::optional<arc::ArcFeatures> arc_features);
   void OnLoadedIcon(std::unique_ptr<webapk::WebApk> webapk,
-                    IconPurpose purpose,
+                    web_app::IconPurpose purpose,
                     std::vector<uint8_t> data);
   void OnProtoSerialized(absl::optional<std::string> serialized_proto);
   void OnUrlLoaderComplete(std::unique_ptr<std::string> response_body);
@@ -77,8 +78,8 @@ class WebApkInstallTask {
   // further work should be done after calling this method.
   void DeliverResult(WebApkInstallStatus status);
 
-  Profile* const profile_;
-  web_app::WebAppProvider* const web_app_provider_;
+  const raw_ptr<Profile, ExperimentalAsh> profile_;
+  const raw_ptr<web_app::WebAppProvider, ExperimentalAsh> web_app_provider_;
 
   arc::mojom::WebApkInfoPtr web_apk_info_;
   const std::string app_id_;

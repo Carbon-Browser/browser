@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -94,7 +94,7 @@ void TrustTokenKeyCommitments::Set(
   commitments_.replace(std::move(filtered));
 }
 
-void TrustTokenKeyCommitments::ParseAndSet(base::StringPiece raw_commitments) {
+void TrustTokenKeyCommitments::ParseAndSet(std::string_view raw_commitments) {
   TrustTokenKeyCommitmentParser parser;
   if (auto parsed = parser.ParseMultipleIssuers(raw_commitments))
     commitments_.swap(*parsed);

@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,9 +10,7 @@ import org.chromium.chrome.browser.incognito.IncognitoUtils;
 import org.chromium.chrome.browser.tab.Tab;
 import org.chromium.content_public.browser.LoadUrlParams;
 
-/**
- * Interface exposing to the common methods to navigate to content shown in native page UIs.
- */
+/** Interface exposing to the common methods to navigate to content shown in native page UIs. */
 public interface NativePageNavigationDelegate {
     /** @return Whether context menus should allow the option to open a link in incognito. */
     default boolean isOpenInIncognitoEnabled() {
@@ -24,7 +22,7 @@ public interface NativePageNavigationDelegate {
      */
     default boolean isOpenInNewTabInGroupEnabled() {
         return true;
-    };
+    }
 
     /** @return Whether context menus should allow the option to open a link in a new window. */
     boolean isOpenInNewWindowEnabled();

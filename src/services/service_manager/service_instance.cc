@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,9 +7,10 @@
 #include <set>
 #include <utility>
 
-#include "base/bind.h"
 #include "base/containers/contains.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
+#include "base/ranges/algorithm.h"
 #include "base/strings/strcat.h"
 #include "base/strings/utf_string_conversions.h"
 #include "build/build_config.h"
@@ -38,15 +39,15 @@ std::set<std::string> GetRequiredCapabilities(
   // Start by looking for requirements specific to the target identity.
   auto it = source_requirements.find(target_service);
   if (it != source_requirements.end()) {
-    std::copy(it->second.begin(), it->second.end(),
-              std::inserter(capabilities, capabilities.begin()));
+    base::ranges::copy(it->second,
+                       std::inserter(capabilities, capabilities.begin()));
   }
 
   // Apply wild card rules too.
   it = source_requirements.find("*");
   if (it != source_requirements.end()) {
-    std::copy(it->second.begin(), it->second.end(),
-              std::inserter(capabilities, capabilities.begin()));
+    base::ranges::copy(it->second,
+                       std::inserter(capabilities, capabilities.begin()));
   }
   return capabilities;
 }

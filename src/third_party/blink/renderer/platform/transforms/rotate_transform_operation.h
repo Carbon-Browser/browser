@@ -69,9 +69,12 @@ class PLATFORM_EXPORT RotateTransformOperation : public TransformOperation {
   OperationType GetType() const override { return type_; }
   OperationType PrimitiveType() const override { return kRotate3D; }
 
-  void Apply(TransformationMatrix& transform,
+  void Apply(gfx::Transform& transform,
              const gfx::SizeF& /*borderBoxSize*/) const override {
-    transform.Rotate3d(rotation_);
+    if (type_ == kRotate)
+      transform.Rotate(Angle());
+    else
+      transform.RotateAbout(rotation_.axis, rotation_.angle);
   }
 
   static bool IsMatchingOperationType(OperationType type) {
@@ -120,7 +123,7 @@ class PLATFORM_EXPORT RotateAroundOriginTransformOperation final
         new RotateAroundOriginTransformOperation(angle, origin_x, origin_y));
   }
 
-  void Apply(TransformationMatrix&, const gfx::SizeF&) const override;
+  void Apply(gfx::Transform&, const gfx::SizeF&) const override;
 
   static bool IsMatchingOperationType(OperationType type) {
     return type == kRotateAroundOrigin;

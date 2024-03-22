@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -17,7 +17,7 @@ int64_t ConvertTime(const base::TimeTicks& ticks,
     return kNullTime;
   }
   DCHECK(!start_time.is_null());
-  return (start_time + (ticks - start_ticks)).ToJavaTime();
+  return (start_time + (ticks - start_ticks)).InMillisecondsSinceUnixEpoch();
 }
 
 }  // namespace metrics_util

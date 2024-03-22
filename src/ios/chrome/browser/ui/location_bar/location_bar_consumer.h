@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -15,6 +15,9 @@
 // changes. (This is usually when the default search engine changes).
 - (void)updateSearchByImageSupported:(BOOL)searchByImageSupported;
 
+// Notifies the consumer to update after the Lens support status
+// changes. (This is usually when the default search engine changes).
+- (void)updateLensImageSupported:(BOOL)lensImageSupported;
 
 @end
 

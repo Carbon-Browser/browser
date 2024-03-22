@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -88,8 +88,6 @@ class NavigationSimulator {
   // error did not result in an error page.
   static RenderFrameHost* GoBackAndFail(WebContents* web_contents,
                                         int net_error_code);
-
-  // TODO(clamy, ahemery): Add GoForwardAndFail() if it becomes needed.
 
   // Simulates a failed offset navigation. Returns the RenderFrameHost that
   // committed the error page for the navigation, or nullptr if the navigation

@@ -1,10 +1,11 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "ash/accessibility/dictation_nudge.h"
 
 #include "ash/accessibility/dictation_nudge_controller.h"
+#include "ash/constants/notifier_catalogs.h"
 #include "ash/resources/vector_icons/vector_icons.h"
 #include "ash/strings/grit/ash_strings.h"
 #include "ash/style/ash_color_provider.h"
@@ -37,6 +38,7 @@ constexpr char kDictationNudgeName[] = "DictationOfflineContextualNudge";
 
 DictationNudge::DictationNudge(DictationNudgeController* controller)
     : SystemNudge(kDictationNudgeName,
+                  NudgeCatalogName::kDictation,
                   kIconSize,
                   kIconLabelSpacing,
                   kNudgePadding),

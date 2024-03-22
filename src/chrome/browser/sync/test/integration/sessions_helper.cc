@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,14 +9,13 @@
 #include <set>
 #include <utility>
 
-#include "base/bind.h"
 #include "base/command_line.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/memory/weak_ptr.h"
 #include "base/ranges/algorithm.h"
 #include "base/task/single_thread_task_runner.h"
 #include "base/test/test_timeouts.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "base/time/time.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/sync/session_sync_service_factory.h"
@@ -24,10 +23,11 @@
 #include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/browser_tabstrip.h"
 #include "chrome/browser/ui/singleton_tabs.h"
+#include "chrome/browser/ui/tabs/tab_enums.h"
 #include "chrome/browser/ui/tabs/tab_strip_model.h"
 #include "chrome/common/chrome_switches.h"
 #include "chrome/test/base/ui_test_utils.h"
-#include "components/sync/driver/sync_client.h"
+#include "components/sync/service/sync_client.h"
 #include "components/sync_sessions/open_tabs_ui_delegate.h"
 #include "components/sync_sessions/session_sync_service.h"
 #include "content/public/browser/navigation_entry.h"
@@ -155,7 +155,7 @@ bool OpenTabFromSourceIndex(int browser_index,
 void CloseTab(int browser_index, int tab_index) {
   TabStripModel* tab_strip =
       test()->GetBrowser(browser_index)->tab_strip_model();
-  tab_strip->CloseWebContentsAt(tab_index, TabStripModel::CLOSE_USER_GESTURE);
+  tab_strip->CloseWebContentsAt(tab_index, TabCloseTypes::CLOSE_USER_GESTURE);
 }
 
 void MoveTab(int from_browser_index, int to_browser_index, int tab_index) {
@@ -169,7 +169,7 @@ void MoveTab(int from_browser_index, int to_browser_index, int tab_index) {
       test()->GetBrowser(to_browser_index)->tab_strip_model();
   target_strip->InsertWebContentsAt(target_strip->count(),
                                     std::move(detached_contents),
-                                    TabStripModel::ADD_ACTIVE);
+                                    AddTabTypes::ADD_ACTIVE);
 }
 
 void NavigateTab(int browser_index, const GURL& url) {

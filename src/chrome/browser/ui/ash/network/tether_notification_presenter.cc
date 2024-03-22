@@ -1,27 +1,29 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/ui/ash/network/tether_notification_presenter.h"
 
+#include <algorithm>
 #include <string>
 
-#include "ash/components/multidevice/logging/logging.h"
+#include "ash/constants/ash_features.h"
 #include "ash/constants/notifier_catalogs.h"
 #include "ash/public/cpp/network_icon_image_source.h"
 #include "ash/public/cpp/notification_utils.h"
-#include "base/bind.h"
-#include "base/cxx17_backports.h"
+#include "ash/webui/settings/public/constants/routes.mojom.h"
+#include "base/feature_list.h"
+#include "base/functional/bind.h"
 #include "base/memory/ptr_util.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/strings/utf_string_conversions.h"
 #include "chrome/app/vector_icons/vector_icons.h"
 #include "chrome/browser/notifications/notification_display_service.h"
 #include "chrome/browser/ui/settings_window_manager_chromeos.h"
-#include "chrome/browser/ui/webui/settings/chromeos/constants/routes.mojom.h"
 #include "chrome/common/url_constants.h"
 #include "chrome/common/webui_url_constants.h"
 #include "chrome/grit/generated_resources.h"
+#include "chromeos/ash/components/multidevice/logging/logging.h"
 #include "chromeos/ash/components/network/network_connect.h"
 #include "ui/base/l10n/l10n_util.h"
 #include "ui/gfx/color_palette.h"
@@ -31,9 +33,7 @@
 #include "ui/message_center/public/cpp/notification_types.h"
 #include "ui/message_center/public/cpp/notifier_id.h"
 
-namespace chromeos {
-
-namespace tether {
+namespace ash::tether {
 
 namespace {
 
@@ -87,12 +87,12 @@ class SettingsUiDelegateImpl
 const gfx::ImageSkia GetImageForSignalStrength(int signal_strength) {
   // Convert the [0, 100] range to [0, 4], since there are 5 distinct signal
   // strength icons (0 bars to 4 bars).
-  int normalized_signal_strength = base::clamp(signal_strength / 25, 0, 4);
+  int normalized_signal_strength = std::clamp(signal_strength / 25, 0, 4);
 
   return gfx::CanvasImageSource::MakeImageSkia<
-      ash::network_icon::SignalStrengthImageSource>(
-      ash::network_icon::BARS, gfx::kGoogleBlue500, kTetherSignalIconSize,
-      normalized_signal_strength);
+      network_icon::SignalStrengthImageSource>(
+      network_icon::BARS, gfx::kGoogleBlue500, kTetherSignalIconSize,
+      normalized_signal_strength, 5);
 }
 
 }  // namespace
@@ -144,7 +144,7 @@ void TetherNotificationPresenter::NotifyPotentialHotspotNearby(
 
   ShowNotification(CreateNotification(
       kPotentialHotspotNotificationId,
-      ash::NotificationCatalogName::kTetherPotentialHotspot,
+      NotificationCatalogName::kTetherPotentialHotspot,
       l10n_util::GetStringUTF16(
           IDS_TETHER_NOTIFICATION_WIFI_AVAILABLE_ONE_DEVICE_TITLE),
       l10n_util::GetStringFUTF16(
@@ -162,7 +162,7 @@ void TetherNotificationPresenter::NotifyMultiplePotentialHotspotsNearby() {
 
   ShowNotification(CreateNotification(
       kPotentialHotspotNotificationId,
-      ash::NotificationCatalogName::kTetherPotentialHotspot,
+      NotificationCatalogName::kTetherPotentialHotspot,
       l10n_util::GetStringUTF16(
           IDS_TETHER_NOTIFICATION_WIFI_AVAILABLE_MULTIPLE_DEVICES_TITLE),
       l10n_util::GetStringUTF16(
@@ -202,7 +202,7 @@ void TetherNotificationPresenter::NotifySetupRequired(
 
   ShowNotification(CreateNotification(
       kSetupRequiredNotificationId,
-      ash::NotificationCatalogName::kTetherSetupRequired,
+      NotificationCatalogName::kTetherSetupRequired,
       l10n_util::GetStringFUTF16(IDS_TETHER_NOTIFICATION_SETUP_REQUIRED_TITLE,
                                  base::ASCIIToUTF16(device_name)),
       l10n_util::GetStringFUTF16(IDS_TETHER_NOTIFICATION_SETUP_REQUIRED_MESSAGE,
@@ -219,7 +219,7 @@ void TetherNotificationPresenter::NotifyConnectionToHostFailed() {
   PA_LOG(VERBOSE) << "Displaying \"connection attempt failed\" notification. "
                   << "Notification ID = " << id;
 
-  ShowNotification(ash::CreateSystemNotification(
+  ShowNotification(CreateSystemNotificationPtr(
       message_center::NotificationType::NOTIFICATION_TYPE_SIMPLE, id,
       l10n_util::GetStringUTF16(
           IDS_TETHER_NOTIFICATION_CONNECTION_FAILED_TITLE),
@@ -228,7 +228,7 @@ void TetherNotificationPresenter::NotifyConnectionToHostFailed() {
       std::u16string() /* display_source */, GURL() /* origin_url */,
       message_center::NotifierId(
           message_center::NotifierType::SYSTEM_COMPONENT, kNotifierTether,
-          ash::NotificationCatalogName::kTetherConnectionError),
+          NotificationCatalogName::kTetherConnectionError),
       {} /* rich_notification_data */,
       new message_center::HandleNotificationClickDelegate(base::BindRepeating(
           &TetherNotificationPresenter::OnNotificationClicked,
@@ -302,7 +302,7 @@ void TetherNotificationPresenter::OnNotificationClosed(
 std::unique_ptr<message_center::Notification>
 TetherNotificationPresenter::CreateNotification(
     const std::string& id,
-    const ash::NotificationCatalogName& catalog_name,
+    const NotificationCatalogName& catalog_name,
     const std::u16string& title,
     const std::u16string& message,
     const gfx::ImageSkia& small_image,
@@ -322,6 +322,9 @@ TetherNotificationPresenter::CreateNotification(
               &TetherNotificationPresenter::OnNotificationClosed,
               weak_ptr_factory_.GetWeakPtr(), id)));
   notification->set_small_image(gfx::Image(small_image));
+  if (base::FeatureList::IsEnabled(ash::features::kInstantHotspotRebrand)) {
+    notification->set_never_timeout(true);
+  }
   return notification;
 }
 
@@ -359,6 +362,4 @@ void TetherNotificationPresenter::RemoveNotificationIfVisible(
       NotificationHandler::Type::TRANSIENT, notification_id);
 }
 
-}  // namespace tether
-
-}  // namespace chromeos
+}  // namespace ash::tether

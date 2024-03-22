@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -18,8 +18,8 @@ namespace {
 
 // Computes a SHA-1 hash of |data| and returns it as a hex string.
 std::string ComputeSHA1(const std::string& data) {
-  const std::string sha1 = base::SHA1HashString(data);
-  return base::HexEncode(sha1.data(), sha1.size());
+  return base::HexEncode(
+      base::SHA1HashSpan(base::as_bytes(base::make_span(data))));
 }
 
 }  // namespace

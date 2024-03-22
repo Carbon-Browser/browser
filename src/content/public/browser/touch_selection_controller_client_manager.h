@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -29,6 +29,15 @@ class CONTENT_EXPORT TouchSelectionControllerClientManager {
   virtual ~TouchSelectionControllerClientManager() {}
 
   virtual void DidStopFlinging() = 0;
+
+  virtual void OnSwipeToMoveCursorBegin() = 0;
+
+  virtual void OnSwipeToMoveCursorEnd() = 0;
+
+  // Used by clients to notify the manager that the client's hit test region has
+  // updated, to allow selection bounds to be updated if needed.
+  virtual void OnClientHitTestRegionUpdated(
+      ui::TouchSelectionControllerClient* client) = 0;
 
   // The manager uses this class' methods to notify observers about important
   // events.

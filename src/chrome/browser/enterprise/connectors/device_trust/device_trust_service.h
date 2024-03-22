@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,11 +6,13 @@
 #define CHROME_BROWSER_ENTERPRISE_CONNECTORS_DEVICE_TRUST_DEVICE_TRUST_SERVICE_H_
 
 #include <memory>
+#include <set>
 #include <string>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "base/values.h"
+#include "chrome/browser/enterprise/connectors/device_trust/common/common_types.h"
 #include "components/keyed_service/core/keyed_service.h"
 #include "services/data_decoder/public/cpp/data_decoder.h"
 
@@ -18,8 +20,10 @@ class GURL;
 
 namespace enterprise_connectors {
 
+struct AttestationResponse;
 class AttestationService;
 class DeviceTrustConnectorService;
+struct DeviceTrustResponse;
 class SignalsService;
 
 // Main service used to drive device trust connector scenarios. It is currently
@@ -27,7 +31,8 @@ class SignalsService;
 // Access during an attestation flow.
 class DeviceTrustService : public KeyedService {
  public:
-  using AttestationCallback = base::OnceCallback<void(const std::string&)>;
+  using DeviceTrustCallback =
+      base::OnceCallback<void(const DeviceTrustResponse&)>;
 
   // Callback used by the data_decoder to get the parsed json result.
   using ParseJsonChallengeCallback =
@@ -46,19 +51,25 @@ class DeviceTrustService : public KeyedService {
   // any task sequence.
   virtual bool IsEnabled() const;
 
-  // Starts flow that actually builds a response.
-  virtual void BuildChallengeResponse(const std::string& challenge,
-                                      AttestationCallback callback);
+  // Uses the challenge stored in `serialized_challenge` to generate a
+  // challenge-response containing device signals and a device identity. This
+  // detail, along with the policy `levels` the connector is enabled for, will
+  // be used in the  attestation flow to build the challenge response respective
+  // to its policy level. Returns the challenge response asynchronously via
+  // `callback`.
+  virtual void BuildChallengeResponse(const std::string& serialized_challenge,
+                                      const std::set<DTCPolicyLevel>& levels,
+                                      DeviceTrustCallback callback);
 
-  // Returns whether the Device Trust connector watches navigations to the given
-  // `url` or not.
-  virtual bool Watches(const GURL& url) const;
+  // Returns the policy levels at which the current `url` navigation is being
+  // watched for.
+  virtual const std::set<DTCPolicyLevel> Watches(const GURL& url) const;
 
   // Collects device trust signals and returns them via `callback`.
-  void GetSignals(base::OnceCallback<void(const base::Value::Dict)> callback);
+  void GetSignals(base::OnceCallback<void(base::Value::Dict)> callback);
 
-  // Parses the `challenge` response and returns it via a `callback`.
-  void ParseJsonChallenge(const std::string& challenge,
+  // Parses the `serialized_challenge` and returns its value via `callback`.
+  void ParseJsonChallenge(const std::string& serialized_challenge,
                           ParseJsonChallengeCallback callback);
 
  protected:
@@ -66,11 +77,16 @@ class DeviceTrustService : public KeyedService {
   DeviceTrustService();
 
  private:
-  void OnChallengeParsed(AttestationCallback callback,
-                         const std::string& serialized_signed_challenge);
+  void OnChallengeParsed(const std::set<DTCPolicyLevel>& levels,
+                         DeviceTrustCallback callback,
+                         const std::string& challenge);
   void OnSignalsCollected(const std::string& challenge,
-                          AttestationCallback callback,
+                          const std::set<DTCPolicyLevel>& levels,
+                          DeviceTrustCallback callback,
                           base::Value::Dict signals);
+  void OnAttestationResponseReceived(
+      DeviceTrustCallback callback,
+      const AttestationResponse& attestation_response);
 
   std::unique_ptr<AttestationService> attestation_service_;
   std::unique_ptr<SignalsService> signals_service_;

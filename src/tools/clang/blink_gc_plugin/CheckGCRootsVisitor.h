@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -24,17 +24,23 @@ class CheckGCRootsVisitor : public RecursiveEdgeVisitor {
   explicit CheckGCRootsVisitor(const BlinkGCPluginOptions&);
 
   Errors& gc_roots();
+  Errors& gc_root_refs();
 
   bool ContainsGCRoots(RecordInfo* info);
 
   void VisitValue(Value* edge) override;
   void VisitUniquePtr(UniquePtr*) override;
+  void VisitRawPtr(RawPtr*) override;
+  void VisitRefPtr(RefPtr*) override;
   void VisitPersistent(Persistent* edge) override;
+  void VisitCollection(Collection* edge) override;
 
  private:
   RootPath current_;
   VisitingSet visiting_set_;
   Errors gc_roots_;
+  Errors gc_root_refs_;
+  bool is_ref_ = false;
 
   bool should_check_unique_ptrs_;
 };

@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,6 +11,8 @@ namespace android_webview {
 // shall be added to observer list through AwContentsLifecycleNotifier.
 class WebViewAppStateObserver {
  public:
+  // GENERATED_JAVA_ENUM_PACKAGE: org.chromium.android_webview
+  // GENERATED_JAVA_CLASS_NAME_OVERRIDE: AppState
   enum class State {
     // All WebViews are detached from window.
     kUnknown,

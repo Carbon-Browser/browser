@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,8 +7,9 @@
 #include <iterator>
 #include <vector>
 
-#include "base/bind.h"
 #include "base/containers/contains.h"
+#include "base/functional/bind.h"
+#include "base/ranges/algorithm.h"
 #include "build/build_config.h"
 #include "chrome/browser/background/background_mode_manager.h"
 #include "chrome/browser/browser_process.h"
@@ -37,7 +38,8 @@ namespace {
 void ShowInProgressDownloads(Profile* profile) {
   DownloadCoreService* download_core_service =
       DownloadCoreServiceFactory::GetForBrowserContext(profile);
-  if (download_core_service->NonMaliciousDownloadCount() > 0) {
+  if (download_core_service &&
+      download_core_service->BlockingShutdownCount() > 0) {
     chrome::ScopedTabbedBrowserDisplayer displayer(profile);
     chrome::ShowDownloads(displayer.browser());
   }
@@ -103,8 +105,7 @@ void BrowserCloseManager::CheckForDownloadsInProgress() {
   // Mac has its own in-progress downloads prompt in app_controller_mac.mm.
   CloseBrowsers();
 #else
-  int download_count =
-      DownloadCoreService::NonMaliciousDownloadCountAllProfiles();
+  int download_count = DownloadCoreService::BlockingShutdownCountAllProfiles();
   if (download_count == 0) {
     CloseBrowsers();
     return;
@@ -166,24 +167,22 @@ void BrowserCloseManager::CloseBrowsers() {
   // Make a copy of the BrowserList to simplify the case where we need to
   // destroy a Browser during the loop.
   std::vector<Browser*> browser_list_copy;
-  std::copy(BrowserList::GetInstance()->begin(),
-            BrowserList::GetInstance()->end(),
-            std::back_inserter(browser_list_copy));
+  base::ranges::copy(*BrowserList::GetInstance(),
+                     std::back_inserter(browser_list_copy));
 
   bool ignore_unload_handlers = browser_shutdown::ShouldIgnoreUnloadHandlers();
 
   for (auto* browser : browser_list_copy) {
     browser->window()->Close();
     if (ignore_unload_handlers) {
-      // This path is hit during logoff/power-down. In this case we won't get
-      // a final message and so we force the browser to be deleted.
-      // Close doesn't immediately destroy the browser
-      // (Browser::TabStripEmpty() uses invoke later) but when we're ending the
-      // session we need to make sure the browser is destroyed now. So, invoke
-      // DestroyBrowser to make sure the browser is deleted and cleanup can
-      // happen.
-      while (browser->tab_strip_model()->count())
-        browser->tab_strip_model()->DetachAndDeleteWebContentsAt(0);
+      // This path is hit during logoff/power-down. It could be the case that
+      // there are some tabs which would have prevented the browser from closing
+      // (Ex: A form with an open dialog asking for permission to leave the
+      // current site). Since we are attempting to end the session, we will
+      // force skip these warnings and manually close all the tabs to make sure
+      // the browser is destroyed and cleanup can happen.
+      browser->set_force_skip_warning_user_on_close(true);
+      browser->tab_strip_model()->CloseAllTabs();
       browser->window()->DestroyBrowser();
       // Destroying the browser should have removed it from the browser list.
       DCHECK(!base::Contains(*BrowserList::GetInstance(), browser));

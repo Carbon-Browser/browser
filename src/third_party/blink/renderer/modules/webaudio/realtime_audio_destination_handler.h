@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,7 +9,9 @@
 #include <memory>
 
 #include "base/memory/weak_ptr.h"
+#include "base/task/single_thread_task_runner.h"
 #include "third_party/blink/public/platform/web_audio_latency_hint.h"
+#include "third_party/blink/public/platform/web_audio_sink_descriptor.h"
 #include "third_party/blink/renderer/modules/webaudio/audio_destination_node.h"
 #include "third_party/blink/renderer/platform/audio/audio_callback_metric_reporter.h"
 #include "third_party/blink/renderer/platform/audio/audio_destination.h"
@@ -20,6 +22,7 @@ namespace blink {
 class AudioContext;
 class ExceptionState;
 class WebAudioLatencyHint;
+class WebAudioSinkDescriptor;
 
 class RealtimeAudioDestinationHandler final
     : public AudioDestinationHandler,
@@ -28,6 +31,7 @@ class RealtimeAudioDestinationHandler final
  public:
   static scoped_refptr<RealtimeAudioDestinationHandler> Create(
       AudioNode&,
+      const WebAudioSinkDescriptor&,
       const WebAudioLatencyHint&,
       absl::optional<float> sample_rate);
   ~RealtimeAudioDestinationHandler() override;
@@ -49,6 +53,7 @@ class RealtimeAudioDestinationHandler final
   void RestartRendering() override;
   uint32_t MaxChannelCount() const override;
   double SampleRate() const override;
+  void PrepareTaskRunnerForWorklet() override;
 
   // For AudioIOCallback. This is invoked by the platform audio destination to
   // get the next render quantum into `destination_bus` and update
@@ -71,10 +76,18 @@ class RealtimeAudioDestinationHandler final
   // Sets the detect silence flag for the platform destination.
   void SetDetectSilence(bool detect_silence);
 
+  // Sets the identifier for a new output device. Note that this will recreate
+  // a new platform destination with the specified sink device. It also invokes
+  // `callback` when the recreation is completed.
+  void SetSinkDescriptor(const WebAudioSinkDescriptor& sink_descriptor,
+                         media::OutputDeviceStatusCB callback);
+
  private:
-  explicit RealtimeAudioDestinationHandler(AudioNode&,
-                                           const WebAudioLatencyHint&,
-                                           absl::optional<float> sample_rate);
+  explicit RealtimeAudioDestinationHandler(
+      AudioNode&,
+      const WebAudioSinkDescriptor&,
+      const WebAudioLatencyHint&,
+      absl::optional<float> sample_rate);
 
   void CreatePlatformDestination();
   void StartPlatformDestination();
@@ -95,11 +108,16 @@ class RealtimeAudioDestinationHandler final
     allow_pulling_audio_graph_.store(false, std::memory_order_release);
   }
 
+  // Stores a sink descriptor for sink transition.
+  WebAudioSinkDescriptor sink_descriptor_;
+
   const WebAudioLatencyHint latency_hint_;
 
   // Holds the audio device thread that runs the real time audio context.
   scoped_refptr<AudioDestination> platform_destination_;
 
+  // Stores the user-provided (AudioContextOptions) sample rate. When `nullopt`
+  // it is updated with the sample rate of the first platform destination.
   absl::optional<float> sample_rate_;
 
   // If true, the audio graph will be pulled to get new data.  Otherwise, the

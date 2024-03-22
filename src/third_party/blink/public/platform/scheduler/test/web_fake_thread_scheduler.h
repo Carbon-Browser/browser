@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -20,20 +20,17 @@ class WebFakeThreadScheduler : public WebThreadScheduler {
   ~WebFakeThreadScheduler() override;
 
   // RendererScheduler implementation.
-  std::unique_ptr<Thread> CreateMainThread() override;
+  std::unique_ptr<MainThread> CreateMainThread() override;
   scoped_refptr<base::SingleThreadTaskRunner> CompositorTaskRunner() override;
-  std::unique_ptr<WebAgentGroupScheduler> CreateAgentGroupScheduler() override;
-  WebAgentGroupScheduler* GetCurrentAgentGroupScheduler() override;
+  std::unique_ptr<WebAgentGroupScheduler> CreateWebAgentGroupScheduler()
+      override;
   void SetRendererHidden(bool hidden) override;
   void SetRendererBackgrounded(bool backgrounded) override;
-  std::unique_ptr<RendererPauseHandle> PauseRenderer() override;
 #if BUILDFLAG(IS_ANDROID)
   void PauseTimersForAndroidWebView() override;
   void ResumeTimersForAndroidWebView() override;
 #endif
   void Shutdown() override;
-  void SetTopLevelBlameContext(
-      base::trace_event::BlameContext* blame_context) override;
   void SetRendererProcessType(WebRendererProcessType type) override;
 };
 

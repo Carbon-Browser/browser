@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -51,7 +51,7 @@ class OptionsPageInfo : public Extension::ManifestData {
 
   static std::unique_ptr<OptionsPageInfo> Create(
       Extension* extension,
-      const base::Value* options_ui_value,
+      const base::Value::Dict* options_ui_dict,
       const std::string& options_page_string,
       std::vector<InstallWarning>* install_warnings,
       std::u16string* error);

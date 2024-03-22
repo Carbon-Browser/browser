@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -19,13 +19,10 @@ import org.junit.runner.RunWith;
 import org.chromium.base.FeatureList;
 import org.chromium.base.test.BaseRobolectricTestRunner;
 
-/**
- * Unit Tests for {@link CachedFlag}.
- */
+/** Unit Tests for {@link CachedFlag}. */
 @RunWith(BaseRobolectricTestRunner.class)
 public class CachedFlagUnitTest {
-    @Rule
-    public final BaseFlagTestRule baseFlagTestRule = new BaseFlagTestRule();
+    @Rule public final BaseFlagTestRule baseFlagTestRule = new BaseFlagTestRule();
 
     @Test(expected = AssertionError.class)
     public void testDuplicateFeature_throwsException() {
@@ -78,7 +75,7 @@ public class CachedFlagUnitTest {
         assertIsEnabledMatches(A_OFF_B_ON, featureA, featureB);
 
         // Pretend the app was restarted. The SharedPrefs should remain.
-        CachedFeatureFlags.resetFlagsForTesting();
+        CachedFlagUtils.resetFlagsForTesting();
 
         // Simulate ChromeFeatureList retrieving new, different values for the flags.
         FeatureList.setTestFeatures(A_ON_B_ON);
@@ -96,7 +93,7 @@ public class CachedFlagUnitTest {
         assertIsEnabledMatches(A_OFF_B_ON, featureA, featureB);
 
         // Pretend the app was restarted again.
-        CachedFeatureFlags.resetFlagsForTesting();
+        CachedFlagUtils.resetFlagsForTesting();
 
         // The SharedPrefs should retain the latest values.
         assertIsEnabledMatches(A_ON_B_ON, featureA, featureB);
@@ -112,13 +109,13 @@ public class CachedFlagUnitTest {
         assertIsEnabledMatches(A_OFF_B_OFF, featureA, featureB);
 
         // Force a feature flag.
-        featureA.setForTesting(FEATURE_A, true);
+        featureA.setForTesting(true);
 
         // Verify that the forced value is returned.
         assertIsEnabledMatches(A_ON_B_OFF, featureA, featureB);
 
         // Remove the forcing.
-        featureA.setForTesting(FEATURE_A, null);
+        featureA.setForTesting(null);
 
         // Verify that the forced value is not returned anymore.
         assertIsEnabledMatches(A_OFF_B_OFF, featureA, featureB);

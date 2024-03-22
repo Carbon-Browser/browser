@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -66,7 +66,7 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t* data, size_t size) {
           url, name, value, domain, path, creation, expiration, last_access,
           data_provider.ConsumeBool() /* secure */,
           data_provider.ConsumeBool() /* httponly */, same_site, priority,
-          data_provider.ConsumeBool() /* same_party */, partition_key);
+          partition_key);
 
   if (sanitized_cookie) {
     CHECK(sanitized_cookie->IsCanonical());

@@ -1,35 +1,48 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #import "ios/chrome/browser/ui/autofill/form_input_accessory/form_input_accessory_coordinator.h"
 
-#include <vector>
+#import <vector>
 
-#include "base/bind.h"
-#include "base/ios/ios_util.h"
-#include "base/mac/foundation_util.h"
-#include "base/metrics/histogram_macros.h"
-#include "base/strings/utf_string_conversions.h"
-#include "base/threading/sequenced_task_runner_handle.h"
-#include "base/time/time.h"
-#include "components/autofill/core/browser/personal_data_manager.h"
-#include "components/autofill/core/common/autofill_features.h"
-#include "components/feature_engagement/public/event_constants.h"
-#include "components/feature_engagement/public/feature_constants.h"
-#include "components/feature_engagement/public/tracker.h"
-#include "components/keyed_service/core/service_access_type.h"
-#include "components/password_manager/core/browser/manage_passwords_referrer.h"
-#include "components/password_manager/core/browser/password_ui_utils.h"
+#import "base/apple/foundation_util.h"
+#import "base/functional/bind.h"
+#import "base/ios/ios_util.h"
+#import "base/metrics/histogram_macros.h"
+#import "base/metrics/user_metrics.h"
+#import "base/metrics/user_metrics_action.h"
+#import "base/strings/utf_string_conversions.h"
+#import "base/task/sequenced_task_runner.h"
+#import "base/time/time.h"
+#import "components/autofill/core/browser/personal_data_manager.h"
+#import "components/autofill/core/common/autofill_features.h"
+#import "components/feature_engagement/public/feature_constants.h"
+#import "components/keyed_service/core/service_access_type.h"
+#import "components/password_manager/core/browser/manage_passwords_referrer.h"
+#import "components/password_manager/core/browser/password_ui_utils.h"
+#import "components/password_manager/core/common/password_manager_features.h"
 #import "components/password_manager/ios/password_generation_provider.h"
-#include "components/strings/grit/components_strings.h"
-#include "ios/chrome/browser/autofill/personal_data_manager_factory.h"
-#include "ios/chrome/browser/browser_state/chrome_browser_state.h"
-#include "ios/chrome/browser/feature_engagement/tracker_factory.h"
-#import "ios/chrome/browser/main/browser.h"
-#include "ios/chrome/browser/passwords/ios_chrome_password_store_factory.h"
-#import "ios/chrome/browser/passwords/password_tab_helper.h"
-#import "ios/chrome/browser/ui/alert_coordinator/alert_coordinator.h"
+#import "components/strings/grit/components_strings.h"
+#import "ios/chrome/browser/autofill/model/personal_data_manager_factory.h"
+#import "ios/chrome/browser/feature_engagement/model/tracker_factory.h"
+#import "ios/chrome/browser/passwords/model/ios_chrome_account_password_store_factory.h"
+#import "ios/chrome/browser/passwords/model/ios_chrome_profile_password_store_factory.h"
+#import "ios/chrome/browser/passwords/model/password_tab_helper.h"
+#import "ios/chrome/browser/shared/coordinator/alert/alert_coordinator.h"
+#import "ios/chrome/browser/shared/coordinator/layout_guide/layout_guide_util.h"
+#import "ios/chrome/browser/shared/model/browser/browser.h"
+#import "ios/chrome/browser/shared/model/browser_state/chrome_browser_state.h"
+#import "ios/chrome/browser/shared/model/web_state_list/web_state_list.h"
+#import "ios/chrome/browser/shared/public/commands/application_commands.h"
+#import "ios/chrome/browser/shared/public/commands/browser_coordinator_commands.h"
+#import "ios/chrome/browser/shared/public/commands/command_dispatcher.h"
+#import "ios/chrome/browser/shared/public/commands/open_new_tab_command.h"
+#import "ios/chrome/browser/shared/public/commands/security_alert_commands.h"
+#import "ios/chrome/browser/shared/ui/util/layout_guide_names.h"
+#import "ios/chrome/browser/shared/ui/util/uikit_ui_util.h"
+#import "ios/chrome/browser/shared/ui/util/util_swift.h"
+#import "ios/chrome/browser/ui/autofill/branding/branding_coordinator.h"
 #import "ios/chrome/browser/ui/autofill/form_input_accessory/form_input_accessory_mediator.h"
 #import "ios/chrome/browser/ui/autofill/form_input_accessory/form_input_accessory_view_controller.h"
 #import "ios/chrome/browser/ui/autofill/manual_fill/address_coordinator.h"
@@ -37,62 +50,32 @@
 #import "ios/chrome/browser/ui/autofill/manual_fill/fallback_view_controller.h"
 #import "ios/chrome/browser/ui/autofill/manual_fill/manual_fill_accessory_view_controller.h"
 #import "ios/chrome/browser/ui/autofill/manual_fill/manual_fill_all_password_coordinator.h"
+#import "ios/chrome/browser/ui/autofill/manual_fill/manual_fill_all_password_coordinator_delegate.h"
 #import "ios/chrome/browser/ui/autofill/manual_fill/manual_fill_injection_handler.h"
 #import "ios/chrome/browser/ui/autofill/manual_fill/manual_fill_password_coordinator.h"
-#import "ios/chrome/browser/ui/bubble/bubble_features.h"
+#import "ios/chrome/browser/ui/bubble/bubble_constants.h"
 #import "ios/chrome/browser/ui/bubble/bubble_view_controller_presenter.h"
-#import "ios/chrome/browser/ui/commands/application_commands.h"
-#import "ios/chrome/browser/ui/commands/browser_coordinator_commands.h"
-#import "ios/chrome/browser/ui/commands/command_dispatcher.h"
-#import "ios/chrome/browser/ui/commands/open_new_tab_command.h"
-#import "ios/chrome/browser/ui/commands/security_alert_commands.h"
-#import "ios/chrome/browser/ui/main/layout_guide_scene_agent.h"
-#import "ios/chrome/browser/ui/main/scene_state.h"
-#import "ios/chrome/browser/ui/main/scene_state_browser_agent.h"
-#import "ios/chrome/browser/ui/util/layout_guide_names.h"
-#include "ios/chrome/browser/ui/util/ui_util.h"
-#import "ios/chrome/browser/ui/util/uikit_ui_util.h"
-#import "ios/chrome/browser/ui/util/util_swift.h"
-#import "ios/chrome/browser/web_state_list/web_state_list.h"
+#import "ios/chrome/browser/ui/settings/password/password_manager_ui_features.h"
 #import "ios/chrome/common/ui/reauthentication/reauthentication_module.h"
-#include "ios/chrome/grit/ios_chromium_strings.h"
-#include "ios/chrome/grit/ios_strings.h"
+#import "ios/chrome/grit/ios_branded_strings.h"
+#import "ios/chrome/grit/ios_strings.h"
 #import "ios/web/public/web_state.h"
-#include "ui/base/device_form_factor.h"
-#include "ui/base/l10n/l10n_util_mac.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
+#import "ui/base/device_form_factor.h"
+#import "ui/base/l10n/l10n_util_mac.h"
 
 namespace {
 // Delay between the time the view is shown, and the time the suggestion label
 // is highlighted.
-constexpr base::TimeDelta kPasswordSuggestionHighlightDelay = base::Seconds(1);
+constexpr base::TimeDelta kAutofillSuggestionHighlightDelay = base::Seconds(1);
 
 // Delay between the time the suggestion label is highlighted, and the time the
-// password suggestion tip is shown.
-constexpr base::TimeDelta kPasswordSuggestionTipDelay = base::Seconds(0.5);
+// autofill suggestion tip is shown.
+constexpr base::TimeDelta kAutofillSuggestionTipDelay = base::Seconds(0.5);
 
 // Additional vertical offset for the IPH, so that it doesn't appear below the
 // Autofill strip at the top of the keyboard.
 const CGFloat kIPHVerticalOffset = -5;
 
-// Returns BubbleViewType param from kBubbleRichIPH feature flag.
-BubbleViewType BubbleTypeFromFeature() {
-  DCHECK(base::FeatureList::IsEnabled(kBubbleRichIPH));
-  std::string bubbleTypeName = base::GetFieldTrialParamValueByFeature(
-      kBubbleRichIPH, kBubbleRichIPHParameterName);
-  if (bubbleTypeName == kBubbleRichIPHParameterExplicitDismissal) {
-    return BubbleViewTypeWithClose;
-  } else if (bubbleTypeName == kBubbleRichIPHParameterRich) {
-    return BubbleViewTypeRich;
-  } else if (bubbleTypeName == kBubbleRichIPHParameterRichWithSnooze) {
-    return BubbleViewTypeRichWithSnooze;
-  } else {
-    return BubbleViewTypeDefault;
-  }
-}
 }  // namespace
 
 @interface FormInputAccessoryCoordinator () <
@@ -100,12 +83,16 @@ BubbleViewType BubbleTypeFromFeature() {
     CardCoordinatorDelegate,
     FormInputAccessoryMediatorHandler,
     ManualFillAccessoryViewControllerDelegate,
+    ManualFillAllPasswordCoordinatorDelegate,
     PasswordCoordinatorDelegate,
     SecurityAlertCommands>
 
 // Coordinator in charge of the presenting password autofill options as a modal.
 @property(nonatomic, strong)
     ManualFillAllPasswordCoordinator* allPasswordCoordinator;
+
+// Coordinator in charge of the keyboar autofill branding.
+@property(nonatomic, strong) BrandingCoordinator* brandingCoordinator;
 
 // The Mediator for the input accessory view controller.
 @property(nonatomic, strong)
@@ -128,7 +115,11 @@ BubbleViewType BubbleTypeFromFeature() {
 // Active Form Input View Controller.
 @property(nonatomic, strong) UIViewController* formInputViewController;
 
-// Bubble view controller presenter for password suggestion tip.
+// The browser state. May return null after the coordinator has been stopped
+// (thus the returned value must be checked for null).
+@property(nonatomic, readonly) ChromeBrowserState* browserState;
+
+// Bubble view controller presenter for autofill suggestion tip.
 @property(nonatomic, strong) BubbleViewControllerPresenter* bubblePresenter;
 
 // UI tap recognizer used to dismiss bubble presenter.
@@ -138,18 +129,6 @@ BubbleViewType BubbleTypeFromFeature() {
 // The layout guide installed in the base view controller on which to anchor the
 // potential IPH bubble.
 @property(nonatomic, strong) UILayoutGuide* layoutGuide;
-
-// The browser state. May return null after the coordinator has been stopped
-// (thus the returned value must be checked for null).
-@property(nonatomic, readonly) ChromeBrowserState* browserState;
-
-// The tracker for feature engagement. May return null after the coordinator has
-// been stopped (thus the returned value must be checked for null).
-@property(nonatomic, readonly)
-    feature_engagement::Tracker* featureEngagementTracker;
-
-// The layout guide center to use to coordinate views.
-@property(nonatomic, readonly) LayoutGuideCenter* layoutGuideCenter;
 
 @end
 
@@ -164,6 +143,9 @@ BubbleViewType BubbleTypeFromFeature() {
                              forProtocol:@protocol(SecurityAlertCommands)];
     __weak id<SecurityAlertCommands> securityAlertHandler =
         HandlerForProtocol(dispatcher, SecurityAlertCommands);
+    _brandingCoordinator =
+        [[BrandingCoordinator alloc] initWithBaseViewController:viewController
+                                                        browser:browser];
     _reauthenticationModule = [[ReauthenticationModule alloc] init];
     _injectionHandler = [[ManualFillInjectionHandler alloc]
           initWithWebStateList:browser->GetWebStateList()
@@ -178,15 +160,24 @@ BubbleViewType BubbleTypeFromFeature() {
 }
 
 - (void)start {
+  [self.brandingCoordinator start];
   self.formInputAccessoryViewController =
       [[FormInputAccessoryViewController alloc]
           initWithManualFillAccessoryViewControllerDelegate:self];
-  self.formInputAccessoryViewController.layoutGuideCenter =
-      self.layoutGuideCenter;
+  self.formInputAccessoryViewController.brandingViewController =
+      self.brandingCoordinator.viewController;
+
+  LayoutGuideCenter* layoutGuideCenter =
+      LayoutGuideCenterForBrowser(self.browser);
+  self.formInputAccessoryViewController.layoutGuideCenter = layoutGuideCenter;
 
   DCHECK(self.browserState);
-  auto passwordStore = IOSChromePasswordStoreFactory::GetForBrowserState(
-      self.browserState, ServiceAccessType::EXPLICIT_ACCESS);
+  auto profilePasswordStore =
+      IOSChromeProfilePasswordStoreFactory::GetForBrowserState(
+          self.browserState, ServiceAccessType::EXPLICIT_ACCESS);
+  auto accountPasswordStore =
+      IOSChromeAccountPasswordStoreFactory::GetForBrowserState(
+          self.browserState, ServiceAccessType::EXPLICIT_ACCESS);
 
   // There is no personal data manager in OTR (incognito). Get the original
   // one for manual fallback.
@@ -201,7 +192,8 @@ BubbleViewType BubbleTypeFromFeature() {
                      handler:self
                 webStateList:self.browser->GetWebStateList()
          personalDataManager:personalDataManager
-               passwordStore:passwordStore
+        profilePasswordStore:profilePasswordStore
+        accountPasswordStore:accountPasswordStore
         securityAlertHandler:securityAlertHandler
       reauthenticationModule:self.reauthenticationModule];
   self.formInputAccessoryViewController.formSuggestionClient =
@@ -209,9 +201,14 @@ BubbleViewType BubbleTypeFromFeature() {
   [self.formInputAccessoryViewController.view
       addGestureRecognizer:self.formInputAccessoryTapRecognizer];
 
-  self.layoutGuide = [self.layoutGuideCenter
-      makeLayoutGuideNamed:kAutofillFirstSuggestionGuide];
+  self.layoutGuide =
+      [layoutGuideCenter makeLayoutGuideNamed:kAutofillFirstSuggestionGuide];
   [self.baseViewController.view addLayoutGuide:self.layoutGuide];
+
+  self.formInputAccessoryMediator.originalPrefService =
+      self.browser->GetBrowserState()
+          ->GetOriginalChromeBrowserState()
+          ->GetPrefs();
 }
 
 - (void)stop {
@@ -225,9 +222,9 @@ BubbleViewType BubbleTypeFromFeature() {
   [self.formInputAccessoryMediator disconnect];
   self.formInputAccessoryMediator = nil;
 
-  [self.allPasswordCoordinator stop];
-  self.allPasswordCoordinator = nil;
-
+  [self stopManualFillAllPasswordCoordinator];
+  [self.brandingCoordinator stop];
+  self.brandingCoordinator = nil;
   [self.layoutGuide.owningView removeLayoutGuide:self.layoutGuide];
   self.layoutGuide = nil;
 }
@@ -239,16 +236,7 @@ BubbleViewType BubbleTypeFromFeature() {
   [self.formInputAccessoryViewController reset];
 
   self.formInputViewController = nil;
-  if (@available(iOS 16, *)) {
-    @try {
-      [GetFirstResponder() reloadInputViews];
-    } @catch (NSException* e) {
-      // TODO(crbug.com/1334530) iOS 16 beta 5 is still throwing an
-      // NSInternalInconsistencyException.
-    }
-  } else {
-    [GetFirstResponder() reloadInputViews];
-  }
+  [GetFirstResponder() reloadInputViews];
 }
 
 #pragma mark - Presenting Children
@@ -315,53 +303,35 @@ BubbleViewType BubbleTypeFromFeature() {
   [self.childCoordinators addObject:addressCoordinator];
 }
 
-#pragma mark - Actions
-
-- (void)tapInsideRecognized:(id)sender {
-  [self.bubblePresenter dismissAnimated:YES];
-  self.bubblePresenter = nil;
-}
-
 #pragma mark - FormInputAccessoryMediatorHandler
 
 - (void)resetFormInputView {
   [self reset];
 }
 
-- (void)notifyPasswordSuggestionsShown {
-  // The engagement tracker can change during testing (in feature engagement app
-  // interface), therefore we retrive it here instead of storing it in the
-  // mediator.
-  feature_engagement::Tracker* tracker = self.featureEngagementTracker;
-  if (tracker) {
-    tracker->NotifyEvent(feature_engagement::events::kPasswordSuggestionsShown);
-  }
-}
-
-- (void)notifyPasswordSuggestionSelected {
+- (void)notifyAutofillSuggestionWithIPHSelected {
   // The engagement tracker can change during testing (in feature engagement app
   // interface), therefore we retrive it here instead of storing it in the
   // mediator.
   feature_engagement::Tracker* tracker = self.featureEngagementTracker;
   if (tracker) {
     tracker->NotifyEvent(
-        feature_engagement::events::kPasswordSuggestionSelected);
+        "autofill_external_account_profile_suggestion_accepted");
   }
 }
 
-- (void)showPasswordSuggestionIPHIfNeeded {
-  DCHECK(base::FeatureList::IsEnabled(kBubbleRichIPH));
+- (void)showAutofillSuggestionIPHIfNeeded {
   if (self.bubblePresenter) {
     // Already showing a bubble.
     return;
   }
 
   __weak __typeof(self) weakSelf = self;
-  base::SequencedTaskRunnerHandle::Get()->PostDelayedTask(
+  base::SequencedTaskRunner::GetCurrentDefault()->PostDelayedTask(
       FROM_HERE, base::BindOnce(^{
         [weakSelf tryPresentingBubble];
       }),
-      kPasswordSuggestionHighlightDelay);
+      kAutofillSuggestionHighlightDelay);
 }
 
 #pragma mark - ManualFillAccessoryViewControllerDelegate
@@ -403,12 +373,29 @@ BubbleViewType BubbleTypeFromFeature() {
 
 #pragma mark - PasswordCoordinatorDelegate
 
-- (void)openPasswordSettings {
+- (void)openPasswordManager {
   [self reset];
-  [self.navigator openPasswordSettings];
+  [self.navigator openPasswordManager];
+
+  // The keyboard and keyboard accessory unexpectedly appear after
+  // authentication when entering the Password Manager. Resigning the first
+  // responder here fixes the issue without removing the focus on the underlying
+  // web view's field. See crbug.com/1494929.
+  if (password_manager::features::IsAuthOnEntryEnabled() ||
+      password_manager::features::IsAuthOnEntryV2Enabled()) {
+    [GetFirstResponder() resignFirstResponder];
+  }
+
   UMA_HISTOGRAM_ENUMERATION(
       "PasswordManager.ManagePasswordsReferrer",
       password_manager::ManagePasswordsReferrer::kPasswordsAccessorySheet);
+  base::RecordAction(
+      base::UserMetricsAction("MobileKeyboardAccessoryOpenPasswordManager"));
+}
+
+- (void)openPasswordSettings {
+  [self reset];
+  [self.navigator openPasswordSettings];
 }
 
 - (void)openAllPasswordsPicker {
@@ -528,7 +515,25 @@ BubbleViewType BubbleTypeFromFeature() {
   return nil;
 }
 
+#pragma mark - Actions
+
+- (void)tapInsideRecognized:(id)sender {
+  [self.bubblePresenter dismissAnimated:YES];
+  self.bubblePresenter = nil;
+}
+
 #pragma mark - Private
+
+- (void)stopManualFillAllPasswordCoordinator {
+  [self.allPasswordCoordinator stop];
+  self.allPasswordCoordinator.manualFillAllPasswordCoordinatorDelegate = nil;
+  self.allPasswordCoordinator = nil;
+}
+
+- (void)dismissAlertCoordinator {
+  [self.alertCoordinator stop];
+  self.alertCoordinator = nil;
+}
 
 - (ChromeBrowserState*)browserState {
   return self.browser ? self.browser->GetBrowserState() : nullptr;
@@ -536,24 +541,13 @@ BubbleViewType BubbleTypeFromFeature() {
 
 - (feature_engagement::Tracker*)featureEngagementTracker {
   ChromeBrowserState* browserState = self.browserState;
-  if (!browserState)
+  if (!browserState) {
     return nullptr;
+  }
   feature_engagement::Tracker* tracker =
       feature_engagement::TrackerFactory::GetForBrowserState(browserState);
-  DCHECK(tracker);
+  CHECK(tracker);
   return tracker;
-}
-
-- (LayoutGuideCenter*)layoutGuideCenter {
-  SceneState* sceneState =
-      SceneStateBrowserAgent::FromBrowser(self.browser)->GetSceneState();
-  LayoutGuideSceneAgent* layoutGuideSceneAgent =
-      [LayoutGuideSceneAgent agentFromScene:sceneState];
-  if (self.browserState && self.browserState->IsOffTheRecord()) {
-    return layoutGuideSceneAgent.incognitoLayoutGuideCenter;
-  } else {
-    return layoutGuideSceneAgent.layoutGuideCenter;
-  }
 }
 
 // Shows confirmation dialog before opening Other passwords.
@@ -562,21 +556,25 @@ BubbleViewType BubbleTypeFromFeature() {
   const GURL& URL = webStateList->GetActiveWebState()->GetLastCommittedURL();
   std::u16string origin = base::ASCIIToUTF16(
       password_manager::GetShownOrigin(url::Origin::Create(URL)));
-  NSString* title =
-      l10n_util::GetNSString(IDS_IOS_CONFIRM_USING_OTHER_PASSWORD_TITLE);
+
+  NSString* title = l10n_util::GetNSString(
+      IDS_IOS_MANUAL_FALLBACK_SELECT_PASSWORD_DIALOG_TITLE);
   NSString* message = l10n_util::GetNSStringF(
-      IDS_IOS_CONFIRM_USING_OTHER_PASSWORD_DESCRIPTION, origin);
+      IDS_IOS_MANUAL_FALLBACK_SELECT_PASSWORD_DIALOG_MESSAGE, origin);
 
   self.alertCoordinator = [[AlertCoordinator alloc]
       initWithBaseViewController:self.baseViewController
                          browser:self.browser
                            title:title
                          message:message];
+  [self.childCoordinators addObject:self.alertCoordinator];
 
   __weak __typeof__(self) weakSelf = self;
 
   [self.alertCoordinator addItemWithTitle:l10n_util::GetNSString(IDS_CANCEL)
-                                   action:nil
+                                   action:^{
+                                     [weakSelf dismissAlertCoordinator];
+                                   }
                                     style:UIAlertActionStyleCancel];
 
   NSString* actionTitle =
@@ -584,6 +582,7 @@ BubbleViewType BubbleTypeFromFeature() {
   [self.alertCoordinator addItemWithTitle:actionTitle
                                    action:^{
                                      [weakSelf showAllPasswords];
+                                     [weakSelf dismissAlertCoordinator];
                                    }
                                     style:UIAlertActionStyleDefault];
 
@@ -597,6 +596,7 @@ BubbleViewType BubbleTypeFromFeature() {
       initWithBaseViewController:self.baseViewController
                          browser:self.browser
                 injectionHandler:self.injectionHandler];
+  self.allPasswordCoordinator.manualFillAllPasswordCoordinatorDelegate = self;
   [self.allPasswordCoordinator start];
 }
 
@@ -604,16 +604,14 @@ BubbleViewType BubbleTypeFromFeature() {
 - (BubbleViewControllerPresenter*)newBubbleViewControllerPresenter {
   // Prepare the main arguments for the BubbleViewControllerPresenter
   // initializer.
-  NSString* text = l10n_util::GetNSString(IDS_IOS_PASSWORD_SUGGESTIONS_TIP);
-  NSString* title =
-      l10n_util::GetNSString(IDS_IOS_PASSWORD_SUGGESTIONS_TIP_TITLE);
-  UIImage* image = [UIImage imageNamed:@"password_suggestion_icon"];
-  BubbleViewType bubbleType = BubbleTypeFromFeature();
+  NSString* text = l10n_util::GetNSString(
+      IDS_AUTOFILL_IPH_EXTERNAL_ACCOUNT_PROFILE_SUGGESTION);
 
   // Prepare the dismissal callback.
   __weak __typeof(self) weakSelf = self;
-  ProceduralBlockWithSnoozeAction dismissalCallback =
-      ^(feature_engagement::Tracker::SnoozeAction snoozeAction) {
+  CallbackWithIPHDismissalReasonType dismissalCallback =
+      ^(IPHDismissalReasonType IPHDismissalReasonType,
+        feature_engagement::Tracker::SnoozeAction snoozeAction) {
         [weakSelf IPHDidDismissWithSnoozeAction:snoozeAction];
       };
 
@@ -621,26 +619,15 @@ BubbleViewType BubbleTypeFromFeature() {
   BubbleViewControllerPresenter* bubbleViewControllerPresenter =
       [[BubbleViewControllerPresenter alloc]
                initWithText:text
-                      title:title
-                      image:image
+                      title:nil
+                      image:nil
              arrowDirection:BubbleArrowDirectionDown
-                  alignment:BubbleAlignmentLeading
-                 bubbleType:bubbleType
+                  alignment:BubbleAlignmentTopOrLeading
+                 bubbleType:BubbleViewTypeWithClose
           dismissalCallback:dismissalCallback];
-  bubbleViewControllerPresenter.voiceOverAnnouncement =
-      l10n_util::GetNSString(IDS_IOS_PASSWORD_SUGGESTIONS_TIP_VOICEOVER);
+  bubbleViewControllerPresenter.voiceOverAnnouncement = l10n_util::GetNSString(
+      IDS_AUTOFILL_IPH_EXTERNAL_ACCOUNT_PROFILE_SUGGESTION);
   return bubbleViewControllerPresenter;
-}
-
-- (void)IPHDidDismissWithSnoozeAction:
-    (feature_engagement::Tracker::SnoozeAction)snoozeAction {
-  feature_engagement::Tracker* tracker = self.featureEngagementTracker;
-  if (tracker) {
-    const base::Feature& feature =
-        feature_engagement::kIPHPasswordSuggestionsFeature;
-    tracker->DismissedWithSnooze(feature, snoozeAction);
-  }
-  self.bubblePresenter = nil;
 }
 
 // Checks if the bubble should be presented and acts on it.
@@ -663,22 +650,30 @@ BubbleViewType BubbleTypeFromFeature() {
   // Early return if the engagement tracker won't display the IPH.
   feature_engagement::Tracker* tracker = self.featureEngagementTracker;
   const base::Feature& feature =
-      feature_engagement::kIPHPasswordSuggestionsFeature;
+      feature_engagement::kIPHAutofillExternalAccountProfileSuggestionFeature;
   if (!tracker || !tracker->ShouldTriggerHelpUI(feature)) {
     return;
   }
 
-  // Show the highlight suggestion now.
-  [self.formInputAccessoryViewController animateSuggestionLabel];
-
   // Present the bubble after the delay.
   self.bubblePresenter = bubblePresenter;
   __weak __typeof(self) weakSelf = self;
-  base::SequencedTaskRunnerHandle::Get()->PostDelayedTask(
+  base::SequencedTaskRunner::GetCurrentDefault()->PostDelayedTask(
       FROM_HERE, base::BindOnce(^{
         [weakSelf presentBubbleAtAnchorPoint:anchorPoint];
       }),
-      kPasswordSuggestionTipDelay);
+      kAutofillSuggestionTipDelay);
+}
+
+- (void)IPHDidDismissWithSnoozeAction:
+    (feature_engagement::Tracker::SnoozeAction)snoozeAction {
+  feature_engagement::Tracker* tracker = self.featureEngagementTracker;
+  if (tracker) {
+    const base::Feature& feature =
+        feature_engagement::kIPHAutofillExternalAccountProfileSuggestionFeature;
+    tracker->DismissedWithSnooze(feature, snoozeAction);
+  }
+  self.bubblePresenter = nil;
 }
 
 // Actually presents the bubble.
@@ -686,6 +681,13 @@ BubbleViewType BubbleTypeFromFeature() {
   [self.bubblePresenter presentInViewController:self.baseViewController
                                            view:self.baseViewController.view
                                     anchorPoint:anchorPoint];
+}
+
+#pragma mark - ManualFillAllPasswordCoordinatorDelegate
+
+- (void)manualFillAllPasswordCoordinatorWantsToBeDismissed:
+    (ManualFillAllPasswordCoordinator*)coordinator {
+  [self stopManualFillAllPasswordCoordinator];
 }
 
 @end

@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,7 @@
 #include <algorithm>
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "net/base/io_buffer.h"
 #include "net/base/net_errors.h"
 #include "storage/browser/file_system/file_system_backend.h"
@@ -23,8 +23,8 @@ BufferingFileStreamReader::BufferingFileStreamReader(
       preloading_buffer_length_(preloading_buffer_length),
       max_bytes_to_read_(max_bytes_to_read),
       bytes_read_(0),
-      preloading_buffer_(
-          base::MakeRefCounted<net::IOBuffer>(preloading_buffer_length)),
+      preloading_buffer_(base::MakeRefCounted<net::IOBufferWithSize>(
+          preloading_buffer_length)),
       preloading_buffer_offset_(0),
       preloaded_bytes_(0) {}
 

@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,10 +10,6 @@
 
 #include "extensions/common/extension.h"
 #include "extensions/common/manifest_handler.h"
-
-namespace base {
-class DictionaryValue;
-}
 
 namespace extensions {
 
@@ -51,7 +47,6 @@ struct ManifestURL : public Extension::ManifestData {
 
   // Returns true if this extension's update URL is the extension gallery.
   static bool UpdatesFromGallery(const Extension* extension);
-  static bool UpdatesFromGallery(const base::DictionaryValue* manifest);
 
   // Returns the About Page for this extension.
   static const GURL& GetAboutPage(const Extension* extension);

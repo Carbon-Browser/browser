@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -184,7 +184,7 @@ class NetErrorTabHelperTest : public ChromeRenderViewHostTestHarness {
   TestNetErrorTabHelper* tab_helper() { return tab_helper_.get(); }
 
  private:
-  raw_ptr<content::RenderFrameHost> subframe_;
+  raw_ptr<content::RenderFrameHost, DanglingUntriaged> subframe_;
   std::unique_ptr<TestNetErrorTabHelper> tab_helper_;
   GURL bogus_url_;
 };

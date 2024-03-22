@@ -1,17 +1,26 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "third_party/blink/renderer/modules/service_worker/service_worker_event_queue.h"
 
-#include "base/bind.h"
 #include "base/containers/contains.h"
+#include "base/feature_list.h"
+#include "base/functional/bind.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/time/default_tick_clock.h"
 #include "base/time/time.h"
 #include "third_party/blink/public/mojom/service_worker/service_worker_event_status.mojom-blink.h"
 #include "third_party/blink/renderer/platform/wtf/functional.h"
 
 namespace blink {
+
+// This feature flag enables a new behavior that waits
+// processing events until the top-level script is evaluated.
+// See: https://crbug.com/1462568
+BASE_FEATURE(kServiceWorkerEventQueueWaitForScriptEvaluation,
+             "ServiceWorkerEventQueueWaitForScriptEvaluation",
+             base::FEATURE_ENABLED_BY_DEFAULT);
 
 // static
 constexpr base::TimeDelta ServiceWorkerEventQueue::kEventTimeout;
@@ -54,7 +63,12 @@ ServiceWorkerEventQueue::ServiceWorkerEventQueue(
     : task_runner_(std::move(task_runner)),
       before_start_event_callback_(std::move(before_start_event_callback)),
       idle_callback_(std::move(idle_callback)),
-      tick_clock_(tick_clock) {}
+      tick_clock_(tick_clock) {
+  if (!base::FeatureList::IsEnabled(
+          kServiceWorkerEventQueueWaitForScriptEvaluation)) {
+    is_ready_for_processing_events_ = true;
+  }
+}
 
 ServiceWorkerEventQueue::~ServiceWorkerEventQueue() {
   // Abort all callbacks.
@@ -66,13 +80,18 @@ ServiceWorkerEventQueue::~ServiceWorkerEventQueue() {
 
 void ServiceWorkerEventQueue::Start() {
   DCHECK(!timer_.IsRunning());
-  if (!HasInflightEvent() && !HasScheduledIdleCallback()) {
-    // If no event happens until Start(), the idle callback should be scheduled.
-    OnNoInflightEvent();
-  }
   timer_.Start(FROM_HERE, kUpdateInterval,
                WTF::BindRepeating(&ServiceWorkerEventQueue::UpdateStatus,
                                   WTF::Unretained(this)));
+  if (base::FeatureList::IsEnabled(
+          kServiceWorkerEventQueueWaitForScriptEvaluation)) {
+    is_ready_for_processing_events_ = true;
+    ResetIdleTimeout();
+    ProcessEvents();
+  } else if (!HasInflightEvent() && !HasScheduledIdleCallback()) {
+    // If no event happens until Start(), the idle callback should be scheduled.
+    OnNoInflightEvent();
+  }
 }
 
 void ServiceWorkerEventQueue::EnqueueNormal(
@@ -135,8 +154,9 @@ void ServiceWorkerEventQueue::EnqueueEvent(std::unique_ptr<Event> event) {
   DCHECK(!HasEvent(event->event_id));
   DCHECK(!HasEventInQueue(event->event_id));
 
-  bool can_start_processing_events =
-      !processing_events_ && event->type != Event::Type::Pending;
+  bool can_start_processing_events = is_ready_for_processing_events_ &&
+                                     !processing_events_ &&
+                                     event->type != Event::Type::Pending;
 
   // Start counting the timer when an event is enqueued.
   all_events_.insert(
@@ -144,7 +164,7 @@ void ServiceWorkerEventQueue::EnqueueEvent(std::unique_ptr<Event> event) {
       std::make_unique<EventInfo>(
           tick_clock_->NowTicks() +
               event->custom_timeout.value_or(kEventTimeout),
-          WTF::Bind(std::move(event->abort_callback), event->event_id)));
+          WTF::BindOnce(std::move(event->abort_callback), event->event_id)));
 
   auto& queue = event->type == Event::Type::Offline ? queued_offline_events_
                                                     : queued_online_events_;
@@ -158,6 +178,8 @@ void ServiceWorkerEventQueue::EnqueueEvent(std::unique_ptr<Event> event) {
 }
 
 void ServiceWorkerEventQueue::ProcessEvents() {
+  // TODO(crbug.com/1462568): Switch to CHECK once we resolve the bug.
+  DCHECK(is_ready_for_processing_events_);
   DCHECK(!processing_events_);
   processing_events_ = true;
   auto& queue = GetActiveEventQueue();
@@ -199,7 +221,7 @@ void ServiceWorkerEventQueue::EndEvent(int event_id) {
 }
 
 bool ServiceWorkerEventQueue::HasEvent(int event_id) const {
-  return all_events_.find(event_id) != all_events_.end();
+  return base::Contains(all_events_, event_id);
 }
 
 bool ServiceWorkerEventQueue::HasEventInQueue(int event_id) const {
@@ -245,6 +267,12 @@ void ServiceWorkerEventQueue::SetIdleDelay(base::TimeDelta idle_delay) {
 
   // Let's schedule the idle callback in |delta_until_idle|.
   ScheduleIdleCallback(delta_until_idle);
+}
+
+void ServiceWorkerEventQueue::CheckEventQueue() {
+  if (!HasInflightEvent()) {
+    OnNoInflightEvent();
+  }
 }
 
 void ServiceWorkerEventQueue::UpdateStatus() {
@@ -300,8 +328,8 @@ void ServiceWorkerEventQueue::ScheduleIdleCallback(base::TimeDelta delay) {
   // before |this| is destroyed at ServiceWorkerGlobalScope::Dispose().
   idle_callback_handle_ = PostDelayedCancellableTask(
       *task_runner_, FROM_HERE,
-      WTF::Bind(&ServiceWorkerEventQueue::TriggerIdleCallback,
-                WTF::Unretained(this)),
+      WTF::BindOnce(&ServiceWorkerEventQueue::TriggerIdleCallback,
+                    WTF::Unretained(this)),
       delay);
 }
 

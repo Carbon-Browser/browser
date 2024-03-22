@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -22,16 +22,13 @@ import org.robolectric.annotation.Config;
 
 import org.chromium.base.test.BaseRobolectricTestRunner;
 
-/**
- * Unit tests for {@link TabSwitcherCustomViewManager}.
- */
+/** Unit tests for {@link TabSwitcherCustomViewManager}. */
 @RunWith(BaseRobolectricTestRunner.class)
 @Config(manifest = Config.NONE)
 public class TabSwitcherCustomViewManagerUnitTest {
-    @Mock
-    private TabSwitcherCustomViewManager.Delegate mDelegate;
-    @Mock
-    private View mView;
+    @Mock private TabSwitcherCustomViewManager.Delegate mDelegate;
+    @Mock private View mView;
+    @Mock private Runnable mBackPressRunnableMock;
 
     private TabSwitcherCustomViewManager mTabSwitcherCustomViewManager;
 
@@ -49,18 +46,24 @@ public class TabSwitcherCustomViewManagerUnitTest {
     @Test
     @SmallTest
     public void testRequestView_InvokesDelegateAddingView() {
-        doNothing().when(mDelegate).addCustomView(mView);
-        mTabSwitcherCustomViewManager.requestView(mView);
-        verify(mDelegate).addCustomView(mView);
+        doNothing()
+                .when(mDelegate)
+                .addCustomView(mView, mBackPressRunnableMock, /* clearTabList= */ true);
+        mTabSwitcherCustomViewManager.requestView(
+                mView, mBackPressRunnableMock, /* clearTabList= */ true);
+        verify(mDelegate).addCustomView(mView, mBackPressRunnableMock, /* clearTabList= */ true);
     }
 
     @Test
     @SmallTest
     public void testReleaseView_InvokesDelegateRemoveView() {
         // Add the view.
-        doNothing().when(mDelegate).addCustomView(mView);
-        mTabSwitcherCustomViewManager.requestView(mView);
-        verify(mDelegate).addCustomView(mView);
+        doNothing()
+                .when(mDelegate)
+                .addCustomView(mView, mBackPressRunnableMock, /* clearTabList= */ true);
+        mTabSwitcherCustomViewManager.requestView(
+                mView, mBackPressRunnableMock, /* clearTabList= */ true);
+        verify(mDelegate).addCustomView(mView, mBackPressRunnableMock, /* clearTabList= */ true);
 
         // Release the view.
         doNothing().when(mDelegate).removeCustomView(mView);
@@ -71,12 +74,16 @@ public class TabSwitcherCustomViewManagerUnitTest {
     @Test(expected = AssertionError.class)
     @SmallTest
     public void testMultipleRequestView_withoutRelease_throwsError() {
-        doNothing().when(mDelegate).addCustomView(mView);
-        mTabSwitcherCustomViewManager.requestView(mView);
-        verify(mDelegate).addCustomView(mView);
+        doNothing()
+                .when(mDelegate)
+                .addCustomView(mView, mBackPressRunnableMock, /* clearTabList= */ true);
+        mTabSwitcherCustomViewManager.requestView(
+                mView, mBackPressRunnableMock, /* clearTabList= */ true);
+        verify(mDelegate).addCustomView(mView, mBackPressRunnableMock, /* clearTabList= */ true);
 
         // This should throw an error because we have not release the view yet.
-        mTabSwitcherCustomViewManager.requestView(mView);
+        mTabSwitcherCustomViewManager.requestView(
+                mView, mBackPressRunnableMock, /* clearTabList= */ true);
     }
 
     @Test(expected = AssertionError.class)

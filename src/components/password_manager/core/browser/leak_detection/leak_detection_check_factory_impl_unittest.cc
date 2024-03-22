@@ -1,14 +1,12 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "components/password_manager/core/browser/leak_detection/leak_detection_check_factory_impl.h"
 
-#include "base/test/scoped_feature_list.h"
 #include "base/test/task_environment.h"
 #include "components/password_manager/core/browser/leak_detection/leak_detection_check.h"
 #include "components/password_manager/core/browser/leak_detection/mock_leak_detection_delegate.h"
-#include "components/password_manager/core/common/password_manager_features.h"
 #include "components/signin/public/identity_manager/identity_test_environment.h"
 #include "components/version_info/channel.h"
 #include "services/network/public/cpp/shared_url_loader_factory.h"
@@ -50,15 +48,6 @@ class LeakDetectionCheckFactoryImplTest : public testing::Test {
 }  // namespace
 
 TEST_F(LeakDetectionCheckFactoryImplTest, SignedOut) {
-  EXPECT_CALL(delegate(), OnError(LeakDetectionError::kNotSignIn));
-  EXPECT_FALSE(request_factory().TryCreateLeakCheck(
-      &delegate(), identity_env().identity_manager(), url_loader_factory(),
-      kChannel));
-}
-
-TEST_F(LeakDetectionCheckFactoryImplTest, SignedOutWithFeatureEnabled) {
-  base::test::ScopedFeatureList feature_list;
-  feature_list.InitAndEnableFeature(features::kLeakDetectionUnauthenticated);
   EXPECT_TRUE(request_factory().TryCreateLeakCheck(
       &delegate(), identity_env().identity_manager(), url_loader_factory(),
       kChannel));

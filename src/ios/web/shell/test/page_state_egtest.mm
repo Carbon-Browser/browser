@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,29 +6,24 @@
 #import <Foundation/Foundation.h>
 #import <XCTest/XCTest.h>
 
-#include "base/strings/string_number_conversions.h"
-#include "base/strings/sys_string_conversions.h"
+#import "base/strings/string_number_conversions.h"
+#import "base/strings/sys_string_conversions.h"
 #import "ios/testing/earl_grey/earl_grey_test.h"
 #import "ios/web/shell/test/earl_grey/shell_earl_grey.h"
 #import "ios/web/shell/test/earl_grey/shell_matchers.h"
 #import "ios/web/shell/test/earl_grey/web_shell_test_case.h"
-#include "net/test/embedded_test_server/embedded_test_server.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
+#import "net/test/embedded_test_server/embedded_test_server.h"
 
 namespace {
 
-const char kLongPage1[] = "/ios/testing/data/http_server_files/tall_page.html";
-const char kLongPage2[] =
-    "/ios/testing/data/http_server_files/tall_page.html?2";
+const char kLongPage1[] = "/tall_page.html";
+const char kLongPage2[] = "/tall_page.html?2";
 
 // Test scroll offsets.
 const CGFloat kOffset1 = 20.0f;
 const CGFloat kOffset2 = 40.0f;
 
-// Waits for the web view scroll view is scrolled to |y_offset|.
+// Waits for the web view scroll view is scrolled to `y_offset`.
 void WaitForOffset(CGFloat y_offset) {
   CGPoint offset = CGPointMake(0.0, y_offset);
   NSString* content_offset_string = NSStringFromCGPoint(offset);
@@ -51,7 +46,7 @@ void WaitForOffset(CGFloat y_offset) {
   GREYAssert([condition waitWithTimeout:10], error_text);
 }
 
-// Loads the long page at |url|, scrolls to the top, and waits for the offset to
+// Loads the long page at `url`, scrolls to the top, and waits for the offset to
 // be {0, 0} before returning.
 void ScrollLongPageToTop(const GURL& url) {
   // Load the page and swipe down.
@@ -65,37 +60,25 @@ void ScrollLongPageToTop(const GURL& url) {
 }  // namespace
 
 // Page state test cases for the web shell.
-@interface PageStateTestCase : WebShellTestCase {
-  net::EmbeddedTestServer _server;
-}
+@interface PageStateTestCase : WebShellTestCase
 @end
 
 @implementation PageStateTestCase
-
-- (void)setUp {
-  [super setUp];
-
-  NSString* bundlePath = [NSBundle bundleForClass:[self class]].resourcePath;
-  _server.ServeFilesFromDirectory(
-      base::FilePath(base::SysNSStringToUTF8(bundlePath)));
-  GREYAssert(_server.Start(), @"EmbeddedTestServer failed to start.");
-}
 
 // Tests that page scroll position of a page is restored upon returning to the
 // page via the back/forward buttons.
 // grey_scrollInDirection scrolls incorrect distance on iOS 13.
 // TODO(crbug.com/983144): Enable this test on iOS 13.
-
 - (void)DISABLED_testScrollPositionRestoring {
   // Scroll the first page and verify the offset.
-  ScrollLongPageToTop(_server.GetURL(kLongPage1));
+  ScrollLongPageToTop(self.testServer->GetURL(kLongPage1));
   [[EarlGrey selectElementWithMatcher:web::WebViewScrollView()]
       performAction:grey_scrollInDirection(kGREYDirectionDown, kOffset1)];
   [[EarlGrey selectElementWithMatcher:web::WebViewScrollView()]
       assertWithMatcher:grey_scrollViewContentOffset(CGPointMake(0, kOffset1))];
 
   // Scroll the second page and verify the offset.
-  ScrollLongPageToTop(_server.GetURL(kLongPage2));
+  ScrollLongPageToTop(self.testServer->GetURL(kLongPage2));
   [[EarlGrey selectElementWithMatcher:web::WebViewScrollView()]
       performAction:grey_scrollInDirection(kGREYDirectionDown, kOffset2)];
   [[EarlGrey selectElementWithMatcher:web::WebViewScrollView()]
@@ -116,7 +99,7 @@ void ScrollLongPageToTop(const GURL& url) {
 // load.
 - (void)testZeroContentOffsetAfterLoad {
   // Set up the file-based server to load the tall page.
-  const GURL baseURL = _server.GetURL(kLongPage1);
+  const GURL baseURL = self.testServer->GetURL(kLongPage1);
   [ShellEarlGrey loadURL:baseURL];
 
   // Scroll the page and load again to verify that the new page's scroll offset

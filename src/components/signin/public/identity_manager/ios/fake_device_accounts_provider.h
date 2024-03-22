@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -29,9 +29,6 @@ class FakeDeviceAccountsProvider : public DeviceAccountsProvider {
                       const std::set<std::string>& scopes,
                       AccessTokenCallback callback) override;
   std::vector<AccountInfo> GetAllAccounts() const override;
-  AuthenticationErrorCategory GetAuthenticationErrorCategory(
-      const std::string& gaia_id,
-      NSError* error) const override;
 
   // Methods to configure this fake provider.
   AccountInfo AddAccount(const std::string& gaia, const std::string& email);

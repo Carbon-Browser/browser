@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -64,7 +64,7 @@ EventTraceData EventTraceData::Create(EVENT_TRACE* event) {
   FILETIME event_time = {};
   event_time.dwLowDateTime = event->Header.TimeStamp.LowPart;
   event_time.dwHighDateTime = event->Header.TimeStamp.HighPart;
-  base::Time::FromFileTime(event_time).LocalExplode(&data.time_stamp);
+  data.time_stamp = base::Time::FromFileTime(event_time);
 
   // Parse the MofData.  The structure is defined in //base/logging_win.cc.
   // - For LOG_MESSAGE events, the MofData buffer just contains the message.

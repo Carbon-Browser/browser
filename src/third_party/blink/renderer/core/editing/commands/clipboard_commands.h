@@ -25,7 +25,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -77,6 +77,10 @@ class ClipboardCommands {
                                         Event*,
                                         EditorCommandSource,
                                         const String&);
+  static bool ExecutePasteFromImageURL(LocalFrame&,
+                                       Event*,
+                                       EditorCommandSource,
+                                       const String&);
 
   static bool PasteSupported(LocalFrame*);
 
@@ -109,6 +113,7 @@ class ClipboardCommands {
                               EditorCommandSource);
   static void PasteAsPlainTextFromClipboard(LocalFrame&, EditorCommandSource);
   static void PasteFromClipboard(LocalFrame&, EditorCommandSource);
+  static void PasteFromImageURL(LocalFrame&, EditorCommandSource, String);
 
   using FragmentAndPlainText = std::pair<DocumentFragment*, const bool>;
   static FragmentAndPlainText GetFragmentFromClipboard(LocalFrame&);

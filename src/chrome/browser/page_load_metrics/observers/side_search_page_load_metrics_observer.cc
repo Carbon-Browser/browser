@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -48,6 +48,20 @@ SideSearchPageLoadMetricsObserver::OnFencedFramesStart(
   // This class is interested only in events that are preprocessed and
   // dispatched also to the outermost page at PageLoadTracker. So, this class
   // doesn't need to forward events for FencedFrames.
+  return STOP_OBSERVING;
+}
+
+page_load_metrics::PageLoadMetricsObserver::ObservePolicy
+SideSearchPageLoadMetricsObserver::OnPrerenderStart(
+    content::NavigationHandle* navigation_handle,
+    const GURL& currently_committed_url) {
+  // There is no prerendering trigger for contents in the side panel.
+
+  // Note that here is not reachable because this class is only registered for
+  // the WebContents of the side panel. Especially, the navigation is not
+  // prerendering. See
+  // chrome/browser/page_load_metrics/page_load_metrics_initialize.cc
+  NOTREACHED();
   return STOP_OBSERVING;
 }
 

@@ -283,6 +283,40 @@ constexpr WebCryptoAlgorithmInfo kAlgorithmIdToInfo[] = {
          WebCryptoAlgorithmInfo::kUndefined,         // WrapKey
          WebCryptoAlgorithmInfo::kUndefined          // UnwrapKey
      }},
+    {// Index 16
+     // TODO(crbug.com/1370697): Ed25519 is experimental behind a flag. See
+     // https://chromestatus.com/feature/4913922408710144 for the status.
+     "Ed25519",
+     {
+         WebCryptoAlgorithmInfo::kUndefined,  // Encrypt
+         WebCryptoAlgorithmInfo::kUndefined,  // Decrypt
+         kWebCryptoAlgorithmParamsTypeNone,   // Sign
+         kWebCryptoAlgorithmParamsTypeNone,   // Verify
+         WebCryptoAlgorithmInfo::kUndefined,  // Digest
+         kWebCryptoAlgorithmParamsTypeNone,   // GenerateKey
+         kWebCryptoAlgorithmParamsTypeNone,   // ImportKey
+         WebCryptoAlgorithmInfo::kUndefined,  // GetKeyLength
+         WebCryptoAlgorithmInfo::kUndefined,  // DeriveBits
+         WebCryptoAlgorithmInfo::kUndefined,  // WrapKey
+         WebCryptoAlgorithmInfo::kUndefined   // UnwrapKey
+     }},
+    {// Index 17
+     // TODO(crbug.com/1370697): X25519 is experimental behind a flag. See
+     // https://chromestatus.com/feature/4913922408710144 for the status.
+     "X25519",
+     {
+         WebCryptoAlgorithmInfo::kUndefined,                // Encrypt
+         WebCryptoAlgorithmInfo::kUndefined,                // Decrypt
+         WebCryptoAlgorithmInfo::kUndefined,                // Sign
+         WebCryptoAlgorithmInfo::kUndefined,                // Verify
+         WebCryptoAlgorithmInfo::kUndefined,                // Digest
+         kWebCryptoAlgorithmParamsTypeNone,                 // GenerateKey
+         kWebCryptoAlgorithmParamsTypeNone,                 // ImportKey
+         WebCryptoAlgorithmInfo::kUndefined,                // GetKeyLength
+         kWebCryptoAlgorithmParamsTypeEcdhKeyDeriveParams,  // DeriveBits
+         WebCryptoAlgorithmInfo::kUndefined,                // WrapKey
+         WebCryptoAlgorithmInfo::kUndefined                 // UnwrapKey
+     }},
 };
 
 // Initializing the algorithmIdToInfo table above depends on knowing the enum
@@ -305,7 +339,9 @@ static_assert(kWebCryptoAlgorithmIdEcdsa == 12, "ECDSA id must match");
 static_assert(kWebCryptoAlgorithmIdEcdh == 13, "ECDH id must match");
 static_assert(kWebCryptoAlgorithmIdHkdf == 14, "HKDF id must match");
 static_assert(kWebCryptoAlgorithmIdPbkdf2 == 15, "Pbkdf2 id must match");
-static_assert(kWebCryptoAlgorithmIdLast == 15, "last id must match");
+static_assert(kWebCryptoAlgorithmIdEd25519 == 16, "Ed25519 id must match");
+static_assert(kWebCryptoAlgorithmIdX25519 == 17, "X25519 id must match");
+static_assert(kWebCryptoAlgorithmIdLast == 17, "last id must match");
 static_assert(10 == kWebCryptoOperationLast,
               "the parameter mapping needs to be updated");
 
@@ -505,6 +541,8 @@ bool WebCryptoAlgorithm::IsHash(WebCryptoAlgorithmId id) {
     case kWebCryptoAlgorithmIdEcdh:
     case kWebCryptoAlgorithmIdHkdf:
     case kWebCryptoAlgorithmIdPbkdf2:
+    case kWebCryptoAlgorithmIdEd25519:
+    case kWebCryptoAlgorithmIdX25519:
       break;
   }
   return false;
@@ -529,6 +567,8 @@ bool WebCryptoAlgorithm::IsKdf(WebCryptoAlgorithmId id) {
     case kWebCryptoAlgorithmIdRsaPss:
     case kWebCryptoAlgorithmIdEcdsa:
     case kWebCryptoAlgorithmIdEcdh:
+    case kWebCryptoAlgorithmIdEd25519:
+    case kWebCryptoAlgorithmIdX25519:
       break;
   }
   return false;

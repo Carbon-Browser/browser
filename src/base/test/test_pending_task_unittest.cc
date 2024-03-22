@@ -1,10 +1,10 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "base/test/test_pending_task.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/trace_event/base_tracing.h"
 #include "base/tracing_buildflags.h"
 #include "testing/gmock/include/gmock/gmock.h"

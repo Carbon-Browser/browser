@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,7 +12,7 @@ import 'chrome://resources/cr_elements/cr_tree/cr_tree_item.js';
 
 import {CrTreeElement} from 'chrome://resources/cr_elements/cr_tree/cr_tree.js';
 import {CrTreeItemElement} from 'chrome://resources/cr_elements/cr_tree/cr_tree_item.js';
-import {assert} from 'chrome://resources/js/assert_ts.js';
+import {assert} from 'chrome://resources/js/assert.js';
 
 import {UsbControlTransferParams, UsbControlTransferRecipient, UsbControlTransferType, UsbDeviceInterface, UsbTransferStatus} from './usb_device.mojom-webui.js';
 
@@ -2342,19 +2342,18 @@ export class DescriptorPanel {
         const index = getRequestIndex(row, i);
         const dataLength = getRequestLength(row, i);
 
-        if (this.checkEnumParamValid_(
-                type, 'Transfer Type', UsbControlTransferType) &&
-            this.checkEnumParamValid_(
-                recipient, 'Transfer Recipient', UsbControlTransferRecipient) &&
+        const transferType = this.convertStringToTransferType_(type);
+        const transferRecipient =
+            this.convertStringToTransferRecipient_(recipient);
+
+        if (transferType !== null && transferRecipient !== null &&
             this.checkParamValid_(request, 'Transfer Request', 0, 255) &&
             this.checkParamValid_(value, 'wValue', 0, 65535) &&
             this.checkParamValid_(index, 'wIndex', 0, 65535) &&
             this.checkParamValid_(dataLength, 'Length', 0, 65535)) {
           const usbControlTransferParams: UsbControlTransferParams = {
-            type: (UsbControlTransferType as {[key: string]: number})[type]!,
-            recipient:
-                (UsbControlTransferRecipient as
-                 {[key: string]: number})[recipient]!,
+            type: transferType,
+            recipient: transferRecipient,
             request,
             value,
             index,
@@ -2379,17 +2378,40 @@ export class DescriptorPanel {
     return true;
   }
 
-  /**
-   * Checks if the user input for a enum field is valid.
-   */
-  private checkEnumParamValid_(
-      enumString: string|number, paramName: string,
-      enumObject: {[key: string]: number|string}): boolean {
-    if (enumObject[enumString] !== undefined) {
-      return true;
+  private convertStringToTransferType_(enumString: string):
+      UsbControlTransferType|null {
+    if (enumString === 'STANDARD') {
+      return UsbControlTransferType.STANDARD;
     }
-    showError(`Invalid ${paramName}`, this.rootElement_);
-    return false;
+    if (enumString === 'CLASS') {
+      return UsbControlTransferType.CLASS;
+    }
+    if (enumString === 'VENDOR') {
+      return UsbControlTransferType.VENDOR;
+    }
+    if (enumString === 'RESERVED') {
+      return UsbControlTransferType.RESERVED;
+    }
+    showError('Invalid Transfer Type', this.rootElement_);
+    return null;
+  }
+
+  private convertStringToTransferRecipient_(enumString: string):
+      UsbControlTransferRecipient|null {
+    if (enumString === 'DEVICE') {
+      return UsbControlTransferRecipient.DEVICE;
+    }
+    if (enumString === 'INTERFACE') {
+      return UsbControlTransferRecipient.INTERFACE;
+    }
+    if (enumString === 'ENDPOINT') {
+      return UsbControlTransferRecipient.ENDPOINT;
+    }
+    if (enumString === 'OTHER') {
+      return UsbControlTransferRecipient.OTHER;
+    }
+    showError('Invalid Transfer Recipient', this.rootElement_);
+    return null;
   }
 }
 
@@ -2689,13 +2711,14 @@ function addMappingAction(
   });
 }
 
-type Field = {
-  size: number,
-  label: string,
-  formatter: (data: Uint8Array, offset: number) => string,
-  extraTreeItemFormatter?: (data: Uint8Array, offset: number,
-                            item: CrTreeItemElement, label: string) => void,
-};
+interface Field {
+  size: number;
+  label: string;
+  formatter: (data: Uint8Array, offset: number) => string;
+  extraTreeItemFormatter?:
+      (data: Uint8Array, offset: number, item: CrTreeItemElement,
+       label: string) => void;
+}
 
 /**
  * Renders a tree view to display the raw data in readable text.

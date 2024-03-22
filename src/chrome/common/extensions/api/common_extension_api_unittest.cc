@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -16,6 +16,7 @@
 #include "base/path_service.h"
 #include "base/strings/stringprintf.h"
 #include "base/task/bind_post_task.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/test/bind.h"
 #include "base/test/task_environment.h"
 #include "base/threading/thread.h"
@@ -31,7 +32,7 @@
 #include "extensions/common/manifest.h"
 #include "extensions/common/manifest_constants.h"
 #include "extensions/common/mojom/feature_session_type.mojom.h"
-#include "extensions/common/value_builder.h"
+#include "extensions/test/test_context_data.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
 namespace extensions {
@@ -233,7 +234,8 @@ TEST(ExtensionAPITest, APIFeatures) {
     bool expected = test_data[i].expect_is_available;
     Feature::Availability availability = api.IsAvailable(
         test_data[i].api_full_name, nullptr, test_data[i].context,
-        test_data[i].url, CheckAliasStatus::NOT_ALLOWED, kUnspecifiedContextId);
+        test_data[i].url, CheckAliasStatus::NOT_ALLOWED, kUnspecifiedContextId,
+        TestContextData());
     EXPECT_EQ(expected, availability.is_available())
         << base::StringPrintf("Test %d: Feature '%s' was %s: %s",
                               static_cast<int>(i),
@@ -256,66 +258,64 @@ TEST(ExtensionAPITest, APIFeaturesAlias) {
   ASSERT_FALSE(api.IsAvailable("alias_api_source", nullptr,
                                Feature::UNBLESSED_EXTENSION_CONTEXT, GURL(),
                                CheckAliasStatus::NOT_ALLOWED,
-                               kUnspecifiedContextId)
+                               kUnspecifiedContextId, TestContextData())
                    .is_available());
   ASSERT_TRUE(api.IsAvailable("alias_api_source", nullptr,
                               Feature::UNBLESSED_EXTENSION_CONTEXT, GURL(),
-                              CheckAliasStatus::ALLOWED, kUnspecifiedContextId)
+                              CheckAliasStatus::ALLOWED, kUnspecifiedContextId,
+                              TestContextData())
                   .is_available());
   ASSERT_TRUE(api.IsAvailable("alias_api_source.bar", nullptr,
                               Feature::UNBLESSED_EXTENSION_CONTEXT, GURL(),
-                              CheckAliasStatus::ALLOWED, kUnspecifiedContextId)
+                              CheckAliasStatus::ALLOWED, kUnspecifiedContextId,
+                              TestContextData())
                   .is_available());
   ASSERT_FALSE(api.IsAvailable("alias_api_source.foo", nullptr,
                                Feature::UNBLESSED_EXTENSION_CONTEXT, GURL(),
-                               CheckAliasStatus::ALLOWED, kUnspecifiedContextId)
+                               CheckAliasStatus::ALLOWED, kUnspecifiedContextId,
+                               TestContextData())
                    .is_available());
 
   scoped_refptr<const Extension> extension =
       ExtensionBuilder()
-          .SetManifest(DictionaryBuilder()
+          .SetManifest(base::Value::Dict()
                            .Set("name", "extension")
                            .Set("version", "1")
-                           .Set("manifest_version", 2)
-                           .Build())
+                           .Set("manifest_version", 2))
           .Build();
   const Feature* test_feature =
       api_feature_provider.GetFeature("alias_api_source");
   ASSERT_TRUE(test_feature);
   ASSERT_FALSE(api.IsAnyFeatureAvailableToContext(
       *test_feature, extension.get(), Feature::UNBLESSED_EXTENSION_CONTEXT,
-      GURL(), CheckAliasStatus::NOT_ALLOWED, kUnspecifiedContextId));
+      GURL(), CheckAliasStatus::NOT_ALLOWED, kUnspecifiedContextId,
+      TestContextData()));
   EXPECT_TRUE(api.IsAnyFeatureAvailableToContext(
       *test_feature, extension.get(), Feature::UNBLESSED_EXTENSION_CONTEXT,
-      GURL(), CheckAliasStatus::ALLOWED, kUnspecifiedContextId));
+      GURL(), CheckAliasStatus::ALLOWED, kUnspecifiedContextId,
+      TestContextData()));
 }
 
 TEST(ExtensionAPITest, IsAnyFeatureAvailableToContext) {
   scoped_refptr<const Extension> app =
       ExtensionBuilder()
           .SetManifest(
-              DictionaryBuilder()
+              base::Value::Dict()
                   .Set("name", "app")
-                  .Set("app",
-                       DictionaryBuilder()
-                           .Set("background",
-                                DictionaryBuilder()
-                                    .Set("scripts", ListBuilder()
-                                                        .Append("background.js")
-                                                        .Build())
-                                    .Build())
-                           .Build())
+                  .Set("app", base::Value::Dict().Set(
+                                  "background",
+                                  base::Value::Dict().Set(
+                                      "scripts", base::Value::List().Append(
+                                                     "background.js"))))
                   .Set("version", "1")
-                  .Set("manifest_version", 2)
-                  .Build())
+                  .Set("manifest_version", 2))
           .Build();
   scoped_refptr<const Extension> extension =
       ExtensionBuilder()
-          .SetManifest(DictionaryBuilder()
+          .SetManifest(base::Value::Dict()
                            .Set("name", "extension")
                            .Set("version", "1")
-                           .Set("manifest_version", 2)
-                           .Build())
+                           .Set("manifest_version", 2))
           .Build();
 
   struct {
@@ -375,7 +375,7 @@ TEST(ExtensionAPITest, IsAnyFeatureAvailableToContext) {
               api.IsAnyFeatureAvailableToContext(
                   *test_feature, test_data[i].extension, test_data[i].context,
                   test_data[i].url, CheckAliasStatus::NOT_ALLOWED,
-                  kUnspecifiedContextId))
+                  kUnspecifiedContextId, TestContextData()))
         << i;
   }
 }
@@ -384,20 +384,15 @@ TEST(ExtensionAPITest, SessionTypeFeature) {
   scoped_refptr<const Extension> app =
       ExtensionBuilder()
           .SetManifest(
-              DictionaryBuilder()
+              base::Value::Dict()
                   .Set("name", "app")
-                  .Set("app",
-                       DictionaryBuilder()
-                           .Set("background",
-                                DictionaryBuilder()
-                                    .Set("scripts", ListBuilder()
-                                                        .Append("background.js")
-                                                        .Build())
-                                    .Build())
-                           .Build())
+                  .Set("app", base::Value::Dict().Set(
+                                  "background",
+                                  base::Value::Dict().Set(
+                                      "scripts", base::Value::List().Append(
+                                                     "background.js"))))
                   .Set("version", "1")
-                  .Set("manifest_version", 2)
-                  .Build())
+                  .Set("manifest_version", 2))
           .Build();
 
   const std::vector<FeatureSessionTypesTestData> kTestData(
@@ -433,12 +428,12 @@ TEST(ExtensionAPITest, SessionTypeFeature) {
 
     std::unique_ptr<base::AutoReset<mojom::FeatureSessionType>> current_session(
         ScopedCurrentFeatureSessionType(test.current_session_type));
-    EXPECT_EQ(
-        test.expect_available,
-        api.IsAvailable(test.api_name, app.get(),
-                        Feature::BLESSED_EXTENSION_CONTEXT, GURL(),
-                        CheckAliasStatus::NOT_ALLOWED, kUnspecifiedContextId)
-            .is_available())
+    EXPECT_EQ(test.expect_available,
+              api.IsAvailable(test.api_name, app.get(),
+                              Feature::BLESSED_EXTENSION_CONTEXT, GURL(),
+                              CheckAliasStatus::NOT_ALLOWED,
+                              kUnspecifiedContextId, TestContextData())
+                  .is_available())
         << "Test case (" << test.api_name << ", "
         << static_cast<int>(test.current_session_type) << ").";
   }
@@ -467,16 +462,16 @@ TEST(ExtensionAPITest, LazyGetSchema) {
 
 scoped_refptr<Extension> CreateExtensionWithPermissions(
     const std::set<std::string>& permissions) {
-  base::DictionaryValue manifest;
-  manifest.SetString("name", "extension");
-  manifest.SetString("version", "1.0");
-  manifest.SetInteger("manifest_version", 2);
+  auto manifest = base::Value::Dict()
+                      .Set("name", "extension")
+                      .Set("version", "1.0")
+                      .Set("manifest_version", 2);
   {
-    base::Value permissions_list(base::Value::Type::LIST);
-    for (auto i = permissions.begin(); i != permissions.end(); ++i) {
-      permissions_list.Append(*i);
+    base::Value::List permissions_list;
+    for (const auto& i : permissions) {
+      permissions_list.Append(i);
     }
-    manifest.SetKey("permissions", std::move(permissions_list));
+    manifest.Set("permissions", std::move(permissions_list));
   }
 
   std::string error;
@@ -514,56 +509,57 @@ TEST(ExtensionAPITest, ExtensionWithUnprivilegedAPIs) {
   EXPECT_TRUE(extension_api->IsAnyFeatureAvailableToContext(
       *api_features.GetFeature("storage"), nullptr,
       Feature::BLESSED_EXTENSION_CONTEXT, GURL(), CheckAliasStatus::NOT_ALLOWED,
-      kUnspecifiedContextId));
+      kUnspecifiedContextId, TestContextData()));
   EXPECT_TRUE(extension_api->IsAnyFeatureAvailableToContext(
       *api_features.GetFeature("storage"), nullptr,
       Feature::UNBLESSED_EXTENSION_CONTEXT, GURL(),
-      CheckAliasStatus::NOT_ALLOWED, kUnspecifiedContextId));
+      CheckAliasStatus::NOT_ALLOWED, kUnspecifiedContextId, TestContextData()));
   EXPECT_TRUE(extension_api->IsAnyFeatureAvailableToContext(
       *api_features.GetFeature("storage"), nullptr,
       Feature::CONTENT_SCRIPT_CONTEXT, GURL(), CheckAliasStatus::NOT_ALLOWED,
-      kUnspecifiedContextId));
+      kUnspecifiedContextId, TestContextData()));
 
   // "extension" is partially unprivileged.
   EXPECT_TRUE(extension_api->IsAnyFeatureAvailableToContext(
       *api_features.GetFeature("extension"), nullptr,
       Feature::BLESSED_EXTENSION_CONTEXT, GURL(), CheckAliasStatus::NOT_ALLOWED,
-      kUnspecifiedContextId));
+      kUnspecifiedContextId, TestContextData()));
   EXPECT_TRUE(extension_api->IsAnyFeatureAvailableToContext(
       *api_features.GetFeature("extension"), nullptr,
       Feature::UNBLESSED_EXTENSION_CONTEXT, GURL(),
-      CheckAliasStatus::NOT_ALLOWED, kUnspecifiedContextId));
+      CheckAliasStatus::NOT_ALLOWED, kUnspecifiedContextId, TestContextData()));
   EXPECT_TRUE(extension_api->IsAnyFeatureAvailableToContext(
       *api_features.GetFeature("extension"), nullptr,
       Feature::CONTENT_SCRIPT_CONTEXT, GURL(), CheckAliasStatus::NOT_ALLOWED,
-      kUnspecifiedContextId));
+      kUnspecifiedContextId, TestContextData()));
   EXPECT_TRUE(extension_api->IsAnyFeatureAvailableToContext(
       *api_features.GetFeature("extension.getURL"), nullptr,
       Feature::CONTENT_SCRIPT_CONTEXT, GURL(), CheckAliasStatus::NOT_ALLOWED,
-      kUnspecifiedContextId));
+      kUnspecifiedContextId, TestContextData()));
 
   // "history" is entirely privileged.
   EXPECT_TRUE(extension_api->IsAnyFeatureAvailableToContext(
       *api_features.GetFeature("history"), nullptr,
       Feature::BLESSED_EXTENSION_CONTEXT, GURL(), CheckAliasStatus::NOT_ALLOWED,
-      kUnspecifiedContextId));
+      kUnspecifiedContextId, TestContextData()));
   EXPECT_FALSE(extension_api->IsAnyFeatureAvailableToContext(
       *api_features.GetFeature("history"), nullptr,
       Feature::UNBLESSED_EXTENSION_CONTEXT, GURL(),
-      CheckAliasStatus::NOT_ALLOWED, kUnspecifiedContextId));
+      CheckAliasStatus::NOT_ALLOWED, kUnspecifiedContextId, TestContextData()));
   EXPECT_FALSE(extension_api->IsAnyFeatureAvailableToContext(
       *api_features.GetFeature("history"), nullptr,
       Feature::CONTENT_SCRIPT_CONTEXT, GURL(), CheckAliasStatus::NOT_ALLOWED,
-      kUnspecifiedContextId));
+      kUnspecifiedContextId, TestContextData()));
 }
 
 scoped_refptr<Extension> CreateHostedApp() {
-  base::DictionaryValue values;
-  values.SetString(manifest_keys::kName, "test");
-  values.SetString(manifest_keys::kVersion, "0.1");
-  values.SetPath(manifest_keys::kWebURLs, base::Value(base::Value::Type::LIST));
-  values.SetString(manifest_keys::kLaunchWebURL,
-                   "http://www.example.com");
+  base::Value::Dict values;
+  values.Set(manifest_keys::kName, "test");
+  values.Set(manifest_keys::kVersion, "0.1");
+  values.SetByDottedPath(manifest_keys::kWebURLs,
+                         base::Value(base::Value::Type::LIST));
+  values.SetByDottedPath(manifest_keys::kLaunchWebURL,
+                         "http://www.example.com");
   std::string error;
   scoped_refptr<Extension> extension(
       Extension::Create(base::FilePath(), mojom::ManifestLocation::kInternal,
@@ -574,31 +570,28 @@ scoped_refptr<Extension> CreateHostedApp() {
 
 scoped_refptr<Extension> CreatePackagedAppWithPermissions(
     const std::set<std::string>& permissions) {
-  base::DictionaryValue values;
-  values.SetString(manifest_keys::kName, "test");
-  values.SetString(manifest_keys::kVersion, "0.1");
-  values.SetString(manifest_keys::kPlatformAppBackground,
-      "http://www.example.com");
+  auto manifest =
+      base::Value::Dict()
+          .Set(manifest_keys::kName, "test")
+          .Set(manifest_keys::kVersion, "0.1")
+          .Set(manifest_keys::kApp,
+               base::Value::Dict().Set(
+                   "background",
+                   base::Value::Dict().Set(
+                       "scripts", base::Value::List().Append("test.js"))));
 
-  base::Value app(base::Value::Type::DICTIONARY);
-  base::DictionaryValue background;
-  base::ListValue scripts;
-  scripts.Append("test.js");
-  background.SetKey("scripts", std::move(scripts));
-  app.SetKey("background", std::move(background));
-  values.SetKey(manifest_keys::kApp, std::move(app));
   {
-    base::Value permissions_list(base::Value::Type::LIST);
-    for (auto i = permissions.begin(); i != permissions.end(); ++i) {
-      permissions_list.Append(*i);
+    base::Value::List permissions_list;
+    for (const auto& i : permissions) {
+      permissions_list.Append(i);
     }
-    values.SetKey("permissions", std::move(permissions_list));
+    manifest.Set("permissions", std::move(permissions_list));
   }
 
   std::string error;
   scoped_refptr<Extension> extension(
       Extension::Create(base::FilePath(), mojom::ManifestLocation::kInternal,
-                        values, Extension::NO_FLAGS, &error));
+                        manifest, Extension::NO_FLAGS, &error));
   CHECK(extension.get()) << error;
   return extension;
 }
@@ -614,31 +607,31 @@ TEST(ExtensionAPITest, HostedAppPermissions) {
                    ->IsAvailable("runtime", extension.get(),
                                  Feature::BLESSED_EXTENSION_CONTEXT, GURL(),
                                  CheckAliasStatus::NOT_ALLOWED,
-                                 kUnspecifiedContextId)
+                                 kUnspecifiedContextId, TestContextData())
                    .is_available());
   EXPECT_FALSE(extension_api
                    ->IsAvailable("runtime.id", extension.get(),
                                  Feature::BLESSED_EXTENSION_CONTEXT, GURL(),
                                  CheckAliasStatus::NOT_ALLOWED,
-                                 kUnspecifiedContextId)
+                                 kUnspecifiedContextId, TestContextData())
                    .is_available());
   EXPECT_FALSE(extension_api
                    ->IsAvailable("runtime.sendMessage", extension.get(),
                                  Feature::BLESSED_EXTENSION_CONTEXT, GURL(),
                                  CheckAliasStatus::NOT_ALLOWED,
-                                 kUnspecifiedContextId)
+                                 kUnspecifiedContextId, TestContextData())
                    .is_available());
   EXPECT_FALSE(extension_api
                    ->IsAvailable("runtime.sendNativeMessage", extension.get(),
                                  Feature::BLESSED_EXTENSION_CONTEXT, GURL(),
                                  CheckAliasStatus::NOT_ALLOWED,
-                                 kUnspecifiedContextId)
+                                 kUnspecifiedContextId, TestContextData())
                    .is_available());
   EXPECT_FALSE(extension_api
                    ->IsAvailable("tabs.create", extension.get(),
                                  Feature::BLESSED_EXTENSION_CONTEXT, GURL(),
                                  CheckAliasStatus::NOT_ALLOWED,
-                                 kUnspecifiedContextId)
+                                 kUnspecifiedContextId, TestContextData())
                    .is_available());
 }
 
@@ -659,21 +652,21 @@ TEST(ExtensionAPITest, AppAndFriendsAvailability) {
                                    Feature::BLESSED_EXTENSION_CONTEXT,
                                    GURL("http://foo.com"),
                                    CheckAliasStatus::NOT_ALLOWED,
-                                   kUnspecifiedContextId)
+                                   kUnspecifiedContextId, TestContextData())
                      .is_available());
     EXPECT_TRUE(extension_api
                     ->IsAvailable("app.runtime", extension.get(),
                                   Feature::BLESSED_EXTENSION_CONTEXT,
                                   GURL("http://foo.com"),
                                   CheckAliasStatus::NOT_ALLOWED,
-                                  kUnspecifiedContextId)
+                                  kUnspecifiedContextId, TestContextData())
                     .is_available());
     EXPECT_TRUE(extension_api
                     ->IsAvailable("app.window", extension.get(),
                                   Feature::BLESSED_EXTENSION_CONTEXT,
                                   GURL("http://foo.com"),
                                   CheckAliasStatus::NOT_ALLOWED,
-                                  kUnspecifiedContextId)
+                                  kUnspecifiedContextId, TestContextData())
                     .is_available());
   }
   // Make sure chrome.app.runtime and chrome.app.window are not available to
@@ -687,21 +680,21 @@ TEST(ExtensionAPITest, AppAndFriendsAvailability) {
                                   Feature::BLESSED_EXTENSION_CONTEXT,
                                   GURL("http://foo.com"),
                                   CheckAliasStatus::NOT_ALLOWED,
-                                  kUnspecifiedContextId)
+                                  kUnspecifiedContextId, TestContextData())
                     .is_available());
     EXPECT_FALSE(extension_api
                      ->IsAvailable("app.runtime", extension.get(),
                                    Feature::BLESSED_EXTENSION_CONTEXT,
                                    GURL("http://foo.com"),
                                    CheckAliasStatus::NOT_ALLOWED,
-                                   kUnspecifiedContextId)
+                                   kUnspecifiedContextId, TestContextData())
                      .is_available());
     EXPECT_FALSE(extension_api
                      ->IsAvailable("app.window", extension.get(),
                                    Feature::BLESSED_EXTENSION_CONTEXT,
                                    GURL("http://foo.com"),
                                    CheckAliasStatus::NOT_ALLOWED,
-                                   kUnspecifiedContextId)
+                                   kUnspecifiedContextId, TestContextData())
                      .is_available());
   }
 }
@@ -717,12 +710,12 @@ TEST(ExtensionAPITest, ExtensionWithDependencies) {
     EXPECT_TRUE(api->IsAvailable("ttsEngine", extension.get(),
                                  Feature::BLESSED_EXTENSION_CONTEXT, GURL(),
                                  CheckAliasStatus::NOT_ALLOWED,
-                                 kUnspecifiedContextId)
+                                 kUnspecifiedContextId, TestContextData())
                     .is_available());
     EXPECT_FALSE(api->IsAvailable("tts", extension.get(),
                                   Feature::BLESSED_EXTENSION_CONTEXT, GURL(),
                                   CheckAliasStatus::NOT_ALLOWED,
-                                  kUnspecifiedContextId)
+                                  kUnspecifiedContextId, TestContextData())
                      .is_available());
   }
 
@@ -736,12 +729,12 @@ TEST(ExtensionAPITest, ExtensionWithDependencies) {
     EXPECT_FALSE(api->IsAvailable("ttsEngine", extension.get(),
                                   Feature::BLESSED_EXTENSION_CONTEXT, GURL(),
                                   CheckAliasStatus::NOT_ALLOWED,
-                                  kUnspecifiedContextId)
+                                  kUnspecifiedContextId, TestContextData())
                      .is_available());
     EXPECT_TRUE(api->IsAvailable("tts", extension.get(),
                                  Feature::BLESSED_EXTENSION_CONTEXT, GURL(),
                                  CheckAliasStatus::NOT_ALLOWED,
-                                 kUnspecifiedContextId)
+                                 kUnspecifiedContextId, TestContextData())
                     .is_available());
   }
 }
@@ -750,7 +743,8 @@ bool MatchesURL(
     ExtensionAPI* api, const std::string& api_name, const std::string& url) {
   return api
       ->IsAvailable(api_name, nullptr, Feature::WEB_PAGE_CONTEXT, GURL(url),
-                    CheckAliasStatus::NOT_ALLOWED, kUnspecifiedContextId)
+                    CheckAliasStatus::NOT_ALLOWED, kUnspecifiedContextId,
+                    TestContextData())
       .is_available();
 }
 
@@ -840,17 +834,16 @@ TEST(ExtensionAPITest, DefaultConfigurationFeatures) {
   }
 }
 
-static const base::DictionaryValue* GetDictChecked(
-    const base::DictionaryValue* dict,
-    const std::string& key) {
-  const base::DictionaryValue* out = nullptr;
-  CHECK(dict->GetDictionary(key, &out)) << key;
+static const base::Value::Dict* GetDictChecked(const base::Value::Dict* dict,
+                                               const std::string& key) {
+  const base::Value::Dict* out = dict->FindDict(key);
+  CHECK(out) << key;
   return out;
 }
 
-static std::string GetStringChecked(const base::DictionaryValue* dict,
+static std::string GetStringChecked(const base::Value::Dict* dict,
                                     const std::string& key) {
-  const std::string* out = dict->FindStringKey(key);
+  const std::string* out = dict->FindString(key);
   CHECK(out) << key;
   return *out;
 }
@@ -860,59 +853,55 @@ TEST(ExtensionAPITest, TypesHaveNamespace) {
       ExtensionAPI::CreateWithDefaultConfiguration());
 
   // Returns the dictionary that has |key|: |value|.
-  auto get_dict_from_list = [](
-      const base::ListValue* list, const std::string& key,
-      const std::string& value) -> const base::DictionaryValue* {
-    const base::DictionaryValue* ret = nullptr;
-    for (const auto& val : list->GetListDeprecated()) {
-      const base::DictionaryValue* dict = nullptr;
-      if (!val.GetAsDictionary(&dict))
+  auto get_dict_from_list =
+      [](const base::Value::List* list, const std::string& key,
+         const std::string& value) -> const base::Value::Dict* {
+    for (const auto& val : *list) {
+      const base::Value::Dict* dict = val.GetIfDict();
+      if (!dict)
         continue;
-      if (const std::string* str = dict->FindStringKey(key)) {
-        if (*str == value) {
-          ret = dict;
-          break;
-        }
+      if (const std::string* str = dict->FindString(key)) {
+        if (*str == value)
+          return dict;
       }
     }
-    return ret;
+    return nullptr;
   };
 
-  const base::DictionaryValue* schema = api->GetSchema("sessions");
+  const base::Value::Dict* schema = api->GetSchema("sessions");
   ASSERT_TRUE(schema);
 
-  const base::ListValue* types = nullptr;
-  ASSERT_TRUE(schema->GetList("types", &types));
+  const base::Value::List* types = schema->FindList("types");
+  ASSERT_TRUE(types);
   {
-    const base::DictionaryValue* session_type =
+    const base::Value::Dict* session_type =
         get_dict_from_list(types, "id", "sessions.Session");
     ASSERT_TRUE(session_type);
-    const base::DictionaryValue* props =
-        GetDictChecked(session_type, "properties");
-    const base::DictionaryValue* tab = GetDictChecked(props, "tab");
+    const base::Value::Dict* props = GetDictChecked(session_type, "properties");
+    const base::Value::Dict* tab = GetDictChecked(props, "tab");
     EXPECT_EQ("tabs.Tab", GetStringChecked(tab, "$ref"));
-    const base::DictionaryValue* window = GetDictChecked(props, "window");
+    const base::Value::Dict* window = GetDictChecked(props, "window");
     EXPECT_EQ("windows.Window", GetStringChecked(window, "$ref"));
   }
   {
-    const base::DictionaryValue* device_type =
+    const base::Value::Dict* device_type =
         get_dict_from_list(types, "id", "sessions.Device");
     ASSERT_TRUE(device_type);
-    const base::DictionaryValue* props =
-        GetDictChecked(device_type, "properties");
-    const base::DictionaryValue* sessions = GetDictChecked(props, "sessions");
-    const base::DictionaryValue* items = GetDictChecked(sessions, "items");
+    const base::Value::Dict* props = GetDictChecked(device_type, "properties");
+    const base::Value::Dict* sessions = GetDictChecked(props, "sessions");
+    const base::Value::Dict* items = GetDictChecked(sessions, "items");
     EXPECT_EQ("sessions.Session", GetStringChecked(items, "$ref"));
   }
-  const base::ListValue* functions = nullptr;
-  ASSERT_TRUE(schema->GetList("functions", &functions));
+  const base::Value::List* functions = schema->FindList("functions");
+  ASSERT_TRUE(functions);
   {
-    const base::DictionaryValue* get_recently_closed =
+    const base::Value::Dict* get_recently_closed =
         get_dict_from_list(functions, "name", "getRecentlyClosed");
     ASSERT_TRUE(get_recently_closed);
-    const base::ListValue* parameters = nullptr;
-    ASSERT_TRUE(get_recently_closed->GetList("parameters", &parameters));
-    const base::DictionaryValue* filter =
+    const base::Value::List* parameters =
+        get_recently_closed->FindList("parameters");
+    ASSERT_TRUE(parameters);
+    const base::Value::Dict* filter =
         get_dict_from_list(parameters, "name", "filter");
     ASSERT_TRUE(filter);
     EXPECT_EQ("sessions.Filter", GetStringChecked(filter, "$ref"));
@@ -920,9 +909,10 @@ TEST(ExtensionAPITest, TypesHaveNamespace) {
 
   schema = api->GetSchema("types");
   ASSERT_TRUE(schema);
-  ASSERT_TRUE(schema->GetList("types", &types));
+  types = schema->FindList("types");
+  ASSERT_TRUE(types);
   {
-    const base::DictionaryValue* chrome_setting =
+    const base::Value::Dict* chrome_setting =
         get_dict_from_list(types, "id", "types.ChromeSetting");
     ASSERT_TRUE(chrome_setting);
     EXPECT_EQ("types.ChromeSetting",
@@ -981,13 +971,13 @@ TEST(ExtensionAPITest, NoPermissions) {
   scoped_refptr<const Extension> extension = ExtensionBuilder("Test").Build();
 
   for (size_t i = 0; i < std::size(kTests); ++i) {
-    EXPECT_EQ(
-        kTests[i].expect_success,
-        extension_api
-            ->IsAvailable(kTests[i].permission_name, extension.get(),
-                          Feature::BLESSED_EXTENSION_CONTEXT, GURL(),
-                          CheckAliasStatus::NOT_ALLOWED, kUnspecifiedContextId)
-            .is_available())
+    EXPECT_EQ(kTests[i].expect_success,
+              extension_api
+                  ->IsAvailable(kTests[i].permission_name, extension.get(),
+                                Feature::BLESSED_EXTENSION_CONTEXT, GURL(),
+                                CheckAliasStatus::NOT_ALLOWED,
+                                kUnspecifiedContextId, TestContextData())
+                  .is_available())
         << "Permission being tested: " << kTests[i].permission_name;
   }
 }
@@ -1005,13 +995,13 @@ TEST(ExtensionAPITest, ManifestKeys) {
                   ->IsAvailable("browserAction", extension.get(),
                                 Feature::BLESSED_EXTENSION_CONTEXT, GURL(),
                                 CheckAliasStatus::NOT_ALLOWED,
-                                kUnspecifiedContextId)
+                                kUnspecifiedContextId, TestContextData())
                   .is_available());
   EXPECT_FALSE(extension_api
                    ->IsAvailable("pageAction", extension.get(),
                                  Feature::BLESSED_EXTENSION_CONTEXT, GURL(),
                                  CheckAliasStatus::NOT_ALLOWED,
-                                 kUnspecifiedContextId)
+                                 kUnspecifiedContextId, TestContextData())
                    .is_available());
 }
 
@@ -1026,18 +1016,17 @@ TEST(ExtensionAPITest, GetSchemaFromDifferentThreads) {
   ASSERT_TRUE(t.Start());
 
   base::RunLoop run_loop;
-  const base::DictionaryValue* another_thread_schema = nullptr;
+  const base::Value::Dict* another_thread_schema = nullptr;
 
   auto result_cb =
-      base::BindLambdaForTesting([&](const base::DictionaryValue* res) {
+      base::BindLambdaForTesting([&](const base::Value::Dict* res) {
         another_thread_schema = res;
         run_loop.Quit();
       });
   auto task =
       base::BindOnce(&ExtensionAPI::GetSchema,
                      base::Unretained(shared_instance), "storage")
-          .Then(base::BindPostTask(base::SequencedTaskRunnerHandle::Get(),
-                                   std::move(result_cb)));
+          .Then(base::BindPostTaskToCurrentDefault(std::move(result_cb)));
   t.task_runner()->PostTask(FROM_HERE, std::move(task));
 
   const auto* current_thread_schema = shared_instance->GetSchema("storage");

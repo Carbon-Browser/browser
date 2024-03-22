@@ -1,4 +1,4 @@
-// Copyright (c) 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -72,12 +72,20 @@ gfx::Vector2d GetMouseWheelTick120ths(const PlatformEvent& native_event) {
   return gfx::Vector2d();
 }
 
-PlatformEvent CopyNativeEvent(const PlatformEvent& event) {
-  NOTIMPLEMENTED() << "Don't know how to copy PlatformEvent for this platform";
-  return NULL;
+bool ShouldCopyPlatformEvents() {
+  NOTIMPLEMENTED();
+  return false;
 }
 
-void ReleaseCopiedNativeEvent(const PlatformEvent& event) {}
+PlatformEvent CreateInvalidPlatformEvent() {
+  NOTIMPLEMENTED();
+  return nullptr;
+}
+
+bool IsPlatformEventValid(const PlatformEvent& native_event) {
+  NOTIMPLEMENTED();
+  return false;
+}
 
 PointerDetails GetTouchPointerDetailsFromNative(
     const PlatformEvent& native_event) {

@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,7 +8,6 @@
 #include <memory>
 #include <string>
 
-#include "base/memory/ref_counted.h"
 #include "build/build_config.h"
 #include "components/language/core/browser/accept_languages_service.h"
 #include "components/translate/core/browser/translate_prefs.h"
@@ -68,15 +67,11 @@ class TranslateClient {
   virtual bool ShowTranslateUI(translate::TranslateStep step,
                                const std::string& source_language,
                                const std::string& target_language,
-                               TranslateErrors::Type error_type,
+                               TranslateErrors error_type,
                                bool triggered_from_menu) = 0;
 
   // Returns true if the URL can be translated.
   virtual bool IsTranslatableURL(const GURL& url) = 0;
-
-  // Returns if AutofillAssistant is running. Translation should be disabled
-  // while AutofillAssistant is running.
-  virtual bool IsAutofillAssistantRunning() const = 0;
 };
 
 }  // namespace translate

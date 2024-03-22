@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,8 +11,6 @@
 
 namespace device {
 
-#pragma pack(push, 4)
-
 // This structure is intentionally POD and fixed size so that it can be stored
 // in shared memory between hardware polling threads and the rest of the
 // browser.
@@ -23,8 +21,6 @@ class COMPONENT_EXPORT(GAMEPAD_PUBLIC) Gamepads {
   // Gamepad data for N separate gamepad devices.
   Gamepad items[kItemsLengthCap];
 };
-
-#pragma pack(pop)
 
 }  // namespace device
 

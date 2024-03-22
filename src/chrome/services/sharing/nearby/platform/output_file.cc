@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,7 +6,6 @@
 
 #include "base/numerics/safe_conversions.h"
 
-namespace location {
 namespace nearby {
 namespace chrome {
 
@@ -44,4 +43,3 @@ Exception OutputFile::Close() {
 
 }  // namespace chrome
 }  // namespace nearby
-}  // namespace location

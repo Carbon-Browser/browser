@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,41 +13,47 @@ import androidx.test.filters.SmallTest;
 
 import org.junit.Assert;
 import org.junit.Before;
+import org.junit.ClassRule;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 
+import org.chromium.base.test.util.Batch;
 import org.chromium.base.test.util.CommandLineFlags;
+import org.chromium.base.test.util.CriteriaHelper;
 import org.chromium.base.test.util.DisabledTest;
 import org.chromium.base.test.util.Feature;
+import org.chromium.base.test.util.RequiresRestart;
 import org.chromium.chrome.browser.flags.ChromeSwitches;
 import org.chromium.chrome.browser.profiles.Profile;
 import org.chromium.chrome.browser.tab.Tab;
 import org.chromium.chrome.test.ChromeJUnit4ClassRunner;
 import org.chromium.chrome.test.ChromeTabbedActivityTestRule;
+import org.chromium.chrome.test.batch.BlankCTATabInitialStateRule;
 import org.chromium.chrome.test.util.OmniboxTestUtils;
 import org.chromium.chrome.test.util.browser.LocationSettingsTestUtil;
 import org.chromium.components.browser_ui.site_settings.PermissionInfo;
 import org.chromium.components.content_settings.ContentSettingValues;
 import org.chromium.components.content_settings.ContentSettingsType;
 import org.chromium.content_public.browser.test.util.TestThreadUtils;
+import org.chromium.ui.test.util.DisableAnimationsTestRule;
 
-/**
- * Tests for GeolocationHeader and GeolocationTracker.
- */
+/** Tests for GeolocationHeader and GeolocationTracker. */
 @RunWith(ChromeJUnit4ClassRunner.class)
 @CommandLineFlags.Add({ChromeSwitches.DISABLE_FIRST_RUN_EXPERIENCE})
-@DisabledTest(message = "https://crbug.com/1338183")
+@Batch(Batch.PER_CLASS)
 public class GeolocationHeaderTest {
-    @Rule
-    public ChromeTabbedActivityTestRule mActivityTestRule = new ChromeTabbedActivityTestRule();
+    public @ClassRule static ChromeTabbedActivityTestRule sActivityTestRule =
+            new ChromeTabbedActivityTestRule();
+    public @ClassRule static DisableAnimationsTestRule disableAnimationsRule =
+            new DisableAnimationsTestRule();
+    public @Rule BlankCTATabInitialStateRule mInitialStateRule =
+            new BlankCTATabInitialStateRule(sActivityTestRule, true);
 
     private OmniboxTestUtils mOmniboxTestUtils;
 
     private static final String SEARCH_URL_1 = "https://www.google.com/search?q=potatoes";
     private static final String SEARCH_URL_2 = "https://www.google.co.jp/webhp?#q=dinosaurs";
-    private static final String DISABLE_FEATURES = "disable-features=";
-    private static final String ENABLE_FEATURES = "enable-features=";
     private static final String GOOGLE_BASE_URL_SWITCH = "google-base-url=https://www.google.com";
     private static final double LOCATION_LAT = 20.3;
     private static final double LOCATION_LONG = 155.8;
@@ -55,9 +61,8 @@ public class GeolocationHeaderTest {
 
     @Before
     public void setUp() throws InterruptedException {
-        mActivityTestRule.startMainActivityOnBlankPage();
-        mOmniboxTestUtils = new OmniboxTestUtils(mActivityTestRule.getActivity());
-        GeolocationHeader.setAppPermissionGrantedForTesting(true);
+        LocationSettingsTestUtil.setSystemLocationSettingEnabled(true);
+        mOmniboxTestUtils = new OmniboxTestUtils(sActivityTestRule.getActivity());
     }
 
     @Test
@@ -161,62 +166,72 @@ public class GeolocationHeaderTest {
     @Test
     @SmallTest
     @Feature({"Location"})
+    @DisabledTest(message = "http://crbug/1479552")
     public void testGeolocationHeaderPrimingEnabledPermissionAllow() {
         setPermission(ContentSettingValues.ALLOW);
-        LocationSettingsTestUtil.setSystemLocationSettingEnabled(true);
-        checkHeaderPriming(true /* shouldPrimeHeader */);
+        checkHeaderPriming(/* shouldPrimeHeader= */ true);
     }
 
     @Test
     @SmallTest
     @Feature({"Location"})
+    @DisabledTest(message = "http://crbug/1479552")
     public void testGeolocationHeaderPrimingDisabledPermissionBlock() {
         setPermission(ContentSettingValues.BLOCK);
-        LocationSettingsTestUtil.setSystemLocationSettingEnabled(true);
-        checkHeaderPriming(false /* shouldPrimeHeader */);
+        checkHeaderPriming(/* shouldPrimeHeader= */ false);
     }
 
     @Test
     @SmallTest
     @Feature({"Location"})
+    @DisabledTest(message = "http://crbug/1479552")
     public void testGeolocationHeaderPrimingDisabledPermissionAsk() {
         setPermission(ContentSettingValues.ASK);
-        LocationSettingsTestUtil.setSystemLocationSettingEnabled(true);
-        checkHeaderPriming(false /* shouldPrimeHeader */);
+        checkHeaderPriming(/* shouldPrimeHeader= */ false);
     }
 
     @Test
     @SmallTest
     @Feature({"Location"})
+    @RequiresRestart(value = "Needs to reset cached geolocation from previous tests")
+    @DisabledTest(message = "http://crbug/1479552")
     public void testGeolocationHeaderPrimingDisabledOSPermissionBlocked() {
         setPermission(ContentSettingValues.ALLOW);
         LocationSettingsTestUtil.setSystemLocationSettingEnabled(false);
-        checkHeaderPriming(false /* shouldPrimeHeader */);
+        checkHeaderPriming(/* shouldPrimeHeader= */ false);
     }
 
-    private void checkHeaderWithPermission(final @ContentSettingValues int httpsPermission,
-            final long locationTime, final boolean shouldBeNull) {
-        TestThreadUtils.runOnUiThreadBlocking(() -> {
-            PermissionInfo infoHttps =
-                    new PermissionInfo(ContentSettingsType.GEOLOCATION, SEARCH_URL_1, null, false);
-            infoHttps.setContentSetting(Profile.getLastUsedRegularProfile(), httpsPermission);
-            String header = GeolocationHeader.getGeoHeader(
-                    SEARCH_URL_1, mActivityTestRule.getActivity().getActivityTab());
-            assertHeaderState(header, locationTime, shouldBeNull);
-        });
+    private void checkHeaderWithPermission(
+            final @ContentSettingValues int httpsPermission,
+            final long locationTime,
+            final boolean shouldBeNull) {
+        TestThreadUtils.runOnUiThreadBlocking(
+                () -> {
+                    PermissionInfo infoHttps =
+                            new PermissionInfo(
+                                    ContentSettingsType.GEOLOCATION, SEARCH_URL_1, null, false);
+                    infoHttps.setContentSetting(
+                            Profile.getLastUsedRegularProfile(), httpsPermission);
+                    String header =
+                            GeolocationHeader.getGeoHeader(
+                                    SEARCH_URL_1, sActivityTestRule.getActivity().getActivityTab());
+                    assertHeaderState(header, locationTime, shouldBeNull);
+                });
     }
 
     private void checkHeaderWithLocation(final long locationTime, final boolean shouldBeNull) {
-        TestThreadUtils.runOnUiThreadBlocking(() -> {
-            setMockLocation(locationTime);
-            String header = GeolocationHeader.getGeoHeader(
-                    SEARCH_URL_1, mActivityTestRule.getActivity().getActivityTab());
-            assertHeaderState(header, locationTime, shouldBeNull);
-        });
+        TestThreadUtils.runOnUiThreadBlocking(
+                () -> {
+                    setMockLocation(locationTime);
+                    String header =
+                            GeolocationHeader.getGeoHeader(
+                                    SEARCH_URL_1, sActivityTestRule.getActivity().getActivityTab());
+                    assertHeaderState(header, locationTime, shouldBeNull);
+                });
     }
 
     private void checkHeaderPriming(boolean shouldPrimeHeader) {
-        mActivityTestRule.loadUrlInNewTab("about:blank", false);
+        sActivityTestRule.loadUrlInNewTab("about:blank", false);
         mOmniboxTestUtils.requestFocus();
         mOmniboxTestUtils.typeText("aaaaaaaaaa", false);
         mOmniboxTestUtils.waitAnimationsComplete();
@@ -261,17 +276,20 @@ public class GeolocationHeaderTest {
     }
 
     private void assertNullHeader(final String url, final boolean isIncognito) {
-        final Tab tab = mActivityTestRule.loadUrlInNewTab("about:blank", isIncognito);
+        final Tab tab = sActivityTestRule.loadUrlInNewTab("about:blank", isIncognito);
         TestThreadUtils.runOnUiThreadBlocking(
-                () -> { Assert.assertNull(GeolocationHeader.getGeoHeader(url, tab)); });
+                () -> {
+                    Assert.assertNull(GeolocationHeader.getGeoHeader(url, tab));
+                });
     }
 
     private void assertNonNullHeader(
             final String url, final boolean isIncognito, final long locationTime) {
-        final Tab tab = mActivityTestRule.loadUrlInNewTab("about:blank", isIncognito);
-        TestThreadUtils.runOnUiThreadBlocking(() -> {
-            assertHeaderEquals(locationTime, GeolocationHeader.getGeoHeader(url, tab));
-        });
+        final Tab tab = sActivityTestRule.loadUrlInNewTab("about:blank", isIncognito);
+        TestThreadUtils.runOnUiThreadBlocking(
+                () -> {
+                    assertHeaderEquals(locationTime, GeolocationHeader.getGeoHeader(url, tab));
+                });
     }
 
     private void assertHeaderEquals(long locationTime, String header) {
@@ -284,10 +302,11 @@ public class GeolocationHeaderTest {
         int radius = (int) (LOCATION_ACCURACY * 1000);
 
         // Create a LatLng for the coordinates.
-        PartnerLocationDescriptor.LatLng latlng = PartnerLocationDescriptor.LatLng.newBuilder()
-                                                          .setLatitudeE7(latitudeE7)
-                                                          .setLongitudeE7(longitudeE7)
-                                                          .build();
+        PartnerLocationDescriptor.LatLng latlng =
+                PartnerLocationDescriptor.LatLng.newBuilder()
+                        .setLatitudeE7(latitudeE7)
+                        .setLongitudeE7(longitudeE7)
+                        .build();
 
         // Populate a LocationDescriptor with the LatLng.
         PartnerLocationDescriptor.LocationDescriptor locationDescriptor =
@@ -300,17 +319,25 @@ public class GeolocationHeaderTest {
                         .setRadius((float) radius)
                         .build();
 
-        String locationProto = Base64.encodeToString(
-                locationDescriptor.toByteArray(), Base64.NO_WRAP | Base64.URL_SAFE);
+        String locationProto =
+                Base64.encodeToString(
+                        locationDescriptor.toByteArray(), Base64.NO_WRAP | Base64.URL_SAFE);
         String expectedHeader = "X-Geo: w " + locationProto;
         Assert.assertEquals(expectedHeader, header);
     }
 
     private void setPermission(final @ContentSettingValues int setting) {
-        TestThreadUtils.runOnUiThreadBlocking(() -> {
-            PermissionInfo infoHttps =
-                    new PermissionInfo(ContentSettingsType.GEOLOCATION, SEARCH_URL_1, null, false);
-            infoHttps.setContentSetting(Profile.getLastUsedRegularProfile(), setting);
-        });
+        PermissionInfo infoHttps =
+                new PermissionInfo(ContentSettingsType.GEOLOCATION, SEARCH_URL_1, null, false);
+
+        TestThreadUtils.runOnUiThreadBlocking(
+                () -> {
+                    infoHttps.setContentSetting(Profile.getLastUsedRegularProfile(), setting);
+                });
+        CriteriaHelper.pollUiThread(
+                () -> {
+                    return infoHttps.getContentSetting(Profile.getLastUsedRegularProfile())
+                            == setting;
+                });
     }
 }

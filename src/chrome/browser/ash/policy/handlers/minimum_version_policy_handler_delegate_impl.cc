@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -19,7 +19,7 @@
 #include "chrome/browser/policy/profile_policy_connector.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/profiles/profile_manager.h"
-#include "chrome/browser/ui/webui/chromeos/login/update_required_screen_handler.h"
+#include "chrome/browser/ui/webui/ash/login/update_required_screen_handler.h"
 #include "components/session_manager/core/session_manager.h"
 #include "components/user_manager/user_manager.h"
 
@@ -77,7 +77,7 @@ bool MinimumVersionPolicyHandlerDelegateImpl::IsLoginInProgress() const {
 void MinimumVersionPolicyHandlerDelegateImpl::ShowUpdateRequiredScreen() {
   if (ash::LoginDisplayHost::default_host()) {
     ash::LoginDisplayHost::default_host()->StartWizard(
-        chromeos::UpdateRequiredView::kScreenId);
+        ash::UpdateRequiredView::kScreenId);
   }
 }
 

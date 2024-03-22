@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -30,7 +30,7 @@ class FakeCompositorFrameReportingController
   void BeginMainFrameAborted(
       const viz::BeginFrameId& id,
       CommitEarlyOutReason reason =
-          CommitEarlyOutReason::ABORTED_NOT_VISIBLE) override;
+          CommitEarlyOutReason::kAbortedNotVisible) override;
   void WillCommit() override;
   void DidCommit() override;
   void WillActivate() override;

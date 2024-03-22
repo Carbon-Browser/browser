@@ -1,14 +1,14 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "net/reporting/reporting_cache.h"
 
-#include <algorithm>
 #include <string>
 #include <utility>
 
-#include "base/bind.h"
+#include "base/containers/contains.h"
+#include "base/functional/bind.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/stringprintf.h"
 #include "base/test/scoped_feature_list.h"
@@ -17,7 +17,7 @@
 #include "base/time/time.h"
 #include "base/values.h"
 #include "net/base/features.h"
-#include "net/base/network_isolation_key.h"
+#include "net/base/network_anonymization_key.h"
 #include "net/base/schemeful_site.h"
 #include "net/reporting/mock_persistent_reporting_store.h"
 #include "net/reporting/reporting_cache_impl.h"
@@ -105,7 +105,7 @@ class ReportingCacheTest : public ReportingTestBase,
 
   // Adds a new report to the cache, and returns it.
   const ReportingReport* AddAndReturnReport(
-      const NetworkIsolationKey& network_isolation_key,
+      const NetworkAnonymizationKey& network_anonymization_key,
       const GURL& url,
       const std::string& user_agent,
       const std::string& group,
@@ -114,7 +114,7 @@ class ReportingCacheTest : public ReportingTestBase,
       int depth,
       base::TimeTicks queued,
       int attempts) {
-    const base::Value body_clone(body.Clone());
+    const base::Value::Dict body_clone(body.Clone());
 
     // The public API will only give us the (unordered) full list of reports in
     // the cache.  So we need to grab the list before we add, and the list after
@@ -122,20 +122,21 @@ class ReportingCacheTest : public ReportingTestBase,
     // in test cases, so I've optimized for readability over execution speed.
     std::vector<const ReportingReport*> before;
     cache()->GetReports(&before);
-    cache()->AddReport(absl::nullopt, network_isolation_key, url, user_agent,
-                       group, type, std::move(body), depth, queued, attempts);
+    cache()->AddReport(absl::nullopt, network_anonymization_key, url,
+                       user_agent, group, type, std::move(body), depth, queued,
+                       attempts);
     std::vector<const ReportingReport*> after;
     cache()->GetReports(&after);
 
     for (const ReportingReport* report : after) {
       // If report isn't in before, we've found the new instance.
       if (std::find(before.begin(), before.end(), report) == before.end()) {
-        EXPECT_EQ(network_isolation_key, report->network_isolation_key);
+        EXPECT_EQ(network_anonymization_key, report->network_anonymization_key);
         EXPECT_EQ(url, report->url);
         EXPECT_EQ(user_agent, report->user_agent);
         EXPECT_EQ(group, report->group);
         EXPECT_EQ(type, report->type);
-        EXPECT_EQ(body_clone, *report->body);
+        EXPECT_EQ(body_clone, report->body);
         EXPECT_EQ(depth, report->depth);
         EXPECT_EQ(queued, report->queued);
         EXPECT_EQ(attempts, report->attempts);
@@ -168,8 +169,8 @@ class ReportingCacheTest : public ReportingTestBase,
     if (exist) {
       EXPECT_EQ(endpoint1.group_key, group);
       EXPECT_EQ(endpoint2.group_key, group);
-      EXPECT_TRUE(cache()->ClientExistsForTesting(group.network_isolation_key,
-                                                  group.origin));
+      EXPECT_TRUE(cache()->ClientExistsForTesting(
+          group.network_anonymization_key, group.origin));
     }
     EXPECT_EQ(exist,
               EndpointGroupExistsInCache(group, OriginSubdomains::DEFAULT));
@@ -183,9 +184,9 @@ class ReportingCacheTest : public ReportingTestBase,
   const url::Origin kOrigin2_ = url::Origin::Create(GURL("https://origin2/"));
   const absl::optional<base::UnguessableToken> kReportingSource_ =
       base::UnguessableToken::Create();
-  const NetworkIsolationKey kNik_;
-  const NetworkIsolationKey kOtherNik_ =
-      NetworkIsolationKey(SchemefulSite(kOrigin1_), SchemefulSite(kOrigin2_));
+  const NetworkAnonymizationKey kNak_;
+  const NetworkAnonymizationKey kOtherNak_ =
+      NetworkAnonymizationKey::CreateCrossSite(SchemefulSite(kOrigin1_));
   const IsolationInfo kIsolationInfo1_ =
       IsolationInfo::Create(IsolationInfo::RequestType::kOther,
                             kOrigin1_,
@@ -209,23 +210,23 @@ class ReportingCacheTest : public ReportingTestBase,
   const base::Time kExpires1_ = kNow_ + base::Days(7);
   const base::Time kExpires2_ = kExpires1_ + base::Days(7);
   // There are 2^3 = 8 of these to test the different combinations of matching
-  // vs mismatching NIK, origin, and group.
+  // vs mismatching NAK, origin, and group.
   const ReportingEndpointGroupKey kGroupKey11_ =
-      ReportingEndpointGroupKey(kNik_, kOrigin1_, kGroup1_);
+      ReportingEndpointGroupKey(kNak_, kOrigin1_, kGroup1_);
   const ReportingEndpointGroupKey kGroupKey21_ =
-      ReportingEndpointGroupKey(kNik_, kOrigin2_, kGroup1_);
+      ReportingEndpointGroupKey(kNak_, kOrigin2_, kGroup1_);
   const ReportingEndpointGroupKey kGroupKey12_ =
-      ReportingEndpointGroupKey(kNik_, kOrigin1_, kGroup2_);
+      ReportingEndpointGroupKey(kNak_, kOrigin1_, kGroup2_);
   const ReportingEndpointGroupKey kGroupKey22_ =
-      ReportingEndpointGroupKey(kNik_, kOrigin2_, kGroup2_);
+      ReportingEndpointGroupKey(kNak_, kOrigin2_, kGroup2_);
   const ReportingEndpointGroupKey kOtherGroupKey11_ =
-      ReportingEndpointGroupKey(kOtherNik_, kOrigin1_, kGroup1_);
+      ReportingEndpointGroupKey(kOtherNak_, kOrigin1_, kGroup1_);
   const ReportingEndpointGroupKey kOtherGroupKey21_ =
-      ReportingEndpointGroupKey(kOtherNik_, kOrigin2_, kGroup1_);
+      ReportingEndpointGroupKey(kOtherNak_, kOrigin2_, kGroup1_);
   const ReportingEndpointGroupKey kOtherGroupKey12_ =
-      ReportingEndpointGroupKey(kOtherNik_, kOrigin1_, kGroup2_);
+      ReportingEndpointGroupKey(kOtherNak_, kOrigin1_, kGroup2_);
   const ReportingEndpointGroupKey kOtherGroupKey22_ =
-      ReportingEndpointGroupKey(kOtherNik_, kOrigin2_, kGroup2_);
+      ReportingEndpointGroupKey(kOtherNak_, kOrigin2_, kGroup2_);
 
   TestReportingCacheObserver observer_;
   std::unique_ptr<MockPersistentReportingStore> store_;
@@ -243,7 +244,7 @@ TEST_P(ReportingCacheTest, Reports) {
   cache()->GetReports(&reports);
   EXPECT_TRUE(reports.empty());
 
-  cache()->AddReport(kReportingSource_, kNik_, kUrl1_, kUserAgent_, kGroup1_,
+  cache()->AddReport(kReportingSource_, kNak_, kUrl1_, kUserAgent_, kGroup1_,
                      kType_, base::Value::Dict(), 0, kNowTicks_, 0);
   EXPECT_EQ(1, observer()->cached_reports_update_count());
 
@@ -251,7 +252,7 @@ TEST_P(ReportingCacheTest, Reports) {
   ASSERT_EQ(1u, reports.size());
   const ReportingReport* report = reports[0];
   ASSERT_TRUE(report);
-  EXPECT_EQ(kNik_, report->network_isolation_key);
+  EXPECT_EQ(kNak_, report->network_anonymization_key);
   EXPECT_EQ(kUrl1_, report->url);
   EXPECT_EQ(kUserAgent_, report->user_agent);
   EXPECT_EQ(kGroup1_, report->group);
@@ -281,9 +282,9 @@ TEST_P(ReportingCacheTest, Reports) {
 TEST_P(ReportingCacheTest, RemoveAllReports) {
   LoadReportingClients();
 
-  cache()->AddReport(kReportingSource_, kNik_, kUrl1_, kUserAgent_, kGroup1_,
+  cache()->AddReport(kReportingSource_, kNak_, kUrl1_, kUserAgent_, kGroup1_,
                      kType_, base::Value::Dict(), 0, kNowTicks_, 0);
-  cache()->AddReport(kReportingSource_, kNik_, kUrl1_, kUserAgent_, kGroup1_,
+  cache()->AddReport(kReportingSource_, kNak_, kUrl1_, kUserAgent_, kGroup1_,
                      kType_, base::Value::Dict(), 0, kNowTicks_, 0);
   EXPECT_EQ(2, observer()->cached_reports_update_count());
 
@@ -301,7 +302,7 @@ TEST_P(ReportingCacheTest, RemoveAllReports) {
 TEST_P(ReportingCacheTest, RemovePendingReports) {
   LoadReportingClients();
 
-  cache()->AddReport(kReportingSource_, kNik_, kUrl1_, kUserAgent_, kGroup1_,
+  cache()->AddReport(kReportingSource_, kNak_, kUrl1_, kUserAgent_, kGroup1_,
                      kType_, base::Value::Dict(), 0, kNowTicks_, 0);
   EXPECT_EQ(1, observer()->cached_reports_update_count());
 
@@ -338,7 +339,7 @@ TEST_P(ReportingCacheTest, RemovePendingReports) {
 TEST_P(ReportingCacheTest, RemoveAllPendingReports) {
   LoadReportingClients();
 
-  cache()->AddReport(kReportingSource_, kNik_, kUrl1_, kUserAgent_, kGroup1_,
+  cache()->AddReport(kReportingSource_, kNak_, kUrl1_, kUserAgent_, kGroup1_,
                      kType_, base::Value::Dict(), 0, kNowTicks_, 0);
   EXPECT_EQ(1, observer()->cached_reports_update_count());
 
@@ -378,10 +379,10 @@ TEST_P(ReportingCacheTest, GetReportsAsValue) {
   // We need a reproducible expiry timestamp for this test case.
   const base::TimeTicks now = base::TimeTicks();
   const ReportingReport* report1 =
-      AddAndReturnReport(kNik_, kUrl1_, kUserAgent_, kGroup1_, kType_,
+      AddAndReturnReport(kNak_, kUrl1_, kUserAgent_, kGroup1_, kType_,
                          base::Value::Dict(), 0, now + base::Seconds(200), 0);
   const ReportingReport* report2 =
-      AddAndReturnReport(kOtherNik_, kUrl1_, kUserAgent_, kGroup2_, kType_,
+      AddAndReturnReport(kOtherNak_, kUrl1_, kUserAgent_, kGroup2_, kType_,
                          base::Value::Dict(), 0, now + base::Seconds(100), 1);
   // Mark report1 and report2 as pending.
   EXPECT_THAT(cache()->GetReportsToDeliver(),
@@ -396,7 +397,7 @@ TEST_P(ReportingCacheTest, GetReportsAsValue) {
         {
           "url": "https://origin1/path",
           "group": "group2",
-          "network_isolation_key": "%s",
+          "network_anonymization_key": "%s",
           "type": "default",
           "status": "doomed",
           "body": {},
@@ -407,7 +408,7 @@ TEST_P(ReportingCacheTest, GetReportsAsValue) {
         {
           "url": "https://origin1/path",
           "group": "group1",
-          "network_isolation_key": "%s",
+          "network_anonymization_key": "%s",
           "type": "default",
           "status": "pending",
           "body": {},
@@ -417,15 +418,15 @@ TEST_P(ReportingCacheTest, GetReportsAsValue) {
         },
       ]
       )json",
-      kOtherNik_.ToDebugString().c_str(), kNik_.ToDebugString().c_str()));
+      kOtherNak_.ToDebugString().c_str(), kNak_.ToDebugString().c_str()));
   EXPECT_EQ(expected, actual);
 
   // Add two new reports that will show up as "queued".
   const ReportingReport* report3 =
-      AddAndReturnReport(kNik_, kUrl2_, kUserAgent_, kGroup1_, kType_,
+      AddAndReturnReport(kNak_, kUrl2_, kUserAgent_, kGroup1_, kType_,
                          base::Value::Dict(), 2, now + base::Seconds(200), 0);
   const ReportingReport* report4 =
-      AddAndReturnReport(kOtherNik_, kUrl1_, kUserAgent_, kGroup1_, kType_,
+      AddAndReturnReport(kOtherNak_, kUrl1_, kUserAgent_, kGroup1_, kType_,
                          base::Value::Dict(), 0, now + base::Seconds(300), 0);
   actual = cache()->GetReportsAsValue();
   expected = base::test::ParseJson(base::StringPrintf(
@@ -434,7 +435,7 @@ TEST_P(ReportingCacheTest, GetReportsAsValue) {
         {
           "url": "https://origin1/path",
           "group": "group2",
-          "network_isolation_key": "%s",
+          "network_anonymization_key": "%s",
           "type": "default",
           "status": "doomed",
           "body": {},
@@ -445,7 +446,7 @@ TEST_P(ReportingCacheTest, GetReportsAsValue) {
         {
           "url": "https://origin1/path",
           "group": "group1",
-          "network_isolation_key": "%s",
+          "network_anonymization_key": "%s",
           "type": "default",
           "status": "pending",
           "body": {},
@@ -456,7 +457,7 @@ TEST_P(ReportingCacheTest, GetReportsAsValue) {
         {
           "url": "https://origin2/path",
           "group": "group1",
-          "network_isolation_key": "%s",
+          "network_anonymization_key": "%s",
           "type": "default",
           "status": "queued",
           "body": {},
@@ -467,7 +468,7 @@ TEST_P(ReportingCacheTest, GetReportsAsValue) {
         {
           "url": "https://origin1/path",
           "group": "group1",
-          "network_isolation_key": "%s",
+          "network_anonymization_key": "%s",
           "type": "default",
           "status": "queued",
           "body": {},
@@ -477,8 +478,8 @@ TEST_P(ReportingCacheTest, GetReportsAsValue) {
         },
       ]
       )json",
-      kOtherNik_.ToDebugString().c_str(), kNik_.ToDebugString().c_str(),
-      kNik_.ToDebugString().c_str(), kOtherNik_.ToDebugString().c_str()));
+      kOtherNak_.ToDebugString().c_str(), kNak_.ToDebugString().c_str(),
+      kNak_.ToDebugString().c_str(), kOtherNak_.ToDebugString().c_str()));
   EXPECT_EQ(expected, actual);
 
   // GetReportsToDeliver only returns the non-pending reports.
@@ -494,11 +495,11 @@ TEST_P(ReportingCacheTest, GetReportsToDeliverForSource) {
 
   // Queue a V1 report for each of these sources, and a V0 report (with a null
   // source) for the same URL.
-  cache()->AddReport(source1, kNik_, kUrl1_, kUserAgent_, kGroup1_, kType_,
+  cache()->AddReport(source1, kNak_, kUrl1_, kUserAgent_, kGroup1_, kType_,
                      base::Value::Dict(), 0, kNowTicks_, 0);
-  cache()->AddReport(source2, kNik_, kUrl1_, kUserAgent_, kGroup1_, kType_,
+  cache()->AddReport(source2, kNak_, kUrl1_, kUserAgent_, kGroup1_, kType_,
                      base::Value::Dict(), 0, kNowTicks_, 0);
-  cache()->AddReport(absl::nullopt, kNik_, kUrl1_, kUserAgent_, kGroup1_,
+  cache()->AddReport(absl::nullopt, kNak_, kUrl1_, kUserAgent_, kGroup1_,
                      kType_, base::Value::Dict(), 0, kNowTicks_, 0);
   EXPECT_EQ(3, observer()->cached_reports_update_count());
 
@@ -655,13 +656,13 @@ TEST_P(ReportingCacheTest, ClientsKeyedByEndpointGroupKey) {
   size_t client_count = 4u;
   EXPECT_EQ(client_count, cache()->GetClientCountForTesting());
 
-  // Test that Clients with different NIKs are considered different, and test
+  // Test that Clients with different NAKs are considered different, and test
   // RemoveEndpointGroup() and RemoveClient().
-  const std::pair<NetworkIsolationKey, url::Origin> kNikOriginPairs[] = {
-      {kNik_, kOrigin1_},
-      {kNik_, kOrigin2_},
-      {kOtherNik_, kOrigin1_},
-      {kOtherNik_, kOrigin2_},
+  const std::pair<NetworkAnonymizationKey, url::Origin> kNakOriginPairs[] = {
+      {kNak_, kOrigin1_},
+      {kNak_, kOrigin2_},
+      {kOtherNak_, kOrigin1_},
+      {kOtherNak_, kOrigin2_},
   };
 
   // SetEndpointInCache doesn't update store counts, which is why we start from
@@ -674,7 +675,7 @@ TEST_P(ReportingCacheTest, ClientsKeyedByEndpointGroupKey) {
   int store_remove_group_count = 0;
   int store_remove_endpoint_count = 0;
 
-  for (const auto& pair : kNikOriginPairs) {
+  for (const auto& pair : kNakOriginPairs) {
     EXPECT_TRUE(cache()->ClientExistsForTesting(pair.first, pair.second));
     ReportingEndpointGroupKey group1(pair.first, pair.second, kGroup1_);
     ReportingEndpointGroupKey group2(pair.first, pair.second, kGroup2_);
@@ -952,21 +953,21 @@ TEST_P(ReportingCacheTest, RemoveSourceAndEndpoints) {
       base::UnguessableToken::Create();
   LoadReportingClients();
 
-  NetworkIsolationKey network_isolation_key_1 =
-      kIsolationInfo1_.network_isolation_key();
-  NetworkIsolationKey network_isolation_key_2 =
-      kIsolationInfo2_.network_isolation_key();
+  NetworkAnonymizationKey network_anonymization_key_1 =
+      kIsolationInfo1_.network_anonymization_key();
+  NetworkAnonymizationKey network_anonymization_key_2 =
+      kIsolationInfo2_.network_anonymization_key();
 
   cache()->SetV1EndpointForTesting(
-      ReportingEndpointGroupKey(network_isolation_key_1, *kReportingSource_,
+      ReportingEndpointGroupKey(network_anonymization_key_1, *kReportingSource_,
                                 kOrigin1_, kGroup1_),
       *kReportingSource_, kIsolationInfo1_, kUrl1_);
   cache()->SetV1EndpointForTesting(
-      ReportingEndpointGroupKey(network_isolation_key_1, *kReportingSource_,
+      ReportingEndpointGroupKey(network_anonymization_key_1, *kReportingSource_,
                                 kOrigin1_, kGroup2_),
       *kReportingSource_, kIsolationInfo1_, kUrl2_);
   cache()->SetV1EndpointForTesting(
-      ReportingEndpointGroupKey(network_isolation_key_2, reporting_source_2,
+      ReportingEndpointGroupKey(network_anonymization_key_2, reporting_source_2,
                                 kOrigin2_, kGroup1_),
       reporting_source_2, kIsolationInfo2_, kUrl2_);
 
@@ -1019,7 +1020,7 @@ TEST_P(ReportingCacheTest, GetClientsAsValue) {
       R"json(
       [
         {
-          "network_isolation_key": "%s",
+          "network_anonymization_key": "%s",
           "origin": "https://origin1",
           "groups": [
             {
@@ -1035,7 +1036,7 @@ TEST_P(ReportingCacheTest, GetClientsAsValue) {
           ],
         },
         {
-          "network_isolation_key": "%s",
+          "network_anonymization_key": "%s",
           "origin": "https://origin2",
           "groups": [
             {
@@ -1052,7 +1053,7 @@ TEST_P(ReportingCacheTest, GetClientsAsValue) {
         },
       ]
       )json",
-      kNik_.ToDebugString().c_str(), kOtherNik_.ToDebugString().c_str()));
+      kNak_.ToDebugString().c_str(), kOtherNak_.ToDebugString().c_str()));
 
   // Compare disregarding order.
   base::Value::List& expected_list = expected.GetList();
@@ -1086,16 +1087,16 @@ TEST_P(ReportingCacheTest, GetCandidateEndpointsFromDocumentForDelivery) {
   const base::UnguessableToken reporting_source_2 =
       base::UnguessableToken::Create();
 
-  NetworkIsolationKey network_isolation_key =
-      kIsolationInfo1_.network_isolation_key();
+  NetworkAnonymizationKey network_anonymization_key =
+      kIsolationInfo1_.network_anonymization_key();
   const ReportingEndpointGroupKey document_group_key_1 =
-      ReportingEndpointGroupKey(network_isolation_key, reporting_source_1,
+      ReportingEndpointGroupKey(network_anonymization_key, reporting_source_1,
                                 kOrigin1_, kGroup1_);
   const ReportingEndpointGroupKey document_group_key_2 =
-      ReportingEndpointGroupKey(network_isolation_key, reporting_source_1,
+      ReportingEndpointGroupKey(network_anonymization_key, reporting_source_1,
                                 kOrigin1_, kGroup2_);
   const ReportingEndpointGroupKey document_group_key_3 =
-      ReportingEndpointGroupKey(network_isolation_key, reporting_source_2,
+      ReportingEndpointGroupKey(network_anonymization_key, reporting_source_2,
                                 kOrigin1_, kGroup1_);
 
   SetV1EndpointInCache(document_group_key_1, reporting_source_1,
@@ -1105,7 +1106,7 @@ TEST_P(ReportingCacheTest, GetCandidateEndpointsFromDocumentForDelivery) {
   SetV1EndpointInCache(document_group_key_3, reporting_source_2,
                        kIsolationInfo1_, kEndpoint1_);
   const ReportingEndpointGroupKey kReportGroupKey = ReportingEndpointGroupKey(
-      network_isolation_key, reporting_source_1, kOrigin1_, kGroup1_);
+      network_anonymization_key, reporting_source_1, kOrigin1_, kGroup1_);
   std::vector<ReportingEndpoint> candidate_endpoints =
       cache()->GetCandidateEndpointsForDelivery(kReportGroupKey);
   ASSERT_EQ(1u, candidate_endpoints.size());
@@ -1118,17 +1119,17 @@ TEST_P(ReportingCacheTest, GetCandidateEndpointsFromDocumentForNetworkReports) {
   const base::UnguessableToken reporting_source =
       base::UnguessableToken::Create();
 
-  NetworkIsolationKey network_isolation_key =
-      kIsolationInfo1_.network_isolation_key();
+  NetworkAnonymizationKey network_anonymization_key =
+      kIsolationInfo1_.network_anonymization_key();
 
   const ReportingEndpointGroupKey kDocumentGroupKey = ReportingEndpointGroupKey(
-      network_isolation_key, reporting_source, kOrigin1_, kGroup1_);
+      network_anonymization_key, reporting_source, kOrigin1_, kGroup1_);
 
   SetV1EndpointInCache(kDocumentGroupKey, reporting_source, kIsolationInfo1_,
                        kEndpoint1_);
   const ReportingEndpointGroupKey kNetworkReportGroupKey =
-      ReportingEndpointGroupKey(network_isolation_key, absl::nullopt, kOrigin1_,
-                                kGroup1_);
+      ReportingEndpointGroupKey(network_anonymization_key, absl::nullopt,
+                                kOrigin1_, kGroup1_);
   std::vector<ReportingEndpoint> candidate_endpoints =
       cache()->GetCandidateEndpointsForDelivery(kNetworkReportGroupKey);
   ASSERT_EQ(0u, candidate_endpoints.size());
@@ -1140,16 +1141,16 @@ TEST_P(ReportingCacheTest, GetCandidateEndpointsFromDifferentDocument) {
   const base::UnguessableToken reporting_source =
       base::UnguessableToken::Create();
 
-  NetworkIsolationKey network_isolation_key =
-      kIsolationInfo1_.network_isolation_key();
+  NetworkAnonymizationKey network_anonymization_key =
+      kIsolationInfo1_.network_anonymization_key();
 
   const ReportingEndpointGroupKey kDocumentGroupKey = ReportingEndpointGroupKey(
-      network_isolation_key, reporting_source, kOrigin1_, kGroup1_);
+      network_anonymization_key, reporting_source, kOrigin1_, kGroup1_);
 
   SetV1EndpointInCache(kDocumentGroupKey, reporting_source, kIsolationInfo1_,
                        kEndpoint1_);
   const ReportingEndpointGroupKey kOtherGroupKey = ReportingEndpointGroupKey(
-      network_isolation_key, base::UnguessableToken::Create(), kOrigin1_,
+      network_anonymization_key, base::UnguessableToken::Create(), kOrigin1_,
       kGroup1_);
   std::vector<ReportingEndpoint> candidate_endpoints =
       cache()->GetCandidateEndpointsForDelivery(kOtherGroupKey);
@@ -1163,18 +1164,18 @@ TEST_P(ReportingCacheTest, GetCandidateEndpointsFromDifferentDocument) {
 TEST_P(ReportingCacheTest, GetMixedCandidateEndpointsForDelivery) {
   LoadReportingClients();
 
-  // This test relies on proper NIKs being used, so set those up, and endpoint
+  // This test relies on proper NAKs being used, so set those up, and endpoint
   // group keys to go with them.
-  NetworkIsolationKey network_isolation_key1 =
-      kIsolationInfo1_.network_isolation_key();
-  NetworkIsolationKey network_isolation_key2 =
-      kIsolationInfo2_.network_isolation_key();
-  ReportingEndpointGroupKey group_key_11 =
-      ReportingEndpointGroupKey(network_isolation_key1, kOrigin1_, kGroup1_);
-  ReportingEndpointGroupKey group_key_12 =
-      ReportingEndpointGroupKey(network_isolation_key1, kOrigin1_, kGroup2_);
-  ReportingEndpointGroupKey group_key_21 =
-      ReportingEndpointGroupKey(network_isolation_key2, kOrigin2_, kGroup1_);
+  NetworkAnonymizationKey network_anonymization_key1 =
+      kIsolationInfo1_.network_anonymization_key();
+  NetworkAnonymizationKey network_anonymization_key2 =
+      kIsolationInfo2_.network_anonymization_key();
+  ReportingEndpointGroupKey group_key_11 = ReportingEndpointGroupKey(
+      network_anonymization_key1, kOrigin1_, kGroup1_);
+  ReportingEndpointGroupKey group_key_12 = ReportingEndpointGroupKey(
+      network_anonymization_key1, kOrigin1_, kGroup2_);
+  ReportingEndpointGroupKey group_key_21 = ReportingEndpointGroupKey(
+      network_anonymization_key2, kOrigin2_, kGroup1_);
 
   // Set up V0 endpoint groups for this origin.
   ASSERT_TRUE(SetEndpointInCache(group_key_11, kEndpoint1_, kExpires1_));
@@ -1183,12 +1184,12 @@ TEST_P(ReportingCacheTest, GetMixedCandidateEndpointsForDelivery) {
   ASSERT_TRUE(SetEndpointInCache(group_key_21, kEndpoint1_, kExpires1_));
 
   // Set up a V1 endpoint for a document at the same origin.
-  NetworkIsolationKey network_isolation_key =
-      kIsolationInfo1_.network_isolation_key();
+  NetworkAnonymizationKey network_anonymization_key =
+      kIsolationInfo1_.network_anonymization_key();
   const base::UnguessableToken reporting_source =
       base::UnguessableToken::Create();
   const ReportingEndpointGroupKey document_group_key =
-      ReportingEndpointGroupKey(network_isolation_key1, reporting_source,
+      ReportingEndpointGroupKey(network_anonymization_key1, reporting_source,
                                 kOrigin1_, kGroup1_);
   SetV1EndpointInCache(document_group_key, reporting_source, kIsolationInfo1_,
                        kEndpoint1_);
@@ -1197,7 +1198,7 @@ TEST_P(ReportingCacheTest, GetMixedCandidateEndpointsForDelivery) {
   // the V1 endpoint should be returned.
   std::vector<ReportingEndpoint> candidate_endpoints =
       cache()->GetCandidateEndpointsForDelivery(ReportingEndpointGroupKey(
-          network_isolation_key1, reporting_source, kOrigin1_, kGroup1_));
+          network_anonymization_key1, reporting_source, kOrigin1_, kGroup1_));
   ASSERT_EQ(1u, candidate_endpoints.size());
   EXPECT_EQ(document_group_key, candidate_endpoints[0].group_key);
 
@@ -1205,7 +1206,7 @@ TEST_P(ReportingCacheTest, GetMixedCandidateEndpointsForDelivery) {
   // returned.
   candidate_endpoints =
       cache()->GetCandidateEndpointsForDelivery(ReportingEndpointGroupKey(
-          network_isolation_key1, absl::nullopt, kOrigin1_, kGroup1_));
+          network_anonymization_key1, absl::nullopt, kOrigin1_, kGroup1_));
   ASSERT_EQ(2u, candidate_endpoints.size());
   EXPECT_EQ(group_key_11, candidate_endpoints[0].group_key);
   EXPECT_EQ(group_key_11, candidate_endpoints[1].group_key);
@@ -1214,16 +1215,16 @@ TEST_P(ReportingCacheTest, GetMixedCandidateEndpointsForDelivery) {
   // been configured, so we should fall back to the V0 endpoints.
   candidate_endpoints =
       cache()->GetCandidateEndpointsForDelivery(ReportingEndpointGroupKey(
-          network_isolation_key1, reporting_source, kOrigin1_, kGroup2_));
+          network_anonymization_key1, reporting_source, kOrigin1_, kGroup2_));
   ASSERT_EQ(1u, candidate_endpoints.size());
   EXPECT_EQ(group_key_12, candidate_endpoints[0].group_key);
 }
 
-TEST_P(ReportingCacheTest, GetCandidateEndpointsDifferentNik) {
+TEST_P(ReportingCacheTest, GetCandidateEndpointsDifferentNak) {
   LoadReportingClients();
 
-  // Test that NIKs are respected by using 2 groups with the same origin and
-  // group name but different NIKs.
+  // Test that NAKs are respected by using 2 groups with the same origin and
+  // group name but different NAKs.
   ASSERT_TRUE(SetEndpointInCache(kGroupKey11_, kEndpoint1_, kExpires1_));
   ASSERT_TRUE(SetEndpointInCache(kGroupKey11_, kEndpoint2_, kExpires1_));
   ASSERT_TRUE(SetEndpointInCache(kOtherGroupKey11_, kEndpoint1_, kExpires1_));
@@ -1274,12 +1275,12 @@ TEST_P(ReportingCacheTest, ExcludeSubdomainsDifferentPort) {
       url::Origin::Create(GURL("https://example:444/"));
 
   ASSERT_TRUE(SetEndpointInCache(
-      ReportingEndpointGroupKey(kNik_, kDifferentPortOrigin, kGroup1_),
+      ReportingEndpointGroupKey(kNak_, kDifferentPortOrigin, kGroup1_),
       kEndpoint1_, kExpires1_, OriginSubdomains::EXCLUDE));
 
   std::vector<ReportingEndpoint> candidate_endpoints =
       cache()->GetCandidateEndpointsForDelivery(
-          ReportingEndpointGroupKey(kNik_, kOrigin, kGroup1_));
+          ReportingEndpointGroupKey(kNak_, kOrigin, kGroup1_));
   ASSERT_EQ(0u, candidate_endpoints.size());
 }
 
@@ -1291,12 +1292,12 @@ TEST_P(ReportingCacheTest, ExcludeSubdomainsSuperdomain) {
       url::Origin::Create(GURL("https://example/"));
 
   ASSERT_TRUE(SetEndpointInCache(
-      ReportingEndpointGroupKey(kNik_, kSuperOrigin, kGroup1_), kEndpoint1_,
+      ReportingEndpointGroupKey(kNak_, kSuperOrigin, kGroup1_), kEndpoint1_,
       kExpires1_, OriginSubdomains::EXCLUDE));
 
   std::vector<ReportingEndpoint> candidate_endpoints =
       cache()->GetCandidateEndpointsForDelivery(
-          ReportingEndpointGroupKey(kNik_, kOrigin, kGroup1_));
+          ReportingEndpointGroupKey(kNak_, kOrigin, kGroup1_));
   ASSERT_EQ(0u, candidate_endpoints.size());
 }
 
@@ -1308,12 +1309,12 @@ TEST_P(ReportingCacheTest, IncludeSubdomainsDifferentPort) {
       url::Origin::Create(GURL("https://example:444/"));
 
   ASSERT_TRUE(SetEndpointInCache(
-      ReportingEndpointGroupKey(kNik_, kDifferentPortOrigin, kGroup1_),
+      ReportingEndpointGroupKey(kNak_, kDifferentPortOrigin, kGroup1_),
       kEndpoint1_, kExpires1_, OriginSubdomains::INCLUDE));
 
   std::vector<ReportingEndpoint> candidate_endpoints =
       cache()->GetCandidateEndpointsForDelivery(
-          ReportingEndpointGroupKey(kNik_, kOrigin, kGroup1_));
+          ReportingEndpointGroupKey(kNak_, kOrigin, kGroup1_));
   ASSERT_EQ(1u, candidate_endpoints.size());
   EXPECT_EQ(kDifferentPortOrigin, candidate_endpoints[0].group_key.origin);
 }
@@ -1326,12 +1327,12 @@ TEST_P(ReportingCacheTest, IncludeSubdomainsSuperdomain) {
       url::Origin::Create(GURL("https://example/"));
 
   ASSERT_TRUE(SetEndpointInCache(
-      ReportingEndpointGroupKey(kNik_, kSuperOrigin, kGroup1_), kEndpoint1_,
+      ReportingEndpointGroupKey(kNak_, kSuperOrigin, kGroup1_), kEndpoint1_,
       kExpires1_, OriginSubdomains::INCLUDE));
 
   std::vector<ReportingEndpoint> candidate_endpoints =
       cache()->GetCandidateEndpointsForDelivery(
-          ReportingEndpointGroupKey(kNik_, kOrigin, kGroup1_));
+          ReportingEndpointGroupKey(kNak_, kOrigin, kGroup1_));
   ASSERT_EQ(1u, candidate_endpoints.size());
   EXPECT_EQ(kSuperOrigin, candidate_endpoints[0].group_key.origin);
 }
@@ -1344,15 +1345,15 @@ TEST_P(ReportingCacheTest, IncludeSubdomainsPreferOriginToDifferentPort) {
       url::Origin::Create(GURL("https://example:444/"));
 
   ASSERT_TRUE(
-      SetEndpointInCache(ReportingEndpointGroupKey(kNik_, kOrigin, kGroup1_),
+      SetEndpointInCache(ReportingEndpointGroupKey(kNak_, kOrigin, kGroup1_),
                          kEndpoint1_, kExpires1_, OriginSubdomains::INCLUDE));
   ASSERT_TRUE(SetEndpointInCache(
-      ReportingEndpointGroupKey(kNik_, kDifferentPortOrigin, kGroup1_),
+      ReportingEndpointGroupKey(kNak_, kDifferentPortOrigin, kGroup1_),
       kEndpoint1_, kExpires1_, OriginSubdomains::INCLUDE));
 
   std::vector<ReportingEndpoint> candidate_endpoints =
       cache()->GetCandidateEndpointsForDelivery(
-          ReportingEndpointGroupKey(kNik_, kOrigin, kGroup1_));
+          ReportingEndpointGroupKey(kNak_, kOrigin, kGroup1_));
   ASSERT_EQ(1u, candidate_endpoints.size());
   EXPECT_EQ(kOrigin, candidate_endpoints[0].group_key.origin);
 }
@@ -1365,15 +1366,15 @@ TEST_P(ReportingCacheTest, IncludeSubdomainsPreferOriginToSuperdomain) {
       url::Origin::Create(GURL("https://example/"));
 
   ASSERT_TRUE(
-      SetEndpointInCache(ReportingEndpointGroupKey(kNik_, kOrigin, kGroup1_),
+      SetEndpointInCache(ReportingEndpointGroupKey(kNak_, kOrigin, kGroup1_),
                          kEndpoint1_, kExpires1_, OriginSubdomains::INCLUDE));
   ASSERT_TRUE(SetEndpointInCache(
-      ReportingEndpointGroupKey(kNik_, kSuperOrigin, kGroup1_), kEndpoint1_,
+      ReportingEndpointGroupKey(kNak_, kSuperOrigin, kGroup1_), kEndpoint1_,
       kExpires1_, OriginSubdomains::INCLUDE));
 
   std::vector<ReportingEndpoint> candidate_endpoints =
       cache()->GetCandidateEndpointsForDelivery(
-          ReportingEndpointGroupKey(kNik_, kOrigin, kGroup1_));
+          ReportingEndpointGroupKey(kNak_, kOrigin, kGroup1_));
   ASSERT_EQ(1u, candidate_endpoints.size());
   EXPECT_EQ(kOrigin, candidate_endpoints[0].group_key.origin);
 }
@@ -1389,20 +1390,20 @@ TEST_P(ReportingCacheTest, IncludeSubdomainsPreferMoreSpecificSuperdomain) {
       url::Origin::Create(GURL("https://example/"));
 
   ASSERT_TRUE(SetEndpointInCache(
-      ReportingEndpointGroupKey(kNik_, kSuperOrigin, kGroup1_), kEndpoint1_,
+      ReportingEndpointGroupKey(kNak_, kSuperOrigin, kGroup1_), kEndpoint1_,
       kExpires1_, OriginSubdomains::INCLUDE));
   ASSERT_TRUE(SetEndpointInCache(
-      ReportingEndpointGroupKey(kNik_, kSuperSuperOrigin, kGroup1_),
+      ReportingEndpointGroupKey(kNak_, kSuperSuperOrigin, kGroup1_),
       kEndpoint1_, kExpires1_, OriginSubdomains::INCLUDE));
 
   std::vector<ReportingEndpoint> candidate_endpoints =
       cache()->GetCandidateEndpointsForDelivery(
-          ReportingEndpointGroupKey(kNik_, kOrigin, kGroup1_));
+          ReportingEndpointGroupKey(kNak_, kOrigin, kGroup1_));
   ASSERT_EQ(1u, candidate_endpoints.size());
   EXPECT_EQ(kSuperOrigin, candidate_endpoints[0].group_key.origin);
 }
 
-TEST_P(ReportingCacheTest, IncludeSubdomainsPreserveNik) {
+TEST_P(ReportingCacheTest, IncludeSubdomainsPreserveNak) {
   LoadReportingClients();
 
   const url::Origin kOrigin = url::Origin::Create(GURL("https://foo.example/"));
@@ -1410,17 +1411,18 @@ TEST_P(ReportingCacheTest, IncludeSubdomainsPreserveNik) {
       url::Origin::Create(GURL("https://example/"));
 
   ASSERT_TRUE(SetEndpointInCache(
-      ReportingEndpointGroupKey(kNik_, kSuperOrigin, kGroup1_), kEndpoint1_,
+      ReportingEndpointGroupKey(kNak_, kSuperOrigin, kGroup1_), kEndpoint1_,
       kExpires1_, OriginSubdomains::INCLUDE));
   ASSERT_TRUE(SetEndpointInCache(
-      ReportingEndpointGroupKey(kOtherNik_, kSuperOrigin, kGroup1_),
+      ReportingEndpointGroupKey(kOtherNak_, kSuperOrigin, kGroup1_),
       kEndpoint1_, kExpires1_, OriginSubdomains::INCLUDE));
 
   std::vector<ReportingEndpoint> candidate_endpoints =
       cache()->GetCandidateEndpointsForDelivery(
-          ReportingEndpointGroupKey(kOtherNik_, kOrigin, kGroup1_));
+          ReportingEndpointGroupKey(kOtherNak_, kOrigin, kGroup1_));
   ASSERT_EQ(1u, candidate_endpoints.size());
-  EXPECT_EQ(kOtherNik_, candidate_endpoints[0].group_key.network_isolation_key);
+  EXPECT_EQ(kOtherNak_,
+            candidate_endpoints[0].group_key.network_anonymization_key);
 }
 
 TEST_P(ReportingCacheTest, EvictOldestReport) {
@@ -1435,7 +1437,7 @@ TEST_P(ReportingCacheTest, EvictOldestReport) {
 
   // Enqueue the maximum number of reports, spaced apart in time.
   for (size_t i = 0; i < max_report_count; ++i) {
-    cache()->AddReport(kReportingSource_, kNik_, kUrl1_, kUserAgent_, kGroup1_,
+    cache()->AddReport(kReportingSource_, kNak_, kUrl1_, kUserAgent_, kGroup1_,
                        kType_, base::Value::Dict(), 0, tick_clock()->NowTicks(),
                        0);
     tick_clock()->Advance(base::Minutes(1));
@@ -1443,7 +1445,7 @@ TEST_P(ReportingCacheTest, EvictOldestReport) {
   EXPECT_EQ(max_report_count, report_count());
 
   // Add one more report to force the cache to evict one.
-  cache()->AddReport(kReportingSource_, kNik_, kUrl1_, kUserAgent_, kGroup1_,
+  cache()->AddReport(kReportingSource_, kNak_, kUrl1_, kUserAgent_, kGroup1_,
                      kType_, base::Value::Dict(), 0, tick_clock()->NowTicks(),
                      0);
 
@@ -1467,7 +1469,7 @@ TEST_P(ReportingCacheTest, DontEvictPendingReports) {
   // Enqueue the maximum number of reports, spaced apart in time.
   std::vector<const ReportingReport*> reports;
   for (size_t i = 0; i < max_report_count; ++i) {
-    reports.push_back(AddAndReturnReport(kNik_, kUrl1_, kUserAgent_, kGroup1_,
+    reports.push_back(AddAndReturnReport(kNak_, kUrl1_, kUserAgent_, kGroup1_,
                                          kType_, base::Value::Dict(), 0,
                                          tick_clock()->NowTicks(), 0));
     tick_clock()->Advance(base::Minutes(1));
@@ -1480,7 +1482,7 @@ TEST_P(ReportingCacheTest, DontEvictPendingReports) {
 
   // Add one more report to force the cache to evict one. Since the cache has
   // only pending reports, it will be forced to evict the *new* report!
-  cache()->AddReport(kReportingSource_, kNik_, kUrl1_, kUserAgent_, kGroup1_,
+  cache()->AddReport(kReportingSource_, kNak_, kUrl1_, kUserAgent_, kGroup1_,
                      kType_, base::Value::Dict(), 0, kNowTicks_, 0);
 
   // Make sure the cache evicted a report, and make sure the report evicted was
@@ -1562,7 +1564,7 @@ TEST_P(ReportingCacheTest, EvictFromStalestGroup) {
   LoadReportingClients();
 
   for (size_t i = 0; i < policy().max_endpoints_per_origin; ++i) {
-    ReportingEndpointGroupKey group_key(kNik_, kOrigin1_,
+    ReportingEndpointGroupKey group_key(kNak_, kOrigin1_,
                                         base::NumberToString(i));
     ASSERT_TRUE(SetEndpointInCache(group_key, MakeURL(i), kExpires1_));
     EXPECT_EQ(i + 1, cache()->GetEndpointCount());
@@ -1581,12 +1583,12 @@ TEST_P(ReportingCacheTest, EvictFromStalestGroup) {
   EXPECT_GE(policy().max_endpoints_per_origin, cache()->GetEndpointCount());
   EXPECT_TRUE(ClientExistsInCacheForOrigin(kOrigin1_));
   EXPECT_FALSE(EndpointGroupExistsInCache(
-      ReportingEndpointGroupKey(kNik_, kOrigin1_, "0"),
+      ReportingEndpointGroupKey(kNak_, kOrigin1_, "0"),
       OriginSubdomains::DEFAULT));
   EXPECT_TRUE(
       EndpointGroupExistsInCache(kGroupKey12_, OriginSubdomains::DEFAULT));
   for (size_t i = 1; i < policy().max_endpoints_per_origin; ++i) {
-    ReportingEndpointGroupKey group_key(kNik_, kOrigin1_,
+    ReportingEndpointGroupKey group_key(kNak_, kOrigin1_,
                                         base::NumberToString(i));
     EXPECT_TRUE(
         EndpointGroupExistsInCache(group_key, OriginSubdomains::DEFAULT));
@@ -1606,7 +1608,7 @@ TEST_P(ReportingCacheTest, EvictFromLargestGroup) {
 
   // Insert one more endpoint in a different group; eviction should be
   // triggered.
-  SetEndpointInCache(ReportingEndpointGroupKey(kNik_, kOrigin1_, "default"),
+  SetEndpointInCache(ReportingEndpointGroupKey(kNak_, kOrigin1_, "default"),
                      kEndpoint1_, kExpires1_);
   EXPECT_EQ(policy().max_endpoints_per_origin, cache()->GetEndpointCount());
 
@@ -1654,7 +1656,7 @@ TEST_P(ReportingCacheTest, EvictEndpointsOverGlobalLimitFromStalestClient) {
 
   // Set enough endpoints to reach the global endpoint limit.
   for (size_t i = 0; i < policy().max_endpoint_count; ++i) {
-    ReportingEndpointGroupKey group_key(kNik_, url::Origin::Create(MakeURL(i)),
+    ReportingEndpointGroupKey group_key(kNak_, url::Origin::Create(MakeURL(i)),
                                         kGroup1_);
     ASSERT_TRUE(SetEndpointInCache(group_key, MakeURL(i), kExpires1_));
     EXPECT_EQ(i + 1, cache()->GetEndpointCount());
@@ -1719,13 +1721,14 @@ TEST_P(ReportingCacheTest, AddClientsLoadedFromStore) {
   EXPECT_TRUE(ClientExistsInCacheForOrigin(kOrigin2_));
 }
 
-TEST_P(ReportingCacheTest, AddStoredClientsWithDifferentNetworkIsolationKeys) {
+TEST_P(ReportingCacheTest,
+       AddStoredClientsWithDifferentNetworkAnonymizationKeys) {
   if (!store())
     return;
 
   base::Time now = clock()->Now();
 
-  // This should create 4 different clients, for (2 origins) x (2 NIKs).
+  // This should create 4 different clients, for (2 origins) x (2 NAKs).
   // Intentionally in a weird order to check sorting.
   std::vector<ReportingEndpoint> endpoints;
   endpoints.emplace_back(kGroupKey11_,
@@ -1766,13 +1769,13 @@ TEST_P(ReportingCacheTest, AddStoredClientsWithDifferentNetworkIsolationKeys) {
   EXPECT_TRUE(
       EndpointGroupExistsInCache(kOtherGroupKey21_, OriginSubdomains::DEFAULT));
   EXPECT_TRUE(cache()->ClientExistsForTesting(
-      kGroupKey11_.network_isolation_key, kGroupKey11_.origin));
+      kGroupKey11_.network_anonymization_key, kGroupKey11_.origin));
   EXPECT_TRUE(cache()->ClientExistsForTesting(
-      kGroupKey21_.network_isolation_key, kGroupKey21_.origin));
+      kGroupKey21_.network_anonymization_key, kGroupKey21_.origin));
   EXPECT_TRUE(cache()->ClientExistsForTesting(
-      kOtherGroupKey11_.network_isolation_key, kOtherGroupKey11_.origin));
+      kOtherGroupKey11_.network_anonymization_key, kOtherGroupKey11_.origin));
   EXPECT_TRUE(cache()->ClientExistsForTesting(
-      kOtherGroupKey21_.network_isolation_key, kOtherGroupKey21_.origin));
+      kOtherGroupKey21_.network_anonymization_key, kOtherGroupKey21_.origin));
 }
 
 TEST_P(ReportingCacheTest, DoNotStoreMoreThanLimits) {
@@ -1840,7 +1843,7 @@ TEST_P(ReportingCacheTest, DoNotLoadMismatchedGroupsAndEndpoints) {
   groups.emplace_back(kGroupKey21_, OriginSubdomains::DEFAULT,
                       now /* expires */, now /* last_used */);
   // This endpoint group has no corresponding endpoint
-  groups.emplace_back(ReportingEndpointGroupKey(kNik_, kOrigin2_, "last_group"),
+  groups.emplace_back(ReportingEndpointGroupKey(kNak_, kOrigin2_, "last_group"),
                       OriginSubdomains::DEFAULT, now /* expires */,
                       now /* last_used */);
   store()->SetPrestoredClients(endpoints, groups);
@@ -1874,10 +1877,10 @@ TEST_P(ReportingCacheTest, StoreLastUsedProperly) {
 
   // We need more than three endpoints to trigger eviction.
   std::vector<ReportingEndpoint> endpoints;
-  ReportingEndpointGroupKey group1(kNik_, kOrigin1_, "1");
-  ReportingEndpointGroupKey group2(kNik_, kOrigin1_, "2");
-  ReportingEndpointGroupKey group3(kNik_, kOrigin1_, "3");
-  ReportingEndpointGroupKey group4(kNik_, kOrigin1_, "4");
+  ReportingEndpointGroupKey group1(kNak_, kOrigin1_, "1");
+  ReportingEndpointGroupKey group2(kNak_, kOrigin1_, "2");
+  ReportingEndpointGroupKey group3(kNak_, kOrigin1_, "3");
+  ReportingEndpointGroupKey group4(kNak_, kOrigin1_, "4");
   endpoints.emplace_back(group1, ReportingEndpoint::EndpointInfo{kEndpoint1_});
   endpoints.emplace_back(group2, ReportingEndpoint::EndpointInfo{kEndpoint1_});
   endpoints.emplace_back(group3, ReportingEndpoint::EndpointInfo{kEndpoint1_});
@@ -1942,18 +1945,18 @@ TEST_P(ReportingCacheTest, DoNotAddDuplicatedEntriesFromStore) {
 TEST_P(ReportingCacheTest, GetIsolationInfoForEndpoint) {
   LoadReportingClients();
 
-  NetworkIsolationKey network_isolation_key1 =
-      kIsolationInfo1_.network_isolation_key();
+  NetworkAnonymizationKey network_anonymization_key1 =
+      kIsolationInfo1_.network_anonymization_key();
 
   // Set up a V1 endpoint for this origin.
   cache()->SetV1EndpointForTesting(
-      ReportingEndpointGroupKey(network_isolation_key1, *kReportingSource_,
+      ReportingEndpointGroupKey(network_anonymization_key1, *kReportingSource_,
                                 kOrigin1_, kGroup1_),
       *kReportingSource_, kIsolationInfo1_, kUrl1_);
 
   // Set up a V0 endpoint group for this origin.
-  ReportingEndpointGroupKey group_key_11 =
-      ReportingEndpointGroupKey(network_isolation_key1, kOrigin1_, kGroup1_);
+  ReportingEndpointGroupKey group_key_11 = ReportingEndpointGroupKey(
+      network_anonymization_key1, kOrigin1_, kGroup1_);
   ASSERT_TRUE(SetEndpointInCache(group_key_11, kEndpoint1_, kExpires1_));
 
   // For a V1 endpoint, ensure that the isolation info matches exactly what was
@@ -1967,7 +1970,7 @@ TEST_P(ReportingCacheTest, GetIsolationInfoForEndpoint) {
   EXPECT_EQ(isolation_info_for_document.request_type(),
             IsolationInfo::RequestType::kOther);
 
-  // For a V0 endpoint, ensure that site_for_cookies is null and that the NIK
+  // For a V0 endpoint, ensure that site_for_cookies is null and that the NAK
   // matches the cached endpoint.
   ReportingEndpoint network_endpoint =
       cache()->GetEndpointForTesting(group_key_11, kEndpoint1_);
@@ -1976,8 +1979,8 @@ TEST_P(ReportingCacheTest, GetIsolationInfoForEndpoint) {
       cache()->GetIsolationInfoForEndpoint(network_endpoint);
   EXPECT_EQ(isolation_info_for_network.request_type(),
             IsolationInfo::RequestType::kOther);
-  EXPECT_EQ(isolation_info_for_network.network_isolation_key(),
-            network_endpoint.group_key.network_isolation_key);
+  EXPECT_EQ(isolation_info_for_network.network_anonymization_key(),
+            network_endpoint.group_key.network_anonymization_key);
   EXPECT_TRUE(isolation_info_for_network.site_for_cookies().IsNull());
 }
 
@@ -1986,22 +1989,22 @@ TEST_P(ReportingCacheTest, GetV1ReportingEndpointsForOrigin) {
       base::UnguessableToken::Create();
   LoadReportingClients();
 
-  NetworkIsolationKey network_isolation_key_1 =
-      kIsolationInfo1_.network_isolation_key();
-  NetworkIsolationKey network_isolation_key_2 =
-      kIsolationInfo2_.network_isolation_key();
+  NetworkAnonymizationKey network_anonymization_key_1 =
+      kIsolationInfo1_.network_anonymization_key();
+  NetworkAnonymizationKey network_anonymization_key_2 =
+      kIsolationInfo2_.network_anonymization_key();
 
   // Store endpoints from different origins in cache
   cache()->SetV1EndpointForTesting(
-      ReportingEndpointGroupKey(network_isolation_key_1, *kReportingSource_,
+      ReportingEndpointGroupKey(network_anonymization_key_1, *kReportingSource_,
                                 kOrigin1_, kGroup1_),
       *kReportingSource_, kIsolationInfo1_, kUrl1_);
   cache()->SetV1EndpointForTesting(
-      ReportingEndpointGroupKey(network_isolation_key_1, *kReportingSource_,
+      ReportingEndpointGroupKey(network_anonymization_key_1, *kReportingSource_,
                                 kOrigin1_, kGroup2_),
       *kReportingSource_, kIsolationInfo1_, kUrl2_);
   cache()->SetV1EndpointForTesting(
-      ReportingEndpointGroupKey(network_isolation_key_2, reporting_source_2,
+      ReportingEndpointGroupKey(network_anonymization_key_2, reporting_source_2,
                                 kOrigin2_, kGroup1_),
       reporting_source_2, kIsolationInfo2_, kUrl2_);
 
@@ -2010,17 +2013,17 @@ TEST_P(ReportingCacheTest, GetV1ReportingEndpointsForOrigin) {
   EXPECT_EQ(2u, endpoints.size());
   auto origin_1_endpoints = endpoints.at(kOrigin1_);
   EXPECT_EQ(2u, origin_1_endpoints.size());
-  EXPECT_EQ(ReportingEndpointGroupKey(network_isolation_key_1,
+  EXPECT_EQ(ReportingEndpointGroupKey(network_anonymization_key_1,
                                       *kReportingSource_, kOrigin1_, kGroup1_),
             origin_1_endpoints[0].group_key);
   EXPECT_EQ(kUrl1_, origin_1_endpoints[0].info.url);
-  EXPECT_EQ(ReportingEndpointGroupKey(network_isolation_key_1,
+  EXPECT_EQ(ReportingEndpointGroupKey(network_anonymization_key_1,
                                       *kReportingSource_, kOrigin1_, kGroup2_),
             origin_1_endpoints[1].group_key);
   EXPECT_EQ(kUrl2_, origin_1_endpoints[1].info.url);
   auto origin_2_endpoints = endpoints.at(kOrigin2_);
   EXPECT_EQ(1u, origin_2_endpoints.size());
-  EXPECT_EQ(ReportingEndpointGroupKey(network_isolation_key_2,
+  EXPECT_EQ(ReportingEndpointGroupKey(network_anonymization_key_2,
                                       reporting_source_2, kOrigin2_, kGroup1_),
             origin_2_endpoints[0].group_key);
   EXPECT_EQ(kUrl2_, origin_2_endpoints[0].info.url);

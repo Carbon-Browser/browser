@@ -1,4 +1,4 @@
-// Copyright (c) 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,13 +7,13 @@
 #include <queue>
 #include <vector>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/location.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/system/sys_info.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/task/single_thread_task_runner.h"
 #include "chrome/browser/offline_pages/offline_page_mhtml_archiver.h"
 #include "chrome/browser/offline_pages/offline_page_model_factory.h"
 #include "chrome/browser/offline_pages/offline_page_utils.h"
@@ -167,7 +167,7 @@ bool RecentTabHelper::EnsureInitialized() {
     return snapshots_enabled_;
 
   snapshot_controller_ = std::make_unique<SnapshotController>(
-      base::ThreadTaskRunnerHandle::Get(), this);
+      base::SingleThreadTaskRunner::GetCurrentDefault(), this);
   snapshot_controller_->Stop();  // It is reset when navigation commits.
 
   int tab_id_number = 0;

@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,13 +7,14 @@
 #include <grp.h>
 #include <sys/types.h>
 #include <unistd.h>
+
 #include <string>
 
+#include "base/containers/contains.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/string_util.h"
-#include "chromeos/components/sensors/ash/sensor_hal_dispatcher.h"
 
 namespace {
 
@@ -67,7 +68,6 @@ bool WriteTokenToFile(const base::FilePath& token_path,
 namespace media {
 
 constexpr char TokenManager::kServerTokenPath[];
-constexpr char TokenManager::kServerSensorClientTokenPath[];
 constexpr char TokenManager::kTestClientTokenPath[];
 constexpr std::array<cros::mojom::CameraClientType, 3>
     TokenManager::kTrustedClientTypes;
@@ -80,16 +80,6 @@ bool TokenManager::GenerateServerToken() {
   return WriteTokenToFile(base::FilePath(kServerTokenPath), server_token_);
 }
 
-bool TokenManager::GenerateServerSensorClientToken() {
-  auto* sensor_hal_dispatcher =
-      chromeos::sensors::SensorHalDispatcher::GetInstance();
-  if (!sensor_hal_dispatcher)
-    return false;
-
-  return WriteTokenToFile(base::FilePath(kServerSensorClientTokenPath),
-                          sensor_hal_dispatcher->GetTokenForTrustedClient());
-}
-
 bool TokenManager::GenerateTestClientToken() {
   return WriteTokenToFile(
       base::FilePath(kTestClientTokenPath),
@@ -99,8 +89,7 @@ bool TokenManager::GenerateTestClientToken() {
 base::UnguessableToken TokenManager::GetTokenForTrustedClient(
     cros::mojom::CameraClientType type) {
   base::AutoLock l(client_token_map_lock_);
-  if (std::find(kTrustedClientTypes.begin(), kTrustedClientTypes.end(), type) ==
-      kTrustedClientTypes.end()) {
+  if (!base::Contains(kTrustedClientTypes, type)) {
     return base::UnguessableToken();
   }
   auto& token_set = client_token_map_[type];
@@ -132,16 +121,6 @@ void TokenManager::UnregisterPluginVmToken(
 bool TokenManager::AuthenticateServer(const base::UnguessableToken& token) {
   DCHECK(!server_token_.is_empty());
   return server_token_ == token;
-}
-
-bool TokenManager::AuthenticateServerSensorClient(
-    const base::UnguessableToken& token) {
-  auto* sensor_hal_dispatcher =
-      chromeos::sensors::SensorHalDispatcher::GetInstance();
-  if (!sensor_hal_dispatcher)
-    return false;
-
-  return sensor_hal_dispatcher->AuthenticateClient(token);
 }
 
 absl::optional<cros::mojom::CameraClientType> TokenManager::AuthenticateClient(

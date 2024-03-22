@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -15,8 +15,7 @@
 #include "base/memory/ref_counted.h"
 #include "base/synchronization/lock.h"
 
-namespace gles2_conform_support {
-namespace egl {
+namespace gles2_conform_support::egl {
 
 class Config;
 class Context;
@@ -105,7 +104,6 @@ class Display {
   EGLint window_surface_pbuffer_height_;
 };
 
-}  // namespace egl
-}  // namespace gles2_conform_support
+}  // namespace gles2_conform_support::egl
 
 #endif  // GPU_GLES2_CONFORM_SUPPORT_EGL_DISPLAY_H_

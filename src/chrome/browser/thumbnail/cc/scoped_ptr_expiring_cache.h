@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,6 +10,8 @@
 #include <memory>
 
 #include "net/third_party/quiche/src/quiche/common/quiche_linked_hash_map.h"
+
+namespace thumbnail {
 
 template <class Key, class Value>
 class ScopedPtrExpiringCache {
@@ -35,8 +37,9 @@ class ScopedPtrExpiringCache {
 
   Value* Get(const Key& key) {
     iterator iter = map_.find(key);
-    if (iter != map_.end())
+    if (iter != map_.end()) {
       return iter->second;
+    }
     return nullptr;
   }
 
@@ -74,5 +77,7 @@ class ScopedPtrExpiringCache {
   size_t max_cache_size_;
   LinkedHashMap map_;
 };
+
+}  // namespace thumbnail
 
 #endif  // CHROME_BROWSER_THUMBNAIL_CC_SCOPED_PTR_EXPIRING_CACHE_H_

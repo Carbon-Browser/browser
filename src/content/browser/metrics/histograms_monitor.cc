@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,7 +6,6 @@
 
 #include "base/metrics/histogram_samples.h"
 #include "base/metrics/statistics_recorder.h"
-#include "content/browser/metrics/histogram_synchronizer.h"
 
 namespace content {
 
@@ -16,7 +15,6 @@ HistogramsMonitor::~HistogramsMonitor() = default;
 
 void HistogramsMonitor::StartMonitoring(const std::string& query) {
   query_ = query;
-  FetchHistograms();
   histograms_snapshot_.clear();
   // Save a snapshot of all current histograms that will be used as a baseline.
   for (const auto* const histogram : base::StatisticsRecorder::WithName(
@@ -26,22 +24,16 @@ void HistogramsMonitor::StartMonitoring(const std::string& query) {
   }
 }
 
-base::ListValue HistogramsMonitor::GetDiff() {
-  FetchHistograms();
+base::Value::List HistogramsMonitor::GetDiff() {
   base::StatisticsRecorder::Histograms histograms =
       base::StatisticsRecorder::Sort(base::StatisticsRecorder::WithName(
           base::StatisticsRecorder::GetHistograms(), query_));
   return GetDiffInternal(histograms);
 }
 
-void HistogramsMonitor::FetchHistograms() {
-  base::StatisticsRecorder::ImportProvidedHistograms();
-  HistogramSynchronizer::FetchHistograms();
-}
-
-base::ListValue HistogramsMonitor::GetDiffInternal(
+base::Value::List HistogramsMonitor::GetDiffInternal(
     const base::StatisticsRecorder::Histograms& histograms) {
-  base::ListValue histograms_list;
+  base::Value::List histograms_list;
   for (const base::HistogramBase* const histogram : histograms) {
     std::unique_ptr<base::HistogramSamples> snapshot =
         histogram->SnapshotSamples();

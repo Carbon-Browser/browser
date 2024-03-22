@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,6 +8,7 @@
 #include <memory>
 #include <string>
 
+#include "base/containers/contains.h"
 #include "base/metrics/field_trial_params.h"
 #include "base/metrics/histogram.h"
 #include "base/numerics/safe_conversions.h"
@@ -105,6 +106,10 @@ ResourceLoadScheduler::ResourceLoadScheduler(
                                kTightLimitForRendererSideResourceSchedulerName,
                                kTightLimitForRendererSideResourceScheduler);
 
+  if (base::FeatureList::IsEnabled(features::kBoostImagePriority)) {
+    tight_medium_limit_ = features::kBoostImagePriorityTightMediumLimit.Get();
+  }
+
   scheduler_observer_handle_ = frame_or_worker_scheduler->AddLifecycleObserver(
       FrameScheduler::ObserverType::kLoader,
       WTF::BindRepeating(&ResourceLoadScheduler::OnLifecycleStateChanged,
@@ -158,7 +163,7 @@ void ResourceLoadScheduler::Request(ResourceLoadSchedulerClient* client,
   // Check if the request can be throttled.
   ClientIdWithPriority request_info(*id, priority, intra_priority);
   if (!IsClientDelayable(option)) {
-    Run(*id, client, /*throttleable=*/false);
+    Run(*id, client, /*throttleable=*/false, priority);
     return;
   }
 
@@ -213,6 +218,7 @@ bool ResourceLoadScheduler::Release(
 
     running_requests_.erase(id);
     running_throttleable_requests_.erase(id);
+    running_medium_requests_.erase(id);
 
     if (option == ReleaseOption::kReleaseAndSchedule)
       MaybeRun();
@@ -236,10 +242,13 @@ bool ResourceLoadScheduler::Release(
   return false;
 }
 
-void ResourceLoadScheduler::SetOutstandingLimitForTesting(size_t tight_limit,
-                                                          size_t normal_limit) {
+void ResourceLoadScheduler::SetOutstandingLimitForTesting(
+    size_t tight_limit,
+    size_t normal_limit,
+    size_t tight_medium_limit) {
   tight_outstanding_limit_ = tight_limit;
   normal_outstanding_limit_ = normal_limit;
+  tight_medium_limit_ = tight_medium_limit;
   MaybeRun();
 }
 
@@ -280,8 +289,7 @@ bool ResourceLoadScheduler::IsPendingRequestEffectivelyEmpty(
     // the request is canceled, or Release() is called before firing its Run(),
     // the entry for the request remains in |pending_request_| until it is
     // popped in GetNextPendingRequest().
-    if (pending_request_map_.find(client.client_id) !=
-        pending_request_map_.end()) {
+    if (base::Contains(pending_request_map_, client.client_id)) {
       return false;
     }
   }
@@ -300,14 +308,16 @@ bool ResourceLoadScheduler::GetNextPendingRequest(ClientId* id) {
       stoppable_it != stoppable_queue.end() &&
       (!IsClientDelayable(ThrottleOption::kStoppable) ||
        IsRunningThrottleableRequestsLessThanOutStandingLimit(
-           GetOutstandingLimit(stoppable_it->priority)));
+           GetOutstandingLimit(stoppable_it->priority),
+           stoppable_it->priority));
 
   auto throttleable_it = throttleable_queue.begin();
   bool has_runnable_throttleable_request =
       throttleable_it != throttleable_queue.end() &&
       (!IsClientDelayable(ThrottleOption::kThrottleable) ||
        IsRunningThrottleableRequestsLessThanOutStandingLimit(
-           GetOutstandingLimit(throttleable_it->priority)));
+           GetOutstandingLimit(throttleable_it->priority),
+           throttleable_it->priority));
 
   if (!has_runnable_throttleable_request && !has_runnable_stoppable_request)
     return false;
@@ -354,18 +364,23 @@ void ResourceLoadScheduler::MaybeRun() {
 
     ResourceLoadSchedulerClient* client = found->value->client;
     ThrottleOption option = found->value->option;
+    ResourceLoadPriority priority = found->value->priority;
     pending_request_map_.erase(found);
-    Run(id, client, option == ThrottleOption::kThrottleable);
+    Run(id, client, option == ThrottleOption::kThrottleable, priority);
   }
 }
 
 void ResourceLoadScheduler::Run(ResourceLoadScheduler::ClientId id,
                                 ResourceLoadSchedulerClient* client,
-                                bool throttleable) {
+                                bool throttleable,
+                                ResourceLoadPriority priority) {
   // Assuming the request connection is not multiplexed.
   running_requests_.insert(id, IsMultiplexedConnection(false));
   if (throttleable)
     running_throttleable_requests_.insert(id);
+  if (priority == ResourceLoadPriority::kMedium) {
+    running_medium_requests_.insert(id);
+  }
   client->Run();
 }
 
@@ -406,7 +421,7 @@ size_t ResourceLoadScheduler::GetOutstandingLimit(
 }
 
 void ResourceLoadScheduler::ShowConsoleMessageIfNeeded() {
-  if (is_console_info_shown_ || pending_request_map_.IsEmpty())
+  if (is_console_info_shown_ || pending_request_map_.empty())
     return;
 
   const base::Time limit = clock_->Now() - base::Seconds(60);
@@ -430,7 +445,14 @@ void ResourceLoadScheduler::ShowConsoleMessageIfNeeded() {
 
 bool ResourceLoadScheduler::
     IsRunningThrottleableRequestsLessThanOutStandingLimit(
-        size_t out_standing_limit) {
+        size_t out_standing_limit,
+        ResourceLoadPriority priority) {
+  // Allow for a minimum number of medium-priority requests to be in-flight
+  // independent of the overall number of pending requests.
+  if (priority == ResourceLoadPriority::kMedium &&
+      running_medium_requests_.size() < tight_medium_limit_) {
+    return true;
+  }
   if (CanRequestForMultiplexedConnectionsInTight()) {
     DCHECK_EQ(policy_, ThrottlingPolicy::kTight);
     return (running_throttleable_requests_.size() -
@@ -448,17 +470,17 @@ void ResourceLoadScheduler::SetClockForTesting(const base::Clock* clock) {
 
 void ResourceLoadScheduler::SetConnectionInfo(
     ClientId id,
-    net::HttpResponseInfo::ConnectionInfo connection_info) {
+    net::HttpConnectionInfo connection_info) {
   DCHECK_NE(kInvalidClientId, id);
 
   // `is_multiplexed` will be set false if the connection of the given client
   // doesn't support multiplexing (e.g., HTTP/1.x).
   bool is_multiplexed = true;
   switch (connection_info) {
-    case net::HttpResponseInfo::CONNECTION_INFO_HTTP0_9:
-    case net::HttpResponseInfo::CONNECTION_INFO_HTTP1_0:
-    case net::HttpResponseInfo::CONNECTION_INFO_HTTP1_1:
-    case net::HttpResponseInfo::CONNECTION_INFO_UNKNOWN:
+    case net::HttpConnectionInfo::kHTTP0_9:
+    case net::HttpConnectionInfo::kHTTP1_0:
+    case net::HttpConnectionInfo::kHTTP1_1:
+    case net::HttpConnectionInfo::kUNKNOWN:
       is_multiplexed = false;
       break;
     default:

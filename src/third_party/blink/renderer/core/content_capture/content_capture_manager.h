@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -53,7 +53,7 @@ class CORE_EXPORT ContentCaptureManager
   virtual void Trace(Visitor*) const;
 
   ContentCaptureTask* GetContentCaptureTaskForTesting() const {
-    return content_capture_idle_task_;
+    return content_capture_idle_task_.Get();
   }
 
  protected:

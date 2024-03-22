@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,12 +6,17 @@
 
 #include "base/run_loop.h"
 #include "base/test/test_future.h"
+#include "base/threading/thread_restrictions.h"
 #include "components/web_package/test_support/mock_web_bundle_parser.h"
 #include "testing/gtest/include/gtest/gtest.h"
+#include "third_party/abseil-cpp/absl/types/optional.h"
+#include "url/gurl.h"
 
 namespace web_package {
 
-MockWebBundleParserFactory::MockWebBundleParserFactory() = default;
+MockWebBundleParserFactory::MockWebBundleParserFactory(
+    base::RepeatingCallback<void(absl::optional<GURL>)> on_create_parser)
+    : on_create_parser_(std::move(on_create_parser)) {}
 
 MockWebBundleParserFactory::~MockWebBundleParserFactory() = default;
 
@@ -22,18 +27,20 @@ void MockWebBundleParserFactory::AddReceiver(
 
 void MockWebBundleParserFactory::WaitUntilParseIntegrityBlockCalled(
     base::OnceClosure closure) {
-  if (parser_)
+  if (parser_) {
     parser_->WaitUntilParseIntegrityBlockCalled(std::move(closure));
-  else
+  } else {
     wait_parse_integrity_block_callback_ = std::move(closure);
+  }
 }
 
 void MockWebBundleParserFactory::WaitUntilParseMetadataCalled(
-    base::OnceCallback<void(int64_t offset)> callback) {
-  if (parser_)
+    base::OnceCallback<void(absl::optional<uint64_t> offset)> callback) {
+  if (parser_) {
     parser_->WaitUntilParseMetadataCalled(std::move(callback));
-  else
+  } else {
     wait_parse_metadata_callback_ = std::move(callback);
+  }
 }
 
 void MockWebBundleParserFactory::RunIntegrityBlockCallback(
@@ -49,10 +56,10 @@ void MockWebBundleParserFactory::RunIntegrityBlockCallback(
 }
 
 void MockWebBundleParserFactory::RunMetadataCallback(
-    int64_t expected_metadata_offset,
+    absl::optional<uint64_t> expected_metadata_offset,
     mojom::BundleMetadataPtr metadata,
     web_package::mojom::BundleMetadataParseErrorPtr error) {
-  base::test::TestFuture<int64_t> future;
+  base::test::TestFuture<absl::optional<uint64_t>> future;
   WaitUntilParseMetadataCalled(future.GetCallback());
   EXPECT_EQ(expected_metadata_offset, future.Get());
 
@@ -73,10 +80,81 @@ void MockWebBundleParserFactory::RunResponseCallback(
   parser_->RunResponseCallback(std::move(response), std::move(error));
 }
 
-void MockWebBundleParserFactory::GetParserForFile(
+void MockWebBundleParserFactory::SetIntegrityBlockParseResult(
+    mojom::BundleIntegrityBlockPtr integrity_block,
+    mojom::BundleIntegrityBlockParseErrorPtr error) {
+  integrity_block_parse_result_ =
+      std::make_pair(std::move(integrity_block), std::move(error));
+  if (parser_) {
+    parser_->SetIntegrityBlockParseResult(
+        integrity_block_parse_result_->first.Clone(),
+        integrity_block_parse_result_->second.Clone());
+  }
+}
+
+void MockWebBundleParserFactory::SetMetadataParseResult(
+    mojom::BundleMetadataPtr metadata,
+    web_package::mojom::BundleMetadataParseErrorPtr error) {
+  DCHECK(!metadata.is_null());
+  metadata_parse_result_ =
+      std::make_pair(std::move(metadata), std::move(error));
+  if (parser_) {
+    parser_->SetMetadataParseResult(metadata_parse_result_->first.Clone(),
+                                    metadata_parse_result_->second.Clone());
+  }
+}
+
+void MockWebBundleParserFactory::SetResponseParseResult(
+    mojom::BundleResponsePtr response,
+    mojom::BundleResponseParseErrorPtr error) {
+  response_parse_result_ =
+      std::make_pair(std::move(response), std::move(error));
+  if (parser_) {
+    parser_->SetResponseParseResult(response_parse_result_->first.Clone(),
+                                    response_parse_result_->second.Clone());
+  }
+}
+
+int MockWebBundleParserFactory::GetParserCreationCount() const {
+  return parser_creation_count_;
+}
+
+void MockWebBundleParserFactory::SimulateParserDisconnect() {
+  parser_->SimulateDisconnect();
+}
+
+void MockWebBundleParserFactory::SimulateParseIntegrityBlockCrash() {
+  simulate_parse_integrity_block_crash_ = true;
+}
+
+void MockWebBundleParserFactory::SimulateParseMetadataCrash() {
+  simulate_parse_metadata_crash_ = true;
+}
+
+void MockWebBundleParserFactory::SimulateParseResponseCrash() {
+  simulate_parse_response_crash_ = true;
+}
+
+void MockWebBundleParserFactory::GetParser(
     mojo::PendingReceiver<mojom::WebBundleParser> receiver,
-    base::File file) {
-  parser_ = std::make_unique<MockWebBundleParser>(std::move(receiver));
+    const absl::optional<GURL>& base_url) {
+  on_create_parser_.Run(base_url);
+
+  if (parser_) {
+    // If a parser existed previously, assume that it has been disconnected, and
+    // copy its `wait_` callbacks over to the new instance.
+    parser_ = std::make_unique<MockWebBundleParser>(
+        std::move(receiver), simulate_parse_integrity_block_crash_,
+        simulate_parse_metadata_crash_, simulate_parse_response_crash_,
+        std::move(parser_));
+  } else {
+    parser_ = std::make_unique<MockWebBundleParser>(
+        std::move(receiver), simulate_parse_integrity_block_crash_,
+        simulate_parse_metadata_crash_, simulate_parse_response_crash_);
+  }
+
+  ++parser_creation_count_;
+
   if (!wait_parse_integrity_block_callback_.is_null()) {
     parser_->WaitUntilParseIntegrityBlockCalled(
         std::move(wait_parse_integrity_block_callback_));
@@ -85,12 +163,31 @@ void MockWebBundleParserFactory::GetParserForFile(
     parser_->WaitUntilParseMetadataCalled(
         std::move(wait_parse_metadata_callback_));
   }
+
+  if (integrity_block_parse_result_.has_value()) {
+    parser_->SetIntegrityBlockParseResult(
+        integrity_block_parse_result_->first.Clone(),
+        integrity_block_parse_result_->second.Clone());
+  }
+  if (metadata_parse_result_.has_value()) {
+    parser_->SetMetadataParseResult(metadata_parse_result_->first.Clone(),
+                                    metadata_parse_result_->second.Clone());
+  }
+  if (response_parse_result_.has_value()) {
+    parser_->SetResponseParseResult(response_parse_result_->first.Clone(),
+                                    response_parse_result_->second.Clone());
+  }
 }
+
+void MockWebBundleParserFactory::BindFileDataSource(
+    mojo::PendingReceiver<mojom::BundleDataSource> data_source_receiver,
+    base::File file) {}
 
 void MockWebBundleParserFactory::GetParserForDataSource(
     mojo::PendingReceiver<mojom::WebBundleParser> receiver,
+    const absl::optional<GURL>& base_url,
     mojo::PendingRemote<mojom::BundleDataSource> data_source) {
-  NOTREACHED();
+  GetParser(std::move(receiver), base_url);
 }
 
 }  // namespace web_package

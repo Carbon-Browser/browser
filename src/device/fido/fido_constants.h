@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,7 +8,6 @@
 #include <stdint.h>
 
 #include <array>
-#include <vector>
 
 #include "base/component_export.h"
 #include "base/containers/fixed_flat_set.h"
@@ -194,6 +193,9 @@ constexpr auto kCtapResponseCodeList = base::MakeFixedFlatSet<uint8_t>({
     static_cast<uint8_t>(CtapDeviceResponseCode::kCtap2ErrVendorLast),
 });
 
+COMPONENT_EXPORT(DEVICE_FIDO)
+std::ostream& operator<<(std::ostream& os, CtapDeviceResponseCode code);
+
 // Commands supported by CTAPHID device as specified in
 // https://fidoalliance.org/specs/fido-v2.0-rd-20170927/fido-client-to-authenticator-protocol-v2.0-rd-20170927.html#ctaphid-commands
 enum class FidoHidDeviceCommand : uint8_t {
@@ -256,6 +258,9 @@ enum class CtapRequestCommand : uint8_t {
   kAuthenticatorCredentialManagement = 0x0a,
   kAuthenticatorCredentialManagementPreview = 0x41,
 };
+
+COMPONENT_EXPORT(DEVICE_FIDO)
+std::ostream& operator<<(std::ostream& os, CtapRequestCommand command);
 
 // Enumerates the keys in a COSE Key structure. See
 // https://tools.ietf.org/html/rfc8152#section-7.1
@@ -338,7 +343,6 @@ COMPONENT_EXPORT(DEVICE_FIDO) extern const char kPlatformDeviceMapKey[];
 COMPONENT_EXPORT(DEVICE_FIDO) extern const char kEntityIdMapKey[];
 COMPONENT_EXPORT(DEVICE_FIDO) extern const char kEntityNameMapKey[];
 COMPONENT_EXPORT(DEVICE_FIDO) extern const char kDisplayNameMapKey[];
-COMPONENT_EXPORT(DEVICE_FIDO) extern const char kIconUrlMapKey[];
 COMPONENT_EXPORT(DEVICE_FIDO) extern const char kCredentialTypeMapKey[];
 COMPONENT_EXPORT(DEVICE_FIDO) extern const char kCredentialAlgorithmMapKey[];
 COMPONENT_EXPORT(DEVICE_FIDO) extern const char kCredentialManagementMapKey[];
@@ -402,6 +406,13 @@ constexpr char kCableRoutingIdHeader[] = "X-caBLE-Routing-ID";
 // includes the client's nonce and pairing ID.
 constexpr char kCableClientPayloadHeader[] = "X-caBLE-Client-Payload";
 
+// kCableSignalConnectionHeader is the name of an HTTP header that indicates to
+// the tunnel server that a client supports getting a signal when the
+// authenticator connects to the tunnel server during a state-assisted
+// transaction. The tunnel server echos this header to indicate that the signal
+// will be sent.
+constexpr char kCableSignalConnectionHeader[] = "X-caBLE-Signal-Connection";
+
 // Maximum wait time before client error outs on device.
 COMPONENT_EXPORT(DEVICE_FIDO) extern const base::TimeDelta kDeviceTimeout;
 
@@ -449,9 +460,34 @@ COMPONENT_EXPORT(DEVICE_FIDO) extern const char kCtap2_1Version[];
 
 COMPONENT_EXPORT(DEVICE_FIDO) extern const char kExtensionHmacSecret[];
 COMPONENT_EXPORT(DEVICE_FIDO) extern const char kExtensionCredProtect[];
+COMPONENT_EXPORT(DEVICE_FIDO) extern const char kExtensionLargeBlob[];
 COMPONENT_EXPORT(DEVICE_FIDO) extern const char kExtensionLargeBlobKey[];
 COMPONENT_EXPORT(DEVICE_FIDO) extern const char kExtensionCredBlob[];
 COMPONENT_EXPORT(DEVICE_FIDO) extern const char kExtensionMinPINLength[];
+COMPONENT_EXPORT(DEVICE_FIDO) extern const char kExtensionPRF[];
+
+// Constants for the prf extension
+constexpr size_t kExtensionPRFOutputSize = 32;
+COMPONENT_EXPORT(DEVICE_FIDO) extern const char kExtensionPRFEnabled[];
+COMPONENT_EXPORT(DEVICE_FIDO) extern const char kExtensionPRFEval[];
+COMPONENT_EXPORT(DEVICE_FIDO) extern const char kExtensionPRFEvalByCredential[];
+COMPONENT_EXPORT(DEVICE_FIDO) extern const char kExtensionPRFFirst[];
+COMPONENT_EXPORT(DEVICE_FIDO) extern const char kExtensionPRFResults[];
+COMPONENT_EXPORT(DEVICE_FIDO) extern const char kExtensionPRFSecond[];
+
+// Constants for the largeBlob extension
+COMPONENT_EXPORT(DEVICE_FIDO) extern const char kExtensionLargeBlobBlob[];
+COMPONENT_EXPORT(DEVICE_FIDO)
+extern const char kExtensionLargeBlobOriginalSize[];
+COMPONENT_EXPORT(DEVICE_FIDO) extern const char kExtensionLargeBlobRead[];
+COMPONENT_EXPORT(DEVICE_FIDO) extern const char kExtensionLargeBlobSupport[];
+COMPONENT_EXPORT(DEVICE_FIDO)
+extern const char kExtensionLargeBlobSupportPreferred[];
+COMPONENT_EXPORT(DEVICE_FIDO)
+extern const char kExtensionLargeBlobSupportRequired[];
+COMPONENT_EXPORT(DEVICE_FIDO) extern const char kExtensionLargeBlobSupported[];
+COMPONENT_EXPORT(DEVICE_FIDO) extern const char kExtensionLargeBlobWrite[];
+COMPONENT_EXPORT(DEVICE_FIDO) extern const char kExtensionLargeBlobWritten[];
 
 // Maximum number of seconds the browser waits for Bluetooth authenticator to
 // send packets that advertises that the device is in pairing mode before

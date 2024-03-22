@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -52,7 +52,7 @@
       <div aria-describedby="node30"></div>
       <header id="header">role=[banner] test</header>
       <div id="shadow-host">
-        <template shadowroot="open">
+        <template shadowrootmode="open">
           <input id="shadow-input" placeholder="Shadow input"></input>
         </template>
       </div>

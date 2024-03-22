@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -15,11 +15,9 @@
 
 namespace extensions {
 
-namespace api {
-namespace extensions_manifest_types {
+namespace api::extensions_manifest_types {
 struct Automation;
 }
-}  // namespace api
 
 class URLPatternSet;
 class AutomationManifestPermission;

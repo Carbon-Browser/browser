@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,7 +14,8 @@ IOBufferWithByteBuffer::IOBufferWithByteBuffer(
     void* byte_buffer_data,
     jint position,
     jint limit)
-    : net::WrappedIOBuffer(static_cast<char*>(byte_buffer_data) + position),
+    : net::WrappedIOBuffer(static_cast<char*>(byte_buffer_data) + position,
+                           limit - position),
       byte_buffer_(env, jbyte_buffer),
       initial_position_(position),
       initial_limit_(limit) {

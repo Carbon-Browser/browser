@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,8 @@
 #include <set>
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
+#include "net/http/http_network_session.h"
 #include "net/http/http_raw_request_headers.h"
 #include "net/http/http_request_info.h"
 #include "net/http/http_response_body_drainer.h"
@@ -88,6 +89,7 @@ void HttpBasicStream::Close(bool not_reusable) {
   StreamSocket* socket = state_.connection()->socket();
   if (not_reusable && socket)
     socket->Disconnect();
+  parser()->OnConnectionClose();
   state_.connection()->Reset();
 }
 
@@ -161,11 +163,10 @@ bool HttpBasicStream::GetAlternativeService(
 }
 
 void HttpBasicStream::GetSSLInfo(SSLInfo* ssl_info) {
-  if (!state_.connection()->socket()) {
+  if (!state_.connection()->socket() ||
+      !state_.connection()->socket()->GetSSLInfo(ssl_info)) {
     ssl_info->Reset();
-    return;
   }
-  parser()->GetSSLInfo(ssl_info);
 }
 
 void HttpBasicStream::GetSSLCertRequestInfo(
@@ -185,15 +186,15 @@ int HttpBasicStream::GetRemoteEndpoint(IPEndPoint* endpoint) {
 }
 
 void HttpBasicStream::Drain(HttpNetworkSession* session) {
-  HttpResponseBodyDrainer* drainer = new HttpResponseBodyDrainer(this);
-  drainer->Start(session);
+  session->StartResponseDrainer(
+      std::make_unique<HttpResponseBodyDrainer>(this));
   // |drainer| will delete itself.
 }
 
 void HttpBasicStream::PopulateNetErrorDetails(NetErrorDetails* details) {
   // TODO(mmenke):  Consumers don't actually care about HTTP version, but seems
   // like the right version should be reported, if headers were received.
-  details->connection_info = HttpResponseInfo::CONNECTION_INFO_HTTP1_1;
+  details->connection_info = HttpConnectionInfo::kHTTP1_1;
   return;
 }
 

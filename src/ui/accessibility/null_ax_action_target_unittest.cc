@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -22,7 +22,6 @@ TEST(NullAXActionTargetTest, TestMethods) {
   EXPECT_EQ(gfx::Point(), action_target->GetScrollOffset());
   EXPECT_EQ(gfx::Point(), action_target->MinimumScrollOffset());
   EXPECT_EQ(gfx::Point(), action_target->MaximumScrollOffset());
-  EXPECT_FALSE(action_target->SetSelected(false));
   EXPECT_FALSE(action_target->SetSelection(nullptr, 0, nullptr, 0));
   EXPECT_FALSE(action_target->ScrollToMakeVisible());
   EXPECT_FALSE(action_target->ScrollToMakeVisibleWithSubFocus(

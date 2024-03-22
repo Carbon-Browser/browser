@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -43,8 +43,10 @@ public class ExportWarningDialogFragment extends DialogFragment {
                 .Builder(getActivity(), R.style.ThemeOverlay_BrowserUI_AlertDialog_NoActionBar)
                 .setPositiveButton(R.string.password_settings_export_action_title, mHandler)
                 .setNegativeButton(R.string.cancel, mHandler)
-                .setMessage(getActivity().getResources().getString(
-                        R.string.settings_passwords_export_description))
+                .setMessage(
+                        getActivity()
+                                .getResources()
+                                .getString(R.string.settings_passwords_export_description))
                 .create();
     }
 

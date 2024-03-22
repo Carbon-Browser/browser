@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -21,7 +21,6 @@ ASH_EXPORT extern const char kKeyboardShortcutHelpPageUrl[];
 ASH_EXPORT void ShowDeprecatedAcceleratorNotification(
     const char* notification_id,
     int message_id,
-    int old_shortcut_id,
     int new_shortcut_id);
 
 ASH_EXPORT void ShowDockedMagnifierNotification();

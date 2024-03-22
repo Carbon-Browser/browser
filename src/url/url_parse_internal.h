@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,15 +11,26 @@
 
 namespace url {
 
-// We treat slashes and backslashes the same for IE compatibility.
-inline bool IsURLSlash(char16_t ch) {
+// A helper function to handle a URL separator, which is '/' or '\'.
+//
+// The motivation: There are many condition checks in URL Standard like the
+// following:
+//
+// > If url is special and c is U+002F (/) or U+005C (\), ...
+inline bool IsSlashOrBackslash(char16_t ch) {
   return ch == '/' || ch == '\\';
+}
+inline bool IsSlashOrBackslash(char ch) {
+  return IsSlashOrBackslash(static_cast<char16_t>(ch));
 }
 
 // Returns true if we should trim this character from the URL because it is a
 // space or a control character.
 inline bool ShouldTrimFromURL(char16_t ch) {
   return ch <= ' ';
+}
+inline bool ShouldTrimFromURL(char ch) {
+  return ShouldTrimFromURL(static_cast<char16_t>(ch));
 }
 
 // Given an already-initialized begin index and length, this shrinks the range
@@ -50,8 +61,9 @@ inline int CountConsecutiveSlashes(const CHAR *str,
                                    int begin_offset, int str_len) {
   int count = 0;
   while (begin_offset + count < str_len &&
-         IsURLSlash(str[begin_offset + count]))
+         IsSlashOrBackslash(str[begin_offset + count])) {
     ++count;
+  }
   return count;
 }
 
@@ -74,16 +86,16 @@ void ParsePathInternal(const char16_t* spec,
                        Component* ref);
 
 // Given a spec and a pointer to the character after the colon following the
-// scheme, this parses it and fills in the structure, Every item in the parsed
-// structure is filled EXCEPT for the scheme, which is untouched.
-void ParseAfterScheme(const char* spec,
-                      int spec_len,
-                      int after_scheme,
-                      Parsed* parsed);
-void ParseAfterScheme(const char16_t* spec,
-                      int spec_len,
-                      int after_scheme,
-                      Parsed* parsed);
+// special scheme, this parses it and fills in the structure, Every item in the
+// parsed structure is filled EXCEPT for the scheme, which is untouched.
+void ParseAfterSpecialScheme(const char* spec,
+                             int spec_len,
+                             int after_scheme,
+                             Parsed* parsed);
+void ParseAfterSpecialScheme(const char16_t* spec,
+                             int spec_len,
+                             int after_scheme,
+                             Parsed* parsed);
 
 }  // namespace url
 

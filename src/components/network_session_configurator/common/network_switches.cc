@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -31,8 +31,7 @@ void CopyNetworkSwitches(const base::CommandLine& src_command_line,
 #undef NETWORK_SWITCH
   };
 
-  dest_command_line->CopySwitchesFrom(src_command_line, kSwitchNames,
-                                      std::size(kSwitchNames));
+  dest_command_line->CopySwitchesFrom(src_command_line, kSwitchNames);
 }
 
 }  // namespace network_session_configurator

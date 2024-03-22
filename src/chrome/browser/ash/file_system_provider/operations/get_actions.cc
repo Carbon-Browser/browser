@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -17,18 +17,18 @@ namespace operations {
 namespace {
 
 // Convert the request |value| into a list of actions.
-Actions ConvertRequestValueToActions(std::unique_ptr<RequestValue> value) {
+Actions ConvertRequestValueToActions(const RequestValue& value) {
   using extensions::api::file_system_provider_internal::
       GetActionsRequestedSuccess::Params;
 
-  const Params* params = value->get_actions_success_params();
+  const Params* params = value.get_actions_success_params();
   DCHECK(params);
 
   Actions result;
   for (const auto& idl_action : params->actions) {
     Action action;
     action.id = idl_action.id;
-    action.title = idl_action.title.get() ? *idl_action.title : std::string();
+    action.title = idl_action.title.value_or(std::string());
     result.push_back(action);
   }
 
@@ -37,11 +37,11 @@ Actions ConvertRequestValueToActions(std::unique_ptr<RequestValue> value) {
 
 }  // namespace
 
-GetActions::GetActions(extensions::EventRouter* event_router,
+GetActions::GetActions(RequestDispatcher* dispatcher,
                        const ProvidedFileSystemInfo& file_system_info,
                        const std::vector<base::FilePath>& entry_paths,
                        ProvidedFileSystemInterface::GetActionsCallback callback)
-    : Operation(event_router, file_system_info),
+    : Operation(dispatcher, file_system_info),
       entry_paths_(entry_paths),
       callback_(std::move(callback)) {}
 
@@ -66,15 +66,15 @@ bool GetActions::Execute(int request_id) {
 }
 
 void GetActions::OnSuccess(int /* request_id */,
-                           std::unique_ptr<RequestValue> result,
+                           const RequestValue& result,
                            bool has_more) {
   DCHECK(callback_);
-  std::move(callback_).Run(ConvertRequestValueToActions(std::move(result)),
+  std::move(callback_).Run(ConvertRequestValueToActions(result),
                            base::File::FILE_OK);
 }
 
 void GetActions::OnError(int /* request_id */,
-                         std::unique_ptr<RequestValue> /* result */,
+                         const RequestValue& /* result */,
                          base::File::Error error) {
   DCHECK(callback_);
   std::move(callback_).Run(Actions(), error);

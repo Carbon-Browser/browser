@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,12 +9,13 @@
 #include <string>
 
 #include "base/memory/weak_ptr.h"
+#include "base/values.h"
 #include "extensions/common/mojom/event_dispatcher.mojom-forward.h"
+#include "extensions/renderer/api/messaging/native_renderer_messaging_service.h"
 #include "extensions/renderer/bindings/api_binding_types.h"
 #include "extensions/renderer/bindings/api_bindings_system.h"
 #include "extensions/renderer/bindings/event_emitter.h"
 #include "extensions/renderer/feature_cache.h"
-#include "extensions/renderer/native_renderer_messaging_service.h"
 #include "v8/include/v8-forward.h"
 #include "v8/include/v8-persistent-handle.h"
 
@@ -34,7 +35,14 @@ class ScriptContextSetIterable;
 // a bit messy (since there used to be a different ExtensionBindingsSystem).
 class NativeExtensionBindingsSystem {
  public:
+  class Delegate {
+   public:
+    virtual ScriptContextSetIterable* GetScriptContextSet() = 0;
+    virtual ~Delegate() = default;
+  };
+
   explicit NativeExtensionBindingsSystem(
+      Delegate* delegate,
       std::unique_ptr<IPCMessageSender> ipc_message_sender);
 
   NativeExtensionBindingsSystem(const NativeExtensionBindingsSystem&) = delete;
@@ -72,7 +80,8 @@ class NativeExtensionBindingsSystem {
   void HandleResponse(int request_id,
                       bool success,
                       const base::Value::List& response,
-                      const std::string& error);
+                      const std::string& error,
+                      mojom::ExtraResponseDataPtr extra_data = nullptr);
 
   // Returns the associated IPC message sender.
   IPCMessageSender* GetIPCMessageSender();
@@ -91,6 +100,7 @@ class NativeExtensionBindingsSystem {
   NativeRendererMessagingService* messaging_service() {
     return &messaging_service_;
   }
+  Delegate* delegate() { return delegate_; }
 
   // Returns the API with the given |name| for the given |context|. Used for
   // testing purposes.
@@ -107,7 +117,7 @@ class NativeExtensionBindingsSystem {
   // to |send_event_listener_ipc_|.
   void OnEventListenerChanged(const std::string& event_name,
                               binding::EventListenersChanged change,
-                              const base::DictionaryValue* filter,
+                              const base::Value::Dict* filter,
                               bool was_manual,
                               v8::Local<v8::Context> context);
 
@@ -144,13 +154,11 @@ class NativeExtensionBindingsSystem {
   // granted by active extensions.
   void UpdateContentCapabilities(ScriptContext* context);
 
-  // Invalidates the cached feature availability for |extension|; called when
-  // bindings availability has changed (such as after a permissions change).
-  void InvalidateFeatureCache(const ExtensionId& extension_id);
-
   // Creates the parameters objects inside chrome.scripting, if |context| is for
   // content scripts running in an isolated world.
   void SetScriptingParams(ScriptContext* context);
+
+  const raw_ptr<Delegate, ExperimentalRenderer> delegate_;
 
   std::unique_ptr<IPCMessageSender> ipc_message_sender_;
 

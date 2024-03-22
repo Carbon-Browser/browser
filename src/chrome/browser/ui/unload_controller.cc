@@ -1,26 +1,33 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/ui/unload_controller.h"
 
-#include "base/bind.h"
 #include "base/containers/contains.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
+#include "base/ranges/algorithm.h"
 #include "base/task/single_thread_task_runner.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "chrome/browser/devtools/devtools_window.h"
-#include "chrome/browser/lifetime/application_lifetime.h"
+#include "chrome/browser/lifetime/application_lifetime_desktop.h"
 #include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/browser_tabstrip.h"
 #include "chrome/browser/ui/tabs/tab_strip_model.h"
 #include "chrome/browser/ui/tabs/tab_strip_model_delegate.h"
+#include "chrome/browser/ui/web_applications/app_browser_controller.h"
+#include "chrome/browser/ui/web_applications/web_app_tabbed_utils.h"
+#include "chrome/browser/web_applications/policy/web_app_policy_manager.h"
+#include "chrome/browser/web_applications/web_app_provider.h"
+#include "chrome/browser/web_applications/web_app_tab_helper.h"
 #include "components/tab_groups/tab_group_id.h"
+#include "components/webapps/common/web_app_id.h"
 #include "content/public/browser/render_view_host.h"
 #include "content/public/browser/web_contents.h"
 #include "extensions/buildflags/buildflags.h"
 
 #if BUILDFLAG(ENABLE_EXTENSIONS)
+#include "chrome/browser/profiles/profile.h"
 #include "extensions/browser/extension_registry.h"
 #include "extensions/common/constants.h"
 #endif  // (ENABLE_EXTENSIONS)
@@ -44,6 +51,13 @@ bool UnloadController::CanCloseContents(content::WebContents* contents) {
   // that avoids the fast shutdown path where we just kill all the renderers.
   if (is_attempting_to_close_browser_)
     ClearUnloadState(contents, true);
+
+  if (!web_app::IsTabClosable(
+          browser_->tab_strip_model(),
+          browser_->tab_strip_model()->GetIndexOfWebContents(contents))) {
+    return false;
+  }
+
   return !is_attempting_to_close_browser_ ||
          is_calling_before_unload_handlers();
 }
@@ -52,7 +66,8 @@ bool UnloadController::ShouldRunUnloadEventsHelper(
     content::WebContents* contents) {
   // If |contents| is being inspected, devtools needs to intercept beforeunload
   // events.
-  return DevToolsWindow::GetInstanceForInspectedWebContents(contents) != NULL;
+  return DevToolsWindow::GetInstanceForInspectedWebContents(contents) !=
+         nullptr;
 }
 
 bool UnloadController::RunUnloadEventsHelper(content::WebContents* contents) {
@@ -136,8 +151,13 @@ bool UnloadController::BeforeUnloadFired(content::WebContents* contents,
 }
 
 bool UnloadController::ShouldCloseWindow() {
-  if (HasCompletedUnloadProcessing())
+  if (IsUnclosableApp()) {
+    return false;
+  }
+
+  if (HasCompletedUnloadProcessing()) {
     return true;
+  }
 
   // Special case for when we quit an application. The devtools window can
   // close if it's beforeunload event has already fired which will happen due
@@ -379,7 +399,7 @@ bool UnloadController::RemoveFromSet(UnloadListenerSet* set,
                                      content::WebContents* web_contents) {
   DCHECK(is_attempting_to_close_browser_);
 
-  auto iter = std::find(set->begin(), set->end(), web_contents);
+  auto iter = base::ranges::find(*set, web_contents);
   if (iter != set->end()) {
     set->erase(iter);
     return true;
@@ -398,9 +418,24 @@ void UnloadController::ClearUnloadState(content::WebContents* web_contents,
       // Do not post a new task if there is already any.
       if (weak_factory_.HasWeakPtrs())
         return;
-      base::ThreadTaskRunnerHandle::Get()->PostTask(
+      base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
           FROM_HERE, base::BindOnce(&UnloadController::ProcessPendingTabs,
                                     weak_factory_.GetWeakPtr(), false));
     }
   }
+}
+
+bool UnloadController::IsUnclosableApp() const {
+  if (!web_app::AppBrowserController::IsWebApp(browser_.get())) {
+    return false;
+  }
+
+  content::WebContents* const active_web_contents =
+      browser_->tab_strip_model()->GetActiveWebContents();
+  if (!active_web_contents) {
+    return false;
+  }
+  return web_app::WebAppProvider::GetForWebContents(active_web_contents)
+      ->policy_manager()
+      .IsPreventCloseEnabled(browser_->app_controller()->app_id());
 }

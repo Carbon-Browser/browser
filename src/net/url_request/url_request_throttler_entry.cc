@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,8 +7,8 @@
 #include <cmath>
 #include <utility>
 
-#include "base/bind.h"
 #include "base/check_op.h"
+#include "base/functional/bind.h"
 #include "base/metrics/field_trial.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/rand_util.h"
@@ -51,14 +51,15 @@ const int URLRequestThrottlerEntry::kDefaultMaximumBackoffMs = 15 * 60 * 1000;
 const int URLRequestThrottlerEntry::kDefaultEntryLifetimeMs = 2 * 60 * 1000;
 
 // Returns NetLog parameters when a request is rejected by throttling.
-base::Value NetLogRejectedRequestParams(const std::string* url_id,
-                                        int num_failures,
-                                        const base::TimeDelta& release_after) {
-  base::Value dict(base::Value::Type::DICTIONARY);
-  dict.SetStringKey("url", *url_id);
-  dict.SetIntKey("num_failures", num_failures);
-  dict.SetIntKey("release_after_ms",
-                 static_cast<int>(release_after.InMilliseconds()));
+base::Value::Dict NetLogRejectedRequestParams(
+    const std::string* url_id,
+    int num_failures,
+    const base::TimeDelta& release_after) {
+  base::Value::Dict dict;
+  dict.Set("url", *url_id);
+  dict.Set("num_failures", num_failures);
+  dict.Set("release_after_ms",
+           static_cast<int>(release_after.InMilliseconds()));
   return dict;
 }
 

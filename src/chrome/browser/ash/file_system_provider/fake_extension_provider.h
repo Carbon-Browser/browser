@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -36,7 +36,8 @@ class FakeExtensionProvider : public ProviderInterface {
   const ProviderId& GetId() const override;
   const std::string& GetName() const override;
   const IconSet& GetIconSet() const override;
-  bool RequestMount(Profile* profile) override;
+  RequestManager* GetRequestManager() override;
+  bool RequestMount(Profile* profile, RequestMountCallback callback) override;
 
  protected:
   FakeExtensionProvider(const extensions::ExtensionId& extension_id,

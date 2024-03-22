@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -21,7 +21,7 @@ namespace policy {
 // If an affiliated user with a connected invalidation service is logged in,
 // that invalidation service will be used to conserve server resources. If there
 // are no logged-in users matching these criteria, a device-global
-// |TiclInvalidationService| is spun up.
+// |InvalidationService| is spun up.
 // The class monitors the status of the invalidation services and switches
 // between them whenever the service currently in use disconnects or the
 // device-global invalidation service can be replaced with another service that

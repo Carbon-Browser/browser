@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,14 +6,14 @@
 
 #include "ash/constants/ash_switches.h"
 #include "ash/shell.h"
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/command_line.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/location.h"
 #include "base/logging.h"
 #include "base/no_destructor.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/task/single_thread_task_runner.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "chromeos/ash/components/dbus/cdm_factory_daemon/cdm_factory_daemon_client.h"
 #include "content/public/browser/browser_task_traits.h"
 #include "content/public/browser/browser_thread.h"
@@ -35,7 +35,7 @@ constexpr char kCdmFactoryDaemonPipeName[] = "cdm-factory-daemon-pipe";
 class BrowserCdmFactoryProxy : public cdm::mojom::BrowserCdmFactory {
  public:
   BrowserCdmFactoryProxy()
-      : task_runner_(base::SequencedTaskRunnerHandle::Get()) {}
+      : task_runner_(base::SequencedTaskRunner::GetCurrentDefault()) {}
   BrowserCdmFactoryProxy(const BrowserCdmFactoryProxy&) = delete;
   BrowserCdmFactoryProxy& operator=(const BrowserCdmFactoryProxy&) = delete;
   ~BrowserCdmFactoryProxy() override = default;
@@ -88,6 +88,20 @@ class BrowserCdmFactoryProxy : public cdm::mojom::BrowserCdmFactory {
     }
     CdmFactoryDaemonProxyAsh::GetInstance().GetAndroidHwKeyData(
         key_id, hw_identifier, std::move(callback));
+  }
+
+  void AllocateSecureBuffer(uint32_t size,
+                            AllocateSecureBufferCallback callback) override {
+    if (!task_runner_->RunsTasksInCurrentSequence()) {
+      task_runner_->PostTask(
+          FROM_HERE,
+          base::BindOnce(&BrowserCdmFactoryProxy::AllocateSecureBuffer,
+                         weak_factory_.GetWeakPtr(), size,
+                         std::move(callback)));
+      return;
+    }
+    CdmFactoryDaemonProxyAsh::GetInstance().AllocateSecureBuffer(
+        size, std::move(callback));
   }
 
  private:
@@ -252,6 +266,23 @@ void CdmFactoryDaemonProxyAsh::GetAndroidHwKeyData(
       base::Unretained(this), key_id, hw_identifier, std::move(callback)));
 }
 
+void CdmFactoryDaemonProxyAsh::AllocateSecureBuffer(
+    uint32_t size,
+    AllocateSecureBufferCallback callback) {
+  DCHECK(mojo_task_runner_->RunsTasksInCurrentSequence());
+  DVLOG(1) << "CdmFactoryDaemonProxyAsh::AllocateSecureBuffer called";
+  if (daemon_remote_.is_bound()) {
+    DVLOG(1) << "CdmFactoryDaemon mojo connection already exists, re-use it";
+    ProxyAllocateSecureBuffer(size, std::move(callback));
+    return;
+  }
+
+  // base::Unretained is safe below because this class is a singleton.
+  EstablishDaemonConnection(
+      base::BindOnce(&CdmFactoryDaemonProxyAsh::ProxyAllocateSecureBuffer,
+                     base::Unretained(this), size, std::move(callback)));
+}
+
 void CdmFactoryDaemonProxyAsh::EstablishDaemonConnection(
     base::OnceClosure callback) {
   // This may have happened already.
@@ -322,6 +353,17 @@ void CdmFactoryDaemonProxyAsh::ProxyGetAndroidHwKeyData(
   }
   daemon_remote_->GetAndroidHwKeyData(key_id, hw_identifier,
                                       std::move(callback));
+}
+
+void CdmFactoryDaemonProxyAsh::ProxyAllocateSecureBuffer(
+    uint32_t size,
+    AllocateSecureBufferCallback callback) {
+  if (!daemon_remote_) {
+    LOG(ERROR) << "daemon_remote_ interface is not connected";
+    std::move(callback).Run(mojo::PlatformHandle());
+    return;
+  }
+  daemon_remote_->AllocateSecureBuffer(size, std::move(callback));
 }
 
 void CdmFactoryDaemonProxyAsh::SendDBusRequest(base::ScopedFD fd,

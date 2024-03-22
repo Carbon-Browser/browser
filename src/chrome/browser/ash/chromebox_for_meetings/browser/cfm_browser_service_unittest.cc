@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,21 +8,20 @@
 #include <utility>
 #include <vector>
 
-#include "ash/services/chromebox_for_meetings/public/cpp/fake_service_connection.h"
-#include "ash/services/chromebox_for_meetings/public/cpp/fake_service_context.h"
-#include "ash/services/chromebox_for_meetings/public/cpp/service_connection.h"
-#include "ash/services/chromebox_for_meetings/public/mojom/cfm_browser.mojom.h"
-#include "ash/services/chromebox_for_meetings/public/mojom/cfm_service_manager.mojom.h"
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/metrics/field_trial.h"
 #include "base/metrics/field_trial_params.h"
 #include "base/run_loop.h"
 #include "base/test/bind.h"
 #include "base/test/mock_callback.h"
 #include "base/test/scoped_feature_list.h"
-#include "base/test/scoped_field_trial_list_resetter.h"
 #include "base/test/task_environment.h"
 #include "chromeos/ash/components/dbus/chromebox_for_meetings/fake_cfm_hotline_client.h"
+#include "chromeos/ash/services/chromebox_for_meetings/public/cpp/fake_service_connection.h"
+#include "chromeos/ash/services/chromebox_for_meetings/public/cpp/fake_service_context.h"
+#include "chromeos/ash/services/chromebox_for_meetings/public/cpp/service_connection.h"
+#include "chromeos/ash/services/chromebox_for_meetings/public/mojom/cfm_browser.mojom.h"
+#include "chromeos/ash/services/chromebox_for_meetings/public/mojom/cfm_service_manager.mojom.h"
 #include "components/variations/field_trial_config/field_trial_util.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
 #include "mojo/public/cpp/bindings/receiver.h"
@@ -33,12 +32,15 @@
 namespace ash::cfm {
 namespace {
 
-// TODO(https://crbug.com/1164001): remove after the migration to namespace ash.
+// TODO(https://crbug.com/1403174): Remove when namespace of mojoms for CfM are
+// migarted to ash.
 namespace mojom = ::chromeos::cfm::mojom;
 
 class CfmBrowserServiceTest : public testing::Test {
  public:
-  CfmBrowserServiceTest() = default;
+  CfmBrowserServiceTest() {
+    scoped_feature_list_.InitWithEmptyFeatureAndFieldTrialLists();
+  }
   CfmBrowserServiceTest(const CfmBrowserServiceTest&) = delete;
   CfmBrowserServiceTest& operator=(const CfmBrowserServiceTest&) = delete;
 
@@ -102,10 +104,6 @@ class CfmBrowserServiceTest : public testing::Test {
 
  protected:
   base::test::SingleThreadTaskEnvironment task_environment_;
-  // The test suite instantiates a FieldTrialList but for the purpose of these
-  // tests it's cleaner to start from scratch.
-  base::test::ScopedFieldTrialListResetter trial_list_resetter_;
-  base::FieldTrialList trial_list_{nullptr};
   base::test::ScopedFeatureList scoped_feature_list_;
   FakeCfmServiceContext context_;
   mojo::Remote<mojom::CfmBrowser> browser_remote_;
@@ -129,13 +127,14 @@ TEST_F(CfmBrowserServiceTest, GetBrowserRemote) {
 
 TEST_F(CfmBrowserServiceTest, GetVariationsData) {
   std::string field_trial_parameters = "Foo.Bar:Key/Value";
-  std::string field_trial_states = "*Baz/Qux/Foo/Bar/";
+  std::string field_trial_states = "*Baz/Qux/Foo/Bar";
   std::string enabled_features = "enabled<Foo";
   std::string disabled_features = "disabled<Baz";
 
   ASSERT_TRUE(variations::AssociateParamsFromString(field_trial_parameters));
   ASSERT_TRUE(base::FieldTrialList::CreateTrialsFromString(field_trial_states));
-  scoped_feature_list_.InitFromCommandLine(enabled_features, disabled_features);
+  base::test::ScopedFeatureList scoped_feature_list;
+  scoped_feature_list.InitFromCommandLine(enabled_features, disabled_features);
 
   base::RunLoop run_loop;
   GetBrowserRemote()->GetVariationsData(base::BindLambdaForTesting(

@@ -1,14 +1,13 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/metrics/metrics_reporting_state.h"
 
-#include "base/bind.h"
-#include "base/callback.h"
 #include "base/feature_list.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/metrics/histogram_macros.h"
-#include "base/task/task_runner_util.h"
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
 #include "chrome/browser/browser_process.h"
@@ -28,7 +27,6 @@
 #if BUILDFLAG(IS_CHROMEOS_ASH)
 #include "chrome/browser/ash/policy/core/browser_policy_connector_ash.h"
 #include "chrome/browser/browser_process_platform_part.h"
-#include "components/metrics/structured/neutrino_logging.h"  // nogncheck
 #endif  // BUILDFLAG(IS_CHROMEOS_ASH)
 
 #if BUILDFLAG(IS_ANDROID)
@@ -77,12 +75,6 @@ void SetMetricsReporting(bool to_update_pref,
   g_browser_process->local_state()->SetBoolean(
       metrics::prefs::kMetricsReportingEnabled, updated_pref);
 
-#if BUILDFLAG(IS_CHROMEOS_ASH)
-  metrics::structured::NeutrinoDevicesLogWithClientId(
-      g_browser_process->local_state()->GetString(
-          metrics::prefs::kMetricsClientID),
-      metrics::structured::NeutrinoDevicesLocation::kSetMetricsReporting);
-#endif  // BUILDFLAG(IS_CHROMEOS_ASH)
   UpdateMetricsPrefsOnPermissionChange(updated_pref, called_from);
 
   // Uses the current state of whether reporting is enabled to enable services.
@@ -117,9 +109,14 @@ void ChangeMetricsReportingStateWithReply(
   // Chrome OS manages metrics settings externally and changes to reporting
   // should be propagated to metrics service regardless if the policy is managed
   // or not.
-  if (IsMetricsReportingPolicyManaged() &&
-      called_from !=
-          ChangeMetricsReportingStateCalledFrom::kCrosMetricsSettingsChange) {
+  // TODO(crbug/1346321): Possibly change |is_chrome_os| to use
+  // BUILDFLAG(IS_CHROMEOS_ASH).
+  bool is_chrome_os =
+      (called_from ==
+       ChangeMetricsReportingStateCalledFrom::kCrosMetricsSettingsChange) ||
+      (called_from ==
+       ChangeMetricsReportingStateCalledFrom::kCrosMetricsSettingsCreated);
+  if (IsMetricsReportingPolicyManaged() && !is_chrome_os) {
     if (!callback_fn.is_null()) {
       const bool metrics_enabled =
           ChromeMetricsServiceAccessor::IsMetricsAndCrashReportingEnabled();
@@ -128,23 +125,25 @@ void ChangeMetricsReportingStateWithReply(
     return;
   }
 #endif
-#if BUILDFLAG(IS_CHROMEOS_ASH)
-  metrics::structured::NeutrinoDevicesLogWithClientId(
-      g_browser_process->local_state()->GetString(
-          metrics::prefs::kMetricsClientID),
-      metrics::structured::NeutrinoDevicesLocation::
-          kChangeMetricsReportingStateWithReply);
-#endif  // BUILDFLAG(IS_CHROMEOS_ASH)
-  base::PostTaskAndReplyWithResult(
-      GoogleUpdateSettings::CollectStatsConsentTaskRunner(), FROM_HERE,
-      base::BindOnce(&SetGoogleUpdateSettings, enabled),
-      base::BindOnce(&SetMetricsReporting, enabled, std::move(callback_fn),
-                     called_from));
+  GoogleUpdateSettings::CollectStatsConsentTaskRunner()
+      ->PostTaskAndReplyWithResult(
+          FROM_HERE, base::BindOnce(&SetGoogleUpdateSettings, enabled),
+          base::BindOnce(&SetMetricsReporting, enabled, std::move(callback_fn),
+                         called_from));
 }
 
 void UpdateMetricsPrefsOnPermissionChange(
     bool metrics_enabled,
     ChangeMetricsReportingStateCalledFrom called_from) {
+  // On Chrome OS settings creation, nothing should be performed (the metrics
+  // service is simply being initialized). Otherwise, for users who have
+  // metrics reporting disabled, their client ID and low entropy sources would
+  // be cleared on each log in. For users who have metrics reporting enabled,
+  // their stability metrics and histogram data would be cleared.
+  if (called_from ==
+      ChangeMetricsReportingStateCalledFrom::kCrosMetricsSettingsCreated) {
+    return;
+  }
   if (metrics_enabled) {
     // When a user opts in to the metrics reporting service, the previously
     // collected data should be cleared to ensure that nothing is reported
@@ -171,37 +170,32 @@ void UpdateMetricsPrefsOnPermissionChange(
       metrics::prefs::kUsePostFREFixSamplingTrial, true);
 #endif  // BUILDFLAG(IS_ANDROID)
 
-  // Clear the client id and low entropy sources pref when opting out.
+  // Clear the client id and low entropy sources pref when the user opts out
+  // from a non-FRE source. In the FRE flow the entropy source is not cleared
+  // since no data has been uploaded yet.
   // Note: This will not affect the running state (e.g. field trial
   // randomization), as the pref is only read on startup.
 
   UMA_HISTOGRAM_BOOLEAN("UMA.ClientIdCleared", true);
 
   PrefService* local_state = g_browser_process->local_state();
-#if BUILDFLAG(IS_CHROMEOS_ASH)
-  metrics::structured::NeutrinoDevicesLogClientIdCleared(
-      local_state->GetString(metrics::prefs::kMetricsClientID),
-      local_state->GetInt64(metrics::prefs::kInstallDate),
-      local_state->GetInt64(metrics::prefs::kMetricsReportingEnabledTimestamp));
-#endif  // BUILDFLAG(IS_CHROMEOS_ASH)
 
   local_state->ClearPref(metrics::prefs::kMetricsClientID);
   local_state->ClearPref(metrics::prefs::kMetricsProvisionalClientID);
-  metrics::EntropyState::ClearPrefs(local_state);
+  local_state->ClearPref(metrics::prefs::kMetricsLogRecordId);
+
+  // Don't clear the entropy state if the user opted out in the FRE. This is to
+  // prevent experiments that have been randomized based on the low-entropy
+  // source from having their state re-rolled on a subsequent session.
+  if (called_from != ChangeMetricsReportingStateCalledFrom::kUiFirstRun) {
+    metrics::EntropyState::ClearPrefs(local_state);
+  }
   metrics::ClonedInstallDetector::ClearClonedInstallInfo(local_state);
   local_state->ClearPref(metrics::prefs::kMetricsReportingEnabledTimestamp);
   crash_keys::ClearMetricsClientId();
 }
 
 void ApplyMetricsReportingPolicy() {
-#if BUILDFLAG(IS_ANDROID)
-  // Android must verify if this policy is feature-enabled.
-  if (!base::FeatureList::IsEnabled(
-          policy::features::kActivateMetricsReportingEnabledPolicyAndroid)) {
-    return;
-  }
-#endif  // BUILDFLAG(IS_ANDROID)
-
   GoogleUpdateSettings::CollectStatsConsentTaskRunner()->PostTask(
       FROM_HERE,
       base::BindOnce(
@@ -213,16 +207,7 @@ bool IsMetricsReportingPolicyManaged() {
 #if BUILDFLAG(IS_CHROMEOS_ASH)
   policy::BrowserPolicyConnectorAsh* policy_connector =
       g_browser_process->platform_part()->browser_policy_connector_ash();
-  const bool is_managed = policy_connector->IsDeviceEnterpriseManaged();
-
-  metrics::structured::NeutrinoDevicesLogPolicy(
-      g_browser_process->local_state()->GetString(
-          metrics::prefs::kMetricsClientID),
-      is_managed,
-      metrics::structured::NeutrinoDevicesLocation::
-          kIsMetricsReportingPolicyManaged);
-
-  return is_managed;
+  return policy_connector->IsDeviceEnterpriseManaged();
 #else
   const PrefService* pref_service = g_browser_process->local_state();
   const PrefService::Preference* pref =

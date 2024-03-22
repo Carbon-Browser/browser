@@ -1,11 +1,12 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 #ifndef DEVICE_VR_OPENXR_OPENXR_SCENE_PLANE_H_
 #define DEVICE_VR_OPENXR_OPENXR_SCENE_PLANE_H_
 
+#include "base/types/id_type.h"
 #include "device/vr/openxr/openxr_scene_object.h"
-#include "device/vr/openxr/openxr_util.h"
+#include "third_party/openxr/src/include/openxr/openxr.h"
 
 namespace device {
 

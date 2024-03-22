@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -16,6 +16,10 @@
 #include "components/password_manager/core/browser/stub_password_manager_client.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
+
+#if BUILDFLAG(IS_MAC)
+#include "components/os_crypt/sync/os_crypt_mocker.h"
+#endif
 
 using base::ASCIIToUTF16;
 using testing::_;
@@ -73,6 +77,10 @@ class CredentialManagerPasswordFormManagerTest : public testing::Test {
     form_to_save_.scheme = PasswordForm::Scheme::kHtml;
     form_to_save_.type = PasswordForm::Type::kApi;
     form_to_save_.in_store = PasswordForm::Store::kProfileStore;
+
+#if BUILDFLAG(IS_MAC)
+    OSCryptMocker::SetUp();
+#endif
   }
   CredentialManagerPasswordFormManagerTest(
       const CredentialManagerPasswordFormManagerTest&) = delete;
@@ -160,6 +168,7 @@ TEST_F(CredentialManagerPasswordFormManagerTest, UpdatePasswordCredentialAPI) {
   // different password from already saved one.
   PasswordForm saved_match = form_to_save_;
   saved_match.password_value += u"1";
+  saved_match.match_type = PasswordForm::MatchType::kExact;
 
   std::unique_ptr<CredentialManagerPasswordFormManager> form_manager =
       CreateFormManager(form_to_save_);

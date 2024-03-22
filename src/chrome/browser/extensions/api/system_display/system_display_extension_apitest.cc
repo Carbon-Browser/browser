@@ -1,12 +1,12 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include <memory>
 #include <string>
 
-#include "base/bind.h"
 #include "base/debug/leak_annotations.h"
+#include "base/functional/bind.h"
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
 #include "chrome/browser/extensions/extension_apitest.h"
@@ -16,6 +16,7 @@
 #include "extensions/browser/api_test_utils.h"
 #include "extensions/browser/mock_display_info_provider.h"
 #include "extensions/common/api/system_display.h"
+#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "ui/display/display.h"
 
 namespace extensions {
@@ -62,7 +63,7 @@ IN_PROC_BROWSER_TEST_P(SystemDisplayExtensionApiTest, GetDisplayInfo) {
 
 #endif  // BUILDFLAG(IS_WIN)
 
-#if !BUILDFLAG(IS_CHROMEOS_ASH)
+#if !(BUILDFLAG(IS_CHROMEOS_ASH) || BUILDFLAG(IS_CHROMEOS_LACROS))
 
 using SystemDisplayExtensionApiFunctionTest = SystemDisplayExtensionApiTest;
 
@@ -80,8 +81,7 @@ IN_PROC_BROWSER_TEST_P(SystemDisplayExtensionApiFunctionTest, SetDisplay) {
             api_test_utils::RunFunctionAndReturnError(
                 set_info_function.get(), "[\"display_id\", {}]", profile()));
 
-  std::unique_ptr<base::DictionaryValue> set_info =
-      provider_->GetSetInfoValue();
+  absl::optional<base::Value::Dict> set_info = provider_->GetSetInfoValue();
   EXPECT_FALSE(set_info);
 }
 

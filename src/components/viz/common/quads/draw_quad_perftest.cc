@@ -1,10 +1,10 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include <vector>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/memory/raw_ptr.h"
 #include "base/time/time.h"
 #include "base/timer/lap_timer.h"
@@ -36,7 +36,8 @@ perf_test::PerfResultReporter SetUpDrawQuadReporter(const std::string& story) {
 }
 
 SharedQuadState* CreateSharedQuadState(CompositorRenderPass* render_pass) {
-  gfx::Transform quad_transform = gfx::Transform(1.0, 0.0, 0.5, 1.0, 0.5, 0.0);
+  gfx::Transform quad_transform =
+      gfx::Transform::Affine(1.0, 0.5, 0.0, 1.0, 0.5, 0.0);
   gfx::Rect content_rect(26, 28);
   gfx::Rect visible_layer_rect(10, 12, 14, 16);
   bool are_contents_opaque = false;
@@ -46,8 +47,9 @@ SharedQuadState* CreateSharedQuadState(CompositorRenderPass* render_pass) {
 
   SharedQuadState* state = render_pass->CreateAndAppendSharedQuadState();
   state->SetAll(quad_transform, content_rect, visible_layer_rect,
-                gfx::MaskFilterInfo(), /*clip_rect=*/absl::nullopt,
-                are_contents_opaque, opacity, blend_mode, sorting_context_id);
+                gfx::MaskFilterInfo(), /*clip=*/absl::nullopt,
+                are_contents_opaque, opacity, blend_mode, sorting_context_id,
+                /*layer_id=*/0u, /*fast_rounded_corner=*/false);
   return state;
 }
 

@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -43,7 +43,7 @@ crypto::ScopedPK11Slot GetRootCertsSlot() {
 
 ScopedCERTCertificateList ListCertsInSlot(PK11SlotInfo* slot) {
   ScopedCERTCertificateList result;
-  CERTCertList* cert_list = PK11_ListCertsInSlot(slot);
+  crypto::ScopedCERTCertList cert_list(PK11_ListCertsInSlot(slot));
   if (!cert_list)
     return result;
   for (CERTCertListNode* node = CERT_LIST_HEAD(cert_list);
@@ -51,7 +51,6 @@ ScopedCERTCertificateList ListCertsInSlot(PK11SlotInfo* slot) {
        node = CERT_LIST_NEXT(node)) {
     result.push_back(x509_util::DupCERTCertificate(node->cert));
   }
-  CERT_DestroyCertList(cert_list);
 
   // Sort the result so that test comparisons can be deterministic.
   std::sort(

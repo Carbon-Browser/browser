@@ -1,16 +1,12 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 package org.chromium.components.version_info;
 
-import org.chromium.base.annotations.CalledByNative;
-import org.chromium.base.annotations.MainDex;
+import org.jni_zero.CalledByNative;
 
-/**
- * Bridge between native and VersionConstants.java.
- */
-@MainDex
+/** Bridge between native and VersionConstants.java. */
 public class VersionConstantsBridge {
     @CalledByNative
     public static int getChannel() {

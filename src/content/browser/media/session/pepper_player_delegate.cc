@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,6 +7,7 @@
 #include "base/command_line.h"
 #include "content/browser/media/session/pepper_playback_observer.h"
 #include "content/browser/renderer_host/render_frame_host_impl.h"
+#include "content/browser/renderer_host/render_frame_host_impl_ppapi_support.h"
 #include "media/base/media_switches.h"
 #include "services/media_session/public/cpp/media_position.h"
 
@@ -74,10 +75,6 @@ void PepperPlayerDelegate::OnEnterPictureInPicture(int player_id) {
   // Pepper player cannot enter picture-in-picture. Do nothing.
 }
 
-void PepperPlayerDelegate::OnExitPictureInPicture(int player_id) {
-  // Pepper player cannot exit picture-in-picture. Do nothing.
-}
-
 void PepperPlayerDelegate::OnSetAudioSinkId(int player_id,
                                             const std::string& raw_device_id) {
   // Pepper player cannot change audio sinks. Do nothing.
@@ -104,7 +101,8 @@ RenderFrameHost* PepperPlayerDelegate::render_frame_host() const {
 
 void PepperPlayerDelegate::SetVolume(int player_id, double volume) {
   static_cast<RenderFrameHostImpl*>(render_frame_host_)
-      ->PepperSetVolume(pp_instance_, volume);
+      ->GetPpapiSupport()
+      .SetVolume(pp_instance_, volume);
 }
 
 bool PepperPlayerDelegate::HasAudio(int player_id) const {

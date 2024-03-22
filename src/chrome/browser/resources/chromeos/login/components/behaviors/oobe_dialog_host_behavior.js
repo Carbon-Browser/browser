@@ -1,10 +1,12 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 // clang-format off
-// #import {dom, Polymer} from '//resources/polymer/v3_0/polymer/polymer_bundled.min.js';
-// #import {invokePolymerMethod} from '../../display_manager.m.js';
+import {dom, Polymer} from '//resources/polymer/v3_0/polymer/polymer_bundled.min.js';
+
+import { traceFirstScreenShown } from '../../oobe_trace.js';
+import {invokePolymerMethod} from '../../display_manager.js';
 // clang-format on
 
 /**
@@ -14,19 +16,19 @@
  */
 
 /** @polymerBehavior */
-/* #export */ var OobeDialogHostBehavior = {
+export const OobeDialogHostBehavior = {
   properties: {},
 
   /**
    * Triggers onBeforeShow for descendants.
-   * @suppress {missingProperties} cr.ui.login.invokePolymerMethod
+   * @suppress {missingProperties} invokePolymerMethod
    */
   propagateOnBeforeShow() {
     const dialogs = this.shadowRoot.querySelectorAll(
         'oobe-dialog,oobe-adaptive-dialog,oobe-content-dialog,' +
         'gaia-dialog,oobe-loading-dialog');
     for (const dialog of dialogs) {
-      cr.ui.login.invokePolymerMethod(dialog, 'onBeforeShow');
+      invokePolymerMethod(dialog, 'onBeforeShow');
     }
   },
 
@@ -34,6 +36,7 @@
    * Trigger onBeforeShow for all children.
    */
   onBeforeShow() {
+    traceFirstScreenShown();
     this.propagateOnBeforeShow();
   },
 
@@ -42,8 +45,8 @@
    * @param {string} selector CSS selector (optional).
    */
   propagateUpdateLocalizedContent(selector) {
-    var screens = Polymer.dom(this.root).querySelectorAll(selector);
-    for (var i = 0; i < screens.length; ++i) {
+    const screens = dom(this.root).querySelectorAll(selector);
+    for (let i = 0; i < screens.length; ++i) {
       /** @type {{updateLocalizedContent: function()}}}*/ (screens[i])
           .updateLocalizedContent();
     }

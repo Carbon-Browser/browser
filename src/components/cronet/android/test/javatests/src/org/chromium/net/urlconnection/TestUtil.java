@@ -1,26 +1,22 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 package org.chromium.net.urlconnection;
 
-import org.junit.Assert;
+import static com.google.common.truth.Truth.assertThat;
 
 import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
 import java.net.HttpURLConnection;
 
-/**
- * Helper functions and fields used in Cronet's HttpURLConnection tests.
- */
+/** Helper functions and fields used in Cronet's HttpURLConnection tests. */
 public class TestUtil {
     static final String UPLOAD_DATA_STRING = "Nifty upload data!";
     static final byte[] UPLOAD_DATA = UPLOAD_DATA_STRING.getBytes();
     static final int REPEAT_COUNT = 100000;
 
-    /**
-     * Helper method to extract response body as a string for testing.
-     */
+    /** Helper method to extract response body as a string for testing. */
     static String getResponseAsString(HttpURLConnection connection) throws Exception {
         InputStream in = connection.getInputStream();
         ByteArrayOutputStream out = new ByteArrayOutputStream();
@@ -49,8 +45,11 @@ public class TestUtil {
      */
     static void checkLargeData(String data) {
         for (int i = 0; i < REPEAT_COUNT; i++) {
-            Assert.assertEquals(UPLOAD_DATA_STRING, data.substring(UPLOAD_DATA_STRING.length() * i,
-                                                            UPLOAD_DATA_STRING.length() * (i + 1)));
+            assertThat(
+                            data.substring(
+                                    UPLOAD_DATA_STRING.length() * i,
+                                    UPLOAD_DATA_STRING.length() * (i + 1)))
+                    .isEqualTo(UPLOAD_DATA_STRING);
         }
     }
 }

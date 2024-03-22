@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -36,7 +36,7 @@ void LogMessage::EstimateTraceMemoryOverhead(
   overhead->AddString(message_);
 }
 
-bool LogMessage::AppendToProto(ProtoAppender* appender) {
+bool LogMessage::AppendToProto(ProtoAppender* appender) const {
   // LogMessage is handled in a special way in
   // track_event_thread_local_event_sink.cc in the function |AddTraceEvent|, so
   // this call should never happen.

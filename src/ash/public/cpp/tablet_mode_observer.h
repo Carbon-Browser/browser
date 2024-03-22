@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,6 +12,11 @@ namespace ash {
 // Used to observe tablet mode changes inside ash. Exported for tests.
 class ASH_PUBLIC_EXPORT TabletModeObserver {
  public:
+  // OnTabletModeStarting/Started/Ending/Ended is deprecated. Use
+  // display::DisplayObserver::OnDisplayTabletStateChanged to catch the tablet
+  // mode enterting and exiting.
+  // TODO(crbug.com/1502114): Remove OnTabletModeStarting/Started/Ending/Ended.
+
   // Called when the tablet mode is about to start.
   virtual void OnTabletModeStarting() {}
 

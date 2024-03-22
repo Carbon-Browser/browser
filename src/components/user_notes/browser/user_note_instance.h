@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -97,7 +97,7 @@ class UserNoteInstance : public blink::mojom::AnnotationAgentHost {
 
   // A ref to the backing model of this note instance. The model is owned by
   // |UserNoteService|. The model is expected to outlive this class.
-  base::SafeRef<UserNote> model_;
+  base::SafeRef<UserNote, base::SafeRefDanglingUntriaged> model_;
 
   // The owning note manager.
   raw_ptr<UserNoteManager> parent_manager_;

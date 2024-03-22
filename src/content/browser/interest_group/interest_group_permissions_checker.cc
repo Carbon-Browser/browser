@@ -1,10 +1,10 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "content/browser/interest_group/interest_group_permissions_checker.h"
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/strings/escape.h"
 #include "base/strings/strcat.h"
 #include "base/time/time.h"

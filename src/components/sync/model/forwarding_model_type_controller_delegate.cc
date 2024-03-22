@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -42,6 +42,14 @@ void ForwardingModelTypeControllerDelegate::GetTypeEntitiesCountForDebugging(
 void ForwardingModelTypeControllerDelegate::
     RecordMemoryUsageAndCountsHistograms() {
   other_->RecordMemoryUsageAndCountsHistograms();
+}
+
+void ForwardingModelTypeControllerDelegate::ClearMetadataIfStopped() {
+  // `other_` can be null during testing.
+  // TODO(crbug.com/1418351): Remove test-only code-path.
+  if (other_) {
+    other_->ClearMetadataIfStopped();
+  }
 }
 
 }  // namespace syncer

@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,9 +14,7 @@ import android.view.contentcapture.ContentCaptureSession;
 
 import androidx.annotation.RequiresApi;
 
-/**
- * The implementation of PlatformAPIWrapper.
- */
+/** The implementation of PlatformAPIWrapper. */
 @RequiresApi(Build.VERSION_CODES.Q)
 public class PlatformAPIWrapperImpl extends PlatformAPIWrapper {
     @Override

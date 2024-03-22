@@ -18,12 +18,20 @@
 #ifndef COMPONENTS_ADBLOCK_CORE_SUBSCRIPTION_SUBSCRIPTION_CONFIG_H_
 #define COMPONENTS_ADBLOCK_CORE_SUBSCRIPTION_SUBSCRIPTION_CONFIG_H_
 
+#include <string_view>
 #include <vector>
 
-#include "base/strings/string_piece_forward.h"
 #include "url/gurl.h"
 
 namespace adblock {
+
+const GURL& AcceptableAdsUrl();
+const GURL& AntiCVUrl();
+const GURL& DefaultSubscriptionUrl();
+
+// Sets the port used by the embedded http server required for browser tests.
+// Must be called before the first call to GetKnownSubscriptions().
+void SetFilterListServerPortForTesting(int port_for_testing);
 
 enum class SubscriptionUiVisibility { Visible, Invisible };
 
@@ -82,7 +90,7 @@ struct PreloadedSubscriptionInfo {
   // https://easylist-downloads.adblockplus.org/easylistchina+easylist.txt).
   // This preloaded subscription will be used as a substitute for a
   // subscription with a URL that matches |url_pattern|.
-  base::StringPiece url_pattern;
+  std::string_view url_pattern;
 
   // Resource ID containing the binary flatbuffer data that defines this
   // preloaded subscription. Examples:

@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,15 +8,15 @@
 
 #include <memory>
 
+#include "base/memory/ptr_util.h"
 #include "base/threading/platform_thread.h"
 #include "build/build_config.h"
 
 #if BUILDFLAG(IS_CHROMEOS) && defined(ARCH_CPU_X86_64)
-#include "base/bind.h"
 #include "base/check.h"
+#include "base/functional/bind.h"
 #include "base/profiler/frame_pointer_unwinder.h"
 #include "base/profiler/stack_copier_signal.h"
-#include "base/profiler/stack_sampler_impl.h"
 #include "base/profiler/thread_delegate_posix.h"
 #include "base/profiler/unwinder.h"
 #endif
@@ -43,11 +43,11 @@ std::unique_ptr<StackSampler> StackSampler::Create(
     StackSamplerTestDelegate* test_delegate) {
 #if BUILDFLAG(IS_CHROMEOS) && defined(ARCH_CPU_X86_64)
   DCHECK(!core_unwinders_factory);
-  return std::make_unique<StackSamplerImpl>(
-      std::make_unique<StackCopierSignal>(
-          ThreadDelegatePosix::Create(thread_token)),
-      BindOnce(&CreateUnwinders), module_cache,
-      std::move(record_sample_callback), test_delegate);
+  return base::WrapUnique(
+      new StackSampler(std::make_unique<StackCopierSignal>(
+                           ThreadDelegatePosix::Create(thread_token)),
+                       BindOnce(&CreateUnwinders), module_cache,
+                       std::move(record_sample_callback), test_delegate));
 #else
   return nullptr;
 #endif

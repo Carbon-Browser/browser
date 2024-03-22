@@ -1,7 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Copyright 2021 The Chromium Authors. All rights reserved.
-     Use of this source code is governed by a BSD-style license that can be
-     found in the LICENSE file. -->
+<!--
+Copyright 2021 The Chromium Authors
+Use of this source code is governed by a BSD-style license that can be
+found in the LICENSE file.
+-->
 
 <org.chromium.ui.widget.ViewLookupCachingFrameLayout
     xmlns:android="http://schemas.android.com/apk/res/android"
@@ -28,10 +30,10 @@
                 android:layout_height="72dp"
                 android:layout_marginHorizontal="16dp"
                 android:layout_gravity="center_vertical|start"
-                android:background="@drawable/bookmark_save_flow_background"
-                android:foreground="@drawable/bookmark_save_flow_ripple"
+                android:background="@drawable/rounded_rectangle_surface_1"
+                android:foreground="@drawable/bookmark_touch_ripple"
                 android:scaleType="centerInside"
-                android:contentDescription="@string/bookmark_action_bar_edit_folder" />
+                android:contentDescription="@string/edit_folder" />
 
             <LinearLayout
                 android:layout_width="wrap_content"
@@ -125,7 +127,7 @@
                 android:textAppearance="@style/TextAppearance.TextSmall.Secondary" />
         </LinearLayout>
 
-        <androidx.appcompat.widget.SwitchCompat
+        <com.google.android.material.materialswitch.MaterialSwitch
             android:id="@+id/notification_switch"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"

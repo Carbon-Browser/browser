@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,9 +8,7 @@ import static junit.framework.Assert.assertEquals;
 
 import org.chromium.chrome.browser.gcore.ChromeGoogleApiClient;
 
-/**
- * Mock of ChromeGoogleApiClient that tracks which methods are called.
- */
+/** Mock of ChromeGoogleApiClient that tracks which methods are called. */
 public class MockChromeGoogleApiClient implements ChromeGoogleApiClient {
     private final Object mLock = new Object();
 

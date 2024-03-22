@@ -1,12 +1,13 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CHROME_BROWSER_UI_COCOA_SCREENTIME_HISTORY_DELETER_IMPL_H_
 #define CHROME_BROWSER_UI_COCOA_SCREENTIME_HISTORY_DELETER_IMPL_H_
 
-#include "base/mac/scoped_nsobject.h"
 #include "chrome/browser/ui/cocoa/screentime/history_deleter.h"
+
+#include <memory>
 
 @class STWebHistory;
 
@@ -31,7 +32,7 @@ class HistoryDeleterImpl : public HistoryDeleter {
  private:
   HistoryDeleterImpl();
 
-  base::scoped_nsobject<STWebHistory> platform_deleter_;
+  STWebHistory* __strong platform_deleter_;
 };
 
 }  // namespace screentime

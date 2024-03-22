@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,8 +7,8 @@
 #include <string>
 #include <utility>
 
-#include "base/bind.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
 #include "base/no_destructor.h"
 #include "base/observer_list.h"
 #include "base/strings/pattern.h"
@@ -22,9 +22,8 @@
 #include "chrome/browser/ash/plugin_vm/plugin_vm_pref_names.h"
 #include "chrome/browser/ash/settings/cros_settings.h"
 #include "chrome/browser/profiles/profile.h"
-#include "chrome/browser/profiles/profile_manager.h"
 #include "chrome/browser/ui/ash/shelf/chrome_shelf_controller.h"
-#include "chromeos/dbus/dlcservice/dlcservice_client.h"
+#include "chromeos/ash/components/dbus/dlcservice/dlcservice_client.h"
 #include "components/exo/shell_surface_util.h"
 #include "components/prefs/pref_service.h"
 #include "components/prefs/scoped_user_pref_update.h"
@@ -36,6 +35,7 @@ const char kPitaDlc[] = "pita";
 const char kPluginVmShelfAppId[] = "lgjpclljbbmphhnalkeplcmnjpfmmaek";
 const char kPluginVmName[] = "PvmDefault";
 const char kChromeOSBaseDirectoryDisplayText[] = "Network \u203a ChromeOS";
+const char kPluginVmWindowId[] = "org.chromium.plugin_vm_ui";
 
 namespace {
 
@@ -75,11 +75,11 @@ void SetFakePluginVmPolicy(Profile* profile,
                            const std::string& image_url,
                            const std::string& image_hash,
                            const std::string& license_key) {
-  DictionaryPrefUpdate update(profile->GetPrefs(),
+  ScopedDictPrefUpdate update(profile->GetPrefs(),
                               plugin_vm::prefs::kPluginVmImage);
-  base::Value* dict = update.Get();
-  dict->SetStringPath(prefs::kPluginVmImageUrlKeyName, image_url);
-  dict->SetStringPath(prefs::kPluginVmImageHashKeyName, image_hash);
+  base::Value::Dict& dict = update.Get();
+  dict.SetByDottedPath(prefs::kPluginVmImageUrlKeyName, image_url);
+  dict.SetByDottedPath(prefs::kPluginVmImageHashKeyName, image_hash);
   plugin_vm::PluginVmInstallerFactory::GetForProfile(profile)
       ->SkipLicenseCheckForTesting();  // IN-TEST
   MutableFakeLicenseKey() = license_key;
@@ -138,9 +138,13 @@ absl::optional<std::string> GetIdFromDriveUrl(const GURL& url) {
   return absl::nullopt;
 }
 
-PluginVmPolicySubscription::PluginVmPolicySubscription(
+bool IsPluginvmWindowId(const std::string& window_id) {
+  return base::StartsWith(window_id, kPluginVmWindowId);
+}
+
+PluginVmAvailabilitySubscription::PluginVmAvailabilitySubscription(
     Profile* profile,
-    base::RepeatingCallback<void(bool)> callback)
+    AvailabilityChangeCallback callback)
     : profile_(profile), callback_(callback) {
   DCHECK(ash::CrosSettings::IsInitialized());
   ash::CrosSettings* cros_settings = ash::CrosSettings::Get();
@@ -149,31 +153,45 @@ PluginVmPolicySubscription::PluginVmPolicySubscription(
   pref_change_registrar_->Init(profile->GetPrefs());
   pref_change_registrar_->Add(
       plugin_vm::prefs::kPluginVmAllowed,
-      base::BindRepeating(&PluginVmPolicySubscription::OnPolicyChanged,
+      base::BindRepeating(&PluginVmAvailabilitySubscription::OnPolicyChanged,
                           base::Unretained(this)));
   pref_change_registrar_->Add(
       plugin_vm::prefs::kPluginVmUserId,
-      base::BindRepeating(&PluginVmPolicySubscription::OnPolicyChanged,
+      base::BindRepeating(&PluginVmAvailabilitySubscription::OnPolicyChanged,
                           base::Unretained(this)));
+  pref_change_registrar_->Add(
+      plugin_vm::prefs::kPluginVmImageExists,
+      base::BindRepeating(
+          &PluginVmAvailabilitySubscription::OnImageExistsChanged,
+          base::Unretained(this)));
   device_allowed_subscription_ = cros_settings->AddSettingsObserver(
       ash::kPluginVmAllowed,
-      base::BindRepeating(&PluginVmPolicySubscription::OnPolicyChanged,
+      base::BindRepeating(&PluginVmAvailabilitySubscription::OnPolicyChanged,
                           base::Unretained(this)));
   fake_license_subscription_ = GetFakeLicenseKeyListeners().Add(
-      base::BindRepeating(&PluginVmPolicySubscription::OnPolicyChanged,
+      base::BindRepeating(&PluginVmAvailabilitySubscription::OnPolicyChanged,
                           base::Unretained(this)));
 
   is_allowed_ = PluginVmFeatures::Get()->IsAllowed(profile);
+  is_configured_ = PluginVmFeatures::Get()->IsConfigured(profile_);
 }
 
-void PluginVmPolicySubscription::OnPolicyChanged() {
+void PluginVmAvailabilitySubscription::OnPolicyChanged() {
   bool allowed = PluginVmFeatures::Get()->IsAllowed(profile_);
   if (allowed != is_allowed_) {
     is_allowed_ = allowed;
-    callback_.Run(allowed);
+    callback_.Run(is_allowed_, is_configured_);
   }
 }
 
-PluginVmPolicySubscription::~PluginVmPolicySubscription() = default;
+void PluginVmAvailabilitySubscription::OnImageExistsChanged() {
+  bool configured = PluginVmFeatures::Get()->IsConfigured(profile_);
+  if (configured != is_configured_) {
+    is_configured_ = configured;
+    callback_.Run(is_allowed_, is_configured_);
+  }
+}
+
+PluginVmAvailabilitySubscription::~PluginVmAvailabilitySubscription() = default;
 
 }  // namespace plugin_vm

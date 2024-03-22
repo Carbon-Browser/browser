@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,15 +11,15 @@
 
 #include "base/barrier_callback.h"
 #include "base/barrier_closure.h"
-#include "base/bind.h"
 #include "base/check.h"
 #include "base/containers/span.h"
-#include "base/feature_list.h"
 #include "base/files/file.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/sequence_checker.h"
 #include "base/task/sequenced_task_runner.h"
 #include "components/services/storage/public/cpp/buckets/bucket_locator.h"
+#include "mojo/public/cpp/bindings/callback_helpers.h"
 #include "storage/browser/file_system/file_system_backend.h"
 #include "storage/browser/file_system/file_system_context.h"
 #include "storage/common/file_system/file_system_types.h"
@@ -36,8 +36,6 @@ static const FileSystemType kTemporaryAndPersistent[] = {
     kFileSystemTypeTemporary,
     kFileSystemTypePersistent,
 };
-static const FileSystemType kTemporary[] = {kFileSystemTypeTemporary};
-static const FileSystemType kPersistent[] = {kFileSystemTypePersistent};
 static const FileSystemType kSyncable[] = {kFileSystemTypeSyncable};
 
 template <typename T>
@@ -64,20 +62,13 @@ base::span<const FileSystemType> QuotaStorageTypeToFileSystemTypes(
     blink::mojom::StorageType storage_type) {
   using StorageType = blink::mojom::StorageType;
 
-  if (base::FeatureList::IsEnabled(
-          blink::features::kPersistentQuotaIsTemporaryQuota)) {
-    DCHECK_NE(storage_type, StorageType::kPersistent);
-    if (storage_type == StorageType::kTemporary)
-      return kTemporaryAndPersistent;
-  }
   switch (storage_type) {
     case StorageType::kTemporary:
-      return kTemporary;
-    case StorageType::kPersistent:
-      return kPersistent;
+      return kTemporaryAndPersistent;
     case StorageType::kSyncable:
       return kSyncable;
     case StorageType::kDeprecatedQuotaNotManaged:
+    case StorageType::kDeprecatedPersistent:
     case StorageType::kUnknown:
       NOTREACHED();
       return {};
@@ -103,6 +94,17 @@ blink::mojom::QuotaStatusCode DeleteBucketOnFileTaskRunner(
   base::File::Error result =
       provider->GetQuotaUtil()->DeleteBucketDataOnFileTaskRunner(
           context, context->quota_manager_proxy().get(), bucket_locator, type);
+
+  // If obfuscated_file_util() was caching this default bucket, it should be
+  // deleted as well. If it was not cached, result is a no-op. NOTE: We only
+  // want to cache and delete kTemporary buckets. Otherwise, we may accidentally
+  // delete the wrong databases.
+  if (bucket_locator.is_default &&
+      bucket_locator.type == blink::mojom::StorageType::kTemporary) {
+    provider->GetQuotaUtil()->DeleteCachedDefaultBucket(
+        bucket_locator.storage_key);
+  }
+
   if (result == base::File::FILE_OK)
     return blink::mojom::QuotaStatusCode::kOk;
   return blink::mojom::QuotaStatusCode::kErrorInvalidModification;
@@ -195,6 +197,8 @@ void FileSystemQuotaClient::DeleteBucketData(
   base::span<const FileSystemType> fs_types =
       QuotaStorageTypeToFileSystemTypes(bucket.type);
 
+  auto wrapped_callback = mojo::WrapCallbackWithDefaultInvokeIfNotRun(
+      std::move(callback), blink::mojom::QuotaStatusCode::kUnknown);
   base::RepeatingCallback<void(blink::mojom::QuotaStatusCode)> barrier =
       base::BarrierCallback<blink::mojom::QuotaStatusCode>(
           fs_types.size(),
@@ -205,7 +209,7 @@ void FileSystemQuotaClient::DeleteBucketData(
                 return status;
             }
             return blink::mojom::QuotaStatusCode::kOk;
-          }).Then(std::move(callback)));
+          }).Then(std::move(wrapped_callback)));
 
   for (const auto fs_type : fs_types) {
     file_task_runner()->PostTaskAndReplyWithResult(

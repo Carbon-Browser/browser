@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -28,19 +28,6 @@ enum class WmiParsingError {
   kMaxValue = kFailedToGetId
 };
 
-// Response object for calls to retrieve information about installed AntiVirus
-// software.
-struct WmiAvProductsResponse {
-  WmiAvProductsResponse();
-  ~WmiAvProductsResponse();
-
-  WmiAvProductsResponse(const WmiAvProductsResponse& other);
-
-  std::vector<AvProduct> av_products;
-  absl::optional<base::win::WmiError> query_error;
-  std::vector<WmiParsingError> parsing_errors;
-};
-
 // Response object for calls to retrieve information about installed hotfix
 // updates.
 struct WmiHotfixesResponse {
@@ -58,9 +45,6 @@ struct WmiHotfixesResponse {
 class WmiClient {
  public:
   virtual ~WmiClient() = default;
-
-  // Will retrieve information about installed AntiVirus software.
-  virtual WmiAvProductsResponse GetAntiVirusProducts() = 0;
 
   // Will retrieve information about installed hotfix updates.
   virtual WmiHotfixesResponse GetInstalledHotfixes() = 0;

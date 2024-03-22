@@ -1,8 +1,10 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "ash/quick_pair/repository/fast_pair/device_image_store.h"
+
+#include <optional>
 
 #include "ash/quick_pair/proto/fastpair.pb.h"
 #include "ash/quick_pair/proto/fastpair_data.pb.h"
@@ -10,17 +12,22 @@
 #include "ash/quick_pair/repository/fast_pair/mock_fast_pair_image_decoder.h"
 #include "ash/shell.h"
 #include "ash/test/ash_test_base.h"
-#include "base/callback_helpers.h"
+#include "base/functional/callback_helpers.h"
 #include "base/test/gmock_callback_support.h"
 #include "base/test/mock_callback.h"
-#include "chromeos/services/bluetooth_config/public/cpp/device_image_info.h"
+#include "chromeos/ash/services/bluetooth_config/public/cpp/device_image_info.h"
 #include "components/prefs/pref_service.h"
 #include "testing/gmock/include/gmock/gmock.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "ui/base/webui/web_ui_util.h"
 #include "ui/gfx/image/image_unittest_util.h"
 
+namespace ash::quick_pair {
+
 namespace {
+
+using ::base::test::RunOnceCallback;
+using bluetooth_config::DeviceImageInfo;
+using ::testing::_;
 
 constexpr char kTestModelId[] = "ABC123";
 constexpr char kTestLeftBudUrl[] = "left_bud";
@@ -28,14 +35,6 @@ constexpr char kTestRightBudUrl[] = "right_bud";
 constexpr char kTestCaseUrl[] = "case";
 
 }  // namespace
-
-namespace ash {
-namespace quick_pair {
-
-using ::base::test::RunOnceCallback;
-using chromeos::bluetooth_config::DeviceImageInfo;
-using ::testing::_;
-using ::testing::Return;
 
 class DeviceImageStoreTest : public AshTestBase {
  public:
@@ -59,7 +58,7 @@ class DeviceImageStoreTest : public AshTestBase {
     mock_decoder_ = std::make_unique<MockFastPairImageDecoder>();
     // On call to DecodeImage, run the third argument callback with test_image_.
     ON_CALL(*mock_decoder_, DecodeImageFromUrl(_, _, _))
-        .WillByDefault(RunOnceCallback<2>(test_image_));
+        .WillByDefault(base::test::RunOnceCallbackRepeatedly<2>(test_image_));
 
     device_image_store_ =
         std::make_unique<DeviceImageStore>(mock_decoder_.get());
@@ -186,7 +185,7 @@ TEST_F(DeviceImageStoreTest, FetchDeviceImagesInvalidTrueWireless) {
 
   // Simulate an error during download/decode by returning an empty image.
   ON_CALL(*mock_decoder_, DecodeImageFromUrl(_, _, _))
-      .WillByDefault(RunOnceCallback<2>(gfx::Image()));
+      .WillByDefault(base::test::RunOnceCallbackRepeatedly<2>(gfx::Image()));
   device_image_store_->FetchDeviceImages(kTestModelId, device_metadata_.get(),
                                          callback.Get());
 }
@@ -200,10 +199,11 @@ TEST_F(DeviceImageStoreTest, PersistDeviceImagesValid) {
   // Validate that the images are persisted to prefs.
   PrefService* local_state = Shell::Get()->local_state();
   const base::Value::Dict& device_image_store_dict =
-      local_state->GetValueDict(DeviceImageStore::kDeviceImageStorePref);
-  const base::Value* images_dict = device_image_store_dict.Find(kTestModelId);
+      local_state->GetDict(DeviceImageStore::kDeviceImageStorePref);
+  const base::Value::Dict* images_dict =
+      device_image_store_dict.FindDict(kTestModelId);
   EXPECT_TRUE(images_dict);
-  const std::string* persisted_image = images_dict->FindStringKey("Default");
+  const std::string* persisted_image = images_dict->FindString("Default");
   std::string expected_encoded_image =
       webui::GetBitmapDataUrl(test_image_.AsBitmap());
   EXPECT_EQ(*persisted_image, expected_encoded_image);
@@ -224,7 +224,7 @@ TEST_F(DeviceImageStoreTest, EvictDeviceImagesValid) {
   // Validate that the images are evicted from prefs.
   PrefService* local_state = Shell::Get()->local_state();
   const base::Value::Dict& device_image_store_dict =
-      local_state->GetValueDict(DeviceImageStore::kDeviceImageStorePref);
+      local_state->GetDict(DeviceImageStore::kDeviceImageStorePref);
   const base::Value* images_dict = device_image_store_dict.Find(kTestModelId);
   EXPECT_FALSE(images_dict);
 }
@@ -249,7 +249,7 @@ TEST_F(DeviceImageStoreTest, GetImagesForDeviceModelValid) {
   device_image_store_->FetchDeviceImages(kTestModelId, device_metadata_.get(),
                                          base::DoNothing());
 
-  absl::optional<DeviceImageInfo> images =
+  std::optional<DeviceImageInfo> images =
       device_image_store_->GetImagesForDeviceModel(kTestModelId);
   EXPECT_TRUE(images);
 
@@ -272,7 +272,7 @@ TEST_F(DeviceImageStoreTest, GetImagesForDeviceModelValid) {
 
 TEST_F(DeviceImageStoreTest, GetImagesForDeviceModelInvalidUninitialized) {
   // Don't initialize the dictionary with any results.
-  absl::optional<DeviceImageInfo> images =
+  std::optional<DeviceImageInfo> images =
       device_image_store_->GetImagesForDeviceModel(kTestModelId);
   EXPECT_FALSE(images);
 }
@@ -281,7 +281,7 @@ TEST_F(DeviceImageStoreTest, GetImagesForDeviceModelInvalidNotAdded) {
   device_image_store_->FetchDeviceImages(kTestModelId, device_metadata_.get(),
                                          base::DoNothing());
   // Look for a model ID that wasn't added.
-  absl::optional<DeviceImageInfo> images =
+  std::optional<DeviceImageInfo> images =
       device_image_store_->GetImagesForDeviceModel("DEF456");
   EXPECT_FALSE(images);
 }
@@ -295,7 +295,7 @@ TEST_F(DeviceImageStoreTest, LoadPersistedImagesFromPrefs) {
   // A new/restarted DeviceImageStore instance should load persisted images
   // from prefs.
   DeviceImageStore new_device_image_store(mock_decoder_.get());
-  absl::optional<DeviceImageInfo> images =
+  std::optional<DeviceImageInfo> images =
       new_device_image_store.GetImagesForDeviceModel(kTestModelId);
   EXPECT_TRUE(images);
 
@@ -316,5 +316,4 @@ TEST_F(DeviceImageStoreTest, LoadPersistedImagesFromPrefs) {
   EXPECT_EQ(case_image, webui::GetBitmapDataUrl(test_image_.AsBitmap()));
 }
 
-}  // namespace quick_pair
-}  // namespace ash
+}  // namespace ash::quick_pair

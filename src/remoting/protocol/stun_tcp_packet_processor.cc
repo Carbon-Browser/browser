@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,8 +11,7 @@
 #include "third_party/webrtc/media/base/rtp_utils.h"
 #include "third_party/webrtc/rtc_base/time_utils.h"
 
-namespace remoting {
-namespace protocol {
+namespace remoting::protocol {
 
 namespace {
 
@@ -41,8 +40,9 @@ int GetExpectedStunPacketSize(const uint8_t* data,
   } else {
     packet_size += kTurnChannelDataHeaderSize;
     // Calculate any padding if present.
-    if (packet_size % 4)
+    if (packet_size % 4) {
       *pad_bytes = 4 - packet_size % 4;
+    }
   }
   return packet_size;
 }
@@ -97,14 +97,16 @@ scoped_refptr<net::IOBufferWithSize> StunTcpPacketProcessor::Unpack(
     size_t data_size,
     size_t* bytes_consumed) const {
   *bytes_consumed = 0;
-  if (data_size < kPacketHeaderSize + kPacketLengthOffset)
+  if (data_size < kPacketHeaderSize + kPacketLengthOffset) {
     return nullptr;
+  }
 
   size_t pad_bytes;
   size_t packet_size = GetExpectedStunPacketSize(data, data_size, &pad_bytes);
 
-  if (data_size < packet_size + pad_bytes)
+  if (data_size < packet_size + pad_bytes) {
     return nullptr;
+  }
 
   // We have a complete packet.
   const uint8_t* cur = data;
@@ -122,5 +124,4 @@ void StunTcpPacketProcessor::ApplyPacketOptions(
                               rtc::TimeMicros());
 }
 
-}  // namespace protocol
-}  // namespace remoting
+}  // namespace remoting::protocol

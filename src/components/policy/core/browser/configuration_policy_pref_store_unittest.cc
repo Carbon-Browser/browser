@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,8 +8,8 @@
 #include <string>
 #include <utility>
 
-#include "base/callback.h"
 #include "base/files/file_path.h"
+#include "base/functional/callback.h"
 #include "base/memory/ptr_util.h"
 #include "base/run_loop.h"
 #include "components/policy/core/browser/configuration_policy_handler.h"
@@ -56,12 +56,12 @@ TEST_F(ConfigurationPolicyPrefStoreListTest, GetDefault) {
 }
 
 TEST_F(ConfigurationPolicyPrefStoreListTest, SetValue) {
-  base::Value in_value(base::Value::Type::LIST);
+  base::Value::List in_value;
   in_value.Append("test1");
   in_value.Append("test2,");
   PolicyMap policy;
   policy.Set(kTestPolicy, POLICY_LEVEL_MANDATORY, POLICY_SCOPE_USER,
-             POLICY_SOURCE_CLOUD, in_value.Clone(), nullptr);
+             POLICY_SOURCE_CLOUD, base::Value(in_value.Clone()), nullptr);
   UpdateProviderPolicy(policy);
   const base::Value* value = nullptr;
   EXPECT_TRUE(store_->GetValue(kTestPref, &value));

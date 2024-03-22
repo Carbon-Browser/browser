@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,28 +13,28 @@
 #include <string>
 #include <vector>
 
+#include "base/containers/span.h"
 #include "base/strings/string_piece.h"
+#include "base/values.h"
 #include "net/base/address_family.h"
 #include "net/base/completion_once_callback.h"
 #include "net/base/host_port_pair.h"
-#include "net/base/network_change_notifier.h"
-#include "net/base/network_isolation_key.h"
+#include "net/base/network_anonymization_key.h"
+#include "net/base/network_handle.h"
 #include "net/base/request_priority.h"
 #include "net/dns/host_cache.h"
-#include "net/dns/host_resolver_results.h"
+#include "net/dns/host_resolver_system_task.h"
 #include "net/dns/public/dns_config_overrides.h"
 #include "net/dns/public/dns_query_type.h"
+#include "net/dns/public/host_resolver_results.h"
 #include "net/dns/public/host_resolver_source.h"
 #include "net/dns/public/mdns_listener_update_type.h"
 #include "net/dns/public/resolve_error_info.h"
 #include "net/dns/public/secure_dns_policy.h"
 #include "net/log/net_log_with_source.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
+#include "third_party/abseil-cpp/absl/types/variant.h"
 #include "url/scheme_host_port.h"
-
-namespace base {
-class Value;
-}
 
 namespace net {
 
@@ -56,10 +56,37 @@ class URLRequestContext;
 // See mock_host_resolver.h for test implementations.
 class NET_EXPORT HostResolver {
  public:
-  using Host = absl::variant<url::SchemeHostPort, HostPortPair>;
+  class NET_EXPORT Host {
+   public:
+    explicit Host(absl::variant<url::SchemeHostPort, HostPortPair> host);
+    ~Host();
+
+    Host(const Host&);
+    Host& operator=(const Host&);
+    Host(Host&&);
+    Host& operator=(Host&&);
+
+    bool HasScheme() const;
+    const std::string& GetScheme() const;
+    std::string GetHostname() const;  // With brackets for IPv6 literals.
+    base::StringPiece GetHostnameWithoutBrackets() const;
+    uint16_t GetPort() const;
+
+    std::string ToString() const;
+
+    const url::SchemeHostPort& AsSchemeHostPort() const;
+
+   private:
+    absl::variant<url::SchemeHostPort, HostPortPair> host_;
+  };
 
   // Handler for an individual host resolution request. Created by
   // HostResolver::CreateRequest().
+  //
+  // TODO(crbug.com/1290920): Most result retrieval here follows a pattern where
+  // it may return null or empty for requests where that result type is not
+  // available. Clean this up to always return empty for such cases and remove
+  // nullability from the return types.
   class ResolveHostRequest {
    public:
     // Destruction cancels the request if running asynchronously, causing the
@@ -86,7 +113,8 @@ class NET_EXPORT HostResolver {
 
     // Address record (A or AAAA) results of the request. Should only be called
     // after Start() signals completion, either by invoking the callback or by
-    // returning a result other than |ERR_IO_PENDING|.
+    // returning a result other than |ERR_IO_PENDING|. May return nullptr or
+    // empty for non-address requests.
     //
     // TODO(crbug.com/1264933): Remove and replace all usage with
     // GetEndpointResults().
@@ -95,25 +123,25 @@ class NET_EXPORT HostResolver {
     // Endpoint results for `A`, `AAAA`, `UNSPECIFIED`, or `HTTPS` requests.
     // Should only be called after Start() signals completion, either by
     // invoking the callback or by returning a result other than
-    // `ERR_IO_PENDING`.
+    // `ERR_IO_PENDING`. May return nullptr or empty for non-address/HTTPS
+    // requests.
     virtual const std::vector<HostResolverEndpointResult>* GetEndpointResults()
         const = 0;
 
     // Text record (TXT) results of the request. Should only be called after
     // Start() signals completion, either by invoking the callback or by
-    // returning a result other than |ERR_IO_PENDING|.
-    virtual const absl::optional<std::vector<std::string>>& GetTextResults()
-        const = 0;
+    // returning a result other than |ERR_IO_PENDING|. May return nullptr or
+    // empty for non-TXT requests.
+    virtual const std::vector<std::string>* GetTextResults() const = 0;
 
     // Hostname record (SRV or PTR) results of the request. For SRV results,
-    // hostnames are ordered acording to their priorities and weights. See RFC
-    // 2782.
+    // hostnames are ordered according to their priorities and weights. See RFC
+    // 2782. May return nullptr or empty for non-SRV/PTR requests.
     //
     // Should only be called after Start() signals completion, either by
     // invoking the callback or by returning a result other than
     // |ERR_IO_PENDING|.
-    virtual const absl::optional<std::vector<HostPortPair>>&
-    GetHostnameResults() const = 0;
+    virtual const std::vector<HostPortPair>* GetHostnameResults() const = 0;
 
     // Any DNS record aliases, such as CNAME aliases, found as a result of an
     // address query. Includes all known aliases, e.g. from A, AAAA, or HTTPS,
@@ -122,7 +150,8 @@ class NET_EXPORT HostResolver {
     // invoking the callback or by returning a result other than
     // `ERR_IO_PENDING`. Returns a list of aliases that has been fixed up and
     // canonicalized (as URL hostnames), and thus may differ from the results
-    // stored directly in the AddressList.
+    // stored directly in the AddressList. May return nullptr or empty for
+    // non-address/HTTPS requests.
     //
     // If `ResolveHostParameters::include_canonical_name` was true, alias
     // results will always be the single "canonical name" received from the
@@ -133,7 +162,8 @@ class NET_EXPORT HostResolver {
 
     // Result of an experimental query. Meaning depends on the specific query
     // type, but each boolean value generally refers to a valid or invalid
-    // record of the experimental type.
+    // record of the experimental type. May return nullptr or empty for requests
+    // without experimental result behavior.
     NET_EXPORT virtual const std::vector<bool>*
     GetExperimentalResultsForTesting() const;
 
@@ -145,7 +175,8 @@ class NET_EXPORT HostResolver {
     virtual ResolveErrorInfo GetResolveErrorInfo() const = 0;
 
     // Information about the result's staleness in the host cache. Only
-    // available if results were received from the host cache.
+    // available if results were received from the host cache, otherwise
+    // returns nullopt.
     //
     // Should only be called after Start() signals completion, either by
     // invoking the callback or by returning a result other than
@@ -172,15 +203,41 @@ class NET_EXPORT HostResolver {
     virtual int Start() = 0;
   };
 
+  // The options for features::kUseDnsHttpsSvcb experiment. See the comments
+  // in net/base/features.h for more details.
+  struct NET_EXPORT HttpsSvcbOptions {
+    HttpsSvcbOptions();
+    HttpsSvcbOptions(const HttpsSvcbOptions&);
+    HttpsSvcbOptions(HttpsSvcbOptions&&);
+    HttpsSvcbOptions& operator=(const HttpsSvcbOptions&) = default;
+    HttpsSvcbOptions& operator=(HttpsSvcbOptions&&) = default;
+    ~HttpsSvcbOptions();
+
+    static HttpsSvcbOptions FromDict(const base::Value::Dict& dict);
+    static HttpsSvcbOptions FromFeatures();
+
+    bool enable = false;
+    base::TimeDelta insecure_extra_time_max;
+    int insecure_extra_time_percent = 0;
+    base::TimeDelta insecure_extra_time_min;
+    base::TimeDelta secure_extra_time_max;
+    int secure_extra_time_percent = 0;
+    base::TimeDelta secure_extra_time_min;
+  };
+
   // Parameter-grouping struct for additional optional parameters for creation
   // of HostResolverManagers and stand-alone HostResolvers.
   struct NET_EXPORT ManagerOptions {
+    ManagerOptions();
+    ManagerOptions(const ManagerOptions&);
+    ManagerOptions(ManagerOptions&&);
+    ManagerOptions& operator=(const ManagerOptions&) = default;
+    ManagerOptions& operator=(ManagerOptions&&) = default;
+    ~ManagerOptions();
+
     // Set |max_concurrent_resolves| to this to select a default level
     // of concurrency.
     static const size_t kDefaultParallelism = 0;
-
-    // Set |max_system_retry_attempts| to this to select a default retry value.
-    static const size_t kDefaultRetryAttempts;
 
     // How many resolve requests will be allowed to run in parallel.
     // |kDefaultParallelism| for the resolver to choose a default value.
@@ -189,7 +246,8 @@ class NET_EXPORT HostResolver {
     // The maximum number of times to retry for host resolution if using the
     // system resolver. No effect when the system resolver is not used.
     // |kDefaultRetryAttempts| for the resolver to choose a default value.
-    size_t max_system_retry_attempts = kDefaultRetryAttempts;
+    size_t max_system_retry_attempts =
+        HostResolverSystemTask::Params::kDefaultRetryAttempts;
 
     // Initial setting for whether the insecure portion of the built-in
     // asynchronous DnsClient is enabled or disabled. See HostResolverManager::
@@ -208,6 +266,10 @@ class NET_EXPORT HostResolver {
     // unreachable without actually checking. See https://crbug.com/696569 for
     // further context.
     bool check_ipv6_on_wifi = true;
+
+    // An experimental options for features::kUseDnsHttpsSvcb
+    // and features::kUseDnsHttpsSvcbAlpn.
+    absl::optional<HostResolver::HttpsSvcbOptions> https_svcb_options;
   };
 
   // Factory class. Useful for classes that need to inject and override resolver
@@ -360,7 +422,7 @@ class NET_EXPORT HostResolver {
   // defaults will be used if passed |nullptr|.
   virtual std::unique_ptr<ResolveHostRequest> CreateRequest(
       url::SchemeHostPort host,
-      NetworkIsolationKey network_isolation_key,
+      NetworkAnonymizationKey network_anonymization_key,
       NetLogWithSource net_log,
       absl::optional<ResolveHostParameters> optional_parameters) = 0;
 
@@ -368,7 +430,7 @@ class NET_EXPORT HostResolver {
   // TODO(crbug.com/1206799): Rename to discourage use when scheme is known.
   virtual std::unique_ptr<ResolveHostRequest> CreateRequest(
       const HostPortPair& host,
-      const NetworkIsolationKey& network_isolation_key,
+      const NetworkAnonymizationKey& network_anonymization_key,
       const NetLogWithSource& net_log,
       const absl::optional<ResolveHostParameters>& optional_parameters) = 0;
 
@@ -386,7 +448,7 @@ class NET_EXPORT HostResolver {
   virtual HostCache* GetHostCache();
 
   // Returns the current DNS configuration |this| is using, as a Value.
-  virtual base::Value GetDnsConfigAsValue() const;
+  virtual base::Value::Dict GetDnsConfigAsValue() const;
 
   // Set the associated URLRequestContext, generally expected to be called by
   // URLRequestContextBuilder on passing ownership of |this| to a context. May
@@ -395,8 +457,7 @@ class NET_EXPORT HostResolver {
 
   virtual HostResolverManager* GetManagerForTesting();
   virtual const URLRequestContext* GetContextForTesting() const;
-  virtual NetworkChangeNotifier::NetworkHandle GetTargetNetworkForTesting()
-      const;
+  virtual handles::NetworkHandle GetTargetNetworkForTesting() const;
 
   // Creates a new HostResolver. |manager| must outlive the returned resolver.
   //
@@ -433,7 +494,7 @@ class NET_EXPORT HostResolver {
   // Only implemented for Android starting from Marshmallow.
   static std::unique_ptr<HostResolver> CreateStandaloneNetworkBoundResolver(
       NetLog* net_log,
-      NetworkChangeNotifier::NetworkHandle network,
+      handles::NetworkHandle network,
       absl::optional<ManagerOptions> options = absl::nullopt,
       base::StringPiece host_mapping_rules = "",
       bool enable_caching = true);
@@ -447,23 +508,20 @@ class NET_EXPORT HostResolver {
   // Helper for squashing error code to a small set of DNS error codes.
   static int SquashErrorCode(int error);
 
-  // Utility to convert an AddressList to an equivalent list of
-  // `HostResolverEndpointResults`. Assumes all addresses in the input list
-  // represent the default non-protocol endpoint.
-  //
-  // TODO(crbug.com/1264933): Delete once `AddressList` usage is fully replaced
-  // in `HostResolver` and results.
-  static std::vector<HostResolverEndpointResult> AddressListToEndpointResults(
-      const AddressList& address_list);
-
-  // Opposite conversion of `AddressListToEndpointResults()`. Builds an
-  // AddressList from the first non-protocol endpoint found in `endpoints`.
+  // Builds an AddressList from the first non-protocol endpoint found in
+  // `endpoints`.
   //
   // TODO(crbug.com/1264933): Delete once `AddressList` usage is fully replaced
   // in `HostResolver` and results.
   static AddressList EndpointResultToAddressList(
-      const std::vector<HostResolverEndpointResult>& endpoints,
+      base::span<const HostResolverEndpointResult> endpoints,
       const std::set<std::string>& aliases);
+
+  // Returns whether there is at least one protocol endpoint in `endpoints`, and
+  // all such endpoints have ECH parameters. This can be used to implement the
+  // guidance in section 10.1 of draft-ietf-dnsop-svcb-https-11.
+  static bool AllProtocolEndpointsHaveEch(
+      base::span<const HostResolverEndpointResult> endpoints);
 
  protected:
   HostResolver();

@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,7 +6,7 @@
 
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/run_loop.h"
 #include "base/test/task_environment.h"
 #include "dbus/message.h"
@@ -100,9 +100,9 @@ void ServiceProviderTestHelper::SetUpReturnSignal(
 
 std::unique_ptr<dbus::Response> ServiceProviderTestHelper::CallMethod(
     dbus::MethodCall* method_call) {
-  return mock_object_proxy_->CallMethodAndBlock(
-      method_call,
-      dbus::ObjectProxy::TIMEOUT_USE_DEFAULT);
+  return mock_object_proxy_
+      ->CallMethodAndBlock(method_call, dbus::ObjectProxy::TIMEOUT_USE_DEFAULT)
+      .value_or(nullptr);
 }
 
 void ServiceProviderTestHelper::MockExportMethod(

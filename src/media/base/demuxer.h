@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -25,6 +25,16 @@
 namespace media {
 
 class MediaTracks;
+
+enum class DemuxerType {
+  kMockDemuxer,
+  kFFmpegDemuxer,
+  kChunkDemuxer,
+  kMediaUrlDemuxer,
+  kFrameInjectingDemuxer,
+  kStreamProviderDemuxer,
+  kManifestDemuxer,
+};
 
 class MEDIA_EXPORT DemuxerHost {
  public:
@@ -88,6 +98,9 @@ class MEDIA_EXPORT Demuxer : public MediaResource {
   // Returns the name of the demuxer for logging purpose.
   virtual std::string GetDisplayName() const = 0;
 
+  // Get the demuxer type for identification purposes.
+  virtual DemuxerType GetDemuxerType() const = 0;
+
   // Completes initialization of the demuxer.
   //
   // The demuxer does not own |host| as it is guaranteed to outlive the
@@ -131,6 +144,11 @@ class MEDIA_EXPORT Demuxer : public MediaResource {
   // callback upon completion.
   virtual void Seek(base::TimeDelta time, PipelineStatusCallback status_cb) = 0;
 
+  // Returns whether this demuxer supports seeking and has a timeline. If false,
+  // Seek(), CancelPendingSeek(), StartWaitingForSeek(), and GetTimelineOffset()
+  // should be noops.
+  virtual bool IsSeekable() const = 0;
+
   // Stops this demuxer.
   //
   // After this call the demuxer may be destroyed. It is illegal to call any
@@ -168,6 +186,13 @@ class MEDIA_EXPORT Demuxer : public MediaResource {
       const std::vector<MediaTrack::Id>& track_ids,
       base::TimeDelta curr_time,
       TrackChangeCB change_completed_cb) = 0;
+
+  // Allows a demuxer to change behavior based on the playback rate, including
+  // but not limited to changing the amount of buffer space.
+  virtual void SetPlaybackRate(double rate) = 0;
+
+  // Allow canChangeType to be disabled.
+  virtual void DisableCanChangeType();
 };
 
 }  // namespace media

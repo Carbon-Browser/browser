@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,6 +8,7 @@
 
 #include "base/check_op.h"
 #include "base/i18n/string_compare.h"
+#include "base/ranges/algorithm.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/time/time.h"
 #include "components/cbor/values.h"
@@ -128,9 +129,9 @@ absl::optional<std::unique_ptr<Pairing>> Pairing::Parse(
   const cbor::Value::MapValue::const_iterator name_it =
       map.find(cbor::Value(5));
   if (name_it == map.end() || !name_it->second.is_string() ||
-      std::any_of(
-          its.begin(), its.end(),
-          [&map](const cbor::Value::MapValue::const_iterator& it) -> bool {
+      base::ranges::any_of(
+          its,
+          [&map](const cbor::Value::MapValue::const_iterator& it) {
             return it == map.end() || !it->second.is_bytestring();
           }) ||
       its[3]->second.GetBytestring().size() !=
@@ -138,19 +139,25 @@ absl::optional<std::unique_ptr<Pairing>> Pairing::Parse(
     return absl::nullopt;
   }
 
-  pairing->tunnel_server_domain = tunnelserver::DecodeDomain(domain);
+  pairing->tunnel_server_domain = domain;
   pairing->contact_id = its[0]->second.GetBytestring();
   pairing->id = its[1]->second.GetBytestring();
   pairing->secret = its[2]->second.GetBytestring();
   const std::vector<uint8_t>& peer_public_key = its[3]->second.GetBytestring();
-  std::copy(peer_public_key.begin(), peer_public_key.end(),
-            pairing->peer_public_key_x962.begin());
+  base::ranges::copy(peer_public_key, pairing->peer_public_key_x962.begin());
   pairing->name = name_it->second.GetString();
 
   if (!VerifyPairingSignature(local_identity_seed,
                               pairing->peer_public_key_x962, handshake_hash,
                               its[4]->second.GetBytestring())) {
     return absl::nullopt;
+  }
+
+  const auto play_services_tag_it = map.find(cbor::Value(999));
+  if (play_services_tag_it != map.end() &&
+      play_services_tag_it->second.is_bool() &&
+      play_services_tag_it->second.GetBool()) {
+    pairing->from_new_implementation = true;
   }
 
   return pairing;
@@ -186,6 +193,9 @@ bool Pairing::EqualPublicKeys(const std::unique_ptr<Pairing>& a,
                               const std::unique_ptr<Pairing>& b) {
   return a->peer_public_key_x962 == b->peer_public_key_x962;
 }
+
+Pairing::Pairing(const Pairing&) = default;
+Pairing& Pairing::operator=(const Pairing&) = default;
 
 }  // namespace cablev2
 

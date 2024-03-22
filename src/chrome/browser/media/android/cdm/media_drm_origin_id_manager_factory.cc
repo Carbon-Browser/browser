@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,7 +10,6 @@
 #include "base/memory/ptr_util.h"
 #include "chrome/browser/media/android/cdm/media_drm_origin_id_manager.h"
 #include "chrome/browser/profiles/profile.h"
-#include "components/keyed_service/content/browser_context_dependency_manager.h"
 #include "media/base/media_switches.h"
 
 // static
@@ -22,13 +21,20 @@ MediaDrmOriginIdManager* MediaDrmOriginIdManagerFactory::GetForProfile(
 
 // static
 MediaDrmOriginIdManagerFactory* MediaDrmOriginIdManagerFactory::GetInstance() {
-  return base::Singleton<MediaDrmOriginIdManagerFactory>::get();
+  static base::NoDestructor<MediaDrmOriginIdManagerFactory> instance;
+  return instance.get();
 }
 
 MediaDrmOriginIdManagerFactory::MediaDrmOriginIdManagerFactory()
-    : BrowserContextKeyedServiceFactory(
+    // No service for Incognito mode.
+    : ProfileKeyedServiceFactory(
           "MediaDrmOriginIdManager",
-          BrowserContextDependencyManager::GetInstance()) {}
+          ProfileSelections::Builder()
+              .WithRegular(ProfileSelection::kOriginalOnly)
+              // TODO(crbug.com/1418376): Check if this service is needed in
+              // Guest mode.
+              .WithGuest(ProfileSelection::kOriginalOnly)
+              .Build()) {}
 
 MediaDrmOriginIdManagerFactory::~MediaDrmOriginIdManagerFactory() = default;
 
@@ -36,15 +42,6 @@ KeyedService* MediaDrmOriginIdManagerFactory::BuildServiceInstanceFor(
     content::BrowserContext* context) const {
   Profile* profile = Profile::FromBrowserContext(context);
   return new MediaDrmOriginIdManager(profile->GetPrefs());
-}
-
-content::BrowserContext* MediaDrmOriginIdManagerFactory::GetBrowserContextToUse(
-    content::BrowserContext* context) const {
-  // No service for Incognito mode.
-  if (context->IsOffTheRecord())
-    return nullptr;
-
-  return context;
 }
 
 bool MediaDrmOriginIdManagerFactory::ServiceIsCreatedWithBrowserContext()

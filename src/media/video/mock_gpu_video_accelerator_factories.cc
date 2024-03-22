@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -75,9 +75,6 @@ class GpuMemoryBufferImpl : public gfx::GpuMemoryBuffer {
   }
   gfx::GpuMemoryBufferHandle CloneHandle() const override {
     return gfx::GpuMemoryBufferHandle();
-  }
-  ClientBuffer AsClientBuffer() override {
-    return reinterpret_cast<ClientBuffer>(this);
   }
   void OnMemoryDump(
       base::trace_event::ProcessMemoryDump* pmd,

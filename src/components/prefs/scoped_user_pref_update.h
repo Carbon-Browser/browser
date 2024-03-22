@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 //
@@ -57,43 +57,74 @@ class COMPONENTS_PREFS_EXPORT ScopedUserPrefUpdateBase {
 
 }  // namespace subtle
 
-// Class to support modifications to dictionary and list base::Values while
-// guaranteeing that PrefObservers are notified of changed values.
+// Class to support modifications to base::Value::Dicts while guaranteeing
+// that PrefObservers are notified of changed values.
 //
 // This class may only be used on the UI thread as it requires access to the
 // PrefService.
-template <base::Value::Type type_enum_value>
-class ScopedUserPrefUpdate : public subtle::ScopedUserPrefUpdateBase {
+class COMPONENTS_PREFS_EXPORT ScopedDictPrefUpdate
+    : public subtle::ScopedUserPrefUpdateBase {
  public:
-  ScopedUserPrefUpdate(PrefService* service, const std::string& path)
+  // The underlying dictionary must not be removed from `service` during
+  // the lifetime of the created ScopedDictPrefUpdate.
+  ScopedDictPrefUpdate(PrefService* service, const std::string& path)
       : ScopedUserPrefUpdateBase(service, path) {}
 
-  ScopedUserPrefUpdate(const ScopedUserPrefUpdate&) = delete;
-  ScopedUserPrefUpdate& operator=(const ScopedUserPrefUpdate&) = delete;
+  ScopedDictPrefUpdate(const ScopedDictPrefUpdate&) = delete;
+  ScopedDictPrefUpdate& operator=(const ScopedDictPrefUpdate&) = delete;
 
   // Triggers an update notification if Get() was called.
-  virtual ~ScopedUserPrefUpdate() {}
+  virtual ~ScopedDictPrefUpdate() = default;
 
-  // Returns a mutable |base::Value| instance that
+  // Returns a mutable `base::Value::Dict` instance that
   // - is already in the user pref store, or
   // - is (silently) created and written to the user pref store if none existed
   //   before.
   //
-  // Calling Get() implies that an update notification is necessary at
-  // destruction time.
+  // Calling Get() will result in an update notification automatically
+  // being triggered at destruction time.
   //
   // The ownership of the return value remains with the user pref store.
-  // Virtual so it can be overriden in subclasses that transform the value
-  // before returning it (for example to return a subelement of a dictionary).
-  virtual base::Value* Get() { return GetValueOfType(type_enum_value); }
+  base::Value::Dict& Get();
 
-  base::Value& operator*() { return *Get(); }
+  base::Value::Dict& operator*() { return Get(); }
 
-  base::Value* operator->() { return Get(); }
+  base::Value::Dict* operator->() { return &Get(); }
 };
 
-typedef ScopedUserPrefUpdate<base::Value::Type::DICTIONARY>
-    DictionaryPrefUpdate;
-typedef ScopedUserPrefUpdate<base::Value::Type::LIST> ListPrefUpdate;
+// Class to support modifications to base::Value::Lists while guaranteeing
+// that PrefObservers are notified of changed values.
+//
+// This class may only be used on the UI thread as it requires access to the
+// PrefService.
+class COMPONENTS_PREFS_EXPORT ScopedListPrefUpdate
+    : public subtle::ScopedUserPrefUpdateBase {
+ public:
+  // The underlying list must not be removed from `service` during
+  // the lifetime of the created ScopedListPrefUpdate.
+  ScopedListPrefUpdate(PrefService* service, const std::string& path)
+      : ScopedUserPrefUpdateBase(service, path) {}
+
+  ScopedListPrefUpdate(const ScopedListPrefUpdate&) = delete;
+  ScopedListPrefUpdate& operator=(const ScopedListPrefUpdate&) = delete;
+
+  // Triggers an update notification if Get() was called.
+  virtual ~ScopedListPrefUpdate() = default;
+
+  // Returns a mutable `base::Value::List` instance that
+  // - is already in the user pref store, or
+  // - is (silently) created and written to the user pref store if none existed
+  //   before.
+  //
+  // Calling Get() will result in an update notification automatically
+  // being triggered at destruction time.
+  //
+  // The ownership of the return value remains with the user pref store.
+  base::Value::List& Get();
+
+  base::Value::List& operator*() { return Get(); }
+
+  base::Value::List* operator->() { return &Get(); }
+};
 
 #endif  // COMPONENTS_PREFS_SCOPED_USER_PREF_UPDATE_H_

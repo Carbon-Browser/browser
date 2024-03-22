@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -16,52 +16,101 @@
       {
         "id": "ResourceType",
         "type": "string",
-        "enum": ["main_frame", "sub_frame", "stylesheet", "script", "image", "font", "object", "xmlhttprequest", "ping", "csp_report", "media", "websocket", "other"]
+        "enum": [
+          {"name": "main_frame", "description": "Specifies the resource as the main frame."},
+          {"name": "sub_frame", "description": "Specifies the resource as a sub frame."},
+          {"name":  "stylesheet", "description": "Specifies the resource as a stylesheet."},
+          {"name": "script", "description": "Specifies the resource as a script."},
+          {"name": "image", "description": "Specifies the resource as an image."},
+          {"name": "font", "description": "Specifies the resource as a font."},
+          {"name": "object", "description": "Specifies the resource as an object."},
+          {"name": "xmlhttprequest",
+           "description": "Specifies the resource as an XMLHttpRequest."},
+          {"name": "ping",
+           "description": "Specifies the resource as a ping."},
+          {"name": "csp_report",
+          "description": "Specifies the resource as a Content Security Policy (CSP) report."},
+          {"name": "media", "description": "Specifies the resource as a media object."},
+          {"name": "websocket", "description": "Specifies the resource as a WebSocket."},
+          {"name": "webbundle", "description": "Specifies the resource as a WebBundle."},
+          {"name": "other", "description": "Specifies the resource as a type not included in the listed types."}
+        ]
       },
       {
         "id": "OnBeforeRequestOptions",
         "type": "string",
-        "enum": ["blocking", "requestBody", "extraHeaders"]
+        "enum": [
+          {"name": "blocking", "description": "Specifies the request is blocked until the callback function returns."},
+          {"name": "requestBody", "description": "Specifies that the request body should be included in the event."},
+          {"name": "extraHeaders", "description": "Specifies that headers can violate Cross-Origin Resource Sharing (CORS)."}
+        ]
       },
       {
         "id": "OnBeforeSendHeadersOptions",
         "type": "string",
-        "enum": ["requestHeaders", "blocking", "extraHeaders"]
+        "enum": [
+          {"name": "requestHeaders", "description": "Specifies that the request header should be included in the event."},
+          {"name": "blocking", "description": "Specifies the request is blocked until the callback function returns."},
+          {"name": "extraHeaders", "description": "Specifies that headers can violate Cross-Origin Resource Sharing (CORS)."}
+        ]
       },
       {
         "id": "OnSendHeadersOptions",
         "type": "string",
-        "enum": ["requestHeaders", "extraHeaders"]
+        "enum": [
+          {"name": "requestHeaders", "description": "Specifies that the request header should be included in the event."},
+          {"name": "extraHeaders", "description": "Specifies that headers can violate Cross-Origin Resource Sharing (CORS)."}
+        ]
       },
       {
         "id": "OnHeadersReceivedOptions",
         "type": "string",
-        "enum": ["blocking", "responseHeaders", "extraHeaders"]
+        "enum": [
+          {"name": "blocking", "description": "Specifies the request is blocked until the callback function returns."},
+          {"name": "responseHeaders", "description": "Specifies that the response headers should be included in the event."},
+          {"name": "extraHeaders", "description": "Specifies that headers can violate Cross-Origin Resource Sharing (CORS)."}
+        ]
       },
       {
         "id": "OnAuthRequiredOptions",
         "type": "string",
-        "enum": ["responseHeaders", "blocking", "asyncBlocking", "extraHeaders"]
+        "enum": [
+          {"name": "responseHeaders", "description": "Specifies that the response headers should be included in the event."},
+          {"name": "blocking", "description": "Specifies the request is blocked until the callback function returns."},
+          {"name": "asyncBlocking", "description": "Specifies that the callback function is handled asynchronously."},
+          {"name": "extraHeaders", "description": "Specifies that headers can violate Cross-Origin Resource Sharing (CORS)."}
+        ]
       },
       {
         "id": "OnResponseStartedOptions",
         "type": "string",
-        "enum": ["responseHeaders", "extraHeaders"]
+        "enum": [
+          {"name": "responseHeaders", "description": "Specifies that the response headers should be included in the event."},
+          {"name": "extraHeaders", "description": "Specifies that headers can violate Cross-Origin Resource Sharing (CORS)."}
+        ]
       },
       {
         "id": "OnBeforeRedirectOptions",
         "type": "string",
-        "enum": ["responseHeaders", "extraHeaders"]
+        "enum": [
+          {"name": "responseHeaders", "description": "Specifies that the response headers should be included in the event."},
+          {"name": "extraHeaders", "description": "Specifies that headers can violate Cross-Origin Resource Sharing (CORS)."}
+        ]
       },
       {
         "id": "OnCompletedOptions",
         "type": "string",
-        "enum": ["responseHeaders", "extraHeaders"]
+        "enum": [
+          {"name": "responseHeaders", "description": "Specifies that the response headers should be included in the event."},
+          {"name": "extraHeaders", "description": "Specifies that headers can violate Cross-Origin Resource Sharing (CORS)."}
+        ]
       },
       {
         "id": "OnErrorOccurredOptions",
         "type": "string",
-        "enum": ["extraHeaders"]
+        "enum": [
+          {"name": "extraHeaders", "description": "Specifies that headers can violate Cross-Origin Resource Sharing (CORS)."}
+        ]
       },
       {
         "id": "RequestFilter",
@@ -176,9 +225,8 @@
         "name": "handlerBehaviorChanged",
         "type": "function",
         "description": "Needs to be called when the behavior of the webRequest handlers has changed to prevent incorrect handling due to caching. This function call is expensive. Don't call it often.",
-        "parameters": [
-          {"type": "function", "name": "callback", "optional": true, "parameters": []}
-        ]
+        "parameters": [],
+        "returns_async": {"name": "callback", "optional": true, "parameters": []}
       }
     ],
     "events": [
@@ -196,10 +244,10 @@
               "method": {"type": "string", "description": "Standard HTTP method."},
               "frameId": {"type": "integer", "description": "The value 0 indicates that the request happens in the main frame; a positive value indicates the ID of a subframe in which the request happens. If the document of a (sub-)frame is loaded (<code>type</code> is <code>main_frame</code> or <code>sub_frame</code>), <code>frameId</code> indicates the ID of this frame, not the ID of the outer frame. Frame IDs are unique within a tab."},
               "parentFrameId": {"type": "integer", "description": "ID of frame that wraps the frame which sent the request. Set to -1 if no parent frame exists."},
-              "documentId": {"type": "string", "optional": true, "description": "The UUID of the document making the request.", "nodoc": true},
-              "parentDocumentId": {"type": "string", "optional": true, "description": "The UUID of the parent document owning this frame. This is not set if there is no parent.", "nodoc": true},
-              "documentLifecycle": {"type": "string", "optional": true, "description": "The lifecycle the document is in.","nodoc": true},
-              "frameType": {"type": "string", "optional": true, "description": "The type of frame the request occurred in.","nodoc": true},
+              "documentId": {"type": "string", "optional": true, "description": "The UUID of the document making the request."},
+              "parentDocumentId": {"type": "string", "optional": true, "description": "The UUID of the parent document owning this frame. This is not set if there is no parent."},
+              "documentLifecycle": {"$ref": "extensionTypes.DocumentLifecycle", "optional": true, "description": "The lifecycle the document is in."},
+              "frameType": {"$ref": "extensionTypes.FrameType", "optional": true, "description": "The type of frame the request occurred in."},
               "requestBody": {
                 "type": "object",
                 "optional": true,
@@ -268,10 +316,10 @@
               "method": {"type": "string", "description": "Standard HTTP method."},
               "frameId": {"type": "integer", "description": "The value 0 indicates that the request happens in the main frame; a positive value indicates the ID of a subframe in which the request happens. If the document of a (sub-)frame is loaded (<code>type</code> is <code>main_frame</code> or <code>sub_frame</code>), <code>frameId</code> indicates the ID of this frame, not the ID of the outer frame. Frame IDs are unique within a tab."},
               "parentFrameId": {"type": "integer", "description": "ID of frame that wraps the frame which sent the request. Set to -1 if no parent frame exists."},
-              "documentId": {"type": "string", "description": "The UUID of the document making the request.", "nodoc": true},
-              "parentDocumentId": {"type": "string", "optional": true, "description": "The UUID of the parent document owning this frame. This is not set if there is no parent.", "nodoc": true},
-              "documentLifecycle": {"type": "string", "description": "The lifecycle the document is in.","nodoc": true},
-              "frameType": {"type": "string", "description": "The type of frame the request occurred in.","nodoc": true},
+              "documentId": {"type": "string", "description": "The UUID of the document making the request."},
+              "parentDocumentId": {"type": "string", "optional": true, "description": "The UUID of the parent document owning this frame. This is not set if there is no parent."},
+              "documentLifecycle": {"$ref": "extensionTypes.DocumentLifecycle", "description": "The lifecycle the document is in."},
+              "frameType": {"$ref": "extensionTypes.FrameType", "description": "The type of frame the request occurred in."},
               "tabId": {"type": "integer", "description": "The ID of the tab in which the request takes place. Set to -1 if the request isn't related to a tab."},
               "initiator": {"type": "string", "optional": true, "description": "The origin where the request was initiated. This does not change through redirects. If this is an opaque origin, the string 'null' will be used."},
               "type": {"$ref": "ResourceType", "description": "How the requested resource will be used."},
@@ -317,10 +365,10 @@
               "method": {"type": "string", "description": "Standard HTTP method."},
               "frameId": {"type": "integer", "description": "The value 0 indicates that the request happens in the main frame; a positive value indicates the ID of a subframe in which the request happens. If the document of a (sub-)frame is loaded (<code>type</code> is <code>main_frame</code> or <code>sub_frame</code>), <code>frameId</code> indicates the ID of this frame, not the ID of the outer frame. Frame IDs are unique within a tab."},
               "parentFrameId": {"type": "integer", "description": "ID of frame that wraps the frame which sent the request. Set to -1 if no parent frame exists."},
-              "documentId": {"type": "string", "description": "The UUID of the document making the request.", "nodoc": true},
-              "parentDocumentId": {"type": "string", "optional": true, "description": "The UUID of the parent document owning this frame. This is not set if there is no parent.", "nodoc": true},
-              "documentLifecycle": {"type": "string", "description": "The lifecycle the document is in.","nodoc": true},
-              "frameType": {"type": "string", "description": "The type of frame the request occurred in.","nodoc": true},
+              "documentId": {"type": "string", "description": "The UUID of the document making the request."},
+              "parentDocumentId": {"type": "string", "optional": true, "description": "The UUID of the parent document owning this frame. This is not set if there is no parent."},
+              "documentLifecycle": {"$ref": "extensionTypes.DocumentLifecycle", "description": "The lifecycle the document is in."},
+              "frameType": {"$ref": "extensionTypes.FrameType", "description": "The type of frame the request occurred in."},
               "tabId": {"type": "integer", "description": "The ID of the tab in which the request takes place. Set to -1 if the request isn't related to a tab."},
               "type": {"$ref": "ResourceType", "description": "How the requested resource will be used."},
               "initiator": {"type": "string", "optional": true, "description": "The origin where the request was initiated. This does not change through redirects. If this is an opaque origin, the string 'null' will be used."},
@@ -361,10 +409,10 @@
               "method": {"type": "string", "description": "Standard HTTP method."},
               "frameId": {"type": "integer", "description": "The value 0 indicates that the request happens in the main frame; a positive value indicates the ID of a subframe in which the request happens. If the document of a (sub-)frame is loaded (<code>type</code> is <code>main_frame</code> or <code>sub_frame</code>), <code>frameId</code> indicates the ID of this frame, not the ID of the outer frame. Frame IDs are unique within a tab."},
               "parentFrameId": {"type": "integer", "description": "ID of frame that wraps the frame which sent the request. Set to -1 if no parent frame exists."},
-              "documentId": {"type": "string", "description": "The UUID of the document making the request.", "nodoc": true},
-              "parentDocumentId": {"type": "string", "optional": true, "description": "The UUID of the parent document owning this frame. This is not set if there is no parent.", "nodoc": true},
-              "documentLifecycle": {"type": "string", "description": "The lifecycle the document is in.","nodoc": true},
-              "frameType": {"type": "string", "description": "The type of frame the request occurred in.","nodoc": true},
+              "documentId": {"type": "string", "description": "The UUID of the document making the request."},
+              "parentDocumentId": {"type": "string", "optional": true, "description": "The UUID of the parent document owning this frame. This is not set if there is no parent."},
+              "documentLifecycle": {"$ref": "extensionTypes.DocumentLifecycle", "description": "The lifecycle the document is in."},
+              "frameType": {"$ref": "extensionTypes.FrameType", "description": "The type of frame the request occurred in."},
               "tabId": {"type": "integer", "description": "The ID of the tab in which the request takes place. Set to -1 if the request isn't related to a tab."},
               "type": {"$ref": "ResourceType", "description": "How the requested resource will be used."},
               "initiator": {"type": "string", "optional": true, "description": "The origin where the request was initiated. This does not change through redirects. If this is an opaque origin, the string 'null' will be used."},
@@ -412,10 +460,10 @@
               "method": {"type": "string", "description": "Standard HTTP method."},
               "frameId": {"type": "integer", "description": "The value 0 indicates that the request happens in the main frame; a positive value indicates the ID of a subframe in which the request happens. If the document of a (sub-)frame is loaded (<code>type</code> is <code>main_frame</code> or <code>sub_frame</code>), <code>frameId</code> indicates the ID of this frame, not the ID of the outer frame. Frame IDs are unique within a tab."},
               "parentFrameId": {"type": "integer", "description": "ID of frame that wraps the frame which sent the request. Set to -1 if no parent frame exists."},
-              "documentId": {"type": "string", "description": "The UUID of the document making the request.", "nodoc": true},
-              "parentDocumentId": {"type": "string", "optional": true, "description": "The UUID of the parent document owning this frame. This is not set if there is no parent.", "nodoc": true},
-              "documentLifecycle": {"type": "string", "description": "The lifecycle the document is in.","nodoc": true},
-              "frameType": {"type": "string", "description": "The type of frame the request occurred in.","nodoc": true},
+              "documentId": {"type": "string", "description": "The UUID of the document making the request."},
+              "parentDocumentId": {"type": "string", "optional": true, "description": "The UUID of the parent document owning this frame. This is not set if there is no parent."},
+              "documentLifecycle": {"$ref": "extensionTypes.DocumentLifecycle", "description": "The lifecycle the document is in."},
+              "frameType": {"$ref": "extensionTypes.FrameType", "description": "The type of frame the request occurred in."},
               "tabId": {"type": "integer", "description": "The ID of the tab in which the request takes place. Set to -1 if the request isn't related to a tab."},
               "type": {"$ref": "ResourceType", "description": "How the requested resource will be used."},
               "initiator": {"type": "string", "optional": true, "description": "The origin where the request was initiated. This does not change through redirects. If this is an opaque origin, the string 'null' will be used."},
@@ -476,10 +524,10 @@
               "method": {"type": "string", "description": "Standard HTTP method."},
               "frameId": {"type": "integer", "description": "The value 0 indicates that the request happens in the main frame; a positive value indicates the ID of a subframe in which the request happens. If the document of a (sub-)frame is loaded (<code>type</code> is <code>main_frame</code> or <code>sub_frame</code>), <code>frameId</code> indicates the ID of this frame, not the ID of the outer frame. Frame IDs are unique within a tab."},
               "parentFrameId": {"type": "integer", "description": "ID of frame that wraps the frame which sent the request. Set to -1 if no parent frame exists."},
-              "documentId": {"type": "string", "description": "The UUID of the document making the request.", "nodoc": true},
-              "parentDocumentId": {"type": "string", "optional": true, "description": "The UUID of the parent document owning this frame. This is not set if there is no parent.", "nodoc": true},
-              "documentLifecycle": {"type": "string", "description": "The lifecycle the document is in.","nodoc": true},
-              "frameType": {"type": "string", "description": "The type of frame the request occurred in.","nodoc": true},
+              "documentId": {"type": "string", "description": "The UUID of the document making the request."},
+              "parentDocumentId": {"type": "string", "optional": true, "description": "The UUID of the parent document owning this frame. This is not set if there is no parent."},
+              "documentLifecycle": {"$ref": "extensionTypes.DocumentLifecycle", "description": "The lifecycle the document is in."},
+              "frameType": {"$ref": "extensionTypes.FrameType", "description": "The type of frame the request occurred in."},
               "tabId": {"type": "integer", "description": "The ID of the tab in which the request takes place. Set to -1 if the request isn't related to a tab."},
               "type": {"$ref": "ResourceType", "description": "How the requested resource will be used."},
               "initiator": {"type": "string", "optional": true, "description": "The origin where the request was initiated. This does not change through redirects. If this is an opaque origin, the string 'null' will be used."},
@@ -524,10 +572,10 @@
               "method": {"type": "string", "description": "Standard HTTP method."},
               "frameId": {"type": "integer", "description": "The value 0 indicates that the request happens in the main frame; a positive value indicates the ID of a subframe in which the request happens. If the document of a (sub-)frame is loaded (<code>type</code> is <code>main_frame</code> or <code>sub_frame</code>), <code>frameId</code> indicates the ID of this frame, not the ID of the outer frame. Frame IDs are unique within a tab."},
               "parentFrameId": {"type": "integer", "description": "ID of frame that wraps the frame which sent the request. Set to -1 if no parent frame exists."},
-              "documentId": {"type": "string", "description": "The UUID of the document making the request.", "nodoc": true},
-              "parentDocumentId": {"type": "string", "optional": true, "description": "The UUID of the parent document owning this frame. This is not set if there is no parent.", "nodoc": true},
-              "documentLifecycle": {"type": "string", "description": "The lifecycle the document is in.","nodoc": true},
-              "frameType": {"type": "string", "description": "The type of frame the request occurred in.","nodoc": true},
+              "documentId": {"type": "string", "description": "The UUID of the document making the request."},
+              "parentDocumentId": {"type": "string", "optional": true, "description": "The UUID of the parent document owning this frame. This is not set if there is no parent."},
+              "documentLifecycle": {"$ref": "extensionTypes.DocumentLifecycle", "description": "The lifecycle the document is in."},
+              "frameType": {"$ref": "extensionTypes.FrameType", "description": "The type of frame the request occurred in."},
               "tabId": {"type": "integer", "description": "The ID of the tab in which the request takes place. Set to -1 if the request isn't related to a tab."},
               "type": {"$ref": "ResourceType", "description": "How the requested resource will be used."},
               "initiator": {"type": "string", "optional": true, "description": "The origin where the request was initiated. This does not change through redirects. If this is an opaque origin, the string 'null' will be used."},
@@ -573,10 +621,10 @@
               "method": {"type": "string", "description": "Standard HTTP method."},
               "frameId": {"type": "integer", "description": "The value 0 indicates that the request happens in the main frame; a positive value indicates the ID of a subframe in which the request happens. If the document of a (sub-)frame is loaded (<code>type</code> is <code>main_frame</code> or <code>sub_frame</code>), <code>frameId</code> indicates the ID of this frame, not the ID of the outer frame. Frame IDs are unique within a tab."},
               "parentFrameId": {"type": "integer", "description": "ID of frame that wraps the frame which sent the request. Set to -1 if no parent frame exists."},
-              "documentId": {"type": "string", "description": "The UUID of the document making the request.", "nodoc": true},
-              "parentDocumentId": {"type": "string", "optional": true, "description": "The UUID of the parent document owning this frame. This is not set if there is no parent.", "nodoc": true},
-              "documentLifecycle": {"type": "string", "description": "The lifecycle the document is in.","nodoc": true},
-              "frameType": {"type": "string", "description": "The type of frame the request occurred in.","nodoc": true},
+              "documentId": {"type": "string", "description": "The UUID of the document making the request."},
+              "parentDocumentId": {"type": "string", "optional": true, "description": "The UUID of the parent document owning this frame. This is not set if there is no parent."},
+              "documentLifecycle": {"$ref": "extensionTypes.DocumentLifecycle", "description": "The lifecycle the document is in."},
+              "frameType": {"$ref": "extensionTypes.FrameType", "description": "The type of frame the request occurred in."},
               "tabId": {"type": "integer", "description": "The ID of the tab in which the request takes place. Set to -1 if the request isn't related to a tab."},
               "type": {"$ref": "ResourceType", "description": "How the requested resource will be used."},
               "initiator": {"type": "string", "optional": true, "description": "The origin where the request was initiated. This does not change through redirects. If this is an opaque origin, the string 'null' will be used."},
@@ -620,10 +668,10 @@
               "method": {"type": "string", "description": "Standard HTTP method."},
               "frameId": {"type": "integer", "description": "The value 0 indicates that the request happens in the main frame; a positive value indicates the ID of a subframe in which the request happens. If the document of a (sub-)frame is loaded (<code>type</code> is <code>main_frame</code> or <code>sub_frame</code>), <code>frameId</code> indicates the ID of this frame, not the ID of the outer frame. Frame IDs are unique within a tab."},
               "parentFrameId": {"type": "integer", "description": "ID of frame that wraps the frame which sent the request. Set to -1 if no parent frame exists."},
-              "documentId": {"type": "string", "description": "The UUID of the document making the request. This value is not present if the request is a navigation of a frame.", "nodoc": true},
-              "parentDocumentId": {"type": "string", "optional": true, "description": "The UUID of the parent document owning this frame. This is not set if there is no parent.", "nodoc": true},
-              "documentLifecycle": {"type": "string", "description": "The lifecycle the document is in.","nodoc": true},
-              "frameType": {"type": "string", "description": "The type of frame the request occurred in.","nodoc": true},
+              "documentId": {"type": "string", "description": "The UUID of the document making the request. This value is not present if the request is a navigation of a frame."},
+              "parentDocumentId": {"type": "string", "optional": true, "description": "The UUID of the parent document owning this frame. This is not set if there is no parent."},
+              "documentLifecycle": {"$ref": "extensionTypes.DocumentLifecycle", "description": "The lifecycle the document is in."},
+              "frameType": {"$ref": "extensionTypes.FrameType", "description": "The type of frame the request occurred in."},
               "tabId": {"type": "integer", "description": "The ID of the tab in which the request takes place. Set to -1 if the request isn't related to a tab."},
               "type": {"$ref": "ResourceType", "description": "How the requested resource will be used."},
               "initiator": {"type": "string", "optional": true, "description": "The origin where the request was initiated. This does not change through redirects. If this is an opaque origin, the string 'null' will be used."},

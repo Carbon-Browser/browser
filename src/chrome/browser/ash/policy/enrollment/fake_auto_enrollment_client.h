@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,15 +8,19 @@
 #include <memory>
 #include <string>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "chrome/browser/ash/policy/enrollment/auto_enrollment_client.h"
+#include "chrome/browser/ash/policy/enrollment/auto_enrollment_state.h"
 
 class PrefService;
+
+namespace policy::psm {
+class RlweDmserverClient;
+}
 
 namespace policy {
 
 class DeviceManagementService;
-class PsmRlweDmserverClient;
 
 // A fake AutoEnrollmentClient. The test code can control its state.
 class FakeAutoEnrollmentClient : public AutoEnrollmentClient {
@@ -51,9 +55,7 @@ class FakeAutoEnrollmentClient : public AutoEnrollmentClient {
         scoped_refptr<network::SharedURLLoaderFactory> url_loader_factory,
         const std::string& device_serial_number,
         const std::string& device_brand_code,
-        int power_initial,
-        int power_limit,
-        std::unique_ptr<PsmRlweDmserverClient> psm_rlwe_dmserver_client)
+        std::unique_ptr<psm::RlweDmserverClient> psm_rlwe_dmserver_client)
         override;
 
    private:
@@ -68,8 +70,8 @@ class FakeAutoEnrollmentClient : public AutoEnrollmentClient {
 
   ~FakeAutoEnrollmentClient() override;
 
+  // The methods do not fire state change until `SetState` is called.
   void Start() override;
-  // Note: |Retry| is currently a no-op in |FakeAutoEnrollmentClient|.
   void Retry() override;
 
   // Sets the state and notifies the |ProgressCallback| passed to the
@@ -78,7 +80,6 @@ class FakeAutoEnrollmentClient : public AutoEnrollmentClient {
 
  private:
   ProgressCallback progress_callback_;
-  AutoEnrollmentState state_;
 };
 
 }  // namespace policy

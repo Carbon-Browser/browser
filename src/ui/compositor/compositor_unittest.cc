@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,13 +6,13 @@
 
 #include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/task/single_thread_task_runner.h"
 #include "base/test/bind.h"
 #include "base/test/power_monitor_test.h"
 #include "base/test/scoped_feature_list.h"
 #include "base/test/task_environment.h"
 #include "base/test/test_mock_time_task_runner.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "base/time/time.h"
 #include "build/build_config.h"
 #include "cc/metrics/frame_sequence_tracker.h"
@@ -105,7 +105,7 @@ class CompositorTestWithMessageLoop : public CompositorTest {
 
  protected:
   scoped_refptr<base::SingleThreadTaskRunner> CreateTaskRunner() override {
-    task_runner_ = base::ThreadTaskRunnerHandle::Get();
+    task_runner_ = base::SingleThreadTaskRunner::GetCurrentDefault();
     return task_runner_;
   }
 
@@ -203,8 +203,8 @@ TEST_F(CompositorTestWithMessageLoop, ShouldUpdateDisplayProperties) {
   ASSERT_TRUE(compositor()->IsVisible());
 
   // Set a non-identity color matrix, color space, sdr white level, vsync
-  // timebase and vsync interval, and expect it to be set on the context
-  // factory.
+  // timebase, vsync interval, and max interval, and expect it to be set on the
+  // context factory.
   SkM44 color_matrix;
   color_matrix.setRC(1, 1, 0.7f);
   color_matrix.setRC(2, 2, 0.4f);
@@ -213,9 +213,11 @@ TEST_F(CompositorTestWithMessageLoop, ShouldUpdateDisplayProperties) {
   display_color_spaces.SetSDRMaxLuminanceNits(1.f);
   base::TimeTicks vsync_timebase(base::TimeTicks::Now());
   base::TimeDelta vsync_interval(base::Milliseconds(250));
+  base::TimeDelta max_vrr_interval(base::Milliseconds(500));
   compositor()->SetDisplayColorMatrix(color_matrix);
   compositor()->SetDisplayColorSpaces(display_color_spaces);
   compositor()->SetDisplayVSyncParameters(vsync_timebase, vsync_interval);
+  compositor()->SetMaxVrrInterval(max_vrr_interval);
 
   InProcessContextFactory* context_factory =
       static_cast<InProcessContextFactory*>(compositor()->context_factory());
@@ -228,11 +230,12 @@ TEST_F(CompositorTestWithMessageLoop, ShouldUpdateDisplayProperties) {
             context_factory->GetDisplayVSyncTimeBase(compositor()));
   EXPECT_EQ(vsync_interval,
             context_factory->GetDisplayVSyncTimeInterval(compositor()));
+  EXPECT_EQ(max_vrr_interval, context_factory->GetMaxVrrInterval(compositor()));
 
   // Simulate a lost context by releasing the output surface and setting it on
   // the compositor again. Expect that the same color matrix, color space, sdr
-  // white level, vsync timebase and vsync interval will be set again on the
-  // context factory.
+  // white level, vsync timebase, vsync interval, and max interval will be set
+  // again on the context factory.
   context_factory->ResetDisplayOutputParameters(compositor());
   compositor()->SetVisible(false);
   EXPECT_EQ(gfx::kNullAcceleratedWidget,
@@ -248,6 +251,7 @@ TEST_F(CompositorTestWithMessageLoop, ShouldUpdateDisplayProperties) {
             context_factory->GetDisplayVSyncTimeBase(compositor()));
   EXPECT_EQ(vsync_interval,
             context_factory->GetDisplayVSyncTimeInterval(compositor()));
+  EXPECT_EQ(max_vrr_interval, context_factory->GetMaxVrrInterval(compositor()));
   compositor()->SetRootLayer(nullptr);
 }
 
@@ -502,7 +506,7 @@ class LayerDelegateThatAddsDuringUpdateVisualState : public LayerDelegate {
                                   float new_device_scale_factor) override {}
 
  private:
-  raw_ptr<Layer> parent_;
+  raw_ptr<Layer, DanglingUntriaged> parent_;
   std::vector<std::unique_ptr<Layer>> added_layers_;
   bool update_visual_state_called_ = false;
 };
@@ -534,36 +538,6 @@ TEST_F(CompositorTestWithMessageLoop, AddLayerDuringUpdateVisualState) {
   child_layer2.reset();
   child_layer.reset();
   root_layer.reset();
-}
-
-TEST_F(CompositorTestWithMessageLoop, PriorityCutoffWhenVisible) {
-  EXPECT_EQ(gpu::MemoryAllocation::CUTOFF_ALLOW_NICE_TO_HAVE,
-            compositor()
-                ->GetLayerTreeSettings()
-                .memory_policy.priority_cutoff_when_visible);
-  base::test::ScopedFeatureList scoped_feature_list;
-  scoped_feature_list.InitAndEnableFeature(
-      features::kUiCompositorRequiredTilesOnly);
-  DestroyCompositor();
-  CreateCompositor();
-  EXPECT_EQ(gpu::MemoryAllocation::CUTOFF_ALLOW_REQUIRED_ONLY,
-            compositor()
-                ->GetLayerTreeSettings()
-                .memory_policy.priority_cutoff_when_visible);
-}
-
-TEST_F(CompositorTestWithMessageLoop, ReleaseTileResourcesForHiddenLayers) {
-  EXPECT_FALSE(compositor()
-                   ->GetLayerTreeSettings()
-                   .release_tile_resources_for_hidden_layers);
-  base::test::ScopedFeatureList scoped_feature_list;
-  scoped_feature_list.InitAndEnableFeature(
-      features::kUiCompositorReleaseTileResourcesForHiddenLayers);
-  DestroyCompositor();
-  CreateCompositor();
-  EXPECT_TRUE(compositor()
-                  ->GetLayerTreeSettings()
-                  .release_tile_resources_for_hidden_layers);
 }
 
 }  // namespace ui

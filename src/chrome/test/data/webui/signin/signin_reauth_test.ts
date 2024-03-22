@@ -1,10 +1,11 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 import 'chrome://signin-reauth/signin_reauth_app.js';
 
-import {webUIListenerCallback} from 'chrome://resources/js/cr.m.js';
+import {webUIListenerCallback} from 'chrome://resources/js/cr.js';
+import {loadTimeData} from 'chrome://resources/js/load_time_data.js';
 import {flush} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 import {SigninReauthAppElement} from 'chrome://signin-reauth/signin_reauth_app.js';
 import {SigninReauthBrowserProxyImpl} from 'chrome://signin-reauth/signin_reauth_browser_proxy.js';
@@ -20,7 +21,7 @@ suite('SigninReauthTest', function() {
   setup(function() {
     browserProxy = new TestSigninReauthBrowserProxy();
     SigninReauthBrowserProxyImpl.setInstance(browserProxy);
-    document.body.innerHTML = '';
+    document.body.innerHTML = window.trustedTypes!.emptyHTML;
     app = document.createElement('signin-reauth-app');
     document.body.append(app);
   });
@@ -37,7 +38,7 @@ suite('SigninReauthTest', function() {
   test('LoadPage', function() {
     assertDefaultLocale();
     assertEquals(
-        'Use your Google Account to save and fill passwords?',
+        loadTimeData.getString('signinReauthTitle'),
         app.$.signinReauthTitle.textContent!.trim());
   });
 

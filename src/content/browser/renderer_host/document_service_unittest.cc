@@ -1,10 +1,10 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "content/public/browser/document_service.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
 #include "content/browser/renderer_host/document_service_echo_impl.h"
@@ -81,7 +81,7 @@ class DocumentServiceTest : public RenderViewHostTestHarness {
     base::RunLoop().RunUntilIdle();
   }
 
-  raw_ptr<RenderFrameHost> main_rfh_ = nullptr;
+  raw_ptr<RenderFrameHost, DanglingUntriaged> main_rfh_ = nullptr;
   mojo::Remote<mojom::Echo> echo_remote_;
   bool is_echo_impl_alive_ = false;
 };

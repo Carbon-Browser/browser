@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -34,11 +34,22 @@
 // Button to display the share menu.
 @property(nonatomic, strong, readonly) ToolbarButton* shareButton;
 // Button to display the tools menu.
-@property(nonatomic, strong, readonly) ToolbarToolsMenuButton* toolsMenuButton;
+@property(nonatomic, strong, readonly) ToolbarButton* toolsMenuButton;
 // Button to create a new tab.
 @property(nonatomic, strong, readonly) ToolbarButton* openNewTabButton;
 // Separator between the toolbar and the content.
 @property(nonatomic, strong, readonly) UIView* separator;
+
+// Container for the location bar.
+@property(nonatomic, strong, readonly) UIView* locationBarContainer;
+// The height of `locationBarContainer`.
+@property(nonatomic, strong, readonly)
+    NSLayoutConstraint* locationBarContainerHeight;
+// Button taking the full size of the toolbar. Expands the toolbar when tapped.
+@property(nonatomic, strong, readonly) UIButton* collapsedToolbarButton;
+
+// Sets the location bar view containing the omnibox.
+- (void)setLocationBarView:(UIView*)locationBarView;
 
 @end
 

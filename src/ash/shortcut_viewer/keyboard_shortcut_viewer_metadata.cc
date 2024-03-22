@@ -1,10 +1,11 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "ash/shortcut_viewer/keyboard_shortcut_viewer_metadata.h"
 
 #include "ash/constants/ash_features.h"
+#include "ash/public/cpp/accelerators_util.h"
 #include "ash/public/cpp/keyboard_shortcut_item.h"
 #include "ash/resources/vector_icons/vector_icons.h"
 #include "ash/shortcut_viewer/strings/grit/shortcut_viewer_strings.h"
@@ -16,7 +17,7 @@
 #include "ui/base/accelerators/accelerator.h"
 #include "ui/base/l10n/l10n_util.h"
 #include "ui/base/ui_base_features.h"
-#include "ui/chromeos/events/keyboard_layout_util.h"
+#include "ui/events/ash/keyboard_layout_util.h"
 #include "ui/events/devices/device_data_manager.h"
 #include "ui/events/event_constants.h"
 #include "ui/events/keycodes/dom/dom_code.h"
@@ -52,92 +53,6 @@ ui::KeyboardCode GetKeyCodeForModifier(ui::EventFlags modifier) {
   }
 }
 
-// Provides I18n string for key codes which have no mapping to a meaningful
-// description or they require a special one we explicitly specify. For example,
-// ui::VKEY_COMMAND could return a string "Meta", but we want to display it as
-// "Search" or "Launcher".
-absl::optional<std::u16string> GetSpecialStringForKeyboardCode(
-    ui::KeyboardCode key_code) {
-  int msg_id = 0;
-  switch (key_code) {
-    case ui::VKEY_CONTROL:
-      msg_id = IDS_KSV_MODIFIER_CONTROL;
-      break;
-    case ui::VKEY_LMENU:
-      msg_id = IDS_KSV_MODIFIER_ALT;
-      break;
-    case ui::VKEY_SHIFT:
-      msg_id = IDS_KSV_MODIFIER_SHIFT;
-      break;
-    case ui::VKEY_COMMAND:
-      // DeviceUsesKeyboardLayout2() relies on DeviceDataManager.
-      DCHECK(ui::DeviceDataManager::HasInstance());
-      DCHECK(ui::DeviceDataManager::GetInstance()->AreDeviceListsComplete());
-      msg_id = ui::DeviceUsesKeyboardLayout2() ? IDS_KSV_MODIFIER_LAUNCHER
-                                               : IDS_KSV_MODIFIER_SEARCH;
-      break;
-    case ui::VKEY_ESCAPE:
-      msg_id = IDS_KSV_KEY_ESCAPE;
-      break;
-    case ui::VKEY_SPACE:
-      msg_id = IDS_KSV_KEY_SPACE;
-      break;
-    case ui::VKEY_MEDIA_LAUNCH_APP1:
-      msg_id = IDS_KSV_KEY_OVERVIEW;
-      break;
-    case ui::VKEY_ZOOM:
-      msg_id = IDS_KSV_KEY_FULLSCREEN;
-      break;
-    case ui::VKEY_SNAPSHOT:
-      msg_id = IDS_KSV_KEY_SNAPSHOT;
-      break;
-    case ui::VKEY_UNKNOWN:
-      // TODO(wutao): make this reliable.
-      // If this is VKEY_UNKNOWN, it indicates to insert a "+" separator. Use
-      // one plus and one space to replace the string resourece's placeholder so
-      // that the separator will not conflict with the replacement string for
-      // "VKEY_OEM_PLUS", which is "+" and "VKEY_SPACE", which is "Space".
-      return u"+ ";
-    default:
-      return absl::nullopt;
-  }
-  return l10n_util::GetStringUTF16(msg_id);
-}
-
-// Dead keys work by combining two consecutive keystrokes together. The first
-// keystroke does not produce an output character, it acts as a one-shot
-// modifier for a subsequent keystroke. So for example on a German keyboard,
-// pressing the acute ´ dead key, then pressing the letter e will produce é.
-// The first character is called the combining character and does not produce
-// an output glyph. This table maps the combining character to a string
-// containing the non-combining equivalent that can be displayed.
-std::u16string GetStringForDeadKey(ui::DomKey dom_key) {
-  DCHECK(dom_key.IsDeadKey());
-  int32_t ch = dom_key.ToDeadKeyCombiningCharacter();
-  switch (ch) {
-    // Combining grave.
-    case 0x300:
-      return u"`";
-    // Combining acute.
-    case 0x301:
-      return u"´";
-    // Combining circumflex.
-    case 0x302:
-      return u"^";
-    // Combining tilde.
-    case 0x303:
-      return u"~";
-    // Combining diaeresis.
-    case 0x308:
-      return u"¨";
-    default:
-      break;
-  }
-
-  LOG(WARNING) << "No mapping for dead key shortcut " << ch;
-  return base::UTF8ToUTF16(ui::KeycodeConverter::DomKeyToKeyString(dom_key));
-}
-
 }  // namespace
 
 std::u16string GetStringForCategory(ShortcutCategory category) {
@@ -168,59 +83,6 @@ std::u16string GetStringForCategory(ShortcutCategory category) {
   return l10n_util::GetStringUTF16(msg_id);
 }
 
-std::u16string GetStringForKeyboardCode(ui::KeyboardCode key_code,
-                                        bool remap_positional_key) {
-  const absl::optional<std::u16string> key_label =
-      GetSpecialStringForKeyboardCode(key_code);
-  if (key_label)
-    return key_label.value();
-
-  ui::DomKey dom_key;
-  ui::KeyboardCode key_code_to_compare = ui::VKEY_UNKNOWN;
-  const ui::KeyboardLayoutEngine* layout_engine =
-      ui::KeyboardLayoutEngineManager::GetKeyboardLayoutEngine();
-
-  // The input |key_code| is the |KeyboardCode| aka VKEY of the shortcut in
-  // the US layout which is registered from the shortcut table. |key_code|
-  // is first mapped to the |DomCode| this key is on in the US layout. If
-  // the key is not positional, this processing is skipped and it is handled
-  // normally in the loop below. For the positional keys, the |DomCode| is
-  // then mapped to the |DomKey| in the current layout which represents the
-  // glyph/character that appears on the key (and usually when typed).
-  if (remap_positional_key &&
-      ::features::IsImprovedKeyboardShortcutsEnabled()) {
-    ui::DomCode dom_code =
-        ui::KeycodeConverter::MapUSPositionalShortcutKeyToDomCode(key_code);
-    if (dom_code != ui::DomCode::NONE) {
-      if (layout_engine->Lookup(dom_code, /*flags=*/ui::EF_NONE, &dom_key,
-                                &key_code_to_compare)) {
-        if (dom_key.IsDeadKey()) {
-          return GetStringForDeadKey(dom_key);
-        }
-        if (!dom_key.IsValid()) {
-          return std::u16string();
-        }
-        return base::UTF8ToUTF16(
-            ui::KeycodeConverter::DomKeyToKeyString(dom_key));
-      }
-      return std::u16string();
-    }
-  }
-
-  for (const auto& dom_code : ui::kDomCodesArray) {
-    if (!layout_engine->Lookup(dom_code, /*flags=*/ui::EF_NONE, &dom_key,
-                               &key_code_to_compare)) {
-      continue;
-    }
-    if (key_code_to_compare != key_code || !dom_key.IsValid() ||
-        dom_key.IsDeadKey()) {
-      continue;
-    }
-    return base::UTF8ToUTF16(ui::KeycodeConverter::DomKeyToKeyString(dom_key));
-  }
-  return std::u16string();
-}
-
 std::u16string GetAccessibleNameForKeyboardCode(ui::KeyboardCode key_code) {
   int msg_id = 0;
   switch (key_code) {
@@ -243,45 +105,6 @@ std::u16string GetAccessibleNameForKeyboardCode(ui::KeyboardCode key_code) {
       break;
   }
   return msg_id ? l10n_util::GetStringUTF16(msg_id) : std::u16string();
-}
-
-const gfx::VectorIcon* GetVectorIconForKeyboardCode(ui::KeyboardCode key_code) {
-  switch (key_code) {
-    case ui::VKEY_BROWSER_BACK:
-      return &ash::kKsvBrowserBackIcon;
-    case ui::VKEY_BROWSER_FORWARD:
-      return &ash::kKsvBrowserForwardIcon;
-    case ui::VKEY_BROWSER_REFRESH:
-      return &ash::kKsvReloadIcon;
-    case ui::VKEY_ZOOM:
-      return &ash::kKsvFullscreenIcon;
-    case ui::VKEY_MEDIA_LAUNCH_APP1:
-      return &ash::kKsvOverviewIcon;
-    case ui::VKEY_BRIGHTNESS_DOWN:
-      return &ash::kKsvBrightnessDownIcon;
-    case ui::VKEY_BRIGHTNESS_UP:
-      return &ash::kKsvBrightnessUpIcon;
-    case ui::VKEY_VOLUME_MUTE:
-      return &ash::kKsvMuteIcon;
-    case ui::VKEY_VOLUME_DOWN:
-      return &ash::kKsvVolumeDownIcon;
-    case ui::VKEY_VOLUME_UP:
-      return &ash::kKsvVolumeUpIcon;
-    case ui::VKEY_UP:
-      return &ash::kKsvArrowUpIcon;
-    case ui::VKEY_DOWN:
-      return &ash::kKsvArrowDownIcon;
-    case ui::VKEY_LEFT:
-      return &ash::kKsvArrowLeftIcon;
-    case ui::VKEY_RIGHT:
-      return &ash::kKsvArrowRightIcon;
-    case ui::VKEY_PRIVACY_SCREEN_TOGGLE:
-      return &ash::kKsvPrivacyScreenToggleIcon;
-    case ui::VKEY_SNAPSHOT:
-      return &ash::kKsvSnapshotIcon;
-    default:
-      return nullptr;
-  }
 }
 
 const std::vector<ash::KeyboardShortcutItem>& GetKeyboardShortcutItemList() {
@@ -842,7 +665,7 @@ const std::vector<ash::KeyboardShortcutItem>& GetKeyboardShortcutItemList() {
        IDS_KSV_DESCRIPTION_KEYBOARD_SHORTCUT_HELPER,
        {},
        // |accelerator_ids|
-       {{ui::VKEY_OEM_2, ui::EF_CONTROL_DOWN | ui::EF_ALT_DOWN}}},
+       {{ui::VKEY_S, ui::EF_CONTROL_DOWN | ui::EF_COMMAND_DOWN}}},
 
       {// |categories|
        {ShortcutCategory::kTabAndWindow},
@@ -1350,7 +1173,7 @@ const std::vector<ash::KeyboardShortcutItem>& GetKeyboardShortcutItemList() {
        IDS_KSV_DESCRIPTION_OPEN_GET_HELP,
        {},
        // |accelerator_ids|
-       {{ui::VKEY_OEM_2, ui::EF_CONTROL_DOWN}}},
+       {{ui::VKEY_H, ui::EF_COMMAND_DOWN}}},
 
       {// |categories|
        {ShortcutCategory::kSystemAndDisplay},
@@ -1454,6 +1277,13 @@ const std::vector<ash::KeyboardShortcutItem>& GetKeyboardShortcutItemList() {
        {},
        // |accelerator_ids|
        {{ui::VKEY_F, ui::EF_COMMAND_DOWN | ui::EF_ALT_DOWN}}},
+
+      {// |categories|
+       {ShortcutCategory::kTabAndWindow},
+       IDS_KSV_DESCRIPTION_TOGGLE_MULTITASK_MENU,
+       {},
+       // |accelerator_ids|
+       {{ui::VKEY_Z, ui::EF_COMMAND_DOWN}}},
 
       {// |categories|
        {ShortcutCategory::kPageAndBrowser},
@@ -1562,10 +1392,7 @@ const std::vector<ash::KeyboardShortcutItem>& GetKeyboardShortcutItemList() {
   if (!is_initialized) {
     is_initialized = true;
 
-    // The improved desks keyboard shortcuts should only be enabled if the
-    // improved keyboard shortcuts flag is also enabled.
-    if (::features::IsImprovedKeyboardShortcutsEnabled() &&
-        ash::features::IsImprovedDesksKeyboardShortcutsEnabled()) {
+    if (::features::IsImprovedKeyboardShortcutsEnabled()) {
       const ash::KeyboardShortcutItem indexed_activation_shortcut = {
           // |categories|
           {ShortcutCategory::kTabAndWindow},
@@ -1589,19 +1416,17 @@ const std::vector<ash::KeyboardShortcutItem>& GetKeyboardShortcutItemList() {
       item_list->emplace_back(toggle_all_desks_shortcut);
     }
 
-    if (ash::features::IsCalendarViewEnabled()) {
-      const ash::KeyboardShortcutItem toggle_calendar = {
-          // |categories|
-          {ShortcutCategory::kSystemAndDisplay},
-          IDS_KSV_DESCRIPTION_TOGGLE_CALENDAR,
-          {},
-          // |accelerator_ids|
-          {},
-          // |shortcut_key_codes|
-          {{ui::VKEY_COMMAND, ui::VKEY_UNKNOWN, ui::VKEY_C}}};
+    const ash::KeyboardShortcutItem toggle_calendar = {
+        // |categories|
+        {ShortcutCategory::kSystemAndDisplay},
+        IDS_KSV_DESCRIPTION_TOGGLE_CALENDAR,
+        {},
+        // |accelerator_ids|
+        {},
+        // |shortcut_key_codes|
+        {{ui::VKEY_COMMAND, ui::VKEY_UNKNOWN, ui::VKEY_C}}};
 
-      item_list->emplace_back(toggle_calendar);
-    }
+    item_list->emplace_back(toggle_calendar);
 
     for (auto& item : *item_list) {
       if (item.shortcut_key_codes.empty() && !item.accelerator_ids.empty()) {
@@ -1617,15 +1442,17 @@ const std::vector<ash::KeyboardShortcutItem>& GetKeyboardShortcutItemList() {
             // ui::VKEY_UNKNOWN is used as a separator and will be shown as a
             // highlighted "+" sign between the bubble views and the rest of the
             // text.
-            if (!item.shortcut_key_codes.empty())
+            if (!item.shortcut_key_codes.empty()) {
               item.shortcut_key_codes.push_back(ui::VKEY_UNKNOWN);
+            }
             item.shortcut_key_codes.push_back(GetKeyCodeForModifier(modifier));
           }
         }
         // For non grouped accelerators, we need to populate the key as well.
         if (item.accelerator_ids.size() == 1) {
-          if (!item.shortcut_key_codes.empty())
+          if (!item.shortcut_key_codes.empty()) {
             item.shortcut_key_codes.push_back(ui::VKEY_UNKNOWN);
+          }
           item.shortcut_key_codes.push_back(accelerator_id.keycode);
         }
       }

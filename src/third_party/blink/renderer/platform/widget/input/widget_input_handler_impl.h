@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,8 +8,11 @@
 #include "base/memory/weak_ptr.h"
 #include "base/task/single_thread_task_runner.h"
 #include "build/build_config.h"
+#include "cc/input/browser_controls_state.h"
 #include "mojo/public/cpp/bindings/associated_receiver.h"
+#include "mojo/public/cpp/bindings/direct_receiver.h"
 #include "mojo/public/cpp/bindings/receiver.h"
+#include "third_party/abseil-cpp/absl/types/variant.h"
 #include "third_party/blink/public/common/input/web_coalesced_input_event.h"
 #include "third_party/blink/public/mojom/input/input_handler.mojom-blink.h"
 
@@ -76,6 +79,10 @@ class WidgetInputHandlerImpl : public mojom::blink::WidgetInputHandler {
   void GetFrameWidgetInputHandler(
       mojo::PendingAssociatedReceiver<mojom::blink::FrameWidgetInputHandler>
           interface_request) override;
+  void UpdateBrowserControlsState(cc::BrowserControlsState constraints,
+                                  cc::BrowserControlsState current,
+                                  bool animate) override;
+
   void InputWasProcessed();
 
  private:
@@ -96,7 +103,9 @@ class WidgetInputHandlerImpl : public mojom::blink::WidgetInputHandler {
   // killed before we actually fully process the input.
   WaitForInputProcessedCallback input_processed_ack_;
 
-  mojo::Receiver<mojom::blink::WidgetInputHandler> receiver_{this};
+  using Receiver = mojo::Receiver<mojom::blink::WidgetInputHandler>;
+  using DirectReceiver = mojo::DirectReceiver<mojom::blink::WidgetInputHandler>;
+  absl::variant<absl::monostate, Receiver, DirectReceiver> receiver_;
 
   base::WeakPtrFactory<WidgetInputHandlerImpl> weak_ptr_factory_{this};
 };

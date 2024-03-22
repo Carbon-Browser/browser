@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -33,7 +33,7 @@ class TestRenderViewHostFactory : public RenderViewHostFactory {
 
   virtual void set_render_process_host_factory(
       RenderProcessHostFactory* rph_factory);
-  RenderViewHost* CreateRenderViewHost(
+  RenderViewHostImpl* CreateRenderViewHost(
       FrameTree* frame_tree,
       SiteInstanceGroup* group,
       const StoragePartitionConfig& storage_partition_config,
@@ -42,8 +42,9 @@ class TestRenderViewHostFactory : public RenderViewHostFactory {
       int32_t routing_id,
       int32_t main_frame_routing_id,
       int32_t widget_routing_id,
-      bool swapped_out,
-      scoped_refptr<BrowsingContextState> main_browsing_context_state) override;
+      scoped_refptr<BrowsingContextState> main_browsing_context_state,
+      CreateRenderViewHostCase create_case,
+      absl::optional<viz::FrameSinkId> frame_sink_id) override;
 };
 
 }  // namespace content

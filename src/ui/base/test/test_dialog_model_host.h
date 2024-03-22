@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -49,11 +49,13 @@ class TestDialogModelHost final : public DialogModelHost {
   const base::flat_set<Accelerator>& GetAccelerators(ButtonId button_id);
   const std::u16string& GetLabel(ButtonId button_id);
   ElementIdentifier GetId(ButtonId button_id);
+  ElementIdentifier GetInitiallyFocusedField();
 
  private:
   // DialogModelHost:
   void Close() override;
   void OnFieldAdded(DialogModelField* field) override;
+  void OnFieldChanged(DialogModelField* field) override;
 
   std::unique_ptr<DialogModel> dialog_model_;
 };

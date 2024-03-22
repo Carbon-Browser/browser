@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -68,8 +68,8 @@ bool IndexSupportsGroupMove(TabStripModel* tab_strip,
 }  // namespace
 
 ExtensionFunction::ResponseAction TabGroupsGetFunction::Run() {
-  std::unique_ptr<api::tab_groups::Get::Params> params(
-      api::tab_groups::Get::Params::Create(args()));
+  absl::optional<api::tab_groups::Get::Params> params =
+      api::tab_groups::Get::Params::Create(args());
   EXTENSION_FUNCTION_VALIDATE(params);
   int group_id = params->group_id;
 
@@ -85,15 +85,15 @@ ExtensionFunction::ResponseAction TabGroupsGetFunction::Run() {
   DCHECK(!id.is_empty());
 
   return RespondNow(ArgumentList(api::tab_groups::Get::Results::Create(
-      *tab_groups_util::CreateTabGroupObject(id, *visual_data))));
+      tab_groups_util::CreateTabGroupObject(id, *visual_data))));
 }
 
 ExtensionFunction::ResponseAction TabGroupsQueryFunction::Run() {
-  std::unique_ptr<api::tab_groups::Query::Params> params(
-      api::tab_groups::Query::Params::Create(args()));
+  absl::optional<api::tab_groups::Query::Params> params =
+      api::tab_groups::Query::Params::Create(args());
   EXTENSION_FUNCTION_VALIDATE(params);
 
-  base::Value result_list(base::Value::Type::LIST);
+  base::Value::List result_list;
   Profile* profile = Profile::FromBrowserContext(browser_context());
   Browser* current_browser =
       ChromeExtensionFunctionDetails(this).GetCurrentBrowser();
@@ -112,7 +112,7 @@ ExtensionFunction::ResponseAction TabGroupsQueryFunction::Run() {
       continue;
     }
 
-    if (params->query_info.window_id.get()) {
+    if (params->query_info.window_id) {
       int window_id = *params->query_info.window_id;
       if (window_id >= 0 && window_id != ExtensionTabUtil::GetWindowId(browser))
         continue;
@@ -124,45 +124,43 @@ ExtensionFunction::ResponseAction TabGroupsQueryFunction::Run() {
     }
 
     TabStripModel* tab_strip = browser->tab_strip_model();
-    if (!tab_strip)
-      return RespondNow(Error(tabs_constants::kTabStripNotEditableQueryError));
-    if (!tab_strip->SupportsTabGroups())
-      return RespondNow(
-          Error(tabs_constants::kTabStripDoesNotSupportTabGroupsError));
+    if (!tab_strip->SupportsTabGroups()) {
+      continue;
+    }
 
     for (const tab_groups::TabGroupId& id :
          tab_strip->group_model()->ListTabGroups()) {
       const tab_groups::TabGroupVisualData* visual_data =
           tab_strip->group_model()->GetTabGroup(id)->visual_data();
 
-      if (params->query_info.collapsed.get() &&
+      if (params->query_info.collapsed &&
           *params->query_info.collapsed != visual_data->is_collapsed()) {
         continue;
       }
 
-      if (params->query_info.title.get() &&
+      if (params->query_info.title &&
           !base::MatchPattern(visual_data->title(),
                               base::UTF8ToUTF16(*params->query_info.title))) {
         continue;
       }
 
-      if (params->query_info.color != api::tab_groups::COLOR_NONE &&
+      if (params->query_info.color != api::tab_groups::Color::kNone &&
           params->query_info.color !=
               tab_groups_util::ColorIdToColor(visual_data->color())) {
         continue;
       }
 
-      result_list.Append(base::Value::FromUniquePtrValue(
-          tab_groups_util::CreateTabGroupObject(id, *visual_data)->ToValue()));
+      result_list.Append(
+          tab_groups_util::CreateTabGroupObject(id, *visual_data).ToValue());
     }
   }
 
-  return RespondNow(OneArgument(std::move(result_list)));
+  return RespondNow(WithArguments(std::move(result_list)));
 }
 
 ExtensionFunction::ResponseAction TabGroupsUpdateFunction::Run() {
-  std::unique_ptr<api::tab_groups::Update::Params> params(
-      api::tab_groups::Update::Params::Create(args()));
+  absl::optional<api::tab_groups::Update::Params> params =
+      api::tab_groups::Update::Params::Create(args());
   EXTENSION_FUNCTION_VALIDATE(params);
 
   int group_id = params->group_id;
@@ -179,15 +177,16 @@ ExtensionFunction::ResponseAction TabGroupsUpdateFunction::Run() {
   DCHECK(!id.is_empty());
 
   bool collapsed = visual_data->is_collapsed();
-  if (params->update_properties.collapsed.get())
+  if (params->update_properties.collapsed)
     collapsed = *params->update_properties.collapsed;
 
   tab_groups::TabGroupColorId color = visual_data->color();
-  if (params->update_properties.color != api::tab_groups::COLOR_NONE)
+  if (params->update_properties.color != api::tab_groups::Color::kNone) {
     color = tab_groups_util::ColorToColorId(params->update_properties.color);
+  }
 
   std::u16string title = visual_data->title();
-  if (params->update_properties.title.get())
+  if (params->update_properties.title)
     title = base::UTF8ToUTF16(*params->update_properties.title);
 
   TabStripModel* tab_strip_model =
@@ -199,6 +198,10 @@ ExtensionFunction::ResponseAction TabGroupsUpdateFunction::Run() {
         Error(tabs_constants::kTabStripDoesNotSupportTabGroupsError));
   TabGroup* tab_group = tab_strip_model->group_model()->GetTabGroup(id);
 
+  if (tab_groups_util::IsGroupSaved(id, tab_strip_model)) {
+    return RespondNow(Error(tabs_constants::kSavedTabGroupNotEditableError));
+  }
+
   tab_groups::TabGroupVisualData new_visual_data(title, color, collapsed);
   tab_group->SetVisualData(std::move(new_visual_data));
 
@@ -206,18 +209,18 @@ ExtensionFunction::ResponseAction TabGroupsUpdateFunction::Run() {
     return RespondNow(NoArguments());
 
   return RespondNow(ArgumentList(api::tab_groups::Get::Results::Create(
-      *tab_groups_util::CreateTabGroupObject(tab_group->id(),
-                                             *tab_group->visual_data()))));
+      tab_groups_util::CreateTabGroupObject(tab_group->id(),
+                                            *tab_group->visual_data()))));
 }
 
 ExtensionFunction::ResponseAction TabGroupsMoveFunction::Run() {
-  std::unique_ptr<api::tab_groups::Move::Params> params(
-      api::tab_groups::Move::Params::Create(args()));
+  absl::optional<api::tab_groups::Move::Params> params =
+      api::tab_groups::Move::Params::Create(args());
   EXTENSION_FUNCTION_VALIDATE(params);
 
   int group_id = params->group_id;
   int new_index = params->move_properties.index;
-  int* window_id = params->move_properties.window_id.get();
+  const auto& window_id = params->move_properties.window_id;
 
   tab_groups::TabGroupId group = tab_groups::TabGroupId::CreateEmpty();
   std::string error;
@@ -233,7 +236,7 @@ ExtensionFunction::ResponseAction TabGroupsMoveFunction::Run() {
 
 bool TabGroupsMoveFunction::MoveGroup(int group_id,
                                       int new_index,
-                                      int* window_id,
+                                      const absl::optional<int>& window_id,
                                       tab_groups::TabGroupId* group,
                                       std::string* error) {
   Browser* source_browser = nullptr;
@@ -316,7 +319,7 @@ bool TabGroupsMoveFunction::MoveGroup(int group_id,
       // Attach tabs in consecutive indices, to insert them in the same order.
       target_tab_strip->InsertWebContentsAt(new_index + i,
                                             std::move(web_contents),
-                                            TabStripModel::ADD_NONE, *group);
+                                            AddTabTypes::ADD_NONE, *group);
     }
 
     return true;

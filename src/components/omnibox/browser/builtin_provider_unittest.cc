@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -23,13 +23,13 @@
 #include "components/omnibox/browser/mock_autocomplete_provider_client.h"
 #include "components/omnibox/browser/test_scheme_classifier.h"
 #include "components/omnibox/common/omnibox_features.h"
-#include "components/search_engines/omnibox_focus_type.h"
 #include "components/search_engines/template_url.h"
 #include "components/search_engines/template_url_data.h"
 #include "components/search_engines/template_url_service.h"
 #include "components/search_engines/template_url_starter_pack_data.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "third_party/metrics_proto/omnibox_event.pb.h"
+#include "third_party/metrics_proto/omnibox_focus_type.pb.h"
 #include "url/gurl.h"
 
 namespace {
@@ -127,7 +127,9 @@ class BuiltinProviderTest : public testing::Test {
       ASSERT_EQ(cases[i].output.size(), matches.size());
       for (size_t j = 0; j < cases[i].output.size(); ++j) {
         EXPECT_EQ(cases[i].output[j], matches[j].destination_url);
-        EXPECT_FALSE(matches[j].allowed_to_be_default_match);
+        EXPECT_EQ(matches[j].allowed_to_be_default_match,
+                  matches[j].type == AutocompleteMatchType::STARTER_PACK &&
+                      matches[j].inline_autocompletion.empty());
       }
     }
   }
@@ -310,7 +312,7 @@ TEST_F(BuiltinProviderTest, AboutBlank) {
 TEST_F(BuiltinProviderTest, DoesNotSupportMatchesOnFocus) {
   AutocompleteInput input(u"chrome://m", metrics::OmniboxEventProto::OTHER,
                           TestSchemeClassifier());
-  input.set_focus_type(OmniboxFocusType::ON_FOCUS);
+  input.set_focus_type(metrics::OmniboxFocusType::INTERACTION_FOCUS);
   provider_->Start(input, false);
   EXPECT_TRUE(provider_->matches().empty());
 }
@@ -325,25 +327,23 @@ TEST_F(BuiltinProviderTest, Subpages) {
   const GURL kURLThree(kSubpage + kPageThree);
 
   TestData settings_subpage_cases[] = {
-    // Typing the settings path should show settings and the first two subpages.
-    {kSubpage, {GURL(kSubpage), kURLOne, kURLTwo}},
+      // Typing the settings path should show settings and the first two
+      // subpages.
+      {kSubpage, {GURL(kSubpage), kURLOne, kURLTwo}},
 
-    // Typing a subpage path should return the appropriate results.
-    {kSubpage + kPageTwo.substr(0, 1),                 {kURLTwo, kURLThree}},
-    {kSubpage + kPageTwo.substr(0, 2),                 {kURLTwo}},
-    {kSubpage + kPageThree.substr(0, kPageThree.length() - 1),
-                                                       {kURLThree}},
-    {kSubpage + kPageOne,                              {kURLOne}},
-    {kSubpage + kPageTwo,                              {kURLTwo}},
+      // Typing a subpage path should return the appropriate results.
+      {kSubpage + kPageTwo.substr(0, 1), {kURLTwo, kURLThree}},
+      {kSubpage + kPageTwo.substr(0, 2), {kURLTwo}},
+      {kSubpage + kPageThree.substr(0, kPageThree.length() - 1), {kURLThree}},
+      {kSubpage + kPageOne, {kURLOne}},
+      {kSubpage + kPageTwo, {kURLTwo}},
   };
 
   RunTest(settings_subpage_cases, std::size(settings_subpage_cases));
 }
 
+#if !BUILDFLAG(IS_ANDROID) && !BUILDFLAG(IS_IOS)
 TEST_F(BuiltinProviderTest, StarterPack) {
-  base::test::ScopedFeatureList feature_list;
-  feature_list.InitAndEnableFeature(omnibox::kSiteSearchStarterPack);
-
   const GURL kBookmarksUrl =
       GURL(TemplateURLStarterPackData::bookmarks.destination_url);
   const GURL kHistoryUrl =
@@ -391,6 +391,7 @@ TEST_F(BuiltinProviderTest, StarterPack) {
 
   RunTest(typing_scheme_cases, std::size(typing_scheme_cases));
 }
+#endif  //! BUILDFLAG(IS_ANDROID) && !BUILDFLAG(IS_IOS)
 
 TEST_F(BuiltinProviderTest, Inlining) {
   const std::u16string kAbout = url::kAboutScheme16;
@@ -488,8 +489,8 @@ TEST_F(BuiltinProviderTest, Inlining) {
 
   ACMatches matches;
   for (size_t i = 0; i < std::size(cases); ++i) {
-    SCOPED_TRACE(base::StringPrintf(
-        "case %" PRIuS ": %s", i, base::UTF16ToUTF8(cases[i].input).c_str()));
+    SCOPED_TRACE(base::StringPrintf("case %" PRIuS ": %s", i,
+                                    base::UTF16ToUTF8(cases[i].input).c_str()));
     AutocompleteInput input(cases[i].input, metrics::OmniboxEventProto::OTHER,
                             TestSchemeClassifier());
     provider_->Start(input, false);

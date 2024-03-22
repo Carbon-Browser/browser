@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -57,8 +57,11 @@ public class SelectAroundCaretResult {
      * @param wordEndAdjust The end offset difference between the word selection (regardless of the
      *         extended selection granularity) and the initial selection (caret).
      */
-    public SelectAroundCaretResult(int extendedStartAdjust, int extendedEndAdjust,
-            int wordStartAdjust, int wordEndAdjust) {
+    public SelectAroundCaretResult(
+            int extendedStartAdjust,
+            int extendedEndAdjust,
+            int wordStartAdjust,
+            int wordEndAdjust) {
         mExtendedStartAdjust = extendedStartAdjust;
         mExtendedEndAdjust = extendedEndAdjust;
         mWordStartAdjust = wordStartAdjust;

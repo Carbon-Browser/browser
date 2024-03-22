@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -15,10 +15,12 @@
 #include "ash/session/session_controller_impl.h"
 #include "ash/session/test_session_controller_client.h"
 #include "ash/shell.h"
+#include "ash/system/human_presence/human_presence_metrics.h"
 #include "ash/test/ash_test_base.h"
-#include "base/callback_helpers.h"
 #include "base/command_line.h"
+#include "base/functional/callback_helpers.h"
 #include "base/json/json_reader.h"
+#include "base/memory/raw_ptr.h"
 #include "base/test/metrics/histogram_tester.h"
 #include "base/test/scoped_command_line.h"
 #include "base/test/scoped_feature_list.h"
@@ -36,6 +38,8 @@
 #include "components/prefs/testing_pref_store.h"
 
 using session_manager::SessionState;
+
+namespace qd_metrics = ash::quick_dim_metrics;
 
 namespace ash {
 
@@ -127,6 +131,7 @@ std::string GetExpectedPowerPolicyForPrefs(PrefService* prefs,
       power_manager::PowerManagementPolicy::BatteryChargeMode::ADAPTIVE);
   expected_policy.set_boot_on_ac(false);
   expected_policy.set_usb_power_share(true);
+  expected_policy.set_hibernate_delay_sec(0);
 
   expected_policy.set_reason("Prefs");
   return chromeos::PowerPolicyController::GetPolicyDebugString(expected_policy);
@@ -141,9 +146,7 @@ std::string GetExpectedPeakShiftPolicyForPrefs(PrefService* prefs) {
 
   std::vector<power_manager::PowerManagementPolicy::PeakShiftDayConfig> configs;
   EXPECT_TRUE(chromeos::PowerPolicyController::GetPeakShiftDayConfigs(
-      base::Value::AsDictionaryValue(
-          *prefs->GetDictionary(prefs::kPowerPeakShiftDayConfig)),
-      &configs));
+      prefs->GetDict(prefs::kPowerPeakShiftDayConfig), &configs));
 
   power_manager::PowerManagementPolicy expected_policy;
   expected_policy.set_peak_shift_battery_percent_threshold(
@@ -164,8 +167,7 @@ std::string GetExpectedAdvancedBatteryChargeModePolicyForPrefs(
       configs;
   EXPECT_TRUE(
       chromeos::PowerPolicyController::GetAdvancedBatteryChargeModeDayConfigs(
-          base::Value::AsDictionaryValue(*prefs->GetDictionary(
-              prefs::kAdvancedBatteryChargeModeDayConfig)),
+          prefs->GetDict(prefs::kAdvancedBatteryChargeModeDayConfig),
           &configs));
 
   power_manager::PowerManagementPolicy expected_policy;
@@ -222,6 +224,11 @@ class PowerPrefsTest : public NoSessionAshTestBase {
     FakeHumanPresenceDBusClient::Get()->Reset();
     FakeHumanPresenceDBusClient::Get()->set_hps_service_is_available(true);
     NoSessionAshTestBase::SetUp();
+
+    // Initializes adaptive charging hardware support to false.
+    power_manager::PowerSupplyProperties power_props;
+    power_props.set_adaptive_charging_supported(false);
+    power_manager_client()->UpdatePowerProperties(power_props);
 
     power_policy_controller_ = chromeos::PowerPolicyController::Get();
     power_prefs_ = ShellTestApi().power_prefs();
@@ -294,9 +301,10 @@ class PowerPrefsTest : public NoSessionAshTestBase {
   // Start counting histogram updates before we load our first pref service.
   base::HistogramTester histogram_tester_;
 
-  chromeos::PowerPolicyController* power_policy_controller_ =
-      nullptr;                         // Not owned.
-  PowerPrefs* power_prefs_ = nullptr;  // Not owned.
+  raw_ptr<chromeos::PowerPolicyController, DanglingUntriaged | ExperimentalAsh>
+      power_policy_controller_ = nullptr;  // Not owned.
+  raw_ptr<PowerPrefs, DanglingUntriaged | ExperimentalAsh> power_prefs_ =
+      nullptr;  // Not owned.
   base::SimpleTestTickClock tick_clock_;
 
   scoped_refptr<TestingPrefStore> user_pref_store_ =
@@ -480,9 +488,8 @@ TEST_F(PowerPrefsTest, PeakShift) {
 
   managed_pref_store_->SetBoolean(prefs::kPowerPeakShiftEnabled, true);
   managed_pref_store_->SetInteger(prefs::kPowerPeakShiftBatteryThreshold, 50);
-  managed_pref_store_->SetValue(
-      prefs::kPowerPeakShiftDayConfig,
-      std::make_unique<base::Value>(std::move(day_configs)), 0);
+  managed_pref_store_->SetValue(prefs::kPowerPeakShiftDayConfig,
+                                std::move(day_configs), 0);
 
   EXPECT_EQ(chromeos::PowerPolicyController::GetPeakShiftPolicyDebugString(
                 power_manager_client()->policy()),
@@ -522,9 +529,8 @@ TEST_F(PowerPrefsTest, AdvancedBatteryChargeMode) {
 
   managed_pref_store_->SetBoolean(prefs::kAdvancedBatteryChargeModeEnabled,
                                   true);
-  managed_pref_store_->SetValue(
-      prefs::kAdvancedBatteryChargeModeDayConfig,
-      std::make_unique<base::Value>(std::move(day_configs)), 0);
+  managed_pref_store_->SetValue(prefs::kAdvancedBatteryChargeModeDayConfig,
+                                std::move(day_configs), 0);
 
   EXPECT_EQ(chromeos::PowerPolicyController::
                 GetAdvancedBatteryChargeModePolicyDebugString(
@@ -609,8 +615,8 @@ TEST_F(PowerPrefsTest, QuickDimMetrics) {
   const char kUserEmail[] = "user@example.net";
 
   // Initial pref loading shouldn't be logged as manual pref change.
-  EXPECT_TRUE(
-      histogram_tester_.GetAllSamples("ChromeOS.HPS.QuickDim.Enabled").empty());
+  EXPECT_TRUE(histogram_tester_.GetAllSamples(qd_metrics::kEnabledHistogramName)
+                  .empty());
 
   // Initial pref value is false, so manually updating it to true should be
   // logged.
@@ -618,12 +624,12 @@ TEST_F(PowerPrefsTest, QuickDimMetrics) {
 
   const std::vector<base::Bucket> login_screen_buckets = {
       base::Bucket(true, 1)};
-  EXPECT_EQ(histogram_tester_.GetAllSamples("ChromeOS.HPS.QuickDim.Enabled"),
+  EXPECT_EQ(histogram_tester_.GetAllSamples(qd_metrics::kEnabledHistogramName),
             login_screen_buckets);
 
   // Loading a new pref service isn't a manual update, so shouldn't be logged.
   SimulateUserLogin(kUserEmail);
-  EXPECT_EQ(histogram_tester_.GetAllSamples("ChromeOS.HPS.QuickDim.Enabled"),
+  EXPECT_EQ(histogram_tester_.GetAllSamples(qd_metrics::kEnabledHistogramName),
             login_screen_buckets);
 
   // We now re-enable the feature, which *is* a manual toggle (because the
@@ -632,7 +638,7 @@ TEST_F(PowerPrefsTest, QuickDimMetrics) {
 
   // Login screen and user have both enabled the feature.
   const std::vector<base::Bucket> user_enable_buckets = {base::Bucket(true, 2)};
-  EXPECT_EQ(histogram_tester_.GetAllSamples("ChromeOS.HPS.QuickDim.Enabled"),
+  EXPECT_EQ(histogram_tester_.GetAllSamples(qd_metrics::kEnabledHistogramName),
             user_enable_buckets);
 
   // Manual disable should also be logged.
@@ -640,26 +646,48 @@ TEST_F(PowerPrefsTest, QuickDimMetrics) {
 
   const std::vector<base::Bucket> user_disable_buckets = {
       base::Bucket(false, 1), base::Bucket(true, 2)};
-  EXPECT_EQ(histogram_tester_.GetAllSamples("ChromeOS.HPS.QuickDim.Enabled"),
+  EXPECT_EQ(histogram_tester_.GetAllSamples(qd_metrics::kEnabledHistogramName),
             user_disable_buckets);
 
   // Redundant pref change shouldn't be logged.
   SetQuickDimPreference(false);
-  EXPECT_EQ(histogram_tester_.GetAllSamples("ChromeOS.HPS.QuickDim.Enabled"),
+  EXPECT_EQ(histogram_tester_.GetAllSamples(qd_metrics::kEnabledHistogramName),
             user_disable_buckets);
 }
 
 TEST_F(PowerPrefsTest, SetAdaptiveChargingParams) {
-  // Should be enabled by default.
-  EXPECT_TRUE(power_manager_client()->policy().adaptive_charging_enabled());
+  // kPowerAdaptiveChargingEnabled is true by default.
+  PrefService* prefs =
+      Shell::Get()->session_controller()->GetActivePrefService();
+  EXPECT_TRUE(prefs->GetBoolean(prefs::kPowerAdaptiveChargingEnabled));
 
-  // Should be disabled after changing the prefs to false.
-  SetAdaptiveChargingPreference(false);
+  // But adaptive charging should be disabled initially because of no hardware
+  // support.
   EXPECT_FALSE(power_manager_client()->policy().adaptive_charging_enabled());
 
-  // Should be enabled after setting the prefs to true.
+  // Sets adaptive charging hardware support.
+  power_manager::PowerSupplyProperties power_props;
+  power_props.set_adaptive_charging_supported(true);
+  power_manager_client()->UpdatePowerProperties(power_props);
+
+  // With hardware support exists, the adaptive charging feature is controlled
+  // by prefs settings.
+  SetAdaptiveChargingPreference(false);
+  EXPECT_FALSE(power_manager_client()->policy().adaptive_charging_enabled());
+  SetAdaptiveChargingPreference(true);
+  EXPECT_TRUE(power_manager_client()->policy().adaptive_charging_enabled());
+
+  // Once power properties proto showed hardware adaptive_charging_supported, we
+  // never reset it false because the hardware feature should not change.
+  // So although we force power_manager_client to update the power properties
+  // here, hardware support keeps true.
+  power_props.set_adaptive_charging_supported(false);
+  power_manager_client()->UpdatePowerProperties(power_props);
+
+  // The adaptive charging feature is controlled by prefs settings as above.
+  SetAdaptiveChargingPreference(false);
+  EXPECT_FALSE(power_manager_client()->policy().adaptive_charging_enabled());
   SetAdaptiveChargingPreference(true);
   EXPECT_TRUE(power_manager_client()->policy().adaptive_charging_enabled());
 }
-
 }  // namespace ash

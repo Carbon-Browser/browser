@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,11 +8,13 @@
 #include <utility>
 
 #include "base/base64.h"
-#include "base/callback_helpers.h"
 #include "base/command_line.h"
 #include "base/files/file_util.h"
+#include "base/functional/callback_helpers.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/test/gtest_util.h"
 #include "base/test/metrics/histogram_tester.h"
+#include "base/test/mock_callback.h"
 #include "base/test/scoped_feature_list.h"
 #include "base/test/task_environment.h"
 #include "components/optimization_guide/core/bloom_filter.h"
@@ -31,11 +33,17 @@
 #include "components/optimization_guide/core/proto_database_provider_test_base.h"
 #include "components/optimization_guide/core/tab_url_provider.h"
 #include "components/optimization_guide/core/top_host_provider.h"
+#include "components/optimization_guide/proto/hints.pb.h"
 #include "components/prefs/pref_registry_simple.h"
+#include "components/signin/public/base/consent_level.h"
+#include "components/signin/public/identity_manager/identity_manager.h"
+#include "components/signin/public/identity_manager/identity_test_environment.h"
+#include "components/signin/public/identity_manager/test_identity_manager_observer.h"
 #include "components/sync_preferences/testing_pref_service_syncable.h"
 #include "components/ukm/test_ukm_recorder.h"
 #include "components/unified_consent/unified_consent_service.h"
 #include "components/variations/scoped_variations_ids_provider.h"
+#include "google_apis/gaia/google_service_auth_error.h"
 #include "services/metrics/public/cpp/ukm_builders.h"
 #include "services/metrics/public/cpp/ukm_source.h"
 #include "services/network/public/cpp/shared_url_loader_factory.h"
@@ -87,6 +95,8 @@ std::unique_ptr<proto::GetHintsResponse> BuildHintsResponse(
     proto::Hint* hint = get_hints_response->add_hints();
     hint->set_key_representation(proto::HOST);
     hint->set_key(host);
+    hint->add_allowlisted_optimizations()->set_optimization_type(
+        proto::NOSCRIPT);
     proto::PageHint* page_hint = hint->add_page_hints();
     page_hint->set_page_pattern("page pattern");
     proto::Optimization* opt = page_hint->add_allowlisted_optimizations();
@@ -101,7 +111,7 @@ std::unique_ptr<proto::GetHintsResponse> BuildHintsResponse(
     page_hint->set_page_pattern(url);
     proto::Optimization* opt = page_hint->add_allowlisted_optimizations();
     opt->set_optimization_type(proto::COMPRESS_PUBLIC_IMAGES);
-    opt->mutable_public_image_metadata()->add_url("someurl");
+    opt->mutable_any_metadata()->set_type_url("someurl");
   }
   return get_hints_response;
 }
@@ -204,6 +214,8 @@ class TestHintsFetcher : public HintsFetcher {
       const base::flat_set<proto::OptimizationType>& optimization_types,
       proto::RequestContext request_context,
       const std::string& locale,
+      const std::string& access_token,
+      bool skip_cache,
       HintsFetchedCallback hints_fetched_callback) override {
     HintsFetcherEndState fetch_state =
         num_fetches_requested_ < static_cast<int>(fetch_states_.size())
@@ -217,21 +229,22 @@ class TestHintsFetcher : public HintsFetcher {
         std::move(hints_fetched_callback).Run(absl::nullopt);
         return false;
       case HintsFetcherEndState::kFetchSuccessWithHostHints:
-        base::ThreadTaskRunnerHandle::Get()->PostTask(
+        base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
             FROM_HERE, base::BindOnce(&RunHintsFetchedCallbackWithResponse,
                                       std::move(hints_fetched_callback),
                                       BuildHintsResponse({"host.com"}, {})));
         return true;
       case HintsFetcherEndState::kFetchSuccessWithURLHints:
-        base::ThreadTaskRunnerHandle::Get()->PostTask(
+        base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
             FROM_HERE,
-            base::BindOnce(&RunHintsFetchedCallbackWithResponse,
-                           std::move(hints_fetched_callback),
-                           BuildHintsResponse(
-                               {}, {"https://somedomain.org/news/whatever"})));
+            base::BindOnce(
+                &RunHintsFetchedCallbackWithResponse,
+                std::move(hints_fetched_callback),
+                BuildHintsResponse({"somedomain.org"},
+                                   {"https://somedomain.org/news/whatever"})));
         return true;
       case HintsFetcherEndState::kFetchSuccessWithNoHints:
-        base::ThreadTaskRunnerHandle::Get()->PostTask(
+        base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
             FROM_HERE, base::BindOnce(&RunHintsFetchedCallbackWithResponse,
                                       std::move(hints_fetched_callback),
                                       BuildHintsResponse({}, {})));
@@ -286,10 +299,14 @@ class HintsManagerTest : public ProtoDatabaseProviderTestBase {
  public:
   HintsManagerTest() {
     scoped_feature_list_.InitWithFeaturesAndParameters(
-        {{features::kOptimizationHints,
-          GetOptimizationHintsDefaultFeatureParams()},
-         {features::kOptimizationHintsComponent,
-          {{"check_failed_component_version_pref", "true"}}}},
+        {
+            {features::kOptimizationHints,
+             GetOptimizationHintsDefaultFeatureParams()},
+            {features::kRemoteOptimizationGuideFetching,
+             {{"batch_update_hints_for_top_hosts", "true"}}},
+            {features::kOptimizationHintsComponent,
+             {{"check_failed_component_version_pref", "true"}}},
+        },
         /*disabled_features=*/{});
 
     pref_service_ =
@@ -314,7 +331,8 @@ class HintsManagerTest : public ProtoDatabaseProviderTestBase {
     ProtoDatabaseProviderTestBase::TearDown();
   }
 
-  void CreateHintsManager(TopHostProvider* top_host_provider) {
+  void CreateHintsManager(TopHostProvider* top_host_provider,
+                          signin::IdentityManager* identity_manager = nullptr) {
     if (hints_manager_)
       ResetHintsManager();
 
@@ -332,7 +350,8 @@ class HintsManagerTest : public ProtoDatabaseProviderTestBase {
         /*is_off_the_record=*/false, /*application_locale=*/"en-US",
         pref_service(), hint_store_->AsWeakPtr(), top_host_provider,
         tab_url_provider_.get(), url_loader_factory_,
-        /*push_notification_manager=*/nullptr, &optimization_guide_logger_);
+        /*push_notification_manager=*/nullptr,
+        /*identity_manager=*/identity_manager, &optimization_guide_logger_);
     hints_manager_->SetClockForTesting(task_environment_.GetMockClock());
 
     // Run until hint cache is initialized and the HintsManager is ready to
@@ -363,7 +382,7 @@ class HintsManagerTest : public ProtoDatabaseProviderTestBase {
     HintsComponentInfo info(
         base::Version(version),
         temp_dir().Append(FILE_PATH_LITERAL("badconfig.pb")));
-    ASSERT_EQ(7, base::WriteFile(info.path, "garbage", 7));
+    ASSERT_TRUE(base::WriteFile(info.path, "garbage"));
 
     hints_manager_->OnHintsComponentAvailable(info);
     RunUntilIdle();
@@ -475,14 +494,15 @@ class HintsManagerTest : public ProtoDatabaseProviderTestBase {
     base::RunLoop().RunUntilIdle();
   }
 
+ protected:
+  std::unique_ptr<HintsManager> hints_manager_;
+
  private:
   void WriteConfigToFile(const proto::Configuration& config,
                          const base::FilePath& filePath) {
     std::string serialized_config;
     ASSERT_TRUE(config.SerializeToString(&serialized_config));
-    ASSERT_EQ(static_cast<int32_t>(serialized_config.size()),
-              base::WriteFile(filePath, serialized_config.data(),
-                              serialized_config.size()));
+    ASSERT_TRUE(base::WriteFile(filePath, serialized_config));
   }
 
   base::test::TaskEnvironment task_environment_{
@@ -490,7 +510,6 @@ class HintsManagerTest : public ProtoDatabaseProviderTestBase {
   base::test::ScopedFeatureList scoped_feature_list_;
   std::unique_ptr<OptimizationGuideStore> hint_store_;
   std::unique_ptr<FakeTabUrlProvider> tab_url_provider_;
-  std::unique_ptr<HintsManager> hints_manager_;
   std::unique_ptr<sync_preferences::TestingPrefServiceSyncable> pref_service_;
   scoped_refptr<network::SharedURLLoaderFactory> url_loader_factory_;
   network::TestURLLoaderFactory test_url_loader_factory_;
@@ -1077,8 +1096,7 @@ TEST_F(HintsManagerTest, CanApplyOptimizationUrlWithNoHost) {
                                             /*optimization_metadata=*/nullptr);
 
   // Make sure decisions are logged correctly.
-  EXPECT_EQ(OptimizationTypeDecision::kNoHintAvailable,
-            optimization_type_decision);
+  EXPECT_EQ(OptimizationTypeDecision::kInvalidURL, optimization_type_decision);
 }
 
 TEST_F(HintsManagerTest, CanApplyOptimizationHasFilterForTypeButNotLoadedYet) {
@@ -1252,76 +1270,6 @@ TEST_F(HintsManagerTest, CanApplyOptimizationHasPageHintButNoMatchingOptType) {
 }
 
 TEST_F(HintsManagerTest,
-       CanApplyOptimizationAndPopulatesPerformanceHintsMetadata) {
-  hints_manager()->RegisterOptimizationTypes({proto::PERFORMANCE_HINTS});
-  proto::Configuration config;
-  proto::Hint* hint = config.add_hints();
-  hint->set_key("somedomain.org");
-  hint->set_key_representation(proto::HOST);
-  hint->set_version("someversion");
-  proto::PageHint* page_hint = hint->add_page_hints();
-  page_hint->set_page_pattern("/news/");
-  proto::Optimization* opt = page_hint->add_allowlisted_optimizations();
-  opt->set_optimization_type(proto::PERFORMANCE_HINTS);
-  proto::PerformanceHint* performance_hint =
-      opt->mutable_performance_hints_metadata()->add_performance_hints();
-  performance_hint->set_wildcard_pattern("somedomain.org");
-  performance_hint->set_performance_class(proto::PERFORMANCE_SLOW);
-
-  ProcessHints(config, "1.0.0.0");
-
-  base::RunLoop run_loop;
-  auto navigation_data =
-      CreateTestNavigationData(url_with_hints(), {proto::PERFORMANCE_HINTS});
-  CallOnNavigationStartOrRedirect(navigation_data.get(),
-                                  run_loop.QuitClosure());
-  run_loop.Run();
-
-  OptimizationMetadata optimization_metadata;
-  OptimizationTypeDecision optimization_type_decision =
-      hints_manager()->CanApplyOptimization(navigation_data->navigation_url(),
-                                            proto::PERFORMANCE_HINTS,
-                                            &optimization_metadata);
-  // Make sure performance hints metadata is populated.
-  EXPECT_TRUE(optimization_metadata.performance_hints_metadata().has_value());
-  EXPECT_EQ(OptimizationTypeDecision::kAllowedByHint,
-            optimization_type_decision);
-}
-
-TEST_F(HintsManagerTest, CanApplyOptimizationAndPopulatesPublicImageMetadata) {
-  hints_manager()->RegisterOptimizationTypes({proto::COMPRESS_PUBLIC_IMAGES});
-  proto::Configuration config;
-  proto::Hint* hint = config.add_hints();
-  hint->set_key("somedomain.org");
-  hint->set_key_representation(proto::HOST);
-  hint->set_version("someversion");
-  proto::PageHint* page_hint = hint->add_page_hints();
-  page_hint->set_page_pattern("/news/");
-  proto::Optimization* opt = page_hint->add_allowlisted_optimizations();
-  opt->set_optimization_type(proto::COMPRESS_PUBLIC_IMAGES);
-  opt->mutable_public_image_metadata()->add_url("someimage");
-
-  ProcessHints(config, "1.0.0.0");
-
-  auto navigation_data = CreateTestNavigationData(
-      url_with_hints(), {proto::COMPRESS_PUBLIC_IMAGES});
-  base::RunLoop run_loop;
-  CallOnNavigationStartOrRedirect(navigation_data.get(),
-                                  run_loop.QuitClosure());
-  run_loop.Run();
-
-  OptimizationMetadata optimization_metadata;
-  OptimizationTypeDecision optimization_type_decision =
-      hints_manager()->CanApplyOptimization(navigation_data->navigation_url(),
-                                            proto::COMPRESS_PUBLIC_IMAGES,
-                                            &optimization_metadata);
-  // Make sure public images metadata is populated.
-  EXPECT_TRUE(optimization_metadata.public_image_metadata().has_value());
-  EXPECT_EQ(OptimizationTypeDecision::kAllowedByHint,
-            optimization_type_decision);
-}
-
-TEST_F(HintsManagerTest,
        CanApplyOptimizationAndPopulatesLoadingPredictorMetadata) {
   hints_manager()->RegisterOptimizationTypes({proto::LOADING_PREDICTOR});
   proto::Configuration config;
@@ -1425,20 +1373,11 @@ TEST_F(HintsManagerTest,
 
   hints_manager()->RegisterOptimizationTypes({proto::NOSCRIPT});
   OptimizationMetadata optimization_metadata;
-
-  proto::PerformanceHintsMetadata hints_metadata;
-  auto* hint = hints_metadata.add_performance_hints();
-  hint->set_wildcard_pattern("test.com");
-  hint->set_performance_class(proto::PERFORMANCE_SLOW);
-  OptimizationMetadata metadata;
-  optimization_metadata.set_performance_hints_metadata(hints_metadata);
-
   OptimizationTypeDecision optimization_type_decision =
       hints_manager()->CanApplyOptimization(navigation_data->navigation_url(),
                                             proto::NOSCRIPT,
                                             &optimization_metadata);
 
-  EXPECT_FALSE(optimization_metadata.performance_hints_metadata().has_value());
   EXPECT_EQ(OptimizationTypeDecision::kNoHintAvailable,
             optimization_type_decision);
 }
@@ -1585,7 +1524,7 @@ TEST_F(HintsManagerTest,
   RunUntilIdle();
 
   histogram_tester.ExpectUniqueSample(
-      "OptimizationGuide.ApplyDecisionAsync.CompressPublicImages",
+      "OptimizationGuide.ApplyDecision.CompressPublicImages",
       OptimizationTypeDecision::kNoHintAvailable, 1);
 }
 
@@ -1614,7 +1553,7 @@ TEST_F(
   RunUntilIdle();
 
   histogram_tester.ExpectUniqueSample(
-      "OptimizationGuide.ApplyDecisionAsync.CompressPublicImages",
+      "OptimizationGuide.ApplyDecision.CompressPublicImages",
       OptimizationTypeDecision::kNotAllowedByHint, 1);
 }
 
@@ -1697,43 +1636,6 @@ TEST_F(HintsManagerTest, RemoveFetchedEntriesByHintKeys_URL) {
   EXPECT_FALSE(hints_manager()->hint_cache()->HasURLKeyedEntryForURL(url));
 }
 
-TEST_F(HintsManagerTest, PurgeFetchedEntries) {
-  int cache_duration_in_secs = 60;
-  GURL url("https://host.com/r/cats");
-
-  std::unique_ptr<proto::GetHintsResponse> get_hints_response =
-      std::make_unique<proto::GetHintsResponse>();
-
-  proto::Hint* hint = get_hints_response->add_hints();
-  hint->set_key(url.spec());
-  hint->set_key_representation(proto::FULL_URL);
-  hint->mutable_max_cache_duration()->set_seconds(cache_duration_in_secs);
-  proto::PageHint* page_hint = hint->add_page_hints();
-  page_hint->add_allowlisted_optimizations()->set_optimization_type(
-      proto::PERFORMANCE_HINTS);
-  page_hint->set_page_pattern("whatever/*");
-
-  hint = get_hints_response->add_hints();
-  hint->set_key_representation(proto::HOST);
-  hint->set_key(url.host());
-  page_hint = hint->add_page_hints();
-  page_hint->set_page_pattern("anything/*");
-
-  std::unique_ptr<base::RunLoop> run_loop = std::make_unique<base::RunLoop>();
-  hints_manager()->hint_cache()->UpdateFetchedHints(
-      std::move(get_hints_response), base::Time().Now(), {url.host()}, {url},
-      run_loop->QuitClosure());
-  EXPECT_TRUE(hints_manager()->hint_cache()->HasHint(url.host()));
-  EXPECT_TRUE(hints_manager()->hint_cache()->HasURLKeyedEntryForURL(url));
-
-  run_loop = std::make_unique<base::RunLoop>();
-  hints_manager()->PurgeFetchedEntries(run_loop->QuitClosure());
-  run_loop->Run();
-
-  EXPECT_FALSE(hints_manager()->hint_cache()->HasHint(url.host()));
-  EXPECT_FALSE(hints_manager()->hint_cache()->HasURLKeyedEntryForURL(url));
-}
-
 TEST_F(HintsManagerTest, HintFetcherPrefUpdated_URL) {
   base::Time expiry = base::Time::Now() + base::Hours(1);
   HintsFetcher::AddFetchedHostForTesting(pref_service(), "host-key.com",
@@ -1793,18 +1695,37 @@ class HintsManagerFetchingTest : public HintsManagerTest {
         {
             {
                 features::kRemoteOptimizationGuideFetching,
-                {{"max_concurrent_page_navigation_fetches", "2"},
-                 {"max_concurrent_batch_update_fetches", "2"}},
+                {{"batch_update_hints_for_top_hosts", "true"},
+                 {"max_concurrent_page_navigation_fetches", "2"},
+                 {"max_concurrent_batch_update_fetches",
+                  base::NumberToString(batch_concurrency_limit_)}},
             },
         },
         {features::kRemoteOptimizationGuideFetchingAnonymousDataConsent});
   }
 
+  size_t batch_concurrency_limit() const { return batch_concurrency_limit_; }
+
  private:
+  size_t batch_concurrency_limit_ = 2;
   variations::ScopedVariationsIdsProvider scoped_variations_ids_provider_{
       variations::VariationsIdsProvider::Mode::kUseSignedInState};
   base::test::ScopedFeatureList scoped_list_;
 };
+
+TEST_F(HintsManagerFetchingTest, BatchUpdateFetcherCleanup) {
+  EXPECT_GT(batch_concurrency_limit(), 1u);
+  for (size_t i = 0; i < batch_concurrency_limit() * 2; ++i) {
+    auto request_id_and_fetcher =
+        hints_manager_->CreateAndTrackBatchUpdateHintsFetcher();
+    // Now run clean up on this id and expect LRU size to be 0.
+    hints_manager_->CleanUpBatchUpdateHintsFetcher(
+        request_id_and_fetcher.first);
+    EXPECT_EQ(0u, hints_manager_->batch_update_hints_fetchers_.size());
+  }
+  EXPECT_EQ(hints_manager()->num_batch_update_hints_fetches_initiated(),
+            int(batch_concurrency_limit() * 2));
+}
 
 TEST_F(HintsManagerFetchingTest,
        HintsFetchNotAllowedIfFeatureIsEnabledButUserNotAllowed) {
@@ -2397,7 +2318,7 @@ TEST_F(HintsManagerFetchingTest,
   // a URL-keyed hint.
   EXPECT_EQ(OptimizationTypeDecision::kAllowedByHint,
             optimization_type_decision);
-  EXPECT_TRUE(optimization_metadata.public_image_metadata().has_value());
+  EXPECT_TRUE(optimization_metadata.any_metadata().has_value());
 }
 
 TEST_F(HintsManagerFetchingTest,
@@ -2661,7 +2582,7 @@ TEST_F(HintsManagerFetchingTest,
 
   // The new API should have called the async API in the background.
   histogram_tester.ExpectUniqueSample(
-      "OptimizationGuide.ApplyDecisionAsync.CompressPublicImages",
+      "OptimizationGuide.ApplyDecision.CompressPublicImages",
       OptimizationTypeDecision::kAllowedByHint, 1);
 }
 
@@ -2745,12 +2666,12 @@ TEST_F(HintsManagerFetchingTest,
       base::BindOnce([](OptimizationGuideDecision decision,
                         const OptimizationMetadata& metadata) {
         EXPECT_EQ(OptimizationGuideDecision::kTrue, decision);
-        EXPECT_TRUE(metadata.public_image_metadata().has_value());
+        EXPECT_TRUE(metadata.any_metadata().has_value());
       }));
   RunUntilIdle();
 
   histogram_tester.ExpectUniqueSample(
-      "OptimizationGuide.ApplyDecisionAsync.CompressPublicImages",
+      "OptimizationGuide.ApplyDecision.CompressPublicImages",
       OptimizationTypeDecision::kAllowedByHint, 1);
 }
 
@@ -2773,20 +2694,20 @@ TEST_F(HintsManagerFetchingTest,
       base::BindOnce([](OptimizationGuideDecision decision,
                         const OptimizationMetadata& metadata) {
         EXPECT_EQ(OptimizationGuideDecision::kTrue, decision);
-        EXPECT_TRUE(metadata.public_image_metadata().has_value());
+        EXPECT_TRUE(metadata.any_metadata().has_value());
       }));
   hints_manager()->CanApplyOptimizationAsync(
       url_with_url_keyed_hint(), proto::COMPRESS_PUBLIC_IMAGES,
       base::BindOnce([](OptimizationGuideDecision decision,
                         const OptimizationMetadata& metadata) {
         EXPECT_EQ(OptimizationGuideDecision::kTrue, decision);
-        EXPECT_TRUE(metadata.public_image_metadata().has_value());
+        EXPECT_TRUE(metadata.any_metadata().has_value());
       }));
   CallOnNavigationStartOrRedirect(navigation_data.get(), base::DoNothing());
   RunUntilIdle();
 
   histogram_tester.ExpectUniqueSample(
-      "OptimizationGuide.ApplyDecisionAsync.CompressPublicImages",
+      "OptimizationGuide.ApplyDecision.CompressPublicImages",
       OptimizationTypeDecision::kAllowedByHint, 2);
 }
 
@@ -2815,7 +2736,7 @@ TEST_F(
   RunUntilIdle();
 
   histogram_tester.ExpectUniqueSample(
-      "OptimizationGuide.ApplyDecisionAsync.ResourceLoading",
+      "OptimizationGuide.ApplyDecision.ResourceLoading",
       OptimizationTypeDecision::kNotAllowedByHint, 1);
 }
 
@@ -2843,7 +2764,7 @@ TEST_F(HintsManagerFetchingTest,
   RunUntilIdle();
 
   histogram_tester.ExpectUniqueSample(
-      "OptimizationGuide.ApplyDecisionAsync.CompressPublicImages",
+      "OptimizationGuide.ApplyDecision.CompressPublicImages",
       OptimizationTypeDecision::kNotAllowedByHint, 1);
 }
 
@@ -2870,12 +2791,12 @@ TEST_F(HintsManagerFetchingTest,
       base::BindOnce([](OptimizationGuideDecision decision,
                         const OptimizationMetadata& metadata) {
         EXPECT_EQ(OptimizationGuideDecision::kTrue, decision);
-        EXPECT_TRUE(metadata.public_image_metadata().has_value());
+        EXPECT_TRUE(metadata.any_metadata().has_value());
       }));
   RunUntilIdle();
 
   histogram_tester.ExpectUniqueSample(
-      "OptimizationGuide.ApplyDecisionAsync.CompressPublicImages",
+      "OptimizationGuide.ApplyDecision.CompressPublicImages",
       OptimizationTypeDecision::kAllowedByHint, 1);
 }
 
@@ -2906,7 +2827,7 @@ TEST_F(HintsManagerFetchingTest,
   RunUntilIdle();
 
   histogram_tester.ExpectUniqueSample(
-      "OptimizationGuide.ApplyDecisionAsync.PerformanceHints",
+      "OptimizationGuide.ApplyDecision.PerformanceHints",
       OptimizationTypeDecision::kNotAllowedByHint, 1);
 }
 
@@ -2935,7 +2856,7 @@ TEST_F(HintsManagerFetchingTest,
   RunUntilIdle();
 
   histogram_tester.ExpectUniqueSample(
-      "OptimizationGuide.ApplyDecisionAsync.PerformanceHints",
+      "OptimizationGuide.ApplyDecision.PerformanceHints",
       OptimizationTypeDecision::kNoHintAvailable, 1);
 }
 
@@ -2963,7 +2884,7 @@ TEST_F(HintsManagerFetchingTest,
   RunUntilIdle();
 
   histogram_tester.ExpectUniqueSample(
-      "OptimizationGuide.ApplyDecisionAsync.CompressPublicImages",
+      "OptimizationGuide.ApplyDecision.CompressPublicImages",
       OptimizationTypeDecision::kNoHintAvailable, 1);
 }
 
@@ -2993,7 +2914,7 @@ TEST_F(HintsManagerFetchingTest,
   RunUntilIdle();
 
   histogram_tester.ExpectUniqueSample(
-      "OptimizationGuide.ApplyDecisionAsync.CompressPublicImages",
+      "OptimizationGuide.ApplyDecision.CompressPublicImages",
       OptimizationTypeDecision::kNotAllowedByHint, 1);
 }
 
@@ -3024,7 +2945,7 @@ TEST_F(HintsManagerFetchingTest,
   RunUntilIdle();
 
   histogram_tester.ExpectUniqueSample(
-      "OptimizationGuide.ApplyDecisionAsync.LitePageRedirect",
+      "OptimizationGuide.ApplyDecision.LitePageRedirect",
       OptimizationTypeDecision::kNotAllowedByOptimizationFilter, 1);
 }
 
@@ -3055,7 +2976,7 @@ TEST_F(HintsManagerFetchingTest,
   RunUntilIdle();
 
   histogram_tester.ExpectUniqueSample(
-      "OptimizationGuide.ApplyDecisionAsync.LitePageRedirect",
+      "OptimizationGuide.ApplyDecision.LitePageRedirect",
       OptimizationTypeDecision::kNotAllowedByOptimizationFilter, 1);
 }
 
@@ -3080,13 +3001,13 @@ TEST_F(HintsManagerFetchingTest,
       base::BindOnce([](OptimizationGuideDecision decision,
                         const OptimizationMetadata& metadata) {
         EXPECT_EQ(OptimizationGuideDecision::kTrue, decision);
-        EXPECT_TRUE(metadata.public_image_metadata().has_value());
+        EXPECT_TRUE(metadata.any_metadata().has_value());
       }));
   hints_manager()->OnNavigationFinish({url_with_url_keyed_hint()});
   RunUntilIdle();
 
   histogram_tester.ExpectUniqueSample(
-      "OptimizationGuide.ApplyDecisionAsync.CompressPublicImages",
+      "OptimizationGuide.ApplyDecision.CompressPublicImages",
       OptimizationTypeDecision::kAllowedByHint, 1);
 }
 
@@ -3182,7 +3103,7 @@ TEST_F(HintsManagerFetchingTest,
             ASSERT_TRUE(it != decisions.end());
             EXPECT_EQ(OptimizationGuideDecision::kTrue, it->second.decision);
             EXPECT_TRUE(
-                it->second.metadata.public_image_metadata().has_value());
+                it->second.metadata.any_metadata().has_value());
 
             run_loop->Quit();
           },
@@ -3235,6 +3156,129 @@ TEST_F(HintsManagerFetchingTest, BatchUpdateCalledMoreThanMaxConcurrent) {
       "OptimizationGuide.HintsManager.ConcurrentBatchUpdateFetches", 2, 2);
 }
 
+TEST_F(HintsManagerFetchingTest,
+       CanApplyOptimizationOnDemandNoRegistrationAlwaysFetches) {
+  base::HistogramTester histogram_tester;
+
+  InitializeWithDefaultConfig("1.0.0.0");
+
+  hints_manager()->SetHintsFetcherFactoryForTesting(
+      BuildTestHintsFetcherFactory(
+          {HintsFetcherEndState::kFetchSuccessWithURLHints}));
+  std::unique_ptr<base::RunLoop> run_loop = std::make_unique<base::RunLoop>();
+  hints_manager()->CanApplyOptimizationOnDemand(
+      {url_with_url_keyed_hint()},
+      {proto::NOSCRIPT, proto::COMPRESS_PUBLIC_IMAGES},
+      proto::RequestContext::CONTEXT_BOOKMARKS,
+      base::BindRepeating(
+          [](base::RunLoop* run_loop, const GURL& url,
+             const base::flat_map<proto::OptimizationType,
+                                  OptimizationGuideDecisionWithMetadata>&
+                 decisions) {
+            ASSERT_EQ(decisions.size(), 2u);
+            auto it = decisions.find(proto::COMPRESS_PUBLIC_IMAGES);
+            ASSERT_TRUE(it != decisions.end());
+            EXPECT_EQ(OptimizationGuideDecision::kTrue, it->second.decision);
+            EXPECT_TRUE(it->second.metadata.any_metadata().has_value());
+
+            it = decisions.find(proto::NOSCRIPT);
+            ASSERT_TRUE(it != decisions.end());
+            EXPECT_EQ(OptimizationGuideDecision::kTrue, it->second.decision);
+
+            run_loop->Quit();
+          },
+          run_loop.get()));
+  run_loop->Run();
+
+  histogram_tester.ExpectTotalCount(
+      "OptimizationGuide.HintsManager.ConcurrentBatchUpdateFetches", 1);
+}
+
+TEST_F(HintsManagerFetchingTest,
+       CanApplyOptimizationOnDemandNoRegistrationFetchFailure) {
+  base::HistogramTester histogram_tester;
+
+  InitializeWithDefaultConfig("1.0.0.0");
+
+  hints_manager()->SetHintsFetcherFactoryForTesting(
+      BuildTestHintsFetcherFactory({HintsFetcherEndState::kFetchFailed}));
+  std::unique_ptr<base::RunLoop> run_loop = std::make_unique<base::RunLoop>();
+  hints_manager()->CanApplyOptimizationOnDemand(
+      {url_with_url_keyed_hint()}, {proto::COMPRESS_PUBLIC_IMAGES},
+      proto::RequestContext::CONTEXT_BOOKMARKS,
+      base::BindRepeating(
+          [](base::RunLoop* run_loop, const GURL& url,
+             const base::flat_map<proto::OptimizationType,
+                                  OptimizationGuideDecisionWithMetadata>&
+                 decisions) {
+            ASSERT_EQ(decisions.size(), 1u);
+            auto it = decisions.find(proto::COMPRESS_PUBLIC_IMAGES);
+            ASSERT_TRUE(it != decisions.end());
+            EXPECT_EQ(OptimizationGuideDecision::kFalse, it->second.decision);
+
+            run_loop->Quit();
+          },
+          run_loop.get()));
+  run_loop->Run();
+
+  histogram_tester.ExpectTotalCount(
+      "OptimizationGuide.HintsManager.ConcurrentBatchUpdateFetches", 1);
+  histogram_tester.ExpectUniqueSample(
+      "OptimizationGuide.ApplyDecision.CompressPublicImages",
+      OptimizationTypeDecision::kNoHintAvailable, 1);
+}
+
+TEST_F(HintsManagerFetchingTest,
+       CanApplyOptimizationOnDemandMixedRegistrations) {
+  base::HistogramTester histogram_tester;
+
+  InitializeWithDefaultConfig("1.0.0.0");
+
+  hints_manager()->RegisterOptimizationTypes({proto::NOSCRIPT});
+  hints_manager()->SetHintsFetcherFactoryForTesting(
+      BuildTestHintsFetcherFactory(
+          {HintsFetcherEndState::kFetchSuccessWithURLHints}));
+  // Make sure NOSCRIPT is cached and loaded.
+  auto navigation_data =
+      CreateTestNavigationData(url_with_url_keyed_hint(), {proto::NOSCRIPT});
+  CallOnNavigationStartOrRedirect(navigation_data.get(), base::DoNothing());
+  RunUntilIdle();
+
+  std::unique_ptr<base::RunLoop> run_loop = std::make_unique<base::RunLoop>();
+  hints_manager()->CanApplyOptimizationOnDemand(
+      {url_with_hints()}, {proto::NOSCRIPT, proto::COMPRESS_PUBLIC_IMAGES},
+      proto::RequestContext::CONTEXT_BOOKMARKS,
+      base::BindRepeating(
+          [](base::RunLoop* run_loop, const GURL& url,
+             const base::flat_map<proto::OptimizationType,
+                                  OptimizationGuideDecisionWithMetadata>&
+                 decisions) {
+            ASSERT_EQ(decisions.size(), 2u);
+            auto it = decisions.find(proto::NOSCRIPT);
+            ASSERT_TRUE(it != decisions.end());
+            // The server has a response for this.
+            EXPECT_EQ(OptimizationGuideDecision::kTrue, it->second.decision);
+
+            it = decisions.find(proto::COMPRESS_PUBLIC_IMAGES);
+            ASSERT_TRUE(it != decisions.end());
+            EXPECT_EQ(OptimizationGuideDecision::kTrue, it->second.decision);
+            EXPECT_TRUE(it->second.metadata.any_metadata().has_value());
+
+            run_loop->Quit();
+          },
+          run_loop.get()));
+  run_loop->Run();
+
+  histogram_tester.ExpectTotalCount(
+      "OptimizationGuide.HintsManager.ConcurrentBatchUpdateFetches", 1);
+  histogram_tester.ExpectUniqueSample(
+      "OptimizationGuide.ApplyDecision.NoScript",
+      OptimizationTypeDecision::kAllowedByHint, 1);
+  histogram_tester.ExpectUniqueSample(
+      "OptimizationGuide.ApplyDecision.CompressPublicImages",
+      OptimizationTypeDecision::kAllowedByHint, 1);
+}
+
 TEST_F(
     HintsManagerFetchingTest,
     CanApplyOptimizationOnDemandDecisionMultipleTypesBothHostAndURLKeyedMixedFetch) {
@@ -3262,7 +3306,7 @@ TEST_F(
             ASSERT_TRUE(it != decisions.end());
             EXPECT_EQ(OptimizationGuideDecision::kTrue, it->second.decision);
             EXPECT_TRUE(
-                it->second.metadata.public_image_metadata().has_value());
+                it->second.metadata.any_metadata().has_value());
 
             it = decisions.find(proto::NOSCRIPT);
             ASSERT_TRUE(it != decisions.end());
@@ -3299,15 +3343,21 @@ TEST_F(HintsManagerFetchingTest,
             ASSERT_TRUE(it != decisions.end());
             EXPECT_EQ(OptimizationGuideDecision::kFalse, it->second.decision);
 
-            // Should still populate with what's on device.
             it = decisions.find(proto::NOSCRIPT);
             ASSERT_TRUE(it != decisions.end());
-            EXPECT_EQ(OptimizationGuideDecision::kTrue, it->second.decision);
+            EXPECT_EQ(OptimizationGuideDecision::kFalse, it->second.decision);
 
             run_loop->Quit();
           },
           run_loop.get()));
   run_loop->Run();
+
+  histogram_tester.ExpectUniqueSample(
+      "OptimizationGuide.ApplyDecision.NoScript",
+      OptimizationTypeDecision::kNoHintAvailable, 1);
+  histogram_tester.ExpectUniqueSample(
+      "OptimizationGuide.ApplyDecision.CompressPublicImages",
+      OptimizationTypeDecision::kNoHintAvailable, 1);
 }
 
 class HintsManagerFetchingNoBatchUpdateTest : public HintsManagerTest {
@@ -3385,6 +3435,154 @@ TEST_F(HintsManagerComponentSkipProcessingTest, ProcessHintsWithExistingPref) {
                                         ProcessHintsComponentResult::kSuccess,
                                         1);
   }
+}
+
+class HintsManagerPersonalizedFetchingTest : public HintsManagerFetchingTest {
+ public:
+  HintsManagerPersonalizedFetchingTest() {
+    scoped_feature_list_.InitAndEnableFeatureWithParameters(
+        features::kOptimizationGuidePersonalizedFetching,
+        {{"allowed_contexts", "CONTEXT_BOOKMARKS"}});
+  }
+
+  HintsManagerPersonalizedFetchingTest(
+      const HintsManagerPersonalizedFetchingTest&) = delete;
+  HintsManagerPersonalizedFetchingTest& operator=(
+      const HintsManagerPersonalizedFetchingTest&) = delete;
+
+  void SetUp() override {
+    HintsManagerFetchingTest::SetUp();
+    CreateHintsManager(/*top_host_provider=*/nullptr,
+                       identity_test_env()->identity_manager());
+  }
+
+  signin::IdentityTestEnvironment* identity_test_env() {
+    return &identity_test_env_;
+  }
+
+ protected:
+  signin::IdentityTestEnvironment identity_test_env_;
+  base::test::ScopedFeatureList scoped_feature_list_;
+};
+
+TEST_F(HintsManagerPersonalizedFetchingTest,
+       SuccessfulPersonalizedHintsFetching) {
+  ASSERT_TRUE(identity_test_env()->identity_manager());
+  AccountInfo account_info = identity_test_env()->MakePrimaryAccountAvailable(
+      "test_email", signin::ConsentLevel::kSignin);
+
+  base::HistogramTester histogram_tester;
+
+  hints_manager()->RegisterOptimizationTypes({proto::COMPRESS_PUBLIC_IMAGES});
+  InitializeWithDefaultConfig("1.0.0.0");
+
+  hints_manager()->SetHintsFetcherFactoryForTesting(
+      BuildTestHintsFetcherFactory(
+          {HintsFetcherEndState::kFetchSuccessWithURLHints}));
+  std::unique_ptr<base::RunLoop> run_loop = std::make_unique<base::RunLoop>();
+  hints_manager()->CanApplyOptimizationOnDemand(
+      {url_with_url_keyed_hint()}, {proto::COMPRESS_PUBLIC_IMAGES},
+      proto::RequestContext::CONTEXT_BOOKMARKS,
+      base::BindRepeating(
+          [](base::RunLoop* run_loop, const GURL& url,
+             const base::flat_map<proto::OptimizationType,
+                                  OptimizationGuideDecisionWithMetadata>&
+                 decisions) {
+            ASSERT_EQ(decisions.size(), 1u);
+            auto it = decisions.find(proto::COMPRESS_PUBLIC_IMAGES);
+            ASSERT_TRUE(it != decisions.end());
+            EXPECT_EQ(OptimizationGuideDecision::kTrue, it->second.decision);
+            EXPECT_TRUE(it->second.metadata.any_metadata().has_value());
+
+            run_loop->Quit();
+          },
+          run_loop.get()));
+  identity_test_env()->WaitForAccessTokenRequestIfNecessaryAndRespondWithToken(
+      "access_token", base::Time::Max());
+  run_loop->Run();
+
+  histogram_tester.ExpectUniqueSample(
+      "OptimizationGuide.HintsManager.ConcurrentBatchUpdateFetches", 1, 1);
+  histogram_tester.ExpectUniqueSample(
+      "OptimizationGuide.AccessTokenHelper.Result",
+      OptimizationGuideAccessTokenResult::kSuccess, 1);
+}
+
+TEST_F(HintsManagerPersonalizedFetchingTest, TokenFailure) {
+  AccountInfo account_info = identity_test_env()->MakePrimaryAccountAvailable(
+      "test_email", signin::ConsentLevel::kSignin);
+  base::HistogramTester histogram_tester;
+
+  hints_manager()->RegisterOptimizationTypes({proto::COMPRESS_PUBLIC_IMAGES});
+  InitializeWithDefaultConfig("1.0.0.0");
+
+  hints_manager()->SetHintsFetcherFactoryForTesting(
+      BuildTestHintsFetcherFactory(
+          {HintsFetcherEndState::kFetchSuccessWithURLHints}));
+  std::unique_ptr<base::RunLoop> run_loop = std::make_unique<base::RunLoop>();
+  hints_manager()->CanApplyOptimizationOnDemand(
+      {url_with_url_keyed_hint()}, {proto::COMPRESS_PUBLIC_IMAGES},
+      proto::RequestContext::CONTEXT_BOOKMARKS,
+      base::BindRepeating(
+          [](base::RunLoop* run_loop, const GURL& url,
+             const base::flat_map<proto::OptimizationType,
+                                  OptimizationGuideDecisionWithMetadata>&
+                 decisions) {
+            ASSERT_EQ(decisions.size(), 1u);
+            auto it = decisions.find(proto::COMPRESS_PUBLIC_IMAGES);
+            ASSERT_TRUE(it != decisions.end());
+            // Should still request metadata, just without triggering access
+            // token requests.
+            EXPECT_EQ(OptimizationGuideDecision::kTrue, it->second.decision);
+
+            run_loop->Quit();
+          },
+          run_loop.get()));
+  identity_test_env()->WaitForAccessTokenRequestIfNecessaryAndRespondWithError(
+      GoogleServiceAuthError(GoogleServiceAuthError::CONNECTION_FAILED));
+  run_loop->Run();
+
+  histogram_tester.ExpectUniqueSample(
+      "OptimizationGuide.HintsManager.ConcurrentBatchUpdateFetches", 1, 1);
+  histogram_tester.ExpectUniqueSample(
+      "OptimizationGuide.AccessTokenHelper.Result",
+      OptimizationGuideAccessTokenResult::kTransientError, 1);
+}
+
+TEST_F(HintsManagerPersonalizedFetchingTest, NoUserSignIn) {
+  base::HistogramTester histogram_tester;
+
+  hints_manager()->RegisterOptimizationTypes({proto::COMPRESS_PUBLIC_IMAGES});
+  InitializeWithDefaultConfig("1.0.0.0");
+
+  hints_manager()->SetHintsFetcherFactoryForTesting(
+      BuildTestHintsFetcherFactory(
+          {HintsFetcherEndState::kFetchSuccessWithURLHints}));
+  std::unique_ptr<base::RunLoop> run_loop = std::make_unique<base::RunLoop>();
+  hints_manager()->CanApplyOptimizationOnDemand(
+      {url_with_url_keyed_hint()}, {proto::COMPRESS_PUBLIC_IMAGES},
+      proto::RequestContext::CONTEXT_BOOKMARKS,
+      base::BindRepeating(
+          [](base::RunLoop* run_loop, const GURL& url,
+             const base::flat_map<proto::OptimizationType,
+                                  OptimizationGuideDecisionWithMetadata>&
+                 decisions) {
+            ASSERT_EQ(decisions.size(), 1u);
+            auto it = decisions.find(proto::COMPRESS_PUBLIC_IMAGES);
+            ASSERT_TRUE(it != decisions.end());
+            // Should still request metadata, just without triggering access
+            // token requests.
+            EXPECT_EQ(OptimizationGuideDecision::kTrue, it->second.decision);
+
+            run_loop->Quit();
+          },
+          run_loop.get()));
+  run_loop->Run();
+  histogram_tester.ExpectUniqueSample(
+      "OptimizationGuide.HintsManager.ConcurrentBatchUpdateFetches", 1, 1);
+  histogram_tester.ExpectUniqueSample(
+      "OptimizationGuide.AccessTokenHelper.Result",
+      OptimizationGuideAccessTokenResult::kUserNotSignedIn, 1);
 }
 
 }  // namespace optimization_guide

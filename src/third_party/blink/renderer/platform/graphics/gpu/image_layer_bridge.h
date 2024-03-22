@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,7 @@
 
 #include "cc/layers/texture_layer_client.h"
 #include "cc/resources/shared_bitmap_id_registrar.h"
-#include "components/viz/common/resources/resource_format.h"
+#include "components/viz/common/resources/shared_image_format.h"
 #include "third_party/blink/renderer/platform/graphics/graphics_types.h"
 #include "third_party/blink/renderer/platform/graphics/static_bitmap_image.h"
 #include "third_party/blink/renderer/platform/heap/garbage_collected.h"
@@ -74,7 +74,7 @@ class PLATFORM_EXPORT ImageLayerBridge
   // recycled bitmaps that are the wrong size.
   RegisteredBitmap CreateOrRecycleBitmap(
       const gfx::Size& size,
-      viz::ResourceFormat format,
+      viz::SharedImageFormat format,
       cc::SharedBitmapIdRegistrar* bitmap_registrar);
 
   void ResourceReleasedGpu(scoped_refptr<StaticBitmapImage>,

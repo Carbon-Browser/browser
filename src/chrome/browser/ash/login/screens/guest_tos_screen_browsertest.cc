@@ -1,8 +1,7 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include "ash/constants/ash_features.h"
 #include "ash/constants/ash_switches.h"
 #include "base/containers/contains.h"
 #include "chrome/browser/ash/login/oobe_screen.h"
@@ -17,7 +16,7 @@
 #include "chrome/browser/ash/login/wizard_controller.h"
 #include "chrome/browser/browser_process.h"
 #include "chrome/browser/ui/browser.h"
-#include "chrome/browser/ui/webui/chromeos/login/guest_tos_screen_handler.h"
+#include "chrome/browser/ui/webui/ash/login/guest_tos_screen_handler.h"
 #include "content/public/test/browser_test.h"
 #include "testing/gmock/include/gmock/gmock.h"
 
@@ -52,10 +51,6 @@ const test::UIPath kCrosEulaOkButton = {kGuestTostId, "crosEulaOkButton"};
 
 class GuestTosScreenTest : public OobeBaseTest {
  public:
-  GuestTosScreenTest() {
-    feature_list_.InitAndEnableFeature(features::kOobeConsolidatedConsent);
-  }
-
   void SetUpOnMainThread() override {
     LoginDisplayHost::default_host()->GetWizardContext()->is_branded_build =
         true;

@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -51,7 +51,7 @@ class BubbleSyncPromoView : public views::View {
   void EnableSync();
 
   // Delegate, to handle clicks on the sign-in buttons.
-  raw_ptr<BubbleSyncPromoDelegate> delegate_;
+  raw_ptr<BubbleSyncPromoDelegate, DanglingUntriaged> delegate_;
   raw_ptr<BubbleSyncPromoSigninButtonView> signin_button_view_ = nullptr;
 };
 #endif  // CHROME_BROWSER_UI_VIEWS_SYNC_BUBBLE_SYNC_PROMO_VIEW_H_

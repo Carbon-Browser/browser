@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,7 +12,7 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/string_util.h"
 #include "chrome/browser/gcm/gcm_profile_service_factory.h"
@@ -109,9 +109,9 @@ GcmRegisterFunction::GcmRegisterFunction() {}
 GcmRegisterFunction::~GcmRegisterFunction() {}
 
 ExtensionFunction::ResponseAction GcmRegisterFunction::Run() {
-  std::unique_ptr<api::gcm::Register::Params> params(
-      api::gcm::Register::Params::Create(args()));
-  EXTENSION_FUNCTION_VALIDATE(params.get());
+  absl::optional<api::gcm::Register::Params> params =
+      api::gcm::Register::Params::Create(args());
+  EXTENSION_FUNCTION_VALIDATE(params);
 
   GetGCMDriver()->Register(
       extension()->id(), params->sender_ids,
@@ -159,16 +159,16 @@ GcmSendFunction::GcmSendFunction() {}
 GcmSendFunction::~GcmSendFunction() {}
 
 ExtensionFunction::ResponseAction GcmSendFunction::Run() {
-  std::unique_ptr<api::gcm::Send::Params> params(
-      api::gcm::Send::Params::Create(args()));
-  EXTENSION_FUNCTION_VALIDATE(params.get());
+  absl::optional<api::gcm::Send::Params> params =
+      api::gcm::Send::Params::Create(args());
+  EXTENSION_FUNCTION_VALIDATE(params);
   EXTENSION_FUNCTION_VALIDATE(
       ValidateMessageData(params->message.data.additional_properties));
 
   gcm::OutgoingMessage outgoing_message;
   outgoing_message.id = params->message.message_id;
   outgoing_message.data = params->message.data.additional_properties;
-  if (params->message.time_to_live.get())
+  if (params->message.time_to_live)
     outgoing_message.time_to_live = *params->message.time_to_live;
 
   GetGCMDriver()->Send(
@@ -195,12 +195,11 @@ void GcmSendFunction::CompleteFunctionWithResult(
 
 bool GcmSendFunction::ValidateMessageData(const gcm::MessageData& data) const {
   size_t total_size = 0u;
-  for (auto iter = data.cbegin(); iter != data.cend(); ++iter) {
-    total_size += iter->first.size() + iter->second.size();
+  for (const auto& [key, value] : data) {
+    total_size += key.size() + value.size();
 
-    if (!IsMessageKeyValid(iter->first) ||
-        kMaximumGcmMessageSize < iter->first.size() ||
-        kMaximumGcmMessageSize < iter->second.size() ||
+    if (!IsMessageKeyValid(key) || kMaximumGcmMessageSize < key.size() ||
+        kMaximumGcmMessageSize < value.size() ||
         kMaximumGcmMessageSize < total_size)
       return false;
   }
@@ -219,10 +218,9 @@ void GcmJsEventRouter::OnMessage(const std::string& app_id,
   api::gcm::OnMessage::Message message_arg;
   message_arg.data.additional_properties = message.data;
   if (!message.sender_id.empty())
-    message_arg.from = std::make_unique<std::string>(message.sender_id);
+    message_arg.from = message.sender_id;
   if (!message.collapse_key.empty()) {
-    message_arg.collapse_key =
-        std::make_unique<std::string>(message.collapse_key);
+    message_arg.collapse_key = message.collapse_key;
   }
 
   std::unique_ptr<Event> event(
@@ -244,8 +242,7 @@ void GcmJsEventRouter::OnSendError(
     const std::string& app_id,
     const gcm::GCMClient::SendErrorDetails& send_error_details) {
   api::gcm::OnSendError::Error error;
-  error.message_id =
-      std::make_unique<std::string>(send_error_details.message_id);
+  error.message_id = send_error_details.message_id;
   error.error_message = GcmResultToError(send_error_details.result);
   error.details.additional_properties = send_error_details.additional_data;
 

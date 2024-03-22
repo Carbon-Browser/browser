@@ -99,6 +99,12 @@ inline bool IsHTMLSpace(CharType character) {
 }
 
 template <typename CharType>
+ALWAYS_INLINE bool IsHTMLSpecialWhitespace(CharType character) {
+  return character <= '\r' && (character == '\r' || character == '\n' ||
+                               character == '\t' || character == '\f');
+}
+
+template <typename CharType>
 inline bool IsComma(CharType character) {
   return character == ',';
 }
@@ -122,6 +128,11 @@ inline bool IsNotHTMLSpace(CharType character) {
   return !IsHTMLSpace<CharType>(character);
 }
 
+template <typename CharType>
+inline bool IsHTMLSpaceNotLineBreak(CharType character) {
+  return IsHTMLSpace<CharType>(character) && !IsHTMLLineBreak(character);
+}
+
 bool ThreadSafeMatch(const QualifiedName&, const QualifiedName&);
 bool ThreadSafeMatch(const String&, const QualifiedName&);
 
@@ -133,15 +144,9 @@ String AttemptStaticStringCreation(const UChar*, wtf_size_t, CharacterWidth);
 
 template <wtf_size_t inlineCapacity>
 inline static String AttemptStaticStringCreation(
-    const UCharLiteralBuffer<inlineCapacity>& vector,
-    CharacterWidth width) {
-  if (g_literal_buffer_create_string_with_encoding) {
-    // TODO(sky): once this is made the default, remove `width` parameter.
-    return AttemptStaticStringCreation(
-        vector.data(), vector.size(),
-        vector.Is8Bit() ? kForce8Bit : kForce16Bit);
-  }
-  return AttemptStaticStringCreation(vector.data(), vector.size(), width);
+    const UCharLiteralBuffer<inlineCapacity>& vector) {
+  return AttemptStaticStringCreation(
+      vector.data(), vector.size(), vector.Is8Bit() ? kForce8Bit : kForce16Bit);
 }
 
 template <wtf_size_t inlineCapacity>
@@ -151,7 +156,7 @@ inline static String AttemptStaticStringCreation(
   return AttemptStaticStringCreation(vector.data(), vector.size(), width);
 }
 
-inline static String AttemptStaticStringCreation(const String str) {
+inline static String AttemptStaticStringCreation(const String& str) {
   if (!str.Is8Bit())
     return AttemptStaticStringCreation(str.Characters16(), str.length(),
                                        kForce16Bit);

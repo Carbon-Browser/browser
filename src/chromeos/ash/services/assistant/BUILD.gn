@@ -1,4 +1,4 @@
-# Copyright 2018 The Chromium Authors. All rights reserved.
+# Copyright 2018 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -55,19 +55,18 @@ component("lib") {
   ]
 
   deps = [
-    "//ash/components/audio",
     "//ash/constants",
     "//base",
     "//chromeos/ash/components/assistant:buildflags",
+    "//chromeos/ash/components/audio",
+    "//chromeos/ash/components/dbus",
     "//chromeos/ash/services/assistant/public/proto",
-    "//chromeos/dbus",
-    "//chromeos/dbus/dlcservice:dlcservice",
-    "//chromeos/dbus/dlcservice:dlcservice_proto",
+    "//chromeos/ash/services/libassistant/public/cpp:loader",
+    "//chromeos/ash/services/libassistant/public/mojom",
     "//chromeos/dbus/power",
     "//chromeos/dbus/power:power_manager_proto",
-    "//chromeos/dbus/util",
-    "//chromeos/services/libassistant/public/mojom",
     "//chromeos/strings",
+    "//chromeos/version",
     "//components/account_id",
     "//components/prefs",
     "//components/signin/public/identity_manager",
@@ -80,8 +79,13 @@ component("lib") {
   if (enable_cros_libassistant) {
     deps += [
       "//chromeos/ash/services/assistant/public/cpp",
-      "//chromeos/services/libassistant",
+      "//chromeos/ash/services/libassistant",
+      "//chromeos/ash/services/libassistant:constants",
+      "//chromeos/ash/services/libassistant:loader",
     ]
+  } else {
+    sources +=
+        [ "//chromeos/ash/services/assistant/libassistant_loader_stub.cc" ]
   }
 
   public_deps = [
@@ -99,19 +103,19 @@ source_set("tests") {
   deps = [
     ":lib",
     ":test_support",
-    "//ash/components/audio",
     "//ash/constants",
     "//ash/public/cpp/assistant/test_support",
     "//base",
     "//base/test:test_support",
     "//chromeos/ash/components/assistant:buildflags",
     "//chromeos/ash/components/assistant/test_support",
+    "//chromeos/ash/components/audio",
+    "//chromeos/ash/components/dbus:test_support",
     "//chromeos/ash/components/dbus/audio",
     "//chromeos/ash/services/assistant/public/cpp",
     "//chromeos/ash/services/assistant/public/mojom",
-    "//chromeos/dbus:test_support",
+    "//chromeos/ash/services/libassistant/public/mojom",
     "//chromeos/dbus/power",
-    "//chromeos/services/libassistant/public/mojom",
     "//components/prefs:test_support",
     "//components/signin/public/identity_manager",
     "//components/signin/public/identity_manager:test_support",
@@ -170,8 +174,8 @@ static_library("test_support") {
     "//chromeos/ash/services/assistant/public/cpp",
     "//chromeos/ash/services/assistant/public/mojom",
     "//chromeos/ash/services/assistant/public/proto",
+    "//chromeos/ash/services/libassistant/public/mojom",
     "//chromeos/services/assistant/public/shared",
-    "//chromeos/services/libassistant/public/mojom",
     "//mojo/public/cpp/bindings",
     "//testing/gmock",
     "//testing/gtest",

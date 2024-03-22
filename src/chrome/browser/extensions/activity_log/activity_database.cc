@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,8 +6,8 @@
 
 #include <string>
 
-#include "base/bind.h"
 #include "base/command_line.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
 #include "base/strings/string_util.h"
 #include "base/strings/stringprintf.h"
@@ -23,7 +23,7 @@
 #include "third_party/sqlite/sqlite3.h"
 
 #if BUILDFLAG(IS_MAC)
-#include "base/mac/backup_util.h"
+#include "base/apple/backup_util.h"
 #endif
 
 namespace extensions {
@@ -87,7 +87,7 @@ void ActivityDatabase::Init(const base::FilePath& db_name) {
 
 #if BUILDFLAG(IS_MAC)
   // Exclude the database from backups.
-  base::mac::SetBackupExclusion(db_name);
+  base::apple::SetBackupExclusion(db_name);
 #endif
 
   if (!delegate_->InitDatabase(&db_))
@@ -151,9 +151,8 @@ sql::Database* ActivityDatabase::GetSqlConnection() {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   if (valid_db_) {
     return &db_;
-  } else {
-    return NULL;
   }
+  return nullptr;
 }
 
 void ActivityDatabase::Close() {
@@ -177,7 +176,7 @@ void ActivityDatabase::HardFailureClose() {
   valid_db_ = false;
   timer_.Stop();
   db_.reset_error_callback();
-  db_.RazeAndClose();
+  db_.RazeAndPoison();
   delegate_->OnDatabaseFailure();
   already_closed_ = true;
 }

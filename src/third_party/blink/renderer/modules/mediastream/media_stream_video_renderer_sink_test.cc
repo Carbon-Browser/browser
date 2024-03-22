@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,8 +6,9 @@
 
 #include <memory>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/memory/ptr_util.h"
+#include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
 #include "base/strings/utf_string_conversions.h"
 #include "media/base/video_frame.h"
@@ -109,8 +110,8 @@ class MediaStreamVideoRendererSinkTest : public testing::Test {
 
  private:
   void RunIOUntilIdle() const {
-    // |media_stream_component_| uses IO thread to send frames to sinks. Make
-    // sure that tasks on IO thread are completed before moving on.
+    // |media_stream_component_| uses video task runner to send frames to sinks.
+    // Make sure that tasks on video task runner are completed before moving on.
     base::RunLoop run_loop;
     Platform::Current()->GetIOTaskRunner()->PostTaskAndReply(
         FROM_HERE, base::BindOnce([] {}), run_loop.QuitClosure());
@@ -119,7 +120,7 @@ class MediaStreamVideoRendererSinkTest : public testing::Test {
   }
 
   Persistent<MediaStreamSource> media_stream_source_;
-  MockMediaStreamVideoSource* mock_source_;
+  raw_ptr<MockMediaStreamVideoSource, DanglingUntriaged> mock_source_;
 };
 
 // Checks that the initialization-destruction sequence works fine.

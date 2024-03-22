@@ -44,7 +44,6 @@
 #include "third_party/blink/renderer/modules/indexeddb/indexed_db.h"
 #include "third_party/blink/renderer/modules/indexeddb/web_idb_database.h"
 #include "third_party/blink/renderer/modules/modules_export.h"
-#include "third_party/blink/renderer/platform/bindings/script_state.h"
 #include "third_party/blink/renderer/platform/heap/collection_support/heap_hash_map.h"
 #include "third_party/blink/renderer/platform/heap/garbage_collected.h"
 #include "third_party/blink/renderer/platform/mojo/heap_mojo_associated_receiver.h"
@@ -54,10 +53,11 @@ namespace blink {
 
 class ExceptionState;
 class ExecutionContext;
+class ScriptState;
 class V8UnionStringOrStringSequence;
 
 class MODULES_EXPORT IDBDatabase final
-    : public EventTargetWithInlineData,
+    : public EventTarget,
       public ActiveScriptWrappable<IDBDatabase>,
       public ExecutionContextLifecycleObserver,
       public mojom::blink::IDBDatabaseCallbacks {
@@ -70,7 +70,6 @@ class MODULES_EXPORT IDBDatabase final
       mojo::PendingAssociatedReceiver<mojom::blink::IDBDatabaseCallbacks>
           callbacks_receiver,
       mojo::PendingRemote<mojom::blink::ObservedFeature> connection_lifetime);
-  ~IDBDatabase() override;
 
   void Trace(Visitor*) const override;
 
@@ -82,8 +81,14 @@ class MODULES_EXPORT IDBDatabase final
   // versionchage transaction is aborted.
   void SetDatabaseMetadata(const IDBDatabaseMetadata&);
   void TransactionCreated(IDBTransaction*);
+
+  // If `transaction` is an upgrade transaction, verifies that it is the same as
+  // `version_change_transaction_` and clears that member. Called in both abort
+  // and commit paths.
+  void TransactionWillFinish(const IDBTransaction* transaction);
+
+  // This will be called after the transaction's final event dispatch.
   void TransactionFinished(const IDBTransaction*);
-  const String& GetObjectStoreName(int64_t object_store_id) const;
 
   // Implement the IDL
   const String& name() const { return metadata_.name; }
@@ -122,6 +127,7 @@ class MODULES_EXPORT IDBDatabase final
 
   // ExecutionContextLifecycleObserver
   void ContextDestroyed() override;
+  void ContextEnteredBackForwardCache() override;
 
   // EventTarget
   const AtomicString& InterfaceName() const override;
@@ -129,7 +135,6 @@ class MODULES_EXPORT IDBDatabase final
 
   bool IsClosePending() const { return close_pending_; }
   const IDBDatabaseMetadata& Metadata() const { return metadata_; }
-  void EnqueueEvent(Event*);
 
   int64_t FindObjectStoreId(const String& name) const;
   bool ContainsObjectStore(const String& name) const {
@@ -184,13 +189,8 @@ class MODULES_EXPORT IDBDatabase final
 
   bool close_pending_ = false;
 
-  Member<EventQueue> event_queue_;
-
   HeapMojoAssociatedReceiver<mojom::blink::IDBDatabaseCallbacks, IDBDatabase>
       callbacks_receiver_;
-
-  FrameOrWorkerScheduler::SchedulingAffectingFeatureHandle
-      feature_handle_for_scheduler_;
 };
 
 }  // namespace blink

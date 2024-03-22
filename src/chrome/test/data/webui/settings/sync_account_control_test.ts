@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,7 +6,7 @@
 import {flush} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 // <if expr="not chromeos_ash">
 import {CrActionMenuElement} from 'chrome://settings/settings.js';
-import {loadTimeData} from 'chrome://resources/js/load_time_data.m.js';
+import {loadTimeData} from 'chrome://resources/js/load_time_data.js';
 // </if>
 
 import {MAX_SIGNIN_PROMO_IMPRESSION, Router, SettingsSyncAccountControlElement, StatusAction, SyncBrowserProxyImpl} from 'chrome://settings/settings.js';
@@ -41,7 +41,7 @@ suite('SyncAccountControl', function() {
     browserProxy = new TestSyncBrowserProxy();
     SyncBrowserProxyImpl.setInstance(browserProxy);
 
-    document.body.innerHTML = '';
+    document.body.innerHTML = window.trustedTypes!.emptyHTML;
     testElement = document.createElement('settings-sync-account-control');
     testElement.syncStatus = {
       signedIn: true,
@@ -241,6 +241,39 @@ suite('SyncAccountControl', function() {
     // Tapping the last menu item will initiate sign-in.
     items[2]!.click();
     await browserProxy.whenCalled('startSignIn');
+  });
+
+  test('managedUser, Sync off, turn sync off disabled', function() {
+    loadTimeData.overrideValues({turnOffSyncAllowedForManagedProfiles: false});
+
+    testElement.syncStatus = {
+      signedIn: false,
+      disabled: false,
+      hasError: false,
+      domain: 'domain',
+      statusAction: StatusAction.NO_ACTION,
+    };
+    flush();
+    assertTrue(isChildVisible(testElement, '#sync-button'));
+    assertTrue(!!testElement.shadowRoot!.querySelector('#menu'));
+    assertTrue(isChildVisible(testElement, '#dropdown-arrow'));
+  });
+
+  test('managedUser, Sync off, turn sync off enabled', function() {
+    loadTimeData.overrideValues({turnOffSyncAllowedForManagedProfiles: true});
+
+    testElement.syncStatus = {
+      signedIn: false,
+      disabled: false,
+      hasError: false,
+      domain: 'domain',
+      statusAction: StatusAction.NO_ACTION,
+    };
+    flush();
+    assertTrue(isChildVisible(testElement, '#sync-button'));
+    // Menu is hidden.
+    assertFalse(!!testElement.shadowRoot!.querySelector('#menu'));
+    assertFalse(isChildVisible(testElement, '#dropdown-arrow'));
   });
   // </if>
 

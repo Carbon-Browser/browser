@@ -1,13 +1,13 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef STORAGE_BROWSER_FILE_SYSTEM_COPY_OR_MOVE_FILE_VALIDATOR_H_
 #define STORAGE_BROWSER_FILE_SYSTEM_COPY_OR_MOVE_FILE_VALIDATOR_H_
 
-#include "base/callback.h"
 #include "base/component_export.h"
 #include "base/files/file.h"
+#include "base/functional/callback.h"
 
 namespace base {
 class FilePath;

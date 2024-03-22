@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,7 +8,7 @@
 #include <list>
 #include <map>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "components/browsing_data/content/indexed_db_helper.h"
 
 namespace blink {
@@ -16,7 +16,7 @@ class StorageKey;
 }
 
 namespace content {
-class BrowserContext;
+class StoragePartition;
 }
 
 namespace browsing_data {
@@ -24,9 +24,9 @@ namespace browsing_data {
 // Mock for IndexedDBHelper.
 // Use AddIndexedDBSamples() or add directly to response_ list, then
 // call Notify().
-class MockIndexedDBHelper : public IndexedDBHelper {
+class MockIndexedDBHelper : public CannedIndexedDBHelper {
  public:
-  explicit MockIndexedDBHelper(content::BrowserContext* browser_context);
+  explicit MockIndexedDBHelper(content::StoragePartition* storage_partition);
 
   MockIndexedDBHelper(const MockIndexedDBHelper&) = delete;
   MockIndexedDBHelper& operator=(const MockIndexedDBHelper&) = delete;

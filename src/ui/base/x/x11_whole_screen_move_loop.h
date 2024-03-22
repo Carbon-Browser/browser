@@ -1,4 +1,4 @@
-// Copyright (c) 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,8 +9,8 @@
 
 #include <memory>
 
-#include "base/callback.h"
 #include "base/component_export.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "ui/base/x/x11_move_loop.h"
@@ -22,7 +22,7 @@
 #include "ui/gfx/x/connection.h"
 
 namespace x11 {
-class XScopedEventSelector;
+class ScopedEventSelector;
 }
 
 namespace ui {
@@ -80,7 +80,7 @@ class COMPONENT_EXPORT(UI_BASE_X) X11WholeScreenMoveLoop
   x11::Window grab_input_window_;
 
   // Events selected on |grab_input_window_|.
-  std::unique_ptr<x11::XScopedEventSelector> grab_input_window_events_;
+  x11::ScopedEventSelector grab_input_window_events_;
 
   // Whether the pointer was grabbed on |grab_input_window_|.
   bool grabbed_pointer_;

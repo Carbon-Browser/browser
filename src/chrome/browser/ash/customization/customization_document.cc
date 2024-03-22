@@ -1,24 +1,25 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/ash/customization/customization_document.h"
 
-#include <algorithm>
 #include <memory>
 #include <utility>
 
 #include "ash/constants/ash_paths.h"
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/i18n/rtl.h"
 #include "base/json/json_reader.h"
 #include "base/logging.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/path_service.h"
+#include "base/ranges/algorithm.h"
 #include "base/strings/pattern.h"
 #include "base/strings/string_split.h"
 #include "base/strings/string_util.h"
@@ -27,20 +28,20 @@
 #include "base/task/thread_pool.h"
 #include "base/threading/scoped_blocking_call.h"
 #include "base/time/time.h"
+#include "chrome/browser/ash/app_list/app_list_syncable_service.h"
+#include "chrome/browser/ash/app_list/app_list_syncable_service_factory.h"
 #include "chrome/browser/ash/customization/customization_wallpaper_downloader.h"
 #include "chrome/browser/ash/customization/customization_wallpaper_util.h"
+#include "chrome/browser/ash/extensions/default_app_order.h"
 #include "chrome/browser/ash/login/wizard_controller.h"
 #include "chrome/browser/ash/net/delay_network_call.h"
 #include "chrome/browser/browser_process.h"
-#include "chrome/browser/chromeos/extensions/default_app_order.h"
 #include "chrome/browser/extensions/external_loader.h"
 #include "chrome/browser/extensions/external_provider_impl.h"
 #include "chrome/browser/profiles/profile.h"
-#include "chrome/browser/ui/app_list/app_list_syncable_service.h"
-#include "chrome/browser/ui/app_list/app_list_syncable_service_factory.h"
 #include "chrome/common/chrome_paths.h"
 #include "chrome/common/pref_names.h"
-#include "chromeos/system/statistics_provider.h"
+#include "chromeos/ash/components/system/statistics_provider.h"
 #include "components/pref_registry/pref_registry_syncable.h"
 #include "components/prefs/pref_registry_simple.h"
 #include "components/prefs/pref_service.h"
@@ -54,6 +55,7 @@
 #include "services/network/public/cpp/shared_url_loader_factory.h"
 #include "services/network/public/cpp/simple_url_loader.h"
 #include "services/network/public/mojom/url_response_head.mojom.h"
+#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace ash {
 namespace {
@@ -125,49 +127,35 @@ constexpr net::NetworkTrafficAnnotationTag kCustomizationDocumentNetworkTag =
         })");
 
 struct CustomizationDocumentTestOverride {
-  ServicesCustomizationDocument* customization_document = nullptr;
+  raw_ptr<ServicesCustomizationDocument, DanglingUntriaged | ExperimentalAsh>
+      customization_document = nullptr;
   scoped_refptr<network::SharedURLLoaderFactory> url_loader_factory;
 };
 
 // Global overrider for ServicesCustomizationDocument for tests.
 CustomizationDocumentTestOverride* g_test_overrides = nullptr;
 
-// Services customization document load results reported via the
-// "ServicesCustomization.LoadResult" histogram.
-// It is append-only enum due to use in a histogram!
-enum HistogramServicesCustomizationLoadResult {
-  HISTOGRAM_LOAD_RESULT_SUCCESS = 0,
-  HISTOGRAM_LOAD_RESULT_FILE_NOT_FOUND = 1,
-  HISTOGRAM_LOAD_RESULT_PARSING_ERROR = 2,
-  HISTOGRAM_LOAD_RESULT_RETRIES_FAIL = 3,
-  HISTOGRAM_LOAD_RESULT_MAX_VALUE = 4
-};
 
-void LogManifestLoadResult(HistogramServicesCustomizationLoadResult result) {
-  UMA_HISTOGRAM_ENUMERATION("ServicesCustomization.LoadResult",
-                            result,
-                            HISTOGRAM_LOAD_RESULT_MAX_VALUE);
-}
-
-std::string GetLocaleSpecificStringImpl(
-    const base::DictionaryValue* root,
-    const std::string& locale,
-    const std::string& dictionary_name,
-    const std::string& entry_name) {
-  const base::DictionaryValue* dictionary_content = NULL;
-  if (!root || !root->GetDictionary(dictionary_name, &dictionary_content))
+std::string GetLocaleSpecificStringImpl(const base::Value::Dict& root,
+                                        const std::string& locale,
+                                        const std::string& dictionary_name,
+                                        const std::string& entry_name) {
+  const base::Value::Dict* dictionary_content = root.FindDict(dictionary_name);
+  if (!dictionary_content)
     return std::string();
 
-  const base::DictionaryValue* locale_dictionary = NULL;
-  if (dictionary_content->GetDictionary(locale, &locale_dictionary)) {
-    const std::string* result = locale_dictionary->FindStringKey(entry_name);
+  const base::Value::Dict* locale_dictionary =
+      dictionary_content->FindDict(locale);
+  if (locale_dictionary) {
+    const std::string* result = locale_dictionary->FindString(entry_name);
     if (result)
       return *result;
   }
 
-  const base::DictionaryValue* default_dictionary = NULL;
-  if (dictionary_content->GetDictionary(kDefaultAttr, &default_dictionary)) {
-    const std::string* result = default_dictionary->FindStringKey(entry_name);
+  const base::Value::Dict* default_dictionary =
+      dictionary_content->FindDict(kDefaultAttr);
+  if (default_dictionary) {
+    const std::string* result = default_dictionary->FindString(entry_name);
     if (result)
       return *result;
   }
@@ -196,18 +184,12 @@ std::string ReadFileInBackground(const base::FilePath& file) {
 
 }  // anonymous namespace
 
-// Template URL where to fetch OEM services customization manifest from.
-const char ServicesCustomizationDocument::kManifestUrl[] =
-    "https://ssl.gstatic.com/chrome/chromeos-customization/%s.json";
-
 // A custom extensions::ExternalLoader that the ServicesCustomizationDocument
 // creates and uses to publish OEM default apps to the extensions system.
-class ServicesCustomizationExternalLoader
-    : public extensions::ExternalLoader,
-      public base::SupportsWeakPtr<ServicesCustomizationExternalLoader> {
+class ServicesCustomizationExternalLoader : public extensions::ExternalLoader {
  public:
   explicit ServicesCustomizationExternalLoader(Profile* profile)
-      : is_apps_set_(false), profile_(profile) {}
+      : profile_(profile) {}
 
   ServicesCustomizationExternalLoader(
       const ServicesCustomizationExternalLoader&) = delete;
@@ -217,8 +199,8 @@ class ServicesCustomizationExternalLoader
   Profile* profile() { return profile_; }
 
   // Used by the ServicesCustomizationDocument to update the current apps.
-  void SetCurrentApps(std::unique_ptr<base::DictionaryValue> prefs) {
-    apps_.Swap(prefs.get());
+  void SetCurrentApps(base::Value::Dict prefs) {
+    apps_ = std::move(prefs);
     is_apps_set_ = true;
     StartLoading();
   }
@@ -238,17 +220,23 @@ class ServicesCustomizationExternalLoader
     }
 
     VLOG(1) << "ServicesCustomization extension loader publishing "
-            << apps_.DictSize() << " apps.";
-    LoadFinished(apps_.CreateDeepCopy());
+            << apps_.size() << " apps.";
+    LoadFinished(apps_.Clone());
+  }
+
+  base::WeakPtr<ServicesCustomizationExternalLoader> AsWeakPtr() {
+    return weak_ptr_factory_.GetWeakPtr();
   }
 
  protected:
   ~ServicesCustomizationExternalLoader() override {}
 
  private:
-  bool is_apps_set_;
-  base::DictionaryValue apps_;
-  Profile* profile_;
+  bool is_apps_set_ = false;
+  base::Value::Dict apps_;
+  raw_ptr<Profile, ExperimentalAsh> profile_;
+  base::WeakPtrFactory<ServicesCustomizationExternalLoader> weak_ptr_factory_{
+      this};
 };
 
 // CustomizationDocument implementation. ---------------------------------------
@@ -277,16 +265,16 @@ bool CustomizationDocument::LoadManifestFromString(
     NOTREACHED();
     return false;
   }
-  std::unique_ptr<base::Value> root =
-      base::Value::ToUniquePtrValue(std::move(*parsed_json));
 
-  root_ = base::DictionaryValue::From(std::move(root));
-  if (!root_) {
+  if (!parsed_json->is_dict()) {
     NOTREACHED();
     return false;
   }
 
-  const std::string* result = root_->FindStringKey(kVersionAttr);
+  root_ =
+      std::make_unique<base::Value::Dict>(std::move(*parsed_json).TakeDict());
+
+  const std::string* result = root_->FindString(kVersionAttr);
   if (!result || *result != accepted_version_) {
     LOG(ERROR) << "Wrong customization manifest version";
     root_.reset();
@@ -300,8 +288,8 @@ std::string CustomizationDocument::GetLocaleSpecificString(
     const std::string& locale,
     const std::string& dictionary_name,
     const std::string& entry_name) const {
-  return GetLocaleSpecificStringImpl(
-      root_.get(), locale, dictionary_name, entry_name);
+  return GetLocaleSpecificStringImpl(*root_, locale, dictionary_name,
+                                     entry_name);
 }
 
 // StartupCustomizationDocument implementation. --------------------------------
@@ -311,17 +299,17 @@ StartupCustomizationDocument::StartupCustomizationDocument()
   {
     // Loading manifest causes us to do blocking IO on UI thread.
     // Temporarily allow it until we fix http://crosbug.com/11103
-    base::ThreadRestrictions::ScopedAllowIO allow_io;
+    base::ScopedAllowBlocking allow_blocking;
     base::FilePath startup_customization_manifest;
     base::PathService::Get(FILE_STARTUP_CUSTOMIZATION_MANIFEST,
                            &startup_customization_manifest);
     LoadManifestFromFile(startup_customization_manifest);
   }
-  Init(chromeos::system::StatisticsProvider::GetInstance());
+  Init(system::StatisticsProvider::GetInstance());
 }
 
 StartupCustomizationDocument::StartupCustomizationDocument(
-    chromeos::system::StatisticsProvider* statistics_provider,
+    system::StatisticsProvider* statistics_provider,
     const std::string& manifest)
     : CustomizationDocument(kAcceptedManifestVersion) {
   LoadManifestFromString(manifest);
@@ -337,52 +325,52 @@ StartupCustomizationDocument* StartupCustomizationDocument::GetInstance() {
 }
 
 void StartupCustomizationDocument::Init(
-    chromeos::system::StatisticsProvider* statistics_provider) {
+    system::StatisticsProvider* statistics_provider) {
   if (IsReady()) {
     const std::string* initial_locale_ptr =
-        root_->FindStringKey(kInitialLocaleAttr);
+        root_->FindString(kInitialLocaleAttr);
     if (initial_locale_ptr)
       initial_locale_ = *initial_locale_ptr;
 
     const std::string* initial_timezone_ptr =
-        root_->FindStringKey(kInitialTimezoneAttr);
+        root_->FindString(kInitialTimezoneAttr);
     if (initial_timezone_ptr)
       initial_timezone_ = *initial_timezone_ptr;
 
     const std::string* keyboard_layout_ptr =
-        root_->FindStringKey(kKeyboardLayoutAttr);
+        root_->FindString(kKeyboardLayoutAttr);
     if (keyboard_layout_ptr)
       keyboard_layout_ = *keyboard_layout_ptr;
 
-    std::string hwid;
-    if (statistics_provider->GetMachineStatistic(
-            chromeos::system::kHardwareClassKey, &hwid)) {
-      base::ListValue* hwid_list = NULL;
-      if (root_->GetList(kHwidMapAttr, &hwid_list)) {
-        for (const base::Value& hwid_value : hwid_list->GetListDeprecated()) {
-          const base::DictionaryValue* hwid_dictionary = nullptr;
+    if (const absl::optional<base::StringPiece> hwid =
+            statistics_provider->GetMachineStatistic(
+                system::kHardwareClassKey)) {
+      base::Value::List* hwid_list = root_->FindList(kHwidMapAttr);
+      if (hwid_list) {
+        for (const base::Value& hwid_value : *hwid_list) {
+          const base::Value::Dict* hwid_dictionary = nullptr;
           if (hwid_value.is_dict())
-            hwid_dictionary = &base::Value::AsDictionaryValue(hwid_value);
+            hwid_dictionary = &hwid_value.GetDict();
 
           const std::string* hwid_mask =
-              hwid_dictionary ? hwid_dictionary->FindStringKey(kHwidMaskAttr)
+              hwid_dictionary ? hwid_dictionary->FindString(kHwidMaskAttr)
                               : nullptr;
           if (hwid_mask) {
-            if (base::MatchPattern(hwid, *hwid_mask)) {
+            if (base::MatchPattern(hwid.value(), *hwid_mask)) {
               // If HWID for this machine matches some mask, use HWID specific
               // settings.
               const std::string* initial_locale =
-                  hwid_dictionary->FindStringKey(kInitialLocaleAttr);
+                  hwid_dictionary->FindString(kInitialLocaleAttr);
               if (initial_locale)
                 initial_locale_ = *initial_locale;
 
               const std::string* initial_timezone =
-                  hwid_dictionary->FindStringKey(kInitialTimezoneAttr);
+                  hwid_dictionary->FindString(kInitialTimezoneAttr);
               if (initial_timezone)
                 initial_timezone_ = *initial_timezone;
 
               const std::string* keyboard_layout =
-                  hwid_dictionary->FindStringKey(kKeyboardLayoutAttr);
+                  hwid_dictionary->FindString(kKeyboardLayoutAttr);
               if (keyboard_layout)
                 keyboard_layout_ = *keyboard_layout;
             }
@@ -398,18 +386,25 @@ void StartupCustomizationDocument::Init(
   }
 
   // If manifest doesn't exist still apply values from VPD.
-  statistics_provider->GetMachineStatistic(chromeos::system::kInitialLocaleKey,
-                                           &initial_locale_);
-  statistics_provider->GetMachineStatistic(
-      chromeos::system::kInitialTimezoneKey, &initial_timezone_);
-  statistics_provider->GetMachineStatistic(chromeos::system::kKeyboardLayoutKey,
-                                           &keyboard_layout_);
+  if (const absl::optional<base::StringPiece> locale_statistic =
+          statistics_provider->GetMachineStatistic(system::kInitialLocaleKey)) {
+    initial_locale_ = std::string(locale_statistic.value());
+  }
+  if (const absl::optional<base::StringPiece> timezone_statistic =
+          statistics_provider->GetMachineStatistic(
+              system::kInitialTimezoneKey)) {
+    initial_timezone_ = std::string(timezone_statistic.value());
+  }
+  if (const absl::optional<base::StringPiece> keyboard_statistic =
+          statistics_provider->GetMachineStatistic(
+              system::kKeyboardLayoutKey)) {
+    keyboard_layout_ = std::string(keyboard_statistic.value());
+  }
   configured_locales_ = base::SplitString(
       initial_locale_, ",", base::TRIM_WHITESPACE, base::SPLIT_WANT_ALL);
 
   // Convert ICU locale to chrome ("en_US" to "en-US", etc.).
-  std::for_each(configured_locales_.begin(), configured_locales_.end(),
-                base::i18n::GetCanonicalLocale);
+  base::ranges::for_each(configured_locales_, base::i18n::GetCanonicalLocale);
 
   // Let's always have configured_locales_.front() a valid entry.
   if (configured_locales_.size() == 0)
@@ -423,7 +418,7 @@ StartupCustomizationDocument::configured_locales() const {
 
 const std::string& StartupCustomizationDocument::initial_locale_default()
     const {
-  DCHECK(configured_locales_.size() > 0);
+  DCHECK_GT(configured_locales_.size(), 0UL);
   return configured_locales_.front();
 }
 
@@ -446,7 +441,7 @@ class ServicesCustomizationDocument::ApplyingTask {
   void Finished(bool success);
 
  private:
-  ServicesCustomizationDocument* document_;
+  raw_ptr<ServicesCustomizationDocument, ExperimentalAsh> document_;
 
   // This is error-checking flag to prevent destroying unfinished task
   // or double finish.
@@ -475,7 +470,6 @@ ServicesCustomizationDocument::ServicesCustomizationDocument()
     : CustomizationDocument(kAcceptedManifestVersion),
       num_retries_(0),
       load_started_(false),
-      network_delay_(base::Milliseconds(kDefaultNetworkRetryDelayMS)),
       apply_tasks_started_(0),
       apply_tasks_finished_(0),
       apply_tasks_success_(0) {}
@@ -483,14 +477,13 @@ ServicesCustomizationDocument::ServicesCustomizationDocument()
 ServicesCustomizationDocument::ServicesCustomizationDocument(
     const std::string& manifest)
     : CustomizationDocument(kAcceptedManifestVersion),
-      network_delay_(base::Milliseconds(kDefaultNetworkRetryDelayMS)),
       apply_tasks_started_(0),
       apply_tasks_finished_(0),
       apply_tasks_success_(0) {
   LoadManifestFromString(manifest);
 }
 
-ServicesCustomizationDocument::~ServicesCustomizationDocument() {}
+ServicesCustomizationDocument::~ServicesCustomizationDocument() = default;
 
 // static
 ServicesCustomizationDocument* ServicesCustomizationDocument::GetInstance() {
@@ -579,14 +572,13 @@ void ServicesCustomizationDocument::StartFetching() {
     return;
 
   if (!url_.is_valid()) {
-    std::string customization_id;
-    chromeos::system::StatisticsProvider* provider =
-        chromeos::system::StatisticsProvider::GetInstance();
-    if (provider->GetMachineStatistic(chromeos::system::kCustomizationIdKey,
-                                      &customization_id) &&
-        !customization_id.empty()) {
+    system::StatisticsProvider* provider =
+        system::StatisticsProvider::GetInstance();
+    const absl::optional<base::StringPiece> customization_id =
+        provider->GetMachineStatistic(system::kCustomizationIdKey);
+    if (customization_id && !customization_id->empty()) {
       url_ = GURL(base::StringPrintf(
-          kManifestUrl, base::ToLowerASCII(customization_id).c_str()));
+          kManifestUrl, base::ToLowerASCII(customization_id.value()).c_str()));
     } else {
       // Remember that there is no customization ID in VPD.
       OnCustomizationNotFound();
@@ -617,10 +609,16 @@ void ServicesCustomizationDocument::OnManifestRead(
 }
 
 void ServicesCustomizationDocument::StartFileFetch() {
-  DelayNetworkCall(
-      network_delay_,
-      base::BindOnce(&ServicesCustomizationDocument::DoStartFileFetch,
-                     weak_ptr_factory_.GetWeakPtr()));
+  if (custom_network_delay_) {
+    DelayNetworkCallWithCustomDelay(
+        base::BindOnce(&ServicesCustomizationDocument::DoStartFileFetch,
+                       weak_ptr_factory_.GetWeakPtr()),
+        custom_network_delay_.value());
+  } else {
+    DelayNetworkCall(
+        base::BindOnce(&ServicesCustomizationDocument::DoStartFileFetch,
+                       weak_ptr_factory_.GetWeakPtr()));
+  }
 }
 
 void ServicesCustomizationDocument::DoStartFileFetch() {
@@ -643,12 +641,10 @@ void ServicesCustomizationDocument::DoStartFileFetch() {
 bool ServicesCustomizationDocument::LoadManifestFromString(
     const std::string& manifest) {
   if (CustomizationDocument::LoadManifestFromString(manifest)) {
-    LogManifestLoadResult(HISTOGRAM_LOAD_RESULT_SUCCESS);
     OnManifestLoaded();
     return true;
   }
 
-  LogManifestLoadResult(HISTOGRAM_LOAD_RESULT_PARSING_ERROR);
   return false;
 }
 
@@ -656,15 +652,12 @@ void ServicesCustomizationDocument::OnManifestLoaded() {
   if (!WasOOBECustomizationApplied())
     ApplyOOBECustomization();
 
-  std::unique_ptr<base::DictionaryValue> prefs =
-      GetDefaultAppsInProviderFormat(*root_);
-  for (ExternalLoaders::iterator it = external_loaders_.begin();
-       it != external_loaders_.end(); ++it) {
-    if (*it) {
-      UpdateCachedManifest((*it)->profile());
-      (*it)->SetCurrentApps(
-          std::unique_ptr<base::DictionaryValue>(prefs->DeepCopy()));
-      SetOemFolderName((*it)->profile(), *root_);
+  auto prefs = GetDefaultAppsInProviderFormat(*root_);
+  for (auto& external_loader : external_loaders_) {
+    if (external_loader) {
+      UpdateCachedManifest(external_loader->profile());
+      external_loader->SetCurrentApps(prefs.Clone());
+      SetOemFolderName(external_loader->profile(), *root_);
     }
   }
 }
@@ -699,7 +692,6 @@ void ServicesCustomizationDocument::OnSimpleLoaderComplete(
                << " response code = " << response_code
                << " URL = " << url_.spec();
 
-    LogManifestLoadResult(HISTOGRAM_LOAD_RESULT_RETRIES_FAIL);
   }
   load_started_ = false;
 }
@@ -717,7 +709,7 @@ bool ServicesCustomizationDocument::GetDefaultWallpaperUrl(
   if (!IsReady())
     return false;
 
-  const std::string* url = root_->FindStringKey(kDefaultWallpaperAttr);
+  const std::string* url = root_->FindString(kDefaultWallpaperAttr);
   if (!url)
     return false;
 
@@ -725,10 +717,10 @@ bool ServicesCustomizationDocument::GetDefaultWallpaperUrl(
   return true;
 }
 
-std::unique_ptr<base::DictionaryValue>
+absl::optional<base::Value::Dict>
 ServicesCustomizationDocument::GetDefaultApps() const {
   if (!IsReady())
-    return nullptr;
+    return absl::nullopt;
 
   return GetDefaultAppsInProviderFormat(*root_);
 }
@@ -741,43 +733,37 @@ std::string ServicesCustomizationDocument::GetOemAppsFolderName(
   return GetOemAppsFolderNameImpl(locale, *root_);
 }
 
-std::unique_ptr<base::DictionaryValue>
-ServicesCustomizationDocument::GetDefaultAppsInProviderFormat(
-    const base::DictionaryValue& root) {
-  std::unique_ptr<base::DictionaryValue> prefs(new base::DictionaryValue);
-  const base::ListValue* apps_list = NULL;
-  if (root.GetList(kDefaultAppsAttr, &apps_list)) {
-    for (size_t i = 0; i < apps_list->GetListDeprecated().size(); ++i) {
+base::Value::Dict ServicesCustomizationDocument::GetDefaultAppsInProviderFormat(
+    const base::Value::Dict& root) {
+  base::Value::Dict prefs;
+  const base::Value::List* apps_list = root.FindList(kDefaultAppsAttr);
+  if (apps_list) {
+    for (const base::Value& app_entry_value : *apps_list) {
       std::string app_id;
-      std::unique_ptr<base::DictionaryValue> entry;
-      const base::Value& app_entry_value = apps_list->GetListDeprecated()[i];
+      base::Value::Dict entry;
       if (app_entry_value.is_string()) {
         app_id = app_entry_value.GetString();
-        entry = std::make_unique<base::DictionaryValue>();
       } else if (app_entry_value.is_dict()) {
-        const base::DictionaryValue& app_entry =
-            base::Value::AsDictionaryValue(app_entry_value);
-        const std::string* app_id_ptr = app_entry.FindStringKey(kIdAttr);
+        const base::Value::Dict& app_entry = app_entry_value.GetDict();
+        const std::string* app_id_ptr = app_entry.FindString(kIdAttr);
         if (!app_id_ptr) {
           LOG(ERROR) << "Wrong format of default application list";
-          prefs->DictClear();
+          prefs.clear();
           break;
         }
         app_id = *app_id_ptr;
-        entry = app_entry.CreateDeepCopy();
-        entry->RemoveKey(kIdAttr);
+        entry = app_entry.Clone();
+        entry.Remove(kIdAttr);
       } else {
         LOG(ERROR) << "Wrong format of default application list";
-        prefs->DictClear();
+        prefs.clear();
         break;
       }
-      if (!entry->FindKey(
-              extensions::ExternalProviderImpl::kExternalUpdateUrl)) {
-        entry->SetStringKey(
-            extensions::ExternalProviderImpl::kExternalUpdateUrl,
-            extension_urls::GetWebstoreUpdateUrl().spec());
+      if (!entry.Find(extensions::ExternalProviderImpl::kExternalUpdateUrl)) {
+        entry.Set(extensions::ExternalProviderImpl::kExternalUpdateUrl,
+                  extension_urls::GetWebstoreUpdateUrl().spec());
       }
-      prefs->SetPath(app_id, base::Value::FromUniquePtrValue(std::move(entry)));
+      prefs.SetByDottedPath(app_id, std::move(entry));
     }
   }
 
@@ -785,7 +771,7 @@ ServicesCustomizationDocument::GetDefaultAppsInProviderFormat(
 }
 
 void ServicesCustomizationDocument::UpdateCachedManifest(Profile* profile) {
-  profile->GetPrefs()->Set(kServicesCustomizationKey, *root_);
+  profile->GetPrefs()->SetDict(kServicesCustomizationKey, root_->Clone());
 }
 
 extensions::ExternalLoader* ServicesCustomizationDocument::CreateExternalLoader(
@@ -799,12 +785,12 @@ extensions::ExternalLoader* ServicesCustomizationDocument::CreateExternalLoader(
     loader->SetCurrentApps(GetDefaultAppsInProviderFormat(*root_));
     SetOemFolderName(profile, *root_);
   } else {
-    const base::DictionaryValue* root = &base::Value::AsDictionaryValue(
-        *profile->GetPrefs()->GetDictionary(kServicesCustomizationKey));
-    if (root && root->FindStringKey(kVersionAttr)) {
+    const base::Value::Dict& root =
+        profile->GetPrefs()->GetDict(kServicesCustomizationKey);
+    if (root.FindString(kVersionAttr)) {
       // If version exists, profile has cached version of customization.
-      loader->SetCurrentApps(GetDefaultAppsInProviderFormat(*root));
-      SetOemFolderName(profile, *root);
+      loader->SetCurrentApps(GetDefaultAppsInProviderFormat(root));
+      SetOemFolderName(profile, root);
     } else {
       // StartFetching will be called from ServicesCustomizationExternalLoader
       // when StartLoading is called. We can't initiate manifest fetch here
@@ -816,13 +802,12 @@ extensions::ExternalLoader* ServicesCustomizationDocument::CreateExternalLoader(
 }
 
 void ServicesCustomizationDocument::OnCustomizationNotFound() {
-  LogManifestLoadResult(HISTOGRAM_LOAD_RESULT_FILE_NOT_FOUND);
   LoadManifestFromString(kEmptyServicesCustomizationManifest);
 }
 
 void ServicesCustomizationDocument::SetOemFolderName(
     Profile* profile,
-    const base::DictionaryValue& root) {
+    const base::Value::Dict& root) {
   std::string locale = g_browser_process->GetApplicationLocale();
   std::string name = GetOemAppsFolderNameImpl(locale, root);
   if (name.empty())
@@ -841,9 +826,9 @@ void ServicesCustomizationDocument::SetOemFolderName(
 
 std::string ServicesCustomizationDocument::GetOemAppsFolderNameImpl(
     const std::string& locale,
-    const base::DictionaryValue& root) const {
-  return GetLocaleSpecificStringImpl(
-      &root, locale, kLocalizedContent, kDefaultAppsFolderName);
+    const base::Value::Dict& root) const {
+  return GetLocaleSpecificStringImpl(root, locale, kLocalizedContent,
+                                     kDefaultAppsFolderName);
 }
 
 // static
@@ -851,7 +836,10 @@ void ServicesCustomizationDocument::InitializeForTesting(
     scoped_refptr<network::SharedURLLoaderFactory> factory) {
   g_test_overrides = new CustomizationDocumentTestOverride;
   g_test_overrides->customization_document = new ServicesCustomizationDocument;
-  g_test_overrides->customization_document->network_delay_ = base::TimeDelta();
+  // `base::TimeDelta()` means zero time delta - i.e. the request will be
+  // started immediately.
+  g_test_overrides->customization_document->custom_network_delay_ =
+      absl::make_optional(base::TimeDelta());
   g_test_overrides->url_loader_factory = std::move(factory);
 }
 
