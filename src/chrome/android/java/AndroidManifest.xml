@@ -560,16 +560,11 @@ by a child template that "extends" this file.
 
             <intent-filter>
                 <data android:scheme="carbonwallet"/>
+                <data android:host="carbonwallet"/>
                 <action android:name="android.intent.action.VIEW"/>
                 <category android:name="android.intent.category.DEFAULT"/>
                 <category android:name="android.intent.category.BROWSABLE"/>
-            </intent-filter>
 
-            <intent-filter>
-                <data android:scheme="miradaai"/>
-                <action android:name="android.intent.action.VIEW"/>
-                <category android:name="android.intent.category.DEFAULT"/>
-                <category android:name="android.intent.category.BROWSABLE"/>
             </intent-filter>
 
             <meta-data android:name="android.app.shortcuts"

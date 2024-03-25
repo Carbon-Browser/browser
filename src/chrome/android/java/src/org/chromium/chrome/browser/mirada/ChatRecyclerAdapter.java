@@ -1,4 +1,4 @@
-package org.chromium.chrome.browser.ntp.news;
+package org.chromium.chrome.browser.mirada;
 
 import org.chromium.chrome.R;
 import android.view.View;
@@ -22,7 +22,6 @@ import org.w3c.dom.Element;
 import org.w3c.dom.Node;
 import android.widget.TextView;
 import android.graphics.drawable.Drawable;
-
 import com.bumptech.glide.load.resource.bitmap.RoundedCorners;
 import com.bumptech.glide.Glide;
 import com.bumptech.glide.request.target.CustomTarget;
@@ -30,405 +29,62 @@ import com.bumptech.glide.request.transition.Transition;
 import com.bumptech.glide.load.engine.DiskCacheStrategy;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
-
 import org.chromium.chrome.browser.app.ChromeActivity;
 import android.widget.ImageView;
 import org.chromium.content_public.browser.LoadUrlParams;
 import android.content.SharedPreferences;
 import org.chromium.base.ContextUtils;
 import com.bumptech.glide.request.RequestOptions;
-
 import android.widget.FrameLayout;
 import android.view.Gravity;
 import java.lang.Runnable;
 import android.os.Handler;
 import org.json.JSONObject;
-
 import android.widget.LinearLayout;
 import android.util.TypedValue;
-
 import org.json.JSONArray;
-
 import org.chromium.chrome.browser.monetization.VeveBridge;
 import org.chromium.chrome.browser.monetization.VeveUniversalObj;
-
 import android.graphics.Color;
 import java.lang.Character;
+import android.content.res.ColorStateList;
+import android.app.Activity;
 
-public class NTPNewsRecyclerAdapter extends RecyclerView.Adapter<NTPNewsRecyclerAdapter.ViewHolder> implements VeveBridge.VeveUniversalCommunicator {
+public class ChatRecyclerAdapter extends RecyclerView.Adapter<ChatRecyclerAdapter.ViewHolder> implements ChatInterface {
 
-    private ArrayList<Object> mData = new ArrayList<>();
-    private ArrayList<NewsDataObject> mDataTemp = new ArrayList<>();
-    private ArrayList<VeveUniversalObj> mUniversalData = new ArrayList<>();
+    private ArrayList<ChatDataObj> mData = new ArrayList<>();
+
+    private boolean isLightTheme;
+
+    private MiradaActivityInterface mCommunicator;
+
     private LayoutInflater mInflater;
 
-    private String mCountryCode;
+    private StreamingService mStreamingService = new StreamingService();
 
-    private static final String mCoindarToken = "70277:34tJkQia1LEWXFUTf5N";
-
-    private static final String ARTICLE_IMAGE_URL_BASE = "https://hydrisapps.com/carbon/android-resources/article-image-getter/?key=ergnpiqg95pbwfewnfqewfk42939&url=";
-
-    private SharedPreferences mPrefs;
-
-    private boolean blockImageRefresh = false;
-
-    private boolean mIsDarkMode;
+    private Activity mActivity;
 
     // data is passed into the constructor
-    public NTPNewsRecyclerAdapter(Context context, boolean isDarkMode) {
-        this.mInflater = LayoutInflater.from(context);
+    public ChatRecyclerAdapter(Activity activity, boolean isLightTheme, MiradaActivityInterface communicator) {
+        this.mInflater = LayoutInflater.from(activity);
 
-        this.mIsDarkMode = isDarkMode;
+        this.isLightTheme = isLightTheme;
 
-        if (mPrefs == null) mPrefs = ContextUtils.getAppSharedPreferences();
-
-        long mTimeCached = mPrefs.getLong("time_news_cached", 0);
-        long mCurrentTime = System.currentTimeMillis();
-        if (mCurrentTime - mTimeCached >= 3600000) {
-            // been cached for more than an hour, load new
-            getCountryCode();
-        } else {
-            final String mCachedNews = mPrefs.getString("cached_news", "");
-            if (mCachedNews.equals("")) {
-                getCountryCode();
-            } else {
-                try {
-                    DocumentBuilder builder = DocumentBuilderFactory.newInstance().newDocumentBuilder();
-                    InputSource src = new InputSource();
-                    src.setCharacterStream(new StringReader(mCachedNews));
-
-                    Document doc = builder.parse(src);
-                    NodeList nodes = doc.getElementsByTagName("item");
-
-                    for (int i = 0; i < nodes.getLength(); i++) {
-                        NodeList childNodes = nodes.item(i).getChildNodes();
-                        // if (childNodes.getNodeType() == Node.ELEMENT_NODE) {
-                            String imageUrl = "";
-                            for (int z = 0; z < childNodes.getLength(); z++) {
-                              Element el = (Element)childNodes.item(z);
-                              if (el.hasAttribute("url")) {
-                                  imageUrl = el.getAttribute("url");
-                              }
-                            }
-
-                            Element element = (Element) nodes.item(i);
-
-                            String title = getValue("title", element);
-                            String url = getValue("link", element);
-                            // String imageUrl = getValue("media:content", element);
-                            // String imageGetterUrl = ARTICLE_IMAGE_URL_BASE + url;
-                            String publisher = getValue("source", element);
-                            String date = getValue("pubDate", element);
-                            if (date != null) {
-                              date = date.replaceAll("\\+0000", "");
-                            }
-
-                            NewsDataObject dataObj = new NewsDataObject(url, imageUrl, title, publisher, date, null);
-
-                            mData.add(dataObj);
-
-                            // fetchImagesFromGetter(i, imageGetterUrl);
-                            notifyItemInserted(mData.size() - 1);
-                        // }
-                    }
-                } catch (Exception ignore) {
-                    getCountryCode();
-                }
-            }
-        }
-
-        VeveBridge.getInstance().getUniversalAds((VeveBridge.VeveUniversalCommunicator)this);
-    }
-
-    @Override
-    public void onUniversalAdsReceived(ArrayList<VeveUniversalObj> ads) {
-        blockImageRefresh = true;
-        for (int i = 0; i != ads.size(); i++) {
-
-            if (i == 0) {
-                if (mData.size() == 0) break;
-
-                mData.add(1, ads.get(i));
-
-                notifyItemInserted(1);
-            } else if (i == 1 && mData.size() >= 8) {
-                if (mData.size() <= 8) break;
-
-                mData.add(8, ads.get(i));
-
-                notifyItemInserted(8);
-            } else if (i == 2 && mData.size() >= 16) {
-                if (mData.size() <= 16) break;
-
-                mData.add(16, ads.get(i));
-
-                notifyItemInserted(16);
-            } else if (i == 3 && mData.size() >= 24) {
-                if (mData.size() <= 24) break;
-
-                mData.add(24, ads.get(i));
-
-                notifyItemInserted(24);
-            } else if (i == 4 && mData.size() >= 32) {
-                if (mData.size() <= 32) break;
-
-                mData.add(32, ads.get(i));
-
-                notifyItemInserted(32);
-            }
-        }
-
-        new Handler().postDelayed(new Runnable() {
-            @Override
-            public void run() {
-                //notifyDataSetChanged();
-            }
-        }, 1000);
-    }
-
-    private void getCountryCode() {
-        if (mPrefs == null) mPrefs = ContextUtils.getAppSharedPreferences();
-
-        long mCurrentTime = System.currentTimeMillis();
-        long mTimeCached = mPrefs.getLong("time_geo_cached", 0);
-        if (mCurrentTime - mTimeCached < 604800000) {
-              mCountryCode = mPrefs.getString("geoplugin_countryCode", null);
-              if (mCountryCode != null) {
-                  getNewsData();
-                  return;
-              }
-        }
-
-        final String countryEndpointUrl = "http://www.geoplugin.net/json.gp";
-        new AsyncTask<String>() {
-            @Override
-            protected String doInBackground() {
-                String response = null;
-
-                try {
-                    URL connectURL = new URL(countryEndpointUrl);
-                    BufferedReader in = new BufferedReader(
-                    new InputStreamReader(connectURL.openStream()));
-
-                    String inputLine;
-                    StringBuilder sb = new StringBuilder();
-                    while ((inputLine = in.readLine()) != null){
-                        sb.append(inputLine);
-                    }
-                    response = sb.toString();
-
-                    in.close();
-                } catch (Exception ignore) { }
-
-                return response;
-            }
-
-            @Override
-            protected void onPostExecute(String result) {
-                if (result != null) {
-                    try {
-                        if (mPrefs == null) mPrefs = ContextUtils.getAppSharedPreferences();
-
-                        JSONObject jsonObject = new JSONObject(result);
-                        mCountryCode = jsonObject.getString("geoplugin_countryCode");
-
-                        long mCurrentTime = System.currentTimeMillis();
-                        mPrefs.edit().putLong("time_geo_cached", mCurrentTime).apply();
-                        mPrefs.edit().putString("geoplugin_countryCode", mCountryCode).apply();
-
-                        getNewsData();
-                    } catch (Exception ignore) {}
-                }
-            }
-        }.executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR);
-    }
-
-    private void getNewsData() {
-        final String countryEndpointUrl = "https://rss.app/feeds/_J7ORk9Ca44w7rT6f.xml";
-        // "https://coindar.org/api/v2/events?access_token=" + mCoindarToken + "&page=1&page_size=30&sort_by=date_added&order_by=1";
-        new AsyncTask<String>() {
-            @Override
-            protected String doInBackground() {
-                String response = null;
-
-                try {
-                    URL connectURL = new URL(countryEndpointUrl);
-                    BufferedReader in = new BufferedReader(
-                    new InputStreamReader(connectURL.openStream()));
-
-                    String inputLine;
-                    StringBuilder sb = new StringBuilder();
-                    while ((inputLine = in.readLine()) != null){
-                        sb.append(inputLine);
-                    }
-                    response = sb.toString();
-                    in.close();
-                } catch (Exception ignore) {}
-
-                return response;
-            }
-
-            @Override
-            protected void onPostExecute(String result) {
-                if (result != null) {
-                    try {
-                        DocumentBuilder builder = DocumentBuilderFactory.newInstance().newDocumentBuilder();
-                        InputSource src = new InputSource();
-                        src.setCharacterStream(new StringReader(result));
-
-                        Document doc = builder.parse(src);
-                        NodeList nodes = doc.getElementsByTagName("item");
-
-                        if (mPrefs == null) mPrefs = ContextUtils.getAppSharedPreferences();
-
-                        long mCurrentTime = System.currentTimeMillis();
-                        mPrefs.edit().putLong("time_news_cached", mCurrentTime).apply();
-                        mPrefs.edit().putString("cached_news", result).apply();
-
-                        for (int i = 0; i < nodes.getLength(); i++) {
-                            NodeList childNodes = nodes.item(i).getChildNodes();
-                            // if (childNodes.getNodeType() == Node.ELEMENT_NODE) {
-                                String imageUrl = "";
-                                for (int z = 0; z < childNodes.getLength(); z++) {
-                                  Element el = (Element)childNodes.item(z);
-                                  if (el.hasAttribute("url")) {
-                                      imageUrl = el.getAttribute("url");
-                                  }
-                                }
-
-                                Element element = (Element) nodes.item(i);
-
-                                String title = getValue("title", element);
-                                String url = getValue("link", element);
-                                // String imageUrl = getValue("media:content", element);
-                                // String imageGetterUrl = ARTICLE_IMAGE_URL_BASE + url;
-                                String publisher = getValue("source", element);
-                                String date = getValue("pubDate", element);
-                                if (date != null) {
-                                  date = date.replaceAll("\\+0000", "");
-                                }
-
-                                NewsDataObject dataObj = new NewsDataObject(url, imageUrl, title, publisher, date, null);
-
-                                mData.add(dataObj);
-
-                                // fetchImagesFromGetter(i, imageGetterUrl);
-                                notifyItemInserted(mData.size() - 1);
-                            // }
-                        }
-
-                        // JSONArray mJsonArray = new JSONArray(result);
-                        // if (mPrefs == null) mPrefs = ContextUtils.getAppSharedPreferences();
-                        //
-                        // long mCurrentTime = System.currentTimeMillis();
-                        // mPrefs.edit().putLong("time_news_cached", mCurrentTime).apply();
-                        // mPrefs.edit().putString("cached_news", result).apply();
-                        //
-                        // for (int i = 0; i < mJsonArray.length(); i++) {
-                        //     JSONObject mItem = mJsonArray.getJSONObject(i);
-                        //
-                        //     String title = mItem.getString("caption");
-                        //     String url = mItem.getString("source");
-                        //
-                        //     String imageGetterUrl = ARTICLE_IMAGE_URL_BASE + url;
-                        //     String publisher = "";//getValue("source", element);
-                        //     String date = mItem.getString("date_public");
-                        //
-                        //     // get Image Url
-                        //     String imageUrl = "";
-                        //     for (int j = url.length() - 1; j != 0; j--) {
-                        //       if (Character.toString(url.charAt(j)).equals("-")) {
-                        //         imageUrl = "https://coindar.org/images/events/" + url.substring(j + 1) + "_en.jpg";
-                        //         break;
-                        //       }
-                        //     }
-                        //
-                        //     NewsDataObject dataObj = new NewsDataObject(url, imageUrl, title, publisher, date, imageGetterUrl);
-                        //
-                        //     mData.add(dataObj);
-                        //     // mDataTemp.add(dataObj);
-                        //
-                        //     notifyItemInserted(mDataTemp.size() - 1);
-                        //
-                        //     // disable images, coindar doesnt do them
-                        //     // fetchImagesFromGetter(i, imageGetterUrl);
-                        // }
-                    } catch(Exception ignore) { }
-                }
-            }
-        }.executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR);
-    }
-
-    private void fetchImagesFromGetter(final int index, final String url) {
-        new AsyncTask<String>() {
-            @Override
-            protected String doInBackground() {
-                String response = null;
-
-                try {
-                    URL connectURL = new URL(url);
-                    BufferedReader in = new BufferedReader(
-                    new InputStreamReader(connectURL.openStream()));
-
-                    String inputLine;
-                    StringBuilder sb = new StringBuilder();
-                    while ((inputLine = in.readLine()) != null){
-                        sb.append(inputLine);
-                    }
-                    response = sb.toString();
-
-                    in.close();
-                } catch (Exception ignore) { }
-
-                return response;
-            }
-
-            @Override
-            protected void onPostExecute(String result) {
-                if (result != null) {
-                    NewsDataObject dataObj = mDataTemp.get(index);
-                    dataObj.imageUrl = result;
-                    mData.add(dataObj);
-
-                    notifyItemInserted(mData.size() - 1);
-                }
-            }
-        }.executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR);
-    }
-
-    private String getValue(String tag, Element element) {
-        try {
-          NodeList nodes = element.getElementsByTagName(tag).item(0).getChildNodes();
-          Node node = (Node) nodes.item(0);
-          return node.getTextContent();
-        } catch (Exception ignore) {
-          return "";
-        }
+        this.mCommunicator = communicator;
     }
 
     // inflates the row layout from xml when needed
     @Override
     public ViewHolder onCreateViewHolder(ViewGroup parent, int viewType) {
-        if (viewType == 0) {
-            View view = mInflater.inflate(R.layout.ntp_news_universal_ad_item, parent, false);
-            return new ViewHolder(view);
-        } else {
-            View view = mInflater.inflate(R.layout.ntp_news_row_item, parent, false);
-            return new ViewHolder(view);
-        }
+        View view = mInflater.inflate(R.layout.mirada_chat_row_item, parent, false);
+
+        return new ViewHolder(view, viewType);
     }
 
     // binds the data to the TextView in each row
     @Override
     public void onBindViewHolder(ViewHolder holder, int position) {
-        String textColor = mIsDarkMode ? "#ffffff" : "#000000";
-
-        try {
-            View view = holder.itemView;
-
-
-
-        } catch (Exception ignore) { }
+        holder.onBindViewHolder(position);
     }
 
     // total number of rows
@@ -445,10 +101,154 @@ public class NTPNewsRecyclerAdapter extends RecyclerView.Adapter<NTPNewsRecycler
         return 1;
     }
 
+    @Override
+    public void onNewChatClicked() {
+        mData.clear();
+        notifyDataSetChanged();
+    }
+
+    @Override
+    public void onReceivedPrompt(String prompt) {
+        try {
+            mData.add(new ChatDataObj("id", true, prompt, false));
+
+            notifyDataSetChanged();
+
+            JSONArray messages = new JSONArray();
+
+            // add the system message
+            JSONObject systemMessage = new JSONObject();
+            systemMessage.put("role", "system");
+            systemMessage.put("content", "");
+            messages.put(systemMessage);
+
+            for (int i = 0; i != mData.size(); i++) {
+                JSONObject messageItem = new JSONObject();
+                messageItem.put("role", mData.get(i).isUserData ? "user" : "assistant");
+                messageItem.put("content", mData.get(i).text);
+                messages.put(messageItem);
+            }
+
+            // add the newest message
+            JSONObject messageItem = new JSONObject();
+            messageItem.put("role", "user");
+            messageItem.put("content", prompt);
+            messages.put(messageItem);
+
+            // Create the root object and add properties to it
+            JSONObject root = new JSONObject();
+            root.put("messages", messages);
+            root.put("max_tokens", 250);
+            root.put("stream", true);
+            root.put("user", "");
+            root.put("name1", "");
+            root.put("name2", "");
+            root.put("user_bio", "");
+            root.put("mode", "chat-instruct");
+            root.put("instruction_template", "");
+            root.put("repetition_penalty", 1);
+            root.put("negative_prompt", "");
+            root.put("length_penalty", 1.2);
+
+            String data = root.toString();
+
+
+            // Convert the root object to a JSON string
+            String jsonString = root.toString();
+            mStreamingService.postStreamRequest("", data, new StreamingService.StreamHandler() {
+              @Override
+              public void onChunkReceived(String chunk) {
+                  try {
+                      String chunkString = chunk.replaceAll("data: ", "");
+
+                      if (chunkString == null || chunkString.isEmpty()) return;
+
+                      JSONObject jsonResult = new JSONObject(chunkString);
+                      String id = jsonResult.getString("id");
+                      JSONArray arr = jsonResult.getJSONArray("choices");
+                      JSONObject obj = arr.getJSONObject(0);
+                      JSONObject choices = obj.getJSONObject("delta");
+                      String role = choices.getString("role");
+                      String content = choices.getString("content");
+
+                      int index = mData.size() - 1;
+                      ChatDataObj newDataObj = mData.get(index);
+
+                      if (newDataObj.id.equals(id)) {
+                          // stream already exists, continue
+                          String oldText = newDataObj.text;
+                          newDataObj.text = oldText + content;
+                          mData.set(index, newDataObj);
+                      } else {
+                          // make new data obj
+                          mData.add(new ChatDataObj(id, false, content, true));
+                      }
+                  } catch (Exception e) {
+                      e.printStackTrace();
+                  }
+
+                  mCommunicator.onReceivedPromptChunk();
+              }
+
+              @Override
+              public void onComplete() {
+                  try {
+                      int index = mData.size() - 1;
+                      ChatDataObj finishLoadingObj = mData.get(index);
+                      finishLoadingObj.isLoading = false;
+                      mData.set(index, finishLoadingObj);
+                      notifyDataSetChanged();
+                  } catch (Exception ignore) { }
+
+                  mCommunicator.onFinishLoading();
+              }
+
+              @Override
+              public void onError(Exception e) {
+                  mCommunicator.onFinishLoading();
+                  e.printStackTrace();
+              }
+           });
+        } catch (Exception ignore) {
+          // TODO proper error handling
+          ignore.printStackTrace();
+        }
+    }
+
     // stores and recycles views as they are scrolled off screen
     public class ViewHolder extends RecyclerView.ViewHolder implements View.OnClickListener {
-        ViewHolder(View itemView) {
+        int viewType;
+
+        ViewHolder(View itemView, int viewType) {
             super(itemView);
+
+            this.viewType = viewType;
+        }
+
+        public void onBindViewHolder(int position) {
+            String textColor = isLightTheme ? "#000000" : "#ffffff";
+
+            try {
+                View view = itemView;
+
+                ChatDataObj dataObj = mData.get(position);
+
+                TextView text = view.findViewById(R.id.text);
+                text.setTextColor(Color.parseColor(textColor));
+                text.setText(dataObj.text);
+
+                View icon = view.findViewById(R.id.logo_view);
+                icon.setBackground(view.getContext().getResources().getDrawable(viewType == 0 ? R.drawable.ic_user_mirada : R.drawable.ic_mirada_logo_round));
+
+                if (viewType == 0) {
+                  int iconColor = Color.parseColor(isLightTheme ? "#262626" : "#ffffff");
+                  icon.setBackgroundTintList(ColorStateList.valueOf(iconColor));
+
+                  String backgroundColor = isLightTheme ? "#F9F9F9" : "#3E3E3E";
+                  LinearLayout container = view.findViewById(R.id.container);
+                  container.setBackgroundColor(Color.parseColor(backgroundColor));
+                }
+            } catch (Exception ignore) { }
         }
 
         @Override

@@ -24,6 +24,9 @@ class ChromiumDepGraph {
     // Some libraries don't properly fill their POM with the appropriate licensing information. It is provided here from
     // manual lookups. Note that licenseUrl must provide textual content rather than be an html page.
     static final Map<String, PropertyOverride> PROPERTY_OVERRIDES = [
+        com_github_heremaps_oksse: new PropertyOverride(
+            licenseUrl: 'https://www.apache.org/licenses/LICENSE-2.0.txt',
+            licenseName: 'Apache 2.0'),
         com_github_bumptech_glide_glide: new PropertyOverride(
             licenseUrl: 'https://www.apache.org/licenses/LICENSE-2.0.txt',
             licenseName: 'Apache 2.0'),

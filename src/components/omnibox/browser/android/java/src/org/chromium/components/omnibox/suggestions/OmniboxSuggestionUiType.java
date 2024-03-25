@@ -32,6 +32,7 @@ import java.lang.annotation.RetentionPolicy;
     OmniboxSuggestionUiType.PEDAL_SUGGESTION,
     OmniboxSuggestionUiType.DIVIDER_LINE,
     OmniboxSuggestionUiType.QUERY_TILES,
+    OmniboxSuggestionUiType.AI,
     OmniboxSuggestionUiType.COUNT
 })
 @Retention(RetentionPolicy.SOURCE)
@@ -47,6 +48,7 @@ public @interface OmniboxSuggestionUiType {
     int PEDAL_SUGGESTION = 8;
     int DIVIDER_LINE = 9;
     int QUERY_TILES = 10;
+    int AI = 10;
 
-    int COUNT = 11;
+    int COUNT = 12;
 }

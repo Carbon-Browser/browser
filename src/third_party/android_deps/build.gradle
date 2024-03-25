@@ -20,6 +20,7 @@ apply plugin: 'org.owasp.dependencycheck'
 repositories {
     google()
     mavenCentral()
+    maven { url 'https://jitpack.io' }
 }
 
 dependencyCheck {
@@ -64,6 +65,8 @@ dependencies {
     compile ('com.github.bumptech.glide:glide:4.11.0') {
         transitive = true;
     }
+
+    //compile 'com.github.heremaps:oksse:0.9.0'
 
     compile ('me.dm7.barcodescanner:zxing:1.9') {
         exclude group: 'com.android.support', module:'support-v4'

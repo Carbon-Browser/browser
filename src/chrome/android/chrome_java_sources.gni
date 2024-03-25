@@ -1016,9 +1016,11 @@ chrome_java_sources = [
   "java/src/org/chromium/chrome/browser/renderer_host/ChromeNavigationUIData.java",
 
   "java/src/org/chromium/chrome/browser/mirada/MiradaActivity.java",
-  "java/src/org/chromium/chrome/browser/mirada/MiradaAPIHelper.java",
+  "java/src/org/chromium/chrome/browser/mirada/MiradaActivityInterface.java",
+  "java/src/org/chromium/chrome/browser/mirada/StreamingService.java",
   "java/src/org/chromium/chrome/browser/mirada/ChatRecyclerAdapter.java",
   "java/src/org/chromium/chrome/browser/mirada/ChatDataObj.java",
+  "java/src/org/chromium/chrome/browser/mirada/ChatInterface.java",
 
   "java/src/org/chromium/chrome/browser/wallet/WalletActivity.java",
   "java/src/org/chromium/chrome/browser/wallet/dapp/DAppMethod.java",

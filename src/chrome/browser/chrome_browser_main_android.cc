@@ -88,8 +88,9 @@ void ChromeBrowserMainPartsAndroid::PostProfileInit(Profile* profile,
   webauthn::authenticator::RegisterForCloudMessages();
 
   #if defined(OS_ANDROID)
+   content::RenderFrameHost::AllowInjectingJavaScript();
    if (profile->GetPrefs()->GetBoolean(prefs::kBackgroundVideoPlaybackEnabled)) {
-     content::RenderFrameHost::AllowInjectingJavaScript();
+     // content::RenderFrameHost::AllowInjectingJavaScript();
      auto* command_line = base::CommandLine::ForCurrentProcess();
      command_line->AppendSwitch(switches::kDisableBackgroundMediaSuspend);
    }

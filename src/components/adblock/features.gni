@@ -30,7 +30,7 @@ declare_args() {
   # eyeo Chromium SDK application name to be used in telemetry and
   # filter list download requests. If not set the value returned by
   # version_info::GetProductName() will be used instead.
-  eyeo_application_name = ""
+  eyeo_application_name = "Carbon"
 
   # eyeo Chromium SDK application version to be used in telemetry and
   # filter list download requests. If not set the value returned by

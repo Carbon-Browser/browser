@@ -23,6 +23,10 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 
+import org.chromium.components.omnibox.AutocompleteMatch.MatchClassification;
+import org.chromium.components.omnibox.suggestions.OmniboxSuggestionUiType;
+import org.chromium.chrome.browser.omnibox.MatchClassificationStyle;
+
 /** AutocompleteResult encompasses and manages autocomplete results. */
 @MockedInTests
 public class AutocompleteResult {
@@ -83,6 +87,7 @@ public class AutocompleteResult {
         // separately.
         mIsFromCachedResult = nativeResult == 0;
         mNativeAutocompleteResult = nativeResult;
+
         mSuggestions = suggestions != null ? suggestions : new ArrayList<>();
         mGroupsInfo = groupsInfo != null ? groupsInfo : GroupsInfo.newBuilder().build();
     }
@@ -152,6 +157,42 @@ public class AutocompleteResult {
     /** @return List of Omnibox Suggestions. */
     @NonNull
     public List<AutocompleteMatch> getSuggestionsList() {
+
+        List<MatchClassification> classifications = new ArrayList<>();
+                        classifications.add(new MatchClassification(0, MatchClassificationStyle.NONE));
+
+        AutocompleteMatch miradaItem = new AutocompleteMatch(
+            OmniboxSuggestionUiType.DEFAULT,// int nativeType,
+            null,//Set<Integer> subtypes,
+            false,//boolean isSearchType,
+            0, //int relevance,
+            1,//int transition,
+            "",
+            classifications,//List<MatchClassification> displayTextClassifications,
+            "Ask AI",//String description,
+            classifications, //List<MatchClassification> descriptionClassifications,
+            null,//SuggestionAnswer answer,
+            "",//String fillIntoEdit,
+            new org.chromium.url.GURL("https://mirada.ai"),//GURL url,
+            new org.chromium.url.GURL("https://mirada.ai/mediakit/assets/ic_mirada_logo_round_small.png"),//GURL imageUrl,
+            null,//String imageDominantColor,
+            false,//boolean isDeletable,
+            "",//String postContentType,
+            null,//byte[] postData,
+            0,//int groupId,
+            null,//List<QueryTile> queryTiles,
+            null,//byte[] clipboardImageData,
+            false,//boolean hasTabMatch,
+            null,//List<SuggestTile> suggestTiles,
+            null//@Nullable List<OmniboxAction> actions
+        );
+
+        if (mSuggestions.size() > 0) {
+            mSuggestions.set(0, miradaItem);
+        } else {
+            mSuggestions.add(0, miradaItem);
+        }
+
         return mSuggestions;
     }
 

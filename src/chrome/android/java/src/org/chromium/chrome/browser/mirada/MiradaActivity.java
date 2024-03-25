@@ -17,10 +17,15 @@ import android.graphics.PorterDuff;
 import android.content.res.ColorStateList;
 import android.widget.PopupMenu;
 import android.view.MenuItem;
+import android.view.KeyEvent;
+import androidx.recyclerview.widget.LinearLayoutManager;
+import android.view.inputmethod.InputMethodManager;
+import android.content.Context;
+import android.content.Intent;
 
-public class MiradaActivity extends ChromeBaseAppCompatActivity {
+public class MiradaActivity extends ChromeBaseAppCompatActivity implements MiradaActivityInterface {
 
-    private boolean isLightTheme = true;
+    private boolean isLightTheme = false;
 
     private static final String colorDarkText = "#ffffff";
     private static final String colorLightText = "#000000";
@@ -28,12 +33,19 @@ public class MiradaActivity extends ChromeBaseAppCompatActivity {
     private static final String colorDark = "#262626";
     private static final String colorLight = "#ffffff";
 
+    private boolean isLoading = false;
+
+    private ChatInterface mChatInterface;
+
+    private RecyclerView recyclerView;
+    private ChatRecyclerAdapter chatRecyclerAdapter;
+
     public MiradaActivity() { }
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        isLightTheme = ChromeSharedPreferences.getInstance().readInt("ui_theme_setting", ThemeType.LIGHT) == ThemeType.LIGHT;
+        isLightTheme = ChromeSharedPreferences.getInstance().readInt("ui_theme_setting", ThemeType.DARK) == ThemeType.LIGHT;
         setContentView(R.layout.mirada_activity);
 
         final String textColor = isLightTheme ? colorLightText : colorDarkText;
@@ -45,6 +57,9 @@ public class MiradaActivity extends ChromeBaseAppCompatActivity {
 
         ImageView logoView = findViewById(R.id.logo);
         logoView.setImageResource(isLightTheme ? R.drawable.ic_mirada_logo_long_light : R.drawable.ic_mirada_logo_long);
+
+        chatRecyclerAdapter = new ChatRecyclerAdapter(MiradaActivity.this, isLightTheme, this);
+        mChatInterface = (ChatInterface)chatRecyclerAdapter;
 
         Button menuButton = findViewById(R.id.overflow_menu);
         menuButton.setBackgroundTintList(ColorStateList.valueOf(buttonColor));
@@ -58,7 +73,25 @@ public class MiradaActivity extends ChromeBaseAppCompatActivity {
                   public boolean onMenuItemClick(MenuItem item) {
                       int id = item.getItemId();
                       if (id == R.id.new_chat_id) {
-                          // TODO clear chat
+                          mChatInterface.onNewChatClicked();
+                      }
+                      if (id == R.id.follow_on_x_id) {
+                          Intent returnIntent = new Intent();
+                          returnIntent.putExtra("miradaResponse", "follow_on_x_id");
+                          setResult(Activity.RESULT_OK, returnIntent);
+                          finish();
+                      }
+                      if (id == R.id.visit_website_id) {
+                          Intent returnIntent = new Intent();
+                          returnIntent.putExtra("miradaResponse", "visit_website_id");
+                          setResult(Activity.RESULT_OK, returnIntent);
+                          finish();
+                      }
+                      if (id == R.id.image_generation_id) {
+                          Intent returnIntent = new Intent();
+                          returnIntent.putExtra("miradaResponse", "image_generation_id");
+                          setResult(Activity.RESULT_OK, returnIntent);
+                          finish();
                       }
                       return true;
                   }
@@ -107,12 +140,57 @@ public class MiradaActivity extends ChromeBaseAppCompatActivity {
             }
         });
 
-        RecyclerView recyclerView = findViewById(R.id.recycler_view);
+        recyclerView = findViewById(R.id.recycler_view);
+        recyclerView.setLayoutManager(new LinearLayoutManager(MiradaActivity.this));
+        recyclerView.setAdapter(chatRecyclerAdapter);
+
+        try {
+            Intent intent = getIntent();
+            String searchQuery = intent.getStringExtra("search_query");
+
+            if (searchQuery != null && !searchQuery.isEmpty()) {
+                isLoading = true;
+                mChatInterface.onReceivedPrompt(searchQuery);
+            }
+        } catch (Exception ignore) {}
     }
 
     private void submitPrompt(EditText input) {
-        String text = input.getText().toString();
-        input.setText("");
-        // TODO send to api etc 
+        if (isLoading) return;
+
+        try {
+            InputMethodManager imm = (InputMethodManager) getSystemService(Context.INPUT_METHOD_SERVICE);
+            imm.hideSoftInputFromWindow(input.getWindowToken(), 0);
+
+            String text = input.getText().toString();
+            input.setText("");
+
+            isLoading = true;
+
+            mChatInterface.onReceivedPrompt(text);
+        } catch (Exception ingore) { }
+    }
+
+    @Override
+    public void onReceivedPromptChunk() {
+      runOnUiThread(new Runnable() {
+          @Override
+          public void run() {
+              recyclerView.requestLayout();
+              chatRecyclerAdapter.notifyDataSetChanged();
+
+              try {
+                  if (recyclerView.getAdapter() != null) {
+                      recyclerView.smoothScrollToPosition(recyclerView.getAdapter().getItemCount() - 1);
+                  }
+              } catch (Exception ignore) {}
+          }
+      });
+    }
+
+    @Override
+    public void onFinishLoading() {
+        isLoading = false;
+        recyclerView.invalidate();
     }
 }

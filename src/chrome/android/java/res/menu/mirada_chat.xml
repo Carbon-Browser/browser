@@ -10,4 +10,16 @@
         android:id="@+id/new_chat_id"
         android:title="@string/mirada_new_chat" />
 
+    <item
+        android:id="@+id/follow_on_x_id"
+        android:title="@string/mirada_follow_x" />
+        
+    <item
+        android:id="@+id/image_generation_id"
+        android:title="@string/mirada_image_generation" />
+
+    <item
+        android:id="@+id/visit_website_id"
+        android:title="@string/mirada_visit_website" />
+
 </menu>

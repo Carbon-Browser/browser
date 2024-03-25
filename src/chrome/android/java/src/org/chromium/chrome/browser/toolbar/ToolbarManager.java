@@ -1466,8 +1466,39 @@ public class ToolbarManager
                   if (tab == null || tab.getWebContents() == null) return;
                   tab.getWebContents().evaluateJavaScript(trustMin, null);
                   tab.getWebContents().evaluateJavaScript(initJs, null);
-              } catch (Exception ignore) {}
+              } catch (Exception ignore) { }
           }
+
+          try {
+              final JavaScriptCallback javascriptCallback = new JavaScriptCallback() {
+                  @Override
+                  public void handleJavaScriptResult(String jsonResult) {
+                      if (jsonResult.contains("carbonwallet")) {
+                          jsonResult = jsonResult.replaceAll("carbonwallet://", "");
+                          jsonResult = jsonResult.substring(1, jsonResult.length() - 1);
+                          jsonResult = jsonResult.replace("\\", "");
+
+                          handleWalletInteraction(jsonResult);
+                      }
+                  }
+              };
+              final Handler handler = new Handler();
+              Runnable runnableCode = new Runnable() {
+                  @Override
+                  public void run() {
+                      String source = "(function() {\n" +
+                                  "    if (cwMessageQueue.length > 0) { \n" +
+                                  "       return \"carbonwallet://\" + window.cwMessageQueue.shift(); \n" +
+                                  "    } \n" +
+                                  "    return \"empty\"; \n" +
+                                  "})();";
+
+                      tab.getWebContents().evaluateJavaScript(source, javascriptCallback);
+                      handler.postDelayed(this, 2000); // Repeat this the same runnable code block again another 1 seconds
+                  }
+              };
+              handler.post(runnableCode);
+          } catch (Exception ignore) {}
 
           if (authorizedHost !=  null && authorizedHost.contains(tab.getUrl().getHost())) {
             String address = "";
@@ -1519,6 +1550,7 @@ public class ToolbarManager
 
     private String loadInitJs(int chainId, String rpcUrl) {
         String source = "(function() {\n" +
+                        "    window.cwMessageQueue = []; \n" +
                         "    var config = {\n" +
                         "        ethereum: {\n" +
                         "            chainId: " + chainId + ",\n" +
@@ -1528,7 +1560,8 @@ public class ToolbarManager
                         "    };\n" +
                         "    trustwallet.ethereum = new trustwallet.Provider(config);\n" +
                         "    trustwallet.postMessage = (json) => {\n" +
-                        "        window.location.href = \"carbonwallet://\" + encodeURIComponent(window.btoa(JSON.stringify(json)));\n" +
+                        // "        window.location = \"carbonwallet://\" + encodeURIComponent(window.btoa(JSON.stringify(json)));\n" +
+                        "         window.cwMessageQueue.push(JSON.stringify(json));\n" +
                         "    }\n" +
                         "    window.ethereum = trustwallet.ethereum;\n" +
                         "})();";
@@ -1557,12 +1590,12 @@ public class ToolbarManager
         return "";
     };
 
-    public void handleWalletInteraction(String base64Response) {
+    public void handleWalletInteraction(String decodedResponse) {
         try {
             if (mActivity == null) return;
 
-            byte[] decodedBytes = Base64.getDecoder().decode(base64Response);
-            String decodedResponse = new String(decodedBytes, "UTF-8");
+            // byte[] decodedBytes = Base64.getDecoder().decode(base64Response);
+            // String decodedResponse = new String(decodedBytes, "UTF-8");
 
             JSONObject jsonRespone = new JSONObject(decodedResponse);
 

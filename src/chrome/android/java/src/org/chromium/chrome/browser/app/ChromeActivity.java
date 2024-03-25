@@ -250,6 +250,7 @@ import java.util.List;
 import org.chromium.components.adblock.AdblockController;
 import org.chromium.chrome.browser.tab.TLDUtils;
 import org.chromium.ui.widget.Toast;
+import org.chromium.chrome.browser.mirada.MiradaActivity;
 
 /**
  * A {@link AsyncInitializationActivity} that builds and manages a {@link CompositorViewHolder}
@@ -2817,6 +2818,16 @@ public abstract class ChromeActivity<C extends ChromeActivityComponent>
 
         if (id == R.id.managed_by_menu_id) {
             openChromeManagementPage();
+            return true;
+        }
+
+        if (id == R.id.ai_id) {
+            Intent intent = new Intent();
+            intent.setClass(this, MiradaActivity.class);
+
+            try {
+                startActivityForResult(intent, 123456);
+            } catch (Exception ignore) { }
             return true;
         }
 

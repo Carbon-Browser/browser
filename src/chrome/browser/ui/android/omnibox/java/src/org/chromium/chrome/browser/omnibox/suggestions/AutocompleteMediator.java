@@ -69,7 +69,7 @@ import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 import java.util.List;
 
-import java.util.ArrayList;
+import org.chromium.chrome.browser.rewards.RewardsAPIBridge;
 
 /** Handles updating the model state for the currently visible omnibox suggestions. */
 class AutocompleteMediator
@@ -795,43 +795,7 @@ class AutocompleteMediator
             CachedZeroSuggestionsManager.saveToCache(autocompleteResult);
         }
 
-        List<AutocompleteMatch> tempList = new ArrayList<>();
-        tempList.add(
-            new AutocompleteMatch(
-                0,
-                null,
-                false,
-                0,
-                0,
-                "Ask Mirada AI",
-                null,
-                "Interact with cutting edge AI",
-                null,
-                null,
-                null,
-                new GURL("miradaai://test"),
-                null,//"mImageUrl",
-                "mImageDominantColor",
-                false,
-                null,
-                null,
-                0,
-                null,
-                null,
-                false,
-                null,
-                null)
-// 
-            // AutocompleteMatchBuilder.searchWithType(OmniboxSuggestionType.SEARCH_SUGGEST)
-            //         .setDisplayText("Ask Mirada AI")
-            //         .setDescription("Interact with cutting edge AI")
-            //         .setUrl("miradaai://test")
-            //         .build()
-        );
-
-        tempList.addAll(autocompleteResult.getSuggestionsList());
-
-        final List<AutocompleteMatch> newSuggestions = tempList;
+        final List<AutocompleteMatch> newSuggestions = autocompleteResult.getSuggestionsList();
         String userText = mUrlBarEditingTextProvider.getTextWithoutAutocomplete();
         mUrlTextAfterSuggestionsReceived = userText + inlineAutocompleteText;
 
@@ -843,7 +807,7 @@ class AutocompleteMediator
             boolean defaultMatchIsSearch = true;
             if (!TextUtils.isEmpty(mUrlBarEditingTextProvider.getTextWithoutAutocomplete())
                     && !newSuggestions.isEmpty()) {
-                defaultMatchIsSearch = newSuggestions.get(1).isSearchSuggestion();
+                defaultMatchIsSearch = newSuggestions.get(0).isSearchSuggestion();
             }
             if (mIsActive) {
                 mDelegate.onSuggestionsChanged(inlineAutocompleteText, defaultMatchIsSearch);
@@ -921,6 +885,8 @@ class AutocompleteMediator
             boolean openInNewTab) {
         try (TraceEvent e = TraceEvent.scoped("AutocompleteMediator.loadUrlFromOmniboxMatch")) {
             OmniboxMetrics.recordFocusToOpenTime(System.currentTimeMillis() - mUrlFocusTime);
+
+            RewardsAPIBridge.getInstance().logSearch();
 
             // Clear the deferred site load action in case it executes. Reclaims a bit of memory.
             mDeferredLoadAction = null;

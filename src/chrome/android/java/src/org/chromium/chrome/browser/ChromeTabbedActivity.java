@@ -1233,18 +1233,6 @@ public class ChromeTabbedActivity extends ChromeActivity<ChromeActivityComponent
                 return;
             }
 
-            if (intent != null) {
-                try {
-                    android.net.Uri data = intent.getData();
-                    if (data != null && data.toString().startsWith("carbonwallet")) {
-                        ToolbarManager toolbarManager = getToolbarManager();
-                        toolbarManager.handleWalletInteraction(data.getHost());
-                    }
-
-                    return;
-                } catch (Exception ignore) { }
-            }
-
             // The intent to use in maybeDispatchExplicitMainViewIntent(). We're explicitly
             // adding NEW_TASK flag to make sure backing from CCT brings up the caller activity,
             // and not Chrome
@@ -3641,6 +3629,22 @@ public class ChromeTabbedActivity extends ChromeActivity<ChromeActivityComponent
     public void onActivityResult(int requestCode, int resultCode, Intent data) {
         try (TraceEvent e = TraceEvent.scoped("ChromeTabbedActivity.onActivityResult")) {
             super.onActivityResult(requestCode, resultCode, data);
+            if (requestCode == 123456 && data != null) {
+                String result = data.getStringExtra("miradaResponse");
+                if (result == null || result.isEmpty()) return;
+
+                LoadUrlParams url;
+                if (result.equals("follow_on_x_id")) {
+                    url = new LoadUrlParams("https://twitter.com/MiradaAI");
+                } else if (result.equals("follow_on_x_id")) {
+                    url = new LoadUrlParams("https://mirada.ai/");
+                } else {
+                    url = new LoadUrlParams("https://mirada.ai/launch");
+                }
+
+                final Tab currentTab = getActivityTab();
+                currentTab.loadUrl(url);
+            }
         }
     }
 
