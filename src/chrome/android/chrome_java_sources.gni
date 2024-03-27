@@ -1095,6 +1095,12 @@ chrome_java_sources = [
   "java/src/org/chromium/chrome/browser/signin/SigninBridge.java",
   "java/src/org/chromium/chrome/browser/signin/SigninCheckerProvider.java",
   "java/src/org/chromium/chrome/browser/signin/SigninFirstRunFragment.java",
+
+  "java/src/org/chromium/chrome/browser/signin/DefaultBrowserOnboardingMessageFragment.java",
+  "java/src/org/chromium/chrome/browser/signin/PrivacyOnboardingMessageFragment.java",
+  "java/src/org/chromium/chrome/browser/signin/SpeedOnboardingMessageFragment.java",
+  "java/src/org/chromium/chrome/browser/signin/RewardsOnboardingMessageFragment.java",
+
   "java/src/org/chromium/chrome/browser/signin/SigninManagerImpl.java",
   "java/src/org/chromium/chrome/browser/signin/SyncConsentActivity.java",
   "java/src/org/chromium/chrome/browser/signin/SyncConsentActivityLauncherImpl.java",

@@ -753,8 +753,8 @@ public class ToolbarTablet extends ToolbarLayout
         }
         mOptionalButton.setImageDrawable(buttonSpec.getDrawable());
         mOptionalButton.setContentDescription(buttonSpec.getContentDescription());
-        mOptionalButton.setVisibility(View.VISIBLE);
-        mOptionalButton.setEnabled(buttonData.isEnabled());
+        mOptionalButton.setVisibility(View.GONE);
+        mOptionalButton.setEnabled(false);
     }
 
     @Override

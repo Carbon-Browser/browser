@@ -12,9 +12,10 @@
     android:background="#1E1E1E">
 
     <RelativeLayout
+      android:id="@+id/main_container"
       android:layout_width="match_parent"
       android:layout_height="match_parent"
-      android:background="@drawable/ic_first_launch_background"
+      android:background="#000000"
       android:animateLayoutChanges="true">
 
       <ScrollView

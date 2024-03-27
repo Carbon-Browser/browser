@@ -157,7 +157,6 @@ public class AutocompleteResult {
     /** @return List of Omnibox Suggestions. */
     @NonNull
     public List<AutocompleteMatch> getSuggestionsList() {
-
         List<MatchClassification> classifications = new ArrayList<>();
                         classifications.add(new MatchClassification(0, MatchClassificationStyle.NONE));
 
@@ -173,9 +172,9 @@ public class AutocompleteResult {
             classifications, //List<MatchClassification> descriptionClassifications,
             null,//SuggestionAnswer answer,
             "",//String fillIntoEdit,
-            new org.chromium.url.GURL("https://mirada.ai"),//GURL url,
-            new org.chromium.url.GURL("https://mirada.ai/mediakit/assets/ic_mirada_logo_round_small.png"),//GURL imageUrl,
-            null,//String imageDominantColor,
+            new org.chromium.url.GURL("miradaai://"),//GURL url,
+            new org.chromium.url.GURL("https://mirada.ai/mediakit/assets/ic_mirada_logo_round.png"),//GURL imageUrl,
+            "",//String imageDominantColor,
             false,//boolean isDeletable,
             "",//String postContentType,
             null,//byte[] postData,
@@ -187,13 +186,27 @@ public class AutocompleteResult {
             null//@Nullable List<OmniboxAction> actions
         );
 
-        if (mSuggestions.size() > 0) {
-            mSuggestions.set(0, miradaItem);
-        } else {
-            mSuggestions.add(0, miradaItem);
+        trimArrayList(mSuggestions, 4);
+        boolean miradaAdded = false;
+        for (int i = 0; i < mSuggestions.size(); i++) {
+            if (mSuggestions.get(i).getDescription().equals("Ask AI")) {
+              miradaAdded = true;
+              break;
+            }
+        }
+        if (!miradaAdded) {
+            mSuggestions.add(miradaItem);
         }
 
         return mSuggestions;
+    }
+
+    private void trimArrayList(List<AutocompleteMatch> list, int maxSize) {
+        // If the list is larger than maxSize, reduce its size
+        while (list.size() > maxSize) {
+            // Remove the last element (or you can modify this to remove from the start or a specific position)
+            list.remove(list.size() - 1);
+        }
     }
 
     /** @return GroupsInfo structure, describing everything that's known about Suggestion Groups. */

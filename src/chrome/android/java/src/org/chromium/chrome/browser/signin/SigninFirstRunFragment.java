@@ -72,6 +72,7 @@ import org.chromium.ui.text.SpanApplier;
 import org.chromium.ui.text.SpanApplier.SpanInfo;
 import org.chromium.ui.text.NoUnderlineClickableSpan;
 import android.text.method.LinkMovementMethod;
+import android.widget.RelativeLayout;
 
 /** This fragment handles the sign-in without sync consent during the FRE. */
 public class SigninFirstRunFragment extends Fragment
@@ -105,6 +106,7 @@ public class SigninFirstRunFragment extends Fragment
     private int mCurrentVideoPosition;
     private View noAnimSpacerTop;
     private View noAnimSpacerBottom;
+    private RelativeLayout mMainContainer;
 
     public SigninFirstRunFragment() {}
 
@@ -181,6 +183,8 @@ public class SigninFirstRunFragment extends Fragment
         noAnimSpacerTop = view.findViewById(R.id.fre_spacer_top);
         noAnimSpacerBottom = view.findViewById(R.id.fre_spacer_bottom);
 
+        mMainContainer = view.findViewById(R.id.main_container);
+
         mProgressSpinner = view.findViewById(R.id.progress_spinner);
         mProgressSpinner.setVisibility(View.GONE);
         mAcceptButton = (Button) view.findViewById(R.id.terms_accept);
@@ -204,7 +208,7 @@ public class SigninFirstRunFragment extends Fragment
         surfaceView = (SurfaceView) view.findViewById(R.id.fre_surface_view);
         surfaceView.getHolder().addCallback(this);
         // if (DeviceClassManager.enableAnimations()) {
-        //     setupMediaPlayer();
+            // setupMediaPlayer();
         // } else {
             setAnimationDisabled();
         // }
@@ -442,6 +446,8 @@ public class SigninFirstRunFragment extends Fragment
         // mTitle.setVisibility(View.VISIBLE);
         noAnimSpacerTop.setVisibility(View.VISIBLE);
         noAnimSpacerBottom.setVisibility(View.VISIBLE);
+        surfaceView.setVisibility(View.GONE);
+        mMainContainer.setBackground(mMainContainer.getContext().getResources().getDrawable(R.drawable.ic_first_launch_background));
         updateParams(false);
     }
 
@@ -490,7 +496,7 @@ public class SigninFirstRunFragment extends Fragment
     public void surfaceCreated(SurfaceHolder holder) {
         if (player == null) {
             // if (DeviceClassManager.enableAnimations()) {
-                // setupMediaPlayer();
+            //     setupMediaPlayer();
             // } else {
                 setAnimationDisabled();
             // }
@@ -520,9 +526,9 @@ public class SigninFirstRunFragment extends Fragment
 
     private void setupMediaPlayer() {
         player = new MediaPlayer();
-        player = MediaPlayer.create(getContext(), R.raw.intro_anim1);
+        player = MediaPlayer.create(getContext(), null);
 
-        Uri mUri = Uri.parse("android.resource://" + getContext().getPackageName() + "/" + R.raw.intro_anim1);//"file:///android_asset/sfb_anim_intro.mp4");
+        Uri mUri = Uri.parse("android.resource://" + getContext().getPackageName() + "/" + null);//"file:///android_asset/sfb_anim_intro.mp4");
         String uri = mUri.getPath();
         player.setOnPreparedListener(new MediaPlayer.OnPreparedListener() {
             @Override
@@ -546,8 +552,9 @@ public class SigninFirstRunFragment extends Fragment
         player.setOnCompletionListener(new MediaPlayer.OnCompletionListener() {
             @Override
             public void onCompletion(MediaPlayer mediaPlayer) {
-                mAcceptButton.setVisibility(View.VISIBLE);
-                mTosAndPrivacy.setVisibility(View.VISIBLE);
+                // mAcceptButton.setVisibility(View.VISIBLE);
+                // mTosAndPrivacy.setVisibility(View.VISIBLE);
+                setAnimationDisabled();
             }
         });
 

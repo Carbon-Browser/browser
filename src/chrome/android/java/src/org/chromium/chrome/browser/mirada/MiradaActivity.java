@@ -74,6 +74,7 @@ public class MiradaActivity extends ChromeBaseAppCompatActivity implements Mirad
                       int id = item.getItemId();
                       if (id == R.id.new_chat_id) {
                           mChatInterface.onNewChatClicked();
+                          isLoading = false;
                       }
                       if (id == R.id.follow_on_x_id) {
                           Intent returnIntent = new Intent();

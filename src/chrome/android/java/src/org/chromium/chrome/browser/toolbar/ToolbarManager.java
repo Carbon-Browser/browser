@@ -291,6 +291,8 @@ import java.util.Base64;
 import java.nio.charset.StandardCharsets;
 import android.content.Context;
 import java.io.OutputStream;
+import org.chromium.chrome.browser.mirada.MiradaActivity;
+import android.content.Intent;
 
 /**
  * Contains logic for managing the toolbar visual component.  This class manages the interactions
@@ -1110,6 +1112,18 @@ public class ToolbarManager
                     @Override
                     public void onLoadStarted(Tab tab, boolean toDifferentDocument) {
                         onBackPressStateChanged();
+                        try {
+                            String url = tab.getUrl().getSpec();
+                            if (url.startsWith("miradaai://")) {
+                              url = url.replaceAll("miradaai://", "") + getUrlBarTextWithoutAutocomplete();
+
+                              Intent intent = new Intent();
+                              intent.putExtra("search_query", url);
+                              intent.setClass(mActivity, MiradaActivity.class);
+
+                              mActivity.startActivityForResult(intent, 123456);
+                            }
+                        } catch (Exception ignore) { }
                         if (!toDifferentDocument) return;
                         updateTabLoadingState(true);
                     }

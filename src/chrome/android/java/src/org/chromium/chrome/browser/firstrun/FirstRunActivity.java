@@ -32,6 +32,10 @@ import org.chromium.chrome.browser.profiles.Profile;
 import org.chromium.chrome.browser.search_engines.TemplateUrlServiceFactory;
 import org.chromium.chrome.browser.signin.SigninCheckerProvider;
 import org.chromium.chrome.browser.signin.SigninFirstRunFragment;
+import org.chromium.chrome.browser.signin.DefaultBrowserOnboardingMessageFragment;
+import org.chromium.chrome.browser.signin.PrivacyOnboardingMessageFragment;
+import org.chromium.chrome.browser.signin.RewardsOnboardingMessageFragment;
+import org.chromium.chrome.browser.signin.SpeedOnboardingMessageFragment;
 import org.chromium.components.browser_ui.modaldialog.AppModalPresenter;
 import org.chromium.components.feature_engagement.EventConstants;
 import org.chromium.components.metrics.LowEntropySource;
@@ -124,6 +128,23 @@ public class FirstRunActivity extends FirstRunActivityBase implements FirstRunPa
         mFreProgressStates.add(MobileFreProgress.WELCOME_SHOWN);
         mPagerAdapter = new FirstRunPagerAdapter(FirstRunActivity.this, mPages);
         mPager.setAdapter(mPagerAdapter);
+
+        BooleanSupplier alwaysTrue =  () -> true;
+        mPages.add(new FirstRunPage<>(
+                PrivacyOnboardingMessageFragment.class, alwaysTrue));
+        mFreProgressStates.add(MobileFreProgress.FRE_PROGRESS_PRIVACY);
+
+        mPages.add(new FirstRunPage<>(
+                SpeedOnboardingMessageFragment.class, alwaysTrue));
+        mFreProgressStates.add(MobileFreProgress.FRE_PROGRESS_SPEED);
+
+        mPages.add(new FirstRunPage<>(
+                RewardsOnboardingMessageFragment.class, alwaysTrue));
+        mFreProgressStates.add(MobileFreProgress.FRE_PROGRESS_REWARDS);
+
+        mPages.add(new FirstRunPage<>(
+                DefaultBrowserOnboardingMessageFragment.class, alwaysTrue));
+        mFreProgressStates.add(MobileFreProgress.FRE_PROGRESS_SET_DEFAULT);
         // Other pages will be created by createPostNativeAndPoliciesPageSequence() after
         // native and policy service have been initialized.
     }

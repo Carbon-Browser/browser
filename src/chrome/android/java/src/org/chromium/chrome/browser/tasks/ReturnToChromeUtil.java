@@ -567,12 +567,13 @@ public final class ReturnToChromeUtil {
         // When creating initial tab, i.e. cold start without restored tabs, we should only show
         // StartSurface as the HomePage if Single Pane is enabled, HomePage is not customized, not
         // on tablet, accessibility is not enabled or the tab group continuation feature is enabled.
-        return (!ChromeFeatureList.sShowNtpAtStartupAndroid.isEnabled())
-                && (!DseNewTabUrlManager.isNewTabSearchEngineUrlAndroidEnabled()
-                        || DseNewTabUrlManager.isDefaultSearchEngineGoogle())
-                && StartSurfaceConfiguration.isStartSurfaceFlagEnabled()
-                && !shouldHideStartSurfaceWithAccessibilityOn(context)
-                && !DeviceFormFactor.isNonMultiDisplayContextOnTablet(context);
+        // return (!ChromeFeatureList.sShowNtpAtStartupAndroid.isEnabled())
+        //         && (!DseNewTabUrlManager.isNewTabSearchEngineUrlAndroidEnabled()
+        //                 || DseNewTabUrlManager.isDefaultSearchEngineGoogle())
+        //         && StartSurfaceConfiguration.isStartSurfaceFlagEnabled()
+        //         && !shouldHideStartSurfaceWithAccessibilityOn(context)
+        //         && !DeviceFormFactor.isNonMultiDisplayContextOnTablet(context);
+        return false;
     }
 
     /**

@@ -39,7 +39,7 @@ import java.util.List;
  *     part also AdblockController. It lives in UI thread on the browser process.
  */
 @Deprecated
-public final class AdblockController { // SHAMU NEED TO TRACK ADS BLOCKED
+public final class AdblockController { // NEED TO TRACK ADS BLOCKED
     private static final String TAG = AdblockController.class.getSimpleName();
     private ResourceClassificationNotifier mResourceClassificationNotifier;
     private FilteringConfiguration mFilteringConfiguration;
