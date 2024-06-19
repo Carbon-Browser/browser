@@ -353,6 +353,12 @@ by a child template that "extends" this file.
           </intent-filter> -->
         </activity>
 
+        <activity android:name="org.chromium.chrome.browser.mirada.MiradaActivity"
+          android:theme="@style/AppTheme.NoActionBar"
+          android:screenOrientation="portrait"
+          android:launchMode="singleTask">
+        </activity>
+
         <activity android:name="org.chromium.chrome.browser.media.MediaLauncherActivity"
             android:theme="@style/Theme.BrowserUI.NoDisplay"
             android:excludeFromRecents="true"

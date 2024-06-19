@@ -2585,7 +2585,7 @@ if (enable_java_templates) {
       output_manifest = _android_manifest
       build_config = _build_config
       min_sdk_version = _min_sdk_version
-      target_sdk_version = 34
+      target_sdk_version = 33
 
       # Depend on android_resources() targets that use generated files
       # in mergeable_android_manifests (such as android_aar_prebuilt).

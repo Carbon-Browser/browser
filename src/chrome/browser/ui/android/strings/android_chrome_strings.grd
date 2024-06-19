@@ -5661,6 +5661,12 @@ To change this setting, <ph name="BEGIN_LINK">&lt;resetlink&gt;</ph>reset sync<p
 
 
       <!-- Carbon STRINGS -->
+      <message name="IDS_CARBON_ID_CLAIM" desc="">
+        Claim Carbon ID
+      </message>
+      <message name="IDS_CARBON_ID_UPGRADE" desc="">
+        Upgrade Carbon ID
+      </message>
 
       <message name="IDS_FRE_START" desc="">
         START
@@ -5709,6 +5715,22 @@ To change this setting, <ph name="BEGIN_LINK">&lt;resetlink&gt;</ph>reset sync<p
         coming soon
       </message>
 
+      <!-- Mirada strings -->
+      <message name="IDS_MIRADA_NEW_CHAT" desc="">
+        New chat
+      </message>
+      <message name="IDS_MIRADA_FOLLOW_X" desc="">
+        Mirada AI on X
+      </message>
+      <message name="IDS_MIRADA_VISIT_WEBSITE" desc="">
+        Visit website
+      </message>
+      <message name="IDS_MIRADA_IMAGE_GENERATION" desc="">
+        Image generation
+      </message>
+      <message name="IDS_MENU_AI" desc="">
+        AI
+      </message>
 
       <!-- Wallet strings -->
       <message name="IDS_WALLET" desc="">

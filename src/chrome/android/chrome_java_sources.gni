@@ -998,6 +998,13 @@ chrome_java_sources = [
   "java/src/org/chromium/chrome/browser/rewards/RewardsRecyclerAdapter.java",
   "java/src/org/chromium/chrome/browser/rewards/RewardsRedeemActivity.java",
 
+  "java/src/org/chromium/chrome/browser/mirada/MiradaActivity.java",
+  "java/src/org/chromium/chrome/browser/mirada/MiradaActivityInterface.java",
+  "java/src/org/chromium/chrome/browser/mirada/StreamingService.java",
+  "java/src/org/chromium/chrome/browser/mirada/ChatRecyclerAdapter.java",
+  "java/src/org/chromium/chrome/browser/mirada/ChatDataObj.java",
+  "java/src/org/chromium/chrome/browser/mirada/ChatInterface.java",
+
   #"java/src/org/chromium/chrome/browser/vdl/crypto/Crypto.java",
   #"java/src/org/chromium/chrome/browser/vdl/crypto/CryptoException.java",
   #"java/src/org/chromium/chrome/browser/vdl/crypto/Main.java",

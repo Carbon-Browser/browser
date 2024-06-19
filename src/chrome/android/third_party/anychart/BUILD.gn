@@ -1,0 +1,13 @@
+import("//build/config/android/rules.gni")
+import("//build/config/android/rules.gni")
+
+android_aar_prebuilt("anychart_java") {
+  aar_path = "MPAndroidChart-v3.1.0.aar"
+  info_path ="anychart.info"
+  deps = [
+
+  ]
+  #resource_exclusion_globs = [
+  #  "res/values*/*values*",
+  #]
+}
