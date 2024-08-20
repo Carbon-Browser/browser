@@ -5898,7 +5898,7 @@ To change this setting, <ph name="BEGIN_LINK">&lt;resetlink&gt;</ph>reset sync<p
       </message>
 
       <message name="IDS_REWARD_POINTS" desc="">
-        points
+        CRT
       </message>
 
       <message name="IDS_REWARD_REDEEM_MESSAGE_1" desc="">

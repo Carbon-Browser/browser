@@ -991,6 +991,8 @@ chrome_java_sources = [
   "java/src/org/chromium/chrome/browser/read_later/ReadingListUtils.java",
   "java/src/org/chromium/chrome/browser/reengagement/ReengagementNotificationController.java",
   #"java/src/org/chromium/chrome/browser/rewards/RewardsAPIBridge.java",
+  "java/src/org/chromium/chrome/browser/rewards/v2/RewardsHelper.java",
+  "java/src/org/chromium/chrome/browser/rewards/v2/RewardObjectV2.java",
   "java/src/org/chromium/chrome/browser/rewards/RewardsCommunicator.java",
   "java/src/org/chromium/chrome/browser/rewards/RewardsBottomSheetCoordinator.java",
   "java/src/org/chromium/chrome/browser/rewards/RewardsBottomSheetContent.java",

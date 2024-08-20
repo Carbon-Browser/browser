@@ -75,7 +75,7 @@ import org.json.JSONException;
 
 import android.util.TypedValue;
 import com.bumptech.glide.load.resource.bitmap.RoundedCorners;
-import com.amplitude.api.Amplitude;
+// import com.amplitude.api.Amplitude;
 
 /**
  * Simple RecyclerView.Adapter that implements {@link ItemTouchHelperAdapter} to respond to move and
@@ -349,7 +349,7 @@ public class SpeedDialAdapter extends RecyclerView.Adapter<SpeedDialAdapter.Spee
                           if (speedDialInteraction != null) {
                               speedDialInteraction.onSpeedDialClicked();
                           }
-                          Amplitude.getInstance().logEvent("speed_dial_click_event");
+                          // Amplitude.getInstance().logEventAsync("speed_dial_click_event");
                         } catch (Exception ignore) {}
                     }
                 }

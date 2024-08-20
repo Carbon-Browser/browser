@@ -175,7 +175,62 @@ public class AutocompleteResult {
      */
     @NonNull
     public List<AutocompleteMatch> getSuggestionsList() {
+        // List<AutoCompleteMatch.MatchClassification> classifications = new ArrayList<>();
+        //                 classifications.add(new AutoCompleteMatch.MatchClassification(0, AutoCompleteMatch.MatchClassificationStyle.NONE));
+
+        String searchQuery = "";
+        try {
+            searchQuery = mSuggestions.get(0).getDisplayText();
+        } catch(Exception ignore) {}
+        try {
+          AutocompleteMatch miradaItem = new AutocompleteMatch(
+              0,// int nativeType,
+              null,//Set<Integer> subtypes,
+              false,//boolean isSearchType,
+              0, //int relevance,
+              1,//int transition,
+              "",
+              null,//List<MatchClassification> displayTextClassifications,
+              "Ask AI",//String description,
+              null, //List<MatchClassification> descriptionClassifications,
+              null,//SuggestionAnswer answer,
+              "",//String fillIntoEdit,
+              new org.chromium.url.GURL("miradaai://" + searchQuery),//GURL url,
+              new org.chromium.url.GURL("https://mirada.ai/mediakit/assets/ic_mirada_logo_round.png"),//GURL imageUrl,
+              "",//String imageDominantColor,
+              false,//boolean isDeletable,
+              "",//String postContentType,
+              null,//byte[] postData,
+              0,//int groupId,
+              null,//List<QueryTile> queryTiles,
+              null,//byte[] clipboardImageData,
+              false,//boolean hasTabMatch,
+              null,//List<SuggestTile> suggestTiles,
+              null//@Nullable List<OmniboxAction> actions
+          );
+
+          trimArrayList(mSuggestions, 4);
+          boolean miradaAdded = false;
+          for (int i = 0; i < mSuggestions.size(); i++) {
+              if (mSuggestions.get(i).getDescription().equals("Ask AI")) {
+                miradaAdded = true;
+                break;
+              }
+          }
+          if (!miradaAdded && mSuggestions != null) {
+              mSuggestions.add(miradaItem);
+          }
+        } catch (Exception ignore) {}
+
         return mSuggestions;
+    }
+
+    private void trimArrayList(List<AutocompleteMatch> list, int maxSize) {
+        // If the list is larger than maxSize, reduce its size
+        while (list.size() > maxSize) {
+            // Remove the last element (or you can modify this to remove from the start or a specific position)
+            list.remove(list.size() - 1);
+        }
     }
 
     /**

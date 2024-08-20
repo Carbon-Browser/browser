@@ -116,7 +116,7 @@ public class ToSAndUMAFirstRunFragment
         mTosAndPrivacy = (TextView) view.findViewById(R.id.tos_and_privacy);
 
         // set start button gradient
-        Shader textShader = new LinearGradient(0, 0, 155, 0,
+        Shader textShader = new LinearGradient(0, 0, 175, 0,
             new int[]{Color.parseColor("#FF320A"),Color.parseColor("#FF9133")},
            null, Shader.TileMode.REPEAT);
         mAcceptButton.getPaint().setShader(textShader);
@@ -520,33 +520,33 @@ public class ToSAndUMAFirstRunFragment
     }
     private void setupMediaPlayer() {
         player = new MediaPlayer();
-        player = MediaPlayer.create(getContext(), R.raw.sfb_anim_intro);
-        Uri mUri = Uri.parse("android.resource://" + getContext().getPackageName() + "/" + R.raw.sfb_anim_intro);//"file:///android_asset/sfb_anim_intro.mp4");
-        String uri = mUri.getPath();
-        player.setOnPreparedListener(new MediaPlayer.OnPreparedListener() {
-            @Override
-            public void onPrepared(MediaPlayer mp) {
-                updateParams(true);
-                if (!player.isPlaying()) {
-                    player.start();
-                    if (mHandler == null) mHandler = new Handler();
-                    mHandler.postDelayed(updateSurfaceViewVisibility, 0);
-                }
-                if (mCurrentVideoPosition != 0) {
-                    player.seekTo(mCurrentVideoPosition);
-                    player.start();
-                }
-            }
-        });
-        player.setOnCompletionListener(new MediaPlayer.OnCompletionListener() {
-            @Override
-            public void onCompletion(MediaPlayer mediaPlayer) {
-                mAcceptButton.setVisibility(View.VISIBLE);
-                mTosAndPrivacy.setVisibility(View.VISIBLE);
-            }
-        });
-        try {
-            player.setDataSource(uri);
-        } catch (Exception e) { }
+        // player = MediaPlayer.create(getContext(), R.raw.sfb_anim_intro);
+        // Uri mUri = Uri.parse("android.resource://" + getContext().getPackageName() + "/" + R.raw.sfb_anim_intro);//"file:///android_asset/sfb_anim_intro.mp4");
+        // String uri = mUri.getPath();
+        // player.setOnPreparedListener(new MediaPlayer.OnPreparedListener() {
+        //     @Override
+        //     public void onPrepared(MediaPlayer mp) {
+        //         updateParams(true);
+        //         if (!player.isPlaying()) {
+        //             player.start();
+        //             if (mHandler == null) mHandler = new Handler();
+        //             mHandler.postDelayed(updateSurfaceViewVisibility, 0);
+        //         }
+        //         if (mCurrentVideoPosition != 0) {
+        //             player.seekTo(mCurrentVideoPosition);
+        //             player.start();
+        //         }
+        //     }
+        // });
+        // player.setOnCompletionListener(new MediaPlayer.OnCompletionListener() {
+        //     @Override
+        //     public void onCompletion(MediaPlayer mediaPlayer) {
+        //         mAcceptButton.setVisibility(View.VISIBLE);
+        //         mTosAndPrivacy.setVisibility(View.VISIBLE);
+        //     }
+        // });
+        // try {
+        //     player.setDataSource(uri);
+        // } catch (Exception e) { }
     }
 }

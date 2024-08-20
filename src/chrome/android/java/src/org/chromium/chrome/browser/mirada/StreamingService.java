@@ -15,7 +15,7 @@ public class StreamingService {
         void onError(Exception e);
     }
 
-    public void postStreamRequest(String urlString, String jsonData, StreamHandler handler) {
+    public void postStreamRequest(String urlString, String jsonData, String auth, StreamHandler handler) {
         new Thread(() -> {
             HttpURLConnection connection = null;
             try {
@@ -23,6 +23,7 @@ public class StreamingService {
                 connection = (HttpURLConnection) url.openConnection();
                 connection.setRequestMethod("POST");
                 connection.setRequestProperty("Content-Type", "application/json; charset=UTF-8");
+                connection.setRequestProperty("Authorization", "Bearer " + auth);
                 connection.setDoOutput(true);
 
                 try (OutputStream os = connection.getOutputStream()) {

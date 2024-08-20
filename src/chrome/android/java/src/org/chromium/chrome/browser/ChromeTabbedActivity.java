@@ -1078,6 +1078,29 @@ public class ChromeTabbedActivity extends ChromeActivity<ChromeActivityComponent
     }
 
     @Override
+    public void onActivityResult(int requestCode, int resultCode, Intent data) {
+        try (TraceEvent e = TraceEvent.scoped("ChromeTabbedActivity.onActivityResult")) {
+            super.onActivityResult(requestCode, resultCode, data);
+            if (requestCode == 123456 && data != null) {
+                String result = data.getStringExtra("miradaResponse");
+                if (result == null || result.isEmpty()) return;
+
+                LoadUrlParams url;
+                if (result.equals("follow_on_x_id")) {
+                    url = new LoadUrlParams("https://twitter.com/MiradaAI");
+                } else if (result.equals("visit_website_id")) {
+                    url = new LoadUrlParams("https://mirada.ai/");
+                } else {
+                    url = new LoadUrlParams("https://mirada.ai/launch");
+                }
+
+                final Tab currentTab = getActivityTab();
+                currentTab.loadUrl(url);
+            }
+        }
+    }
+
+    @Override
     public void onResumeWithNative() {
         // On warm startup, call setInitialOverviewState in onResume() instead of onStart(). This is
         // because onResume() is guaranteed to called after onNewIntent() and thus have the updated

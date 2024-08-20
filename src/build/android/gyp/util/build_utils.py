@@ -302,7 +302,7 @@ The above {} output was from:
 """
     if sys.version_info.major == 2:
       joined_args = ' '.join(args)
-    else:
+    else: # cunt  = ' '.join(shlex.quote(arg) for arg in args)
       joined_args = shlex.join(args)
 
     sys.stderr.write(MSG.format(stream_string, joined_args))

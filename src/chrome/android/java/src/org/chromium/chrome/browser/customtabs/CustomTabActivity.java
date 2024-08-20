@@ -286,6 +286,34 @@ public class CustomTabActivity extends BaseCustomTabActivity {
         context.startActivity(intent);
     }
 
+    public static void showSuperlink(Context context) {
+        // TODO(xingliu): The title text will be the html document title, figure out if we want to
+        // use Chrome strings here as EmbedContentViewActivity does.
+        CustomTabsIntent customTabIntent =
+                new CustomTabsIntent.Builder()
+                        .setShowTitle(true)
+                        .setShareState(CustomTabsIntent.SHARE_STATE_OFF)
+                        .setColorScheme(ColorUtils.inNightMode(context) ? COLOR_SCHEME_DARK
+                                                                        : COLOR_SCHEME_LIGHT)
+                        .build();
+        customTabIntent.intent.setData(Uri.parse("https://superlink.me/w?partnerId=ec133f45-0c1c-4ecf-a808-d34a9d22145f"));
+
+        Intent intent = LaunchIntentDispatcher.createCustomTabActivityIntent(
+                context, customTabIntent.intent);
+        intent.setPackage(context.getPackageName());
+
+        customTabIntent.intent.putExtra(CustomTabsIntent.EXTRA_TITLE_VISIBILITY_STATE, 1);
+        customTabIntent.intent.putExtra("org.chromium.chrome.browser.customtabs.EXTRA_DISABLE_DOWNLOAD_BUTTON", true);
+        customTabIntent.intent.putExtra("org.chromium.chrome.browser.customtabs.EXTRA_DISABLE_STAR_BUTTON", true);
+
+        intent.putExtra(CustomTabIntentDataProvider.EXTRA_UI_TYPE, CustomTabsUiType.DEFAULT);
+        intent.putExtra(Browser.EXTRA_APPLICATION_ID, context.getPackageName());
+        if (!(context instanceof Activity)) intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+        IntentUtils.addTrustedIntentExtras(intent);
+
+        context.startActivity(intent);
+    }
+
     @Override
     protected boolean requiresFirstRunToBeCompleted(Intent intent) {
         // Custom Tabs can be used to open Chrome help pages before the ToS has been accepted.

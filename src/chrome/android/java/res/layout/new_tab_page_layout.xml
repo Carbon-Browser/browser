@@ -87,7 +87,7 @@
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:layout_marginTop="@dimen/toolbar_height_no_shadow"
-                        android:layout_marginBottom="10dp"
+                        android:layout_marginBottom="8dp"
                         android:gravity="center"
                         android:paddingTop="5dp"
                         android:paddingBottom="5dp">
@@ -118,7 +118,7 @@
                               android:layout_width="wrap_content"
                               android:layout_height="wrap_content">
 
-                              <LinearLayout
+                              <!-- <LinearLayout
                                   android:orientation="vertical"
                                   android:layout_width="wrap_content"
                                   android:layout_height="wrap_content">
@@ -141,7 +141,7 @@
                                       android:textColor="@android:color/white"
                                       android:layout_gravity="center"
                                       android:textSize="12sp"/>
-                              </LinearLayout>
+                              </LinearLayout> -->
 
                               <LinearLayout
                                   android:layout_width="wrap_content"
@@ -155,6 +155,7 @@
                                       android:textSize="26sp"
                                       android:fontFamily="sans-serif"
                                       android:textStyle="bold"
+                                      android:text="..."
                                       android:textColor="#FF5D1D"
                                       android:layout_gravity="center"/>
 
@@ -298,7 +299,7 @@
             <LinearLayout
               android:layout_width="match_parent"
               android:layout_height="wrap_content"
-              android:layout_marginBottom="25dp"
+              android:layout_marginBottom="8dp"
               android:orientation="vertical">
 
               <!-- Coming soon -->
@@ -328,52 +329,21 @@
                     android:gravity="center"
                     android:orientation="horizontal">
 
-                    <Space
-                      android:layout_width="0dp"
-                      android:layout_height="1dp"
-                      android:layout_weight="1" >
-                    </Space>
-
                     <include
                         layout="@layout/speed_dial_tile_view"
                         android:id="@+id/coming_soon_tile1"/>
-
-                    <Space
-                      android:layout_width="0dp"
-                      android:layout_height="1dp"
-                      android:layout_weight="1" >
-                    </Space>
 
                     <include
                         layout="@layout/speed_dial_tile_view"
                         android:id="@+id/coming_soon_tile2"/>
 
-                    <Space
-                      android:layout_width="0dp"
-                      android:layout_height="1dp"
-                      android:layout_weight="1" >
-                    </Space>
-
                     <include
                         layout="@layout/speed_dial_tile_view"
                         android:id="@+id/coming_soon_tile3"/>
 
-                    <Space
-                      android:layout_width="0dp"
-                      android:layout_height="1dp"
-                      android:layout_weight="1" >
-                    </Space>
-
                     <include
                         layout="@layout/speed_dial_tile_view"
                         android:id="@+id/coming_soon_tile4"/>
-
-                    <Space
-                      android:layout_width="0dp"
-                      android:layout_height="1dp"
-                      android:layout_weight="1" >
-                    </Space>
-
                 </LinearLayout>
               </LinearLayout>
 
@@ -382,7 +352,7 @@
                 android:id="@+id/featured_dapps_linearlayout"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="10dp"
+                android:layout_marginTop="8dp"
                 android:background="@drawable/ntp_rounded_background"
                 android:orientation="vertical">
 
@@ -396,9 +366,9 @@
                         android:layout_height="wrap_content"
                         android:fontFamily="sans-serif"
                         android:textStyle="bold"
+                        android:layout_marginTop="6dp"
                         android:textColor="@android:color/white"
-                        android:layout_marginBottom="10dp"
-                        android:layout_marginTop="14dp"
+                        android:layout_marginBottom="4dp"
                         android:textSize="14sp"
                         android:text="@string/featured_daps"
                         android:layout_gravity="center" />
@@ -482,7 +452,7 @@
                     android:layout_height="wrap_content"
                     android:gravity="center"
                     android:visibility="gone"
-                    android:paddingBottom="20dp"
+                    android:paddingBottom="15dp"
                     android:orientation="horizontal">
 
                     <Space
@@ -561,6 +531,27 @@
                   android:text="@string/view_more_dapps"
                   android:layout_gravity="center" />
             </LinearLayout>
+
+            <!-- <LinearLayout android:layout_width="match_parent"
+                android:id="@+id/carbon_id_button"
+                android:layout_height="wrap_content"
+                android:padding="8dp"
+                android:gravity="center_vertical"
+                android:background="@drawable/carbon_id_background_dark">
+
+                <View
+                    android:layout_width="30dp"
+                    android:layout_height="30dp"
+                    android:background="@drawable/ic_carbon_id"/>
+
+                <TextView
+                    android:layout_marginStart="10dp"
+                    android:textSize="14sp"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:textColor="@android:color/white"
+                    android:text="← Get your Carbon ID"/>
+            </LinearLayout> -->
 
             <FrameLayout
                 android:layout_width="match_parent"

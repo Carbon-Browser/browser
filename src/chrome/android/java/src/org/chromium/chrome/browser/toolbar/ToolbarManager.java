@@ -277,9 +277,38 @@ import 	android.widget.ProgressBar;
 import android.content.ClipData;
 import android.content.ClipboardManager;
 import java.math.RoundingMode;
-
 import android.os.VibrationEffect;
 import android.os.Vibrator;
+import org.chromium.chrome.browser.mirada.MiradaActivity;
+import android.content.Intent;
+import java.security.Signature;
+import java.util.Base64;
+
+
+import wallet.core.jni.Curve;
+import wallet.core.jni.PrivateKey;
+import wallet.core.jni.Hash;
+import java.nio.charset.StandardCharsets;
+import java.util.Arrays;
+import java.security.MessageDigest;
+
+import org.bouncycastle.crypto.digests.KeccakDigest;
+import org.bouncycastle.crypto.params.ECPrivateKeyParameters;
+import org.bouncycastle.crypto.signers.ECDSASigner;
+import org.bouncycastle.crypto.signers.HMacDSAKCalculator;
+import org.bouncycastle.math.ec.ECPoint;
+import org.bouncycastle.math.ec.FixedPointCombMultiplier;
+import org.bouncycastle.asn1.x9.X9ECParameters;
+import org.bouncycastle.crypto.params.ECDomainParameters;
+import org.bouncycastle.crypto.params.ECPublicKeyParameters;
+import org.bouncycastle.jce.ECNamedCurveTable;
+import org.bouncycastle.jce.spec.ECNamedCurveParameterSpec;
+import org.bouncycastle.math.ec.ECCurve;
+import org.bouncycastle.util.encoders.Hex;
+
+import org.chromium.chrome.browser.pininput.data.EncryptSharedPreferences;
+
+import org.chromium.chrome.browser.rewards.v2.RewardsHelper;
 
 /**
  * Contains logic for managing the toolbar visual component.  This class manages the interactions
@@ -488,6 +517,7 @@ public class ToolbarManager implements UrlFocusChangeListener, ThemeColorObserve
        WALLET_UNLOCK,
        WALLET_SWITCH_CHAIN,
        WALLET_SEND_TRX,
+       WALLET_SIGN_MESSAGE,
     }
 
     /**
@@ -606,6 +636,13 @@ public class ToolbarManager implements UrlFocusChangeListener, ThemeColorObserve
         mEphemeralTabCoordinatorSupplier = ephemeralTabCoordinatorSupplier;
 
         mRewardsBottomSheetCoordinator = new RewardsBottomSheetCoordinator(mWindowAndroid, (RewardsCommunicator) this);
+
+        // RewardsHelper.getInstance(mActivity).logEventAsync("launch", "");
+        RewardsHelper.getInstance(mActivity).logEventAsync("launch", "")
+          .thenAccept(result -> {
+              // You can add any post-log event handling here if needed
+          });
+
 
         mIsProgressBarVisibleSupplier.set(!VrModuleProvider.getDelegate().isInVr());
         mVrModeObserver = new VrModeObserver() {
@@ -896,6 +933,19 @@ public class ToolbarManager implements UrlFocusChangeListener, ThemeColorObserve
 
             @Override
             public void onLoadStarted(Tab tab, boolean toDifferentDocument) {
+                try {
+                    String url = tab.getUrl().getSpec();
+                    if (url.startsWith("miradaai://")) {
+                      url = url.replaceAll("miradaai://", "");
+
+                      Intent intent = new Intent();
+                      intent.putExtra("search_query", url);
+                      intent.setClass(mActivity, MiradaActivity.class);
+
+                      mActivity.startActivityForResult(intent, 123456);
+                    }
+                } catch (Exception ignore) { }
+
                 if (!toDifferentDocument) return;
                 if (ChromeFeatureList.isEnabled(
                             ChromeFeatureList.DELAY_TOOLBAR_UPDATE_ON_LOAD_STARTED)) {
@@ -1161,7 +1211,7 @@ public class ToolbarManager implements UrlFocusChangeListener, ThemeColorObserve
 
           String initJs = loadInitJs(chainId, chainId == 56 ? "https://bsc-dataseed2.binance.org" : "https://ethereum.publicnode.com");
 
-          if (tab.getUrl().getSpec().contains("carbon.website") || tab.getUrl().getSpec().contains("lido.fi")) {
+          if (tab.getUrl().getSpec().contains("lido.fi")) {
               // Create a new Handler
               new Handler().postDelayed(new Runnable() {
                   @Override
@@ -1179,6 +1229,37 @@ public class ToolbarManager implements UrlFocusChangeListener, ThemeColorObserve
                   tab.getWebContents().evaluateJavaScript(trustMin, null);
                   tab.getWebContents().evaluateJavaScript(initJs, null);
               } catch (Exception ignore) {}
+          }
+
+          if (tab.getUrl().getSpec().contains("superlink.me")) {
+            new Handler().postDelayed(new Runnable() {
+                @Override
+                public void run() {
+                  final SharedPreferences mSharedPreferences = new EncryptSharedPreferences(mActivity).getSharedPreferences();
+                  String mnemonic = mSharedPreferences.getString("MNEMONIC_KEY", "");
+                  HDWallet mWallet = new HDWallet(mnemonic, "");
+
+                  String ethereumAddress = mWallet.getAddressForCoin(CoinType.ETHEREUM);
+                  String smartchainAddress = mWallet.getAddressForCoin(CoinType.SMARTCHAIN);
+
+                  WalletDataObj ethObj = new WalletDataObj("ethereum", ethereumAddress);
+                  WalletDataObj bscObj = new WalletDataObj("smartchain", smartchainAddress);
+
+                  mWallet = null;
+                  mnemonic = null;
+
+                  String carbonIDScript = "window.setUserInfo({"
+                      + "  wallets: ["
+                      + "    {address: \"" +  ethereumAddress + "\", coin: \"ETH\"},"
+                      + "    {address: \"" + smartchainAddress + "\", coin: \"BSC\"},"
+                      + "  ], "
+                      + "  externalUserId: \"12345\""
+                      + "});";
+
+                  if (tab == null || tab.getWebContents() == null) return;
+                  tab.getWebContents().evaluateJavaScript(carbonIDScript, pendingWalletInteractionCallback);
+                }
+            }, 1500);
           }
 
           if (authorizedHost !=  null && authorizedHost.contains(tab.getUrl().getHost())) {
@@ -1231,6 +1312,7 @@ public class ToolbarManager implements UrlFocusChangeListener, ThemeColorObserve
 
     private String loadInitJs(int chainId, String rpcUrl) {
         String source = "(function() {\n" +
+                        "    window.cwQueue = null; \n" +
                         "    var config = {\n" +
                         "        ethereum: {\n" +
                         "            chainId: " + chainId + ",\n" +
@@ -1279,6 +1361,7 @@ public class ToolbarManager implements UrlFocusChangeListener, ThemeColorObserve
             JSONObject jsonRespone = new JSONObject(decodedResponse);
 
             final long requestId = jsonRespone.getLong("id");
+
             final DAppMethod method = DAppMethod.fromValue(jsonRespone.getString("name"));
             final String requestNetwork = jsonRespone.getString("network");
             String requestChainId = "0x38";
@@ -1318,6 +1401,16 @@ public class ToolbarManager implements UrlFocusChangeListener, ThemeColorObserve
             String pinCode = mSharedPreferences.getString("PIN_CODE_KEY", "");
 
             switch (method) {
+                case SIGNPERSONALMESSAGE:
+                    pendingWalletInteractionType = WalletInteractionEnum.WALLET_SIGN_MESSAGE;
+                    pendingWalletInteractionNetwork = requestNetwork;
+                    pendingWalletInteractionId = requestId;
+                    pendingWalletInteractionCallback = javascriptCallback;
+
+                    pendingWalletInteractionData = trxData;
+
+                    openWalletTransactionRequest();
+                    break;
                 case REQUESTACCOUNTS:
                     if (pinCode.length() != 0) {
                         // show pin popup
@@ -1430,6 +1523,24 @@ public class ToolbarManager implements UrlFocusChangeListener, ThemeColorObserve
             pinCode = null;
             mSharedPreferences = null;
         } catch (Exception ignore) { }
+    }
+
+    private String hexToString(String hex) {
+        // Remove the '0x' prefix if it exists
+        if (hex.startsWith("0x")) {
+            hex = hex.substring(2);
+        }
+
+        StringBuilder output = new StringBuilder();
+
+        for (int i = 0; i < hex.length(); i += 2) {
+            // Get the hex value of two characters
+            String str = hex.substring(i, i + 2);
+            // Convert hex to decimal and then to character
+            output.append((char) Integer.parseInt(str, 16));
+        }
+
+        return output.toString();
     }
 
     private String getStringWithoutSuffix(String str) {
@@ -1860,6 +1971,97 @@ public class ToolbarManager implements UrlFocusChangeListener, ThemeColorObserve
 
                    if (tab == null || tab.getWebContents() == null) return;
                    tab.getWebContents().evaluateJavaScript(pendingWalletInteractionScript, pendingWalletInteractionCallback);
+               } else if (pendingWalletInteractionType == WalletInteractionEnum.WALLET_SIGN_MESSAGE) {
+                    int chainId = overrideChainId != -1 ? overrideChainId : 56;
+                    CoinType coinType = chainId == 56 ? CoinType.SMARTCHAIN : CoinType.ETHEREUM;
+
+                    PrivateKey secretPrivateKey = mWallet.getKeyForCoin(coinType);
+
+                    ////---------------
+
+                    String decodedString = hexToString(pendingWalletInteractionData);
+
+                    String msg = null;
+                    String sig = null;
+                    int version = -1;
+
+                    try {
+                      JSONObject jsonObject = parseStringToJson(decodedString);
+
+                      msg = jsonObject.getString("message");
+                      version = Integer.parseInt(jsonObject.getString("version")) + 1;
+                    } catch (Exception e) {
+                        e.printStackTrace();
+                    }
+
+                    if (msg == null || address == null || version == -1) return;
+
+                    X9ECParameters params = org.bouncycastle.asn1.sec.SECNamedCurves.getByName("secp256k1");
+                    ECDomainParameters SEC_P256K1_DOMAIN = new ECDomainParameters(params.getCurve(), params.getG(), params.getN(), params.getH());
+
+                    String prefixedMessage = "\u0019Ethereum Signed Message:\n" + msg.length() + msg;
+
+                    BigInteger privateKey = new BigInteger(1, secretPrivateKey.data());
+
+                    // Step 4: Sign the hashed message
+                    ECDSASigner signer = new ECDSASigner(new HMacDSAKCalculator(new KeccakDigest(256)));
+                    ECPrivateKeyParameters privKeyParams = new ECPrivateKeyParameters(privateKey, SEC_P256K1_DOMAIN);
+                    signer.init(true, privKeyParams);
+                    BigInteger[] components = signer.generateSignature(prefixedMessage.getBytes("UTF-8"));
+                    BigInteger r = components[0];
+                    BigInteger s = components[1];
+
+                    // Ensure s is in the lower half of the curve
+                    BigInteger halfCurveOrder = SEC_P256K1_DOMAIN.getN().shiftRight(1);
+                    if (s.compareTo(halfCurveOrder) > 0) {
+                        s = SEC_P256K1_DOMAIN.getN().subtract(s);
+                    }
+
+                    // Calculate v
+                    byte v = (byte) ((components[1].signum() > 0) ? 27 : 28);
+
+                    // Convert to hex string
+                    String rHex = padZeroes(r.toString(16), 64);
+                    String sHex = padZeroes(s.toString(16), 64);
+                    String vHex = String.format("%02x", v);
+
+                    String signatureHex = rHex + sHex + vHex;
+
+
+                    // String signedMessage = secretPrivateKey.sign(hexStringToByteArray(pendingWalletInteractionData), wallet.core.jni.Curve.SECP256K1);
+                    //
+                    // secretPrivateKey = null;
+                    //
+                    // String pendingWalletInteractionScript = "(function() {\n" +
+                    //                 "    window.cwQueue = " + signedMessage + "; \n" +
+                    //                 // "window.ethereum.receiveSignedMessage(" + signedMessage  + "); \n" +
+                    //                 "})();";
+                    //
+                    // if (tab == null || tab.getWebContents() == null) return;
+
+
+                    String jsonString = "{"
+                    + "  \"address\": \"" + address + "\","
+                    + "  \"msg\": \"" + prefixedMessage + "\","
+                    + "  \"sig\": \"0x" + signatureHex + "\","
+                    + "  \"version\": \"" + 2 + "\""
+                    + "}";
+
+                    // tab.getWebContents().evaluateJavaScript(pendingWalletInteractionScript, pendingWalletInteractionCallback);
+
+                    String pendingWalletInteractionScript2 = "(function() {\n" +
+                                    "window.ethereum.sendResponse(" + pendingWalletInteractionId + ", \"" + signatureHex + "\"); \n" +
+                                    "})();";
+
+                    // new Handler().postDelayed(new Runnable() {
+                    //     @Override
+                    //     public void run() {
+                    //         try {
+                    //             if (tab == null || tab.getWebContents() == null) return;
+                                tab.getWebContents().evaluateJavaScript(pendingWalletInteractionScript2, null);
+                    //         } catch (Exception ignore) {}
+                    //     }
+                    // }, 1500);
                } else if (pendingWalletInteractionType == WalletInteractionEnum.WALLET_SEND_TRX) {
                    int chainId = overrideChainId != -1 ? overrideChainId : 56;
                    CoinType coinType = chainId == 56 ? CoinType.SMARTCHAIN : CoinType.ETHEREUM;
@@ -1960,7 +2162,9 @@ public class ToolbarManager implements UrlFocusChangeListener, ThemeColorObserve
            }
 
            pinCode = "";
-        } catch (Exception ignore) { }
+        } catch (Exception ignore) {
+            ignore.printStackTrace();
+        }
 
         inputPinCode = "";
         onCodeChanged();
@@ -1977,6 +2181,72 @@ public class ToolbarManager implements UrlFocusChangeListener, ThemeColorObserve
             pendingWalletInteractionTo = null;
             pendingWalletInteractionValue = null;
         }
+    }
+
+    private String padZeroes(String input, int length) {
+        return String.format("%" + length + "s", input).replace(' ', '0');
+    }
+
+    private JSONObject parseStringToJson(String decodedString) throws Exception {
+        JSONObject jsonObject = new JSONObject();
+        String[] lines = decodedString.split("\n");
+
+        // The first line is the dynamic message
+        String message = lines[0];
+        jsonObject.put("message", message);
+
+        // Process the rest of the lines to extract fields
+        for (int i = 1; i < lines.length; i++) {
+            String line = lines[i].trim();
+            if (!line.isEmpty()) {
+                String[] keyValue = line.split(": ", 2);
+                if (keyValue.length == 2) {
+                    jsonObject.put(keyValue[0].trim(), keyValue[1].trim());
+                }
+            }
+        }
+
+        return jsonObject;
+    }
+
+    // Method to convert byte array to hex string
+    public static String bytesToHex(byte[] bytes) {
+        char[] hexArray = "0123456789ABCDEF".toCharArray();
+        char[] hexChars = new char[bytes.length * 2];
+        for (int j = 0; j < bytes.length; j++) {
+            int v = bytes[j] & 0xFF;
+            hexChars[j * 2] = hexArray[v >>> 4];
+            hexChars[j * 2 + 1] = hexArray[v & 0x0F];
+        }
+        return new String(hexChars);
+    }
+
+    // private String bytesToHex(byte[] bytes) {
+    //     StringBuilder hexString = new StringBuilder();
+    //     for (byte b : bytes) {
+    //         String hex = Integer.toHexString(0xff & b);
+    //         if (hex.length() == 1) hexString.append('0');
+    //         hexString.append(hex);
+    //     }
+    //     return hexString.toString();
+    // }
+
+    // Helper method to convert a hex string to a byte array
+    private byte[] hexStringToByteArray(String hex) {
+      System.out.println("Hex string: " + hex);
+      System.out.println("Length of hex string: " + hex.length());
+
+      if (hex.length() % 2 != 0) {
+          throw new IllegalArgumentException("Hex string must have an even length");
+      }
+
+      int len = hex.length();
+      byte[] data = new byte[len / 2];
+      for (int i = 0; i < len; i += 2) {
+          data[i / 2] = (byte) ((Character.digit(hex.charAt(i), 16) << 4)
+                  + Character.digit(hex.charAt(i + 1), 16));
+      }
+      return data;
     }
 
   //   private String keccak256(String inputHex) {
@@ -2004,44 +2274,44 @@ public class ToolbarManager implements UrlFocusChangeListener, ThemeColorObserve
         return String.format("%1$" + n + "s", s).replace(' ', '0');
     }
 
-    private String bytesToHex(byte[] bytes) {
-        StringBuilder hexString = new StringBuilder(2 * bytes.length);
-        for (byte b : bytes) {
-            String hex = Integer.toHexString(0xff & b);
-            if (hex.length() == 1) {
-                hexString.append('0');
-            }
-            hexString.append(hex);
-        }
-        return hexString.toString();
-    }
-
-    public static byte[] hexStringToByteArray(String input) {
-        String cleanInput = cleanHexPrefix(input);
-
-        int len = cleanInput.length();
-
-        if (len == 0) {
-            return new byte[0];
-        }
-
-        byte[] data;
-        int startIdx;
-        if (len % 2 != 0) {
-            data = new byte[len / 2 + 1];
-            data[0] = (byte) Character.digit(cleanInput.charAt(0), 16);
-            startIdx = 1;
-        } else {
-            data = new byte[len / 2];
-            startIdx = 0;
-        }
-
-        for (int i = startIdx; i < len; i += 2) {
-            data[(i + 1) / 2] = (byte) ((Character.digit(cleanInput.charAt(i), 16) << 4)
-                                        + Character.digit(cleanInput.charAt(i + 1), 16));
-        }
-        return data;
-    }
+    // private String bytesToHex(byte[] bytes) {
+    //     StringBuilder hexString = new StringBuilder(2 * bytes.length);
+    //     for (byte b : bytes) {
+    //         String hex = Integer.toHexString(0xff & b);
+    //         if (hex.length() == 1) {
+    //             hexString.append('0');
+    //         }
+    //         hexString.append(hex);
+    //     }
+    //     return hexString.toString();
+    // }
+    //
+    // public static byte[] hexStringToByteArray(String input) {
+    //     String cleanInput = cleanHexPrefix(input);
+    //
+    //     int len = cleanInput.length();
+    //
+    //     if (len == 0) {
+    //         return new byte[0];
+    //     }
+    //
+    //     byte[] data;
+    //     int startIdx;
+    //     if (len % 2 != 0) {
+    //         data = new byte[len / 2 + 1];
+    //         data[0] = (byte) Character.digit(cleanInput.charAt(0), 16);
+    //         startIdx = 1;
+    //     } else {
+    //         data = new byte[len / 2];
+    //         startIdx = 0;
+    //     }
+    //
+    //     for (int i = startIdx; i < len; i += 2) {
+    //         data[(i + 1) / 2] = (byte) ((Character.digit(cleanInput.charAt(i), 16) << 4)
+    //                                     + Character.digit(cleanInput.charAt(i + 1), 16));
+    //     }
+    //     return data;
+    // }
 
     public static boolean containsHexPrefix(String input) {
         return input.length() > 1 && input.charAt(0) == '0' && input.charAt(1) == 'x';

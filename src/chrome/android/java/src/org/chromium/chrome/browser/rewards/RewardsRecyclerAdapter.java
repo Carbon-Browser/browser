@@ -50,9 +50,16 @@ import androidx.appcompat.widget.AppCompatImageButton;
 import org.chromium.chrome.browser.rewards.RewardsCommunicator;
 import android.graphics.Color;
 
+import java.lang.Integer;
+import org.json.JSONArray;
+import org.json.JSONObject;
+import java.util.List;
+import org.chromium.chrome.browser.rewards.v2.RewardsHelper;
+import org.chromium.chrome.browser.rewards.v2.RewardObjectV2;
+
 public class RewardsRecyclerAdapter extends RecyclerView.Adapter<RewardsRecyclerAdapter.ViewHolder> implements RewardsAPIBridge.RewardsAPIBridgeCommunicator {
 
-    private ArrayList<RewardObject> mData = new ArrayList<>();
+    private ArrayList<RewardObjectV2> mData = new ArrayList<>();
     private LayoutInflater mInflater;
 
     private SharedPreferences mPrefs;
@@ -62,6 +69,8 @@ public class RewardsRecyclerAdapter extends RecyclerView.Adapter<RewardsRecycler
     private RewardsCommunicator mRewardsCommunicator;
 
     private boolean mIsDarkMode;
+
+    private int balance;
 
     // data is passed into the constructor
     public RewardsRecyclerAdapter(Context context, LinearLayout loadingIndicator, TextView errorMessageTextView, RewardsCommunicator communicator, boolean isDarkMode) {
@@ -76,20 +85,67 @@ public class RewardsRecyclerAdapter extends RecyclerView.Adapter<RewardsRecycler
         mLoadingIndicator = loadingIndicator;
         mErrorMessageTextView = errorMessageTextView;
 
-        RewardsAPIBridge.getInstance().getAllRewards(this);
+        RewardsHelper.getInstance(context).getAllRewardsAsync().thenAccept(rewards -> {
+            this.mData = parseRewards(rewards);
+
+            new Handler(Looper.getMainLooper()).post(new Runnable() {
+                @Override
+                public void run() {
+                    mLoadingIndicator.setVisibility(View.GONE);
+                    notifyDataSetChanged();
+                }
+            });
+        });
+
+        RewardsHelper.getInstance(context).getBalanceAsync().thenAccept(balance -> {
+          this.balance = Integer.parseInt(balance);
+        });
     }
 
+    public static ArrayList<RewardObjectV2> parseRewards(String jsonResponse) {
+        ArrayList<RewardObjectV2> rewardsList = new ArrayList<>();
+
+        try {
+            JSONArray jsonArray = new JSONArray(jsonResponse);
+
+            for (int i = 0; i < jsonArray.length(); i++) {
+                JSONObject jsonObject = jsonArray.getJSONObject(i);
+
+                // Extracting values from JSON object
+                String id = jsonObject.getString("token_id");
+                String name = jsonObject.getString("name");
+                String cost = String.valueOf(jsonObject.getInt("cost"));
+                String amount = String.valueOf(jsonObject.getInt("amount"));
+                String uri = jsonObject.getString("uri");
+                int inventory = jsonObject.getInt("inventory");
+
+                // Extracting image URL from metadata
+                JSONObject metadata = jsonObject.getJSONObject("metadata");
+                String imageUrl = metadata.getString("image");
+
+                // Creating RewardObjectV2 object and adding to list
+                RewardObjectV2 reward = new RewardObjectV2(id, name, cost, amount, uri, imageUrl, inventory);
+                rewardsList.add(reward);
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+
+        return rewardsList;
+    }
+
+    // UNUSED IN v2 --
     @Override
     public void onRewardsReceived(ArrayList<RewardObject> rewards) {
-        this.mData = rewards;
-
-        new Handler(Looper.getMainLooper()).post(new Runnable() {
-            @Override
-            public void run() {
-                mLoadingIndicator.setVisibility(View.GONE);
-                notifyDataSetChanged();
-            }
-        });
+        // this.mData = rewards;
+        //
+        // new Handler(Looper.getMainLooper()).post(new Runnable() {
+        //     @Override
+        //     public void run() {
+        //         mLoadingIndicator.setVisibility(View.GONE);
+        //         notifyDataSetChanged();
+        //     }
+        // });
     }
 
     @Override
@@ -119,7 +175,7 @@ public class RewardsRecyclerAdapter extends RecyclerView.Adapter<RewardsRecycler
 
         View view = holder.itemView;
 
-        final RewardObject mRewardObject = mData.get(position);
+        final RewardObjectV2 mRewardObject = mData.get(position);
 
         ImageView mRewardImage = view.findViewById(R.id.reward_imageview);
         final float density = view.getContext().getResources().getDisplayMetrics().density;
@@ -149,17 +205,8 @@ public class RewardsRecyclerAdapter extends RecyclerView.Adapter<RewardsRecycler
         mRewardMonetary.setTextColor(Color.parseColor(textColor));
         TextView mRewardMonetary2 = view.findViewById(R.id.reward_monetary_value2);
 
-        String rewardPointsString = mRewardObject.valuePoints + " pts";
-          mRewardMonetary2.setText("BUY");
-        // if (mRewardObject.valueDollar < mRewardObject.valuePoints) {
-        //
-        //     rewardPointsString = "$" + mRewardObject.valueDollar + " Voucher";
-        //
-        //     mRewardMonetary2.setText("BUY");
-        // } else {
-        //   // csix upgrade
-        //   mRewardMonetary2.setText("UPGRADE");
-        // }
+        String rewardPointsString = mRewardObject.cost + " CRT";
+        mRewardMonetary2.setText("Claim");
 
         mRewardMonetary.setText(rewardPointsString);
 
@@ -167,24 +214,10 @@ public class RewardsRecyclerAdapter extends RecyclerView.Adapter<RewardsRecycler
         mRewardName.setText(mRewardObject.name);
         mRewardName.setTextColor(Color.parseColor(textColor));
 
-        // if (mRewardObject.name.equals("Carbon PRO (6mo)")) {
-        //     AppCompatImageButton mProHelpBtn = view.findViewById(R.id.pro_help_btn);
-        //     mProHelpBtn.setVisibility(View.VISIBLE);
-        //
-        //     mProHelpBtn.setOnClickListener(new View.OnClickListener() {
-        //         @Override
-        //         public void onClick(View view) {
-        //             mRewardsCommunicator.loadRewardsUrl("https://carbon.website/#pro", view);
-        //
-        //             // TODO close menu
-        //         }
-        //     });
-        // }
-
         LinearLayout mRedeemButton = view.findViewById(R.id.reward_redeem_button);
-        if (RewardsAPIBridge.getInstance().getTotalCreditBalance() < mRewardObject.valuePoints) {
+        // if (balance < Integer.parseInt(mRewardObject.cost)) { DISABLE CLAIMING UNTIL BACKEND SUPPORTED
             mRedeemButton.setEnabled(false);
-        }
+        // }
         mRedeemButton.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
@@ -192,14 +225,12 @@ public class RewardsRecyclerAdapter extends RecyclerView.Adapter<RewardsRecycler
                 intent.setClass(view.getContext(), RewardsRedeemActivity.class);
 
                 intent.putExtra("rewardImageUrl", imageUrl);
-                intent.putExtra("rewardValueDollar", mRewardObject.valueDollar+ " $CSIX");
-                intent.putExtra("rewardValuePoints", mRewardObject.valuePoints);
+                intent.putExtra("rewardCost", mRewardObject.cost+ " CRT");
+                intent.putExtra("rewardInventory",mRewardObject.inventory);
                 intent.putExtra("rewardName", mRewardObject.name);
                 intent.putExtra("rewardId", mRewardObject.id);
 
                 IntentUtils.safeStartActivity(view.getContext(), intent);
-
-                // TODO close menu
             }
         });
     }

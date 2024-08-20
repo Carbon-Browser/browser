@@ -115,7 +115,7 @@ public class NightModeUtils {
      * @return The current theme setting. See {@link ThemeType}.
      */
     public static @ThemeType int getThemeSetting() {
-        int userSetting = SharedPreferencesManager.getInstance().readInt(UI_THEME_SETTING, ThemeType.DARK);
+        int userSetting = SharedPreferencesManager.getInstance().readInt(UI_THEME_SETTING, ThemeType.LIGHT);
         if (userSetting == -1) {
             return isNightModeDefaultToLight() ? ThemeType.LIGHT : ThemeType.SYSTEM_DEFAULT;
         } else {

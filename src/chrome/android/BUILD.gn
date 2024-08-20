@@ -694,6 +694,8 @@ android_library("chrome_java") {
 
     "//chrome/android/third_party/jdk15on:jdk15on_java",
 
+    "//chrome/android/third_party/carbon_b2e:carbon_b2e_java",
+
     # trustwallet
     "//chrome/android/third_party/trustwallet:trustwallet_java",
     #"//chrome/android/third_party/trustwallet:trustwallet_proto_java",
@@ -714,7 +716,7 @@ android_library("chrome_java") {
     #"//chrome/android/third_party/anychart:anychart_java",
 
     # amplitude
-    "//chrome/android/third_party/amplitude:amplitude_java",
+    #"//chrome/android/third_party/amplitude:amplitude_java",
 
     # glide
     #"//chrome/android/third_party/glide:glide_java",

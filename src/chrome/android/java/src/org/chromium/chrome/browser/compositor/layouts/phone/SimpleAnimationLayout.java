@@ -34,6 +34,11 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.LinkedList;
 
+import android.content.SharedPreferences;
+import org.chromium.base.ContextUtils;
+
+import org.chromium.chrome.browser.rewards.v2.RewardsHelper;
+
 /**
  * This class handles animating the opening of new tabs.
  */
@@ -167,6 +172,16 @@ public class SimpleAnimationLayout extends Layout {
             boolean background, float originX, float originY) {
         super.onTabCreated(time, id, index, sourceId, newIsIncognito, background, originX, originY);
         ensureSourceTabCreated(sourceId);
+
+        try {
+          SharedPreferences mPrefs = ContextUtils.getAppSharedPreferences();
+          int nTabsOpened = Long.valueOf(mPrefs.getLong("tabs_opened", 0)).intValue();
+          mPrefs.edit().putLong("tabs_opened", nTabsOpened).apply();
+          if (nTabsOpened % 10 == 0) {
+            RewardsHelper.getInstance(getContext()).logEventAsync("new_tab", ""+nTabsOpened);
+          }
+        } catch (Exception ignore) {}
+
         if (background && mLayoutTabs != null && mLayoutTabs.length > 0) {
             tabCreatedInBackground(id, sourceId, newIsIncognito, originX, originY);
         } else {

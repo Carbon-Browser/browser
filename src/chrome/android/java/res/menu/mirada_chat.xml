@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Copyright 2016 The Chromium Authors. All rights reserved.
+     Use of this source code is governed by a BSD-style license that can be
+     found in the LICENSE file. -->
+
+<menu xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto" >
+
+    <item
+        android:id="@+id/new_chat_id"
+        android:title="@string/mirada_new_chat" />
+
+    <item
+        android:id="@+id/follow_on_x_id"
+        android:title="@string/mirada_follow_x" />
+        
+    <item
+        android:id="@+id/image_generation_id"
+        android:title="@string/mirada_image_generation" />
+
+    <item
+        android:id="@+id/visit_website_id"
+        android:title="@string/mirada_visit_website" />
+
+</menu>

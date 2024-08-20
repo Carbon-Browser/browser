@@ -60,16 +60,4 @@
             android:textSize="12sp" />
     </LinearLayout>
 
-    <!-- <androidx.appcompat.widget.AppCompatImageButton
-        android:id="@+id/pro_help_btn"
-        android:src="@drawable/rewards_help_new"
-        android:background="?attr/selectableItemBackgroundBorderless"
-        android:contentDescription=""
-        android:layout_alignParentEnd="true"
-        android:scaleType="fitXY"
-        android:layout_marginTop="30dp"
-        android:visibility="gone"
-        android:layout_gravity="end"
-        style="@style/SplitToolbarButtonHelpPro"/> -->
-
 </LinearLayout>

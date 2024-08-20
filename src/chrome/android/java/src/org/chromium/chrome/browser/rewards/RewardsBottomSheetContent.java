@@ -31,6 +31,7 @@ import com.bumptech.glide.Glide;
 import android.widget.ImageView;
 import com.bumptech.glide.load.engine.DiskCacheStrategy;
 import 	android.content.res.Configuration;
+import org.chromium.chrome.browser.rewards.v2.RewardsHelper;
 
 /**
  * Bottom sheet content for the screen which allows a parent to approve or deny a website.
@@ -71,7 +72,9 @@ class RewardsBottomSheetContent implements BottomSheetContent {
         mRewardsBridge = RewardsAPIBridge.getInstance();
 
         TextView mBalanceTextView = mContentView.findViewById(R.id.bottom_sheet_rewards_balance);
-        mBalanceTextView.setText(mRewardsBridge.getTotalCreditBalance() + " points");
+        RewardsHelper.getInstance(context).getBalanceAsync().thenAccept(balance -> {
+            mBalanceTextView.setText(balance + " CRT");
+        });
         Shader textShader = new LinearGradient(0, 0, 250, 0,
             new int[]{Color.parseColor("#FF320A"),Color.parseColor("#FF9133")},
            null, Shader.TileMode.CLAMP);

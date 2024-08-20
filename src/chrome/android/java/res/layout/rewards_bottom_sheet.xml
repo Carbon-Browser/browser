@@ -52,7 +52,7 @@
             android:text="@string/bottom_sheet_teaser_1"
             android:textColor="#808080"/>
 
-        <TextView
+        <!-- <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_gravity="center_horizontal"
@@ -60,7 +60,7 @@
             android:textSize="12sp"
             android:layout_marginStart="1.5dp"
             android:text="@string/bottom_sheet_teaser_2"
-            android:textColor="#FF7929"/>
+            android:textColor="#FF7929"/> -->
     </LinearLayout>
 
     <TextView
@@ -70,6 +70,7 @@
         android:layout_gravity="center_horizontal"
         android:importantForAccessibility="no"
         android:layout_marginTop="7dp"
+        android:text="Loading balance.."
         android:layout_marginBottom="28dp"
         android:textSize="25sp"/>
 

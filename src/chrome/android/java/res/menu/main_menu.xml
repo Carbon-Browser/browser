@@ -106,6 +106,13 @@
         <item android:id="@+id/translate_id"
             android:title="@string/menu_translate"
             android:icon="@drawable/ic_translate" />
+        <item android:id="@id/divider_line_id"
+            android:title="@null" />
+        <item android:id="@+id/ai_id"
+            android:title="@string/menu_ai"
+            android:icon="@drawable/ic_menu_ai" />
+        <item android:id="@id/divider_line_id"
+            android:title="@null" />
         <item android:id="@+id/add_to_homescreen_id"
             android:title="@string/menu_add_to_homescreen"
             android:icon="@drawable/ic_add_to_home_screen" />
@@ -153,6 +160,11 @@
             android:icon="@drawable/ic_twitter" />
         <item android:id="@id/divider_line_id"
             android:title="@null" />
+        <!-- <item android:id="@+id/carbon_id"
+            android:title="@string/carbon_id_claim"
+            android:icon="@drawable/ic_carbon_id" />
+        <item android:id="@id/divider_line_id"
+            android:title="@null" /> -->
         <item android:id="@+id/reader_mode_prefs_id"
             android:title="@string/menu_reader_mode_prefs"
             android:icon="@drawable/reader_mode_prefs_icon" />

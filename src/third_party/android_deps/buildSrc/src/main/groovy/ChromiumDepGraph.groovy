@@ -24,6 +24,10 @@ class ChromiumDepGraph {
     // Some libraries don't properly fill their POM with the appropriate licensing information. It is provided here from
     // manual lookups. Note that licenseUrl must provide textual content rather than be an html page.
     static final Map<String, PropertyOverride> PROPERTY_OVERRIDES = [
+        me_superlink_sdk: new PropertyOverride(
+            licenseUrl: 'https://www.apache.org/licenses/LICENSE-2.0.txt',
+            licenseName: 'Apache 2.0'),
+
         com_github_bumptech_glide_glide: new PropertyOverride(
             licenseUrl: 'https://www.apache.org/licenses/LICENSE-2.0.txt',
             licenseName: 'Apache 2.0'),
@@ -34,6 +38,55 @@ class ChromiumDepGraph {
             licenseUrl: 'https://www.apache.org/licenses/LICENSE-2.0.txt',
             licenseName: 'Apache 2.0'),
         com_github_bumptech_glide_annotations: new PropertyOverride(
+            licenseUrl: 'https://www.apache.org/licenses/LICENSE-2.0.txt',
+            licenseName: 'Apache 2.0'),
+
+        com_github_komputing_kethereum_bip39: new PropertyOverride(
+            licenseUrl: 'https://www.apache.org/licenses/LICENSE-2.0.txt',
+            licenseName: 'Apache 2.0'),
+        com_github_komputing_kethereum_bip32: new PropertyOverride(
+            licenseUrl: 'https://www.apache.org/licenses/LICENSE-2.0.txt',
+            licenseName: 'Apache 2.0'),
+        com_github_komputing_kethereum_crypto: new PropertyOverride(
+            licenseUrl: 'https://www.apache.org/licenses/LICENSE-2.0.txt',
+            licenseName: 'Apache 2.0'),
+        com_github_komputing_kethereum_crypto_api: new PropertyOverride(
+            licenseUrl: 'https://www.apache.org/licenses/LICENSE-2.0.txt',
+            licenseName: 'Apache 2.0'),
+        com_github_komputing_kethereum_model: new PropertyOverride(
+            licenseUrl: 'https://www.apache.org/licenses/LICENSE-2.0.txt',
+            licenseName: 'Apache 2.0'),
+        com_github_komputing_kethereum_extensions_kotlin: new PropertyOverride(
+            licenseUrl: 'https://www.apache.org/licenses/LICENSE-2.0.txt',
+            licenseName: 'Apache 2.0'),
+        com_github_komputing_khex: new PropertyOverride(
+            licenseUrl: 'https://www.apache.org/licenses/LICENSE-2.0.txt',
+            licenseName: 'Apache 2.0'),
+        com_github_komputing_kethereum_keccak_shortcut: new PropertyOverride(
+            licenseUrl: 'https://www.apache.org/licenses/LICENSE-2.0.txt',
+            licenseName: 'Apache 2.0'),
+        com_github_komputing_kethereum_crypto_impl_spongycastle: new PropertyOverride(
+            licenseUrl: 'https://www.apache.org/licenses/LICENSE-2.0.txt',
+            licenseName: 'Apache 2.0'),
+        com_github_komputing_kethereum_crypto_impl_java_provider: new PropertyOverride(
+            licenseUrl: 'https://www.apache.org/licenses/LICENSE-2.0.txt',
+            licenseName: 'Apache 2.0'),
+        com_github_komputing_kethereum_bip39_wordlist_en: new PropertyOverride(
+            licenseUrl: 'https://www.apache.org/licenses/LICENSE-2.0.txt',
+            licenseName: 'Apache 2.0'),
+        com_github_WalletConnect_Scarlet_lifecycle_android: new PropertyOverride(
+            licenseUrl: 'https://www.apache.org/licenses/LICENSE-2.0.txt',
+            licenseName: 'Apache 2.0'),
+        com_github_WalletConnect_Scarlet_scarlet: new PropertyOverride(
+            licenseUrl: 'https://www.apache.org/licenses/LICENSE-2.0.txt',
+            licenseName: 'Apache 2.0'),
+        com_tinder_statemachine_statemachine: new PropertyOverride(
+            licenseUrl: 'https://www.apache.org/licenses/LICENSE-2.0.txt',
+            licenseName: 'Apache 2.0'),
+        com_github_WalletConnect_Scarlet_scarlet_core_internal: new PropertyOverride(
+            licenseUrl: 'https://www.apache.org/licenses/LICENSE-2.0.txt',
+            licenseName: 'Apache 2.0'),
+        com_github_WalletConnect_Scarlet_scarlet_core: new PropertyOverride(
             licenseUrl: 'https://www.apache.org/licenses/LICENSE-2.0.txt',
             licenseName: 'Apache 2.0'),
 
@@ -330,6 +383,9 @@ class ChromiumDepGraph {
         // Bill of materials (BOM) deps are used to specify versions for other dependencies and don't have children or
         // artifacts of their own. Add other such empty deps here when we encounter them.
         'org_jetbrains_kotlinx_kotlinx_coroutines_bom',
+        'com_squareup_okhttp3_okhttp_bom',
+        'com_fasterxml_jackson_jackson_bom',
+        'org_jetbrains_kotlin_kotlin_bom',
     ] as Set
 
     // Local text versions of HTML licenses. This cannot replace PROPERTY_OVERRIDES because some libraries refer to

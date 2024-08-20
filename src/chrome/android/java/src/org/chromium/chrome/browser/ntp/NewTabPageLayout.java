@@ -148,6 +148,14 @@ import java.net.SocketTimeoutException;
 import android.widget.ProgressBar;
 
 import java.text.DecimalFormat;
+import java.util.Arrays;
+
+import org.chromium.chrome.browser.mirada.MiradaActivity;
+import static androidx.browser.customtabs.CustomTabsIntent.COLOR_SCHEME_DARK;
+import static androidx.browser.customtabs.CustomTabsIntent.COLOR_SCHEME_LIGHT;
+import org.chromium.chrome.browser.customtabs.CustomTabActivity;
+
+import org.chromium.chrome.browser.rewards.v2.RewardsHelper;
 
 /**
  * Layout for the new tab page. This positions the page elements in the correct vertical positions.
@@ -220,7 +228,7 @@ public class NewTabPageLayout extends LinearLayout implements VrModeObserver, Ba
     private boolean mIsIncognito;
     private WindowAndroid mWindowAndroid;
 
-    private RemoteHelper remoteDappsHelper = new RemoteHelper();
+    private RemoteHelper remoteDappsHelper = new RemoteHelper((RemoteHelper.SpeedDialInterface)this);
     private BackgroundController bgController = new BackgroundController();
     private SpeedDialGridView mSpeedDialView;
     private ImageView bgImageView;
@@ -244,7 +252,7 @@ public class NewTabPageLayout extends LinearLayout implements VrModeObserver, Ba
 
     private NewTabPageUma mNewTabPageUma;
 
-    private boolean isDarkMode = true;
+    private boolean isDarkMode = false;
 
     public enum TokenTrackerEnum {
        CHART_DATA,
@@ -313,9 +321,10 @@ public class NewTabPageLayout extends LinearLayout implements VrModeObserver, Ba
         mMainLayout = findViewById(R.id.ntp_main_layout);
         mMainLayoutTopSection = findViewById(R.id.mainLayoutTopSection);
         bgImageView = findViewById(R.id.bg_image_view);
-        if (remoteDappsHelper == null) remoteDappsHelper = new RemoteHelper();
+        if (remoteDappsHelper == null) remoteDappsHelper = new RemoteHelper((RemoteHelper.SpeedDialInterface)this);
         remoteDappsHelper.getDapps((ChromeActivity)getContext(), ((RemoteHelper.SpeedDialInterface)this));
         remoteDappsHelper.getTakeover((ChromeActivity)getContext(), ((RemoteHelper.TakeoverInterface)this));
+        remoteDappsHelper.getMiradaRC();
         if (bgController == null) bgController = new BackgroundController();
         bgController.getBackground((ChromeActivity)getContext(), this);
         final TextView adsBlockedTextView = (TextView)findViewById(R.id.ntp_ads_blocked);
@@ -356,10 +365,12 @@ public class NewTabPageLayout extends LinearLayout implements VrModeObserver, Ba
         searchesTextViewDesc.setTextColor(Color.parseColor(textColor));
         adsBlockedTextViewDesc.setTextColor(Color.parseColor(textColor));
 
-        final TextView earnedTodayTextView = (TextView)findViewById(R.id.ntp_rewards_earned_today);
-        earnedTodayTextView.setText(mRewardsBridge.getCreditsEarnedToday()+"");
+        // final TextView earnedTodayTextView = (TextView)findViewById(R.id.ntp_rewards_earned_today);
+        // earnedTodayTextView.setText(mRewardsBridge.getCreditsEarnedToday()+"");
         final TextView totalBalanceTextView = (TextView)findViewById(R.id.ntp_rewards_total);
-        totalBalanceTextView.setText(mRewardsBridge.getTotalCreditBalance()+"");
+        RewardsHelper.getInstance(getContext()).getBalanceAsync().thenAccept(balance -> {
+            totalBalanceTextView.setText(balance);
+        });
 
         final SharedPreferences mPrefs = ContextUtils.getAppSharedPreferences();
         boolean isDappsEnabled = mPrefs.getBoolean("ntp_dapps_toggle", true);
@@ -372,6 +383,14 @@ public class NewTabPageLayout extends LinearLayout implements VrModeObserver, Ba
             mDappsLinearLayout2.setVisibility(View.VISIBLE);
             mViewMoreDappsBtn.setVisibility(View.VISIBLE);
         }
+
+        // View mCarbonIDButton = findViewById(R.id.carbon_id_button);
+        // setOnClickListener(new View.OnClickListener() {
+        //     @Override
+        //     public void onClick(View v) {
+        //         CustomTabActivity.showSuperlink(v.getContext());
+        //     }
+        // });
 
         boolean isSpeedDialEnabled = mPrefs.getBoolean("ntp_speed_dial_toggle", true);
         if (isSpeedDialEnabled) {
@@ -595,8 +614,8 @@ public class NewTabPageLayout extends LinearLayout implements VrModeObserver, Ba
             mExploreSectionView = exploreStub.inflate();
         }
 
-        TextView mEarnedTodayTextView = findViewById(R.id.ntp_rewards_earned_today_desc);
-        mEarnedTodayTextView.setTextColor(Color.parseColor(textColor));
+        // TextView mEarnedTodayTextView = findViewById(R.id.ntp_rewards_earned_today_desc);
+        // mEarnedTodayTextView.setTextColor(Color.parseColor(textColor));
         TextView mEarnedTotalTextView = findViewById(R.id.ntp_rewards_total_desc);
         mEarnedTotalTextView.setTextColor(Color.parseColor(textColor));
 
@@ -630,6 +649,9 @@ public class NewTabPageLayout extends LinearLayout implements VrModeObserver, Ba
               }
             }
         });
+
+        TextView mTokenTrackerTitle = findViewById(R.id.token_tracker_title);
+        mTokenTrackerTitle.setTextColor(Color.parseColor(textColor));
 
         TextView mSetDefault = findViewById(R.id.default_browser);
         if (!isCarbonDefault()) {
@@ -719,6 +741,8 @@ public class NewTabPageLayout extends LinearLayout implements VrModeObserver, Ba
         }
 
         try {
+            final boolean isLightTheme = SharedPreferencesManager.getInstance().readInt("ui_theme_setting", ThemeType.LIGHT) == ThemeType.LIGHT;
+            final String textColor = isLightTheme ? "#000000" : "#ffffff";
             JSONArray jsonArray = new JSONArray(result);
             for (int i = 0; i < jsonArray.length(); i++) {
                 JSONObject jsonObj = jsonArray.getJSONObject(i);
@@ -751,6 +775,10 @@ public class NewTabPageLayout extends LinearLayout implements VrModeObserver, Ba
                             tickerTextView = (TextView) tokenLayout.findViewById(R.id.token_ticker);
                             logo = tokenLayout.findViewById(R.id.logo);
                         }
+
+                        priceTextView.setTextColor(Color.parseColor(textColor));
+                        capTextView.setTextColor(Color.parseColor(textColor));
+                        tickerTextView.setTextColor(Color.parseColor(textColor));
 
                         tokenLayout.setOnClickListener(new View.OnClickListener() {
                             @Override
@@ -1003,10 +1031,13 @@ public class NewTabPageLayout extends LinearLayout implements VrModeObserver, Ba
         View stakingTile = findViewById(R.id.coming_soon_tile2);
         View comingSoonTile3 = findViewById(R.id.coming_soon_tile3);
         View comingSoonTile4 = findViewById(R.id.coming_soon_tile4);
+        // View fiatTile = findViewById(R.id.coming_soon_tile5);
 
         walletTile.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
+                RewardsHelper.getInstance(getContext()).logEventAsync("wallet", "");
+
                 Intent intent = new Intent();
                 intent.setClass(view.getContext(), WalletActivity.class);
 
@@ -1022,6 +1053,9 @@ public class NewTabPageLayout extends LinearLayout implements VrModeObserver, Ba
             @Override
             public void onClick(View view) {
                 loadUrl("https://stake.carbon.website/");
+                try {
+                  RewardsHelper.getInstance(getContext()).logEventAsync("staking", "");
+                } catch (Exception ignore) {}
             }
         });
 
@@ -1029,49 +1063,70 @@ public class NewTabPageLayout extends LinearLayout implements VrModeObserver, Ba
             @Override
             public void onClick(View view) {
                 loadUrl("https://www.ldx.fi/");
+                try {
+                  RewardsHelper.getInstance(getContext()).logEventAsync("swap", "");
+                } catch (Exception ignore) {}
             }
         });
 
         comingSoonTile4.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
-                loadUrl("https://www.ldx.fi/");
+                Intent intent = new Intent();
+                intent.setClass(view.getContext(), MiradaActivity.class);
+
+                try {
+                    ((ChromeActivity)getContext()).startActivityForResult(intent, 123456);
+                } catch (Exception ignore) { }
             }
         });
+
+        // fiatTile.setOnClickListener(new View.OnClickListener() {
+        //     @Override
+        //     public void onClick(View view) {
+        //         loadUrl("https://ramp.carbon.website/");
+        //     }
+        // });
 
         TextView mWalletTextView = walletTile.findViewById(R.id.speed_dial_tile_textview);
         TextView mStakingTextView = stakingTile.findViewById(R.id.speed_dial_tile_textview);
         TextView mSwapTextView = comingSoonTile3.findViewById(R.id.speed_dial_tile_textview);
         TextView mBridgeTextView = comingSoonTile4.findViewById(R.id.speed_dial_tile_textview);
+        // TextView mFiatTextView = fiatTile.findViewById(R.id.speed_dial_tile_textview);
         mWalletTextView.setText("Wallet");
         mStakingTextView.setText("Staking");
         mSwapTextView.setText("Swap");
-        mBridgeTextView.setText("Bridge");
+        mBridgeTextView.setText("AI");
+        // mFiatTextView.setText("Fiat Ramp");
         mWalletTextView.setTextColor(Color.parseColor(textColor));
         mStakingTextView.setTextColor(Color.parseColor(textColor));
         mSwapTextView.setTextColor(Color.parseColor(textColor));
         mBridgeTextView.setTextColor(Color.parseColor(textColor));
+        // mFiatTextView.setTextColor(Color.parseColor(textColor));
 
         FrameLayout walletBackground = walletTile.findViewById(R.id.speed_dial_tile_view_icon_background);
         FrameLayout stakingTileBackground = stakingTile.findViewById(R.id.speed_dial_tile_view_icon_background);
         FrameLayout swapBackground = comingSoonTile3.findViewById(R.id.speed_dial_tile_view_icon_background);
         FrameLayout bridgeBackground = comingSoonTile4.findViewById(R.id.speed_dial_tile_view_icon_background);
+        // FrameLayout fiatBackground = fiatTile.findViewById(R.id.speed_dial_tile_view_icon_background);
 
         walletBackground.setBackground(getResources().getDrawable(R.drawable.speed_dial_icon_background_dark_round));
         stakingTileBackground.setBackground(getResources().getDrawable(R.drawable.speed_dial_icon_background_dark_round));
         swapBackground.setBackground(getResources().getDrawable(R.drawable.speed_dial_icon_background_dark_round));
         bridgeBackground.setBackground(getResources().getDrawable(R.drawable.speed_dial_icon_background_dark_round));
+        // fiatBackground.setBackground(getResources().getDrawable(R.drawable.speed_dial_icon_background_dark_round));
 
         ImageView walletTileImage = walletTile.findViewById(R.id.speed_dial_tile_view_icon);
         ImageView stakingTileImage = stakingTile.findViewById(R.id.speed_dial_tile_view_icon);
         ImageView swapTileImage = comingSoonTile3.findViewById(R.id.speed_dial_tile_view_icon);
         ImageView bridgeTileImage = comingSoonTile4.findViewById(R.id.speed_dial_tile_view_icon);
-
+        // ImageView fiatTileImage = fiatTile.findViewById(R.id.speed_dial_tile_view_icon);
 
         walletTileImage.setBackground(getResources().getDrawable(R.drawable.ic_wallet));
         stakingTileImage.setBackground(getResources().getDrawable(R.drawable.ic_staking));
         swapTileImage.setBackground(getResources().getDrawable(R.drawable.ic_swap));
-        bridgeTileImage.setBackground(getResources().getDrawable(R.drawable.ic_bridge));
+        bridgeTileImage.setBackground(getResources().getDrawable(R.drawable.ic_ai));
+        // fiatTileImage.setBackground(getResources().getDrawable(R.drawable.ic_fiat));
     }
 
     private void loadUrl(String url) {
@@ -1749,7 +1804,7 @@ public class NewTabPageLayout extends LinearLayout implements VrModeObserver, Ba
 
             // Add ctaView to your layout if not already added
             // Assuming you have a layout named 'parentLayout' where you want to add ctaView
-            mMainLayout.addView(ctaView, 2);
+            mMainLayout.addView(ctaView, 3);
 
             Glide.with(ctaView)
                 .load(jsonObject.getString("cta_image"))
@@ -1781,9 +1836,61 @@ public class NewTabPageLayout extends LinearLayout implements VrModeObserver, Ba
     @Override
     public void onDappReceived(String json) {
         String textColor = isDarkMode ? "#ffffff" : "#000000";
+        final SharedPreferences mPrefs = ContextUtils.getAppSharedPreferences();
+        String userGeo = mPrefs.getString("u_geo", "");
 
         try {
            JSONArray mDappsArray = new JSONArray(json);
+
+           JSONObject dapp1Obj = mDappsArray.getJSONObject(0);
+           JSONObject dapp2Obj = mDappsArray.getJSONObject(1);
+           JSONObject dapp3Obj = mDappsArray.getJSONObject(2);
+           JSONObject dapp4Obj = mDappsArray.getJSONObject(3);
+           JSONObject dapp5Obj = mDappsArray.getJSONObject(4);
+           JSONObject dapp6Obj = mDappsArray.getJSONObject(5);
+           JSONObject dapp7Obj = mDappsArray.getJSONObject(6);
+           JSONObject dapp8Obj = mDappsArray.getJSONObject(7);
+           if (dapp1Obj.getJSONObject("geoTargeting").getBoolean("enabled")) {
+             if (jsonArrayContainString(userGeo, dapp1Obj.getJSONObject("geoTargeting").getJSONArray("geos"))) {
+               dapp1Obj = dapp1Obj.getJSONObject("geoTargeting");
+             }
+           }
+           if (dapp2Obj.getJSONObject("geoTargeting").getBoolean("enabled")) {
+             if (jsonArrayContainString(userGeo, dapp2Obj.getJSONObject("geoTargeting").getJSONArray("geos"))) {
+               dapp2Obj = dapp2Obj.getJSONObject("geoTargeting");
+             }
+           }
+           if (dapp3Obj.getJSONObject("geoTargeting").getBoolean("enabled")) {
+             if (jsonArrayContainString(userGeo, dapp3Obj.getJSONObject("geoTargeting").getJSONArray("geos"))) {
+               dapp3Obj = dapp3Obj.getJSONObject("geoTargeting");
+             }
+           }
+           if (dapp4Obj.getJSONObject("geoTargeting").getBoolean("enabled")) {
+             if (jsonArrayContainString(userGeo, dapp4Obj.getJSONObject("geoTargeting").getJSONArray("geos"))) {
+               dapp4Obj = dapp4Obj.getJSONObject("geoTargeting");
+             }
+           }
+           if (dapp5Obj.getJSONObject("geoTargeting").getBoolean("enabled")) {
+             if (jsonArrayContainString(userGeo, dapp5Obj.getJSONObject("geoTargeting").getJSONArray("geos"))) {
+               dapp5Obj = dapp5Obj.getJSONObject("geoTargeting");
+             }
+           }
+           if (dapp6Obj.getJSONObject("geoTargeting").getBoolean("enabled")) {
+             if (jsonArrayContainString(userGeo, dapp6Obj.getJSONObject("geoTargeting").getJSONArray("geos"))) {
+               dapp6Obj = dapp6Obj.getJSONObject("geoTargeting");
+             }
+           }
+           if (dapp7Obj.getJSONObject("geoTargeting").getBoolean("enabled")) {
+             if (jsonArrayContainString(userGeo, dapp7Obj.getJSONObject("geoTargeting").getJSONArray("geos"))) {
+               dapp7Obj = dapp7Obj.getJSONObject("geoTargeting");
+             }
+           }
+           if (dapp8Obj.getJSONObject("geoTargeting").getBoolean("enabled")) {
+             if (jsonArrayContainString(userGeo, dapp8Obj.getJSONObject("geoTargeting").getJSONArray("geos"))) {
+               dapp8Obj = dapp8Obj.getJSONObject("geoTargeting");
+             }
+           }
+
            // DApps Links
            View featuredDappTile1 = findViewById(R.id.featured_daps1);
            View featuredDappTile2 = findViewById(R.id.featured_daps2);
@@ -1798,10 +1905,10 @@ public class NewTabPageLayout extends LinearLayout implements VrModeObserver, Ba
            TextView mTextView2 = featuredDappTile2.findViewById(R.id.speed_dial_tile_textview);
            TextView mTextView3 = featuredDappTile3.findViewById(R.id.speed_dial_tile_textview);
            TextView mTextView4 = featuredDappTile4.findViewById(R.id.speed_dial_tile_textview);
-           mTextView1.setText(mDappsArray.getJSONObject(0).getString("title"));
-           mTextView2.setText(mDappsArray.getJSONObject(1).getString("title"));
-           mTextView3.setText(mDappsArray.getJSONObject(2).getString("title"));
-           mTextView4.setText(mDappsArray.getJSONObject(3).getString("title"));
+           mTextView1.setText(dapp1Obj.getString("title"));
+           mTextView2.setText(dapp2Obj.getString("title"));
+           mTextView3.setText(dapp3Obj.getString("title"));
+           mTextView4.setText(dapp4Obj.getString("title"));
            mTextView1.setTextColor(Color.parseColor(textColor));
            mTextView2.setTextColor(Color.parseColor(textColor));
            mTextView3.setTextColor(Color.parseColor(textColor));
@@ -1821,19 +1928,19 @@ public class NewTabPageLayout extends LinearLayout implements VrModeObserver, Ba
            ((ImageView) featuredDappTile7.findViewById(R.id.speed_dial_tile_view_icon)).setImageTintList(null);
            ((ImageView) featuredDappTile8.findViewById(R.id.speed_dial_tile_view_icon)).setImageTintList(null);
 
-           remoteDappsHelper.setBackground(((ImageView) featuredDappTile1.findViewById(R.id.speed_dial_tile_view_icon)), mDappsArray.getJSONObject(0).getString("imgUrl"));
-           remoteDappsHelper.setBackground(((ImageView) featuredDappTile2.findViewById(R.id.speed_dial_tile_view_icon)), mDappsArray.getJSONObject(1).getString("imgUrl"));
-           remoteDappsHelper.setBackground(((ImageView) featuredDappTile3.findViewById(R.id.speed_dial_tile_view_icon)), mDappsArray.getJSONObject(2).getString("imgUrl"));
-           remoteDappsHelper.setBackground(((ImageView) featuredDappTile4.findViewById(R.id.speed_dial_tile_view_icon)), mDappsArray.getJSONObject(3).getString("imgUrl"));
+           remoteDappsHelper.setBackground(((ImageView) featuredDappTile1.findViewById(R.id.speed_dial_tile_view_icon)), dapp1Obj.getString("imgUrl"));
+           remoteDappsHelper.setBackground(((ImageView) featuredDappTile2.findViewById(R.id.speed_dial_tile_view_icon)), dapp2Obj.getString("imgUrl"));
+           remoteDappsHelper.setBackground(((ImageView) featuredDappTile3.findViewById(R.id.speed_dial_tile_view_icon)), dapp3Obj.getString("imgUrl"));
+           remoteDappsHelper.setBackground(((ImageView) featuredDappTile4.findViewById(R.id.speed_dial_tile_view_icon)), dapp4Obj.getString("imgUrl"));
 
            TextView mTextView5 = featuredDappTile5.findViewById(R.id.speed_dial_tile_textview);
            TextView mTextView6 = featuredDappTile6.findViewById(R.id.speed_dial_tile_textview);
            TextView mTextView7 = featuredDappTile7.findViewById(R.id.speed_dial_tile_textview);
            TextView mTextView8 = featuredDappTile8.findViewById(R.id.speed_dial_tile_textview);
-           mTextView5.setText(mDappsArray.getJSONObject(4).getString("title"));
-           mTextView6.setText(mDappsArray.getJSONObject(5).getString("title"));
-           mTextView7.setText(mDappsArray.getJSONObject(6).getString("title"));
-           mTextView8.setText(mDappsArray.getJSONObject(7).getString("title"));
+           mTextView5.setText(dapp5Obj.getString("title"));
+           mTextView6.setText(dapp6Obj.getString("title"));
+           mTextView7.setText(dapp7Obj.getString("title"));
+           mTextView8.setText(dapp8Obj.getString("title"));
            mTextView5.setTextColor(Color.parseColor(textColor));
            mTextView6.setTextColor(Color.parseColor(textColor));
            mTextView7.setTextColor(Color.parseColor(textColor));
@@ -1844,16 +1951,26 @@ public class NewTabPageLayout extends LinearLayout implements VrModeObserver, Ba
            ((FrameLayout) featuredDappTile7.findViewById(R.id.speed_dial_tile_view_icon_background)).setBackground(null);
            ((FrameLayout) featuredDappTile8.findViewById(R.id.speed_dial_tile_view_icon_background)).setBackground(null);
 
-           remoteDappsHelper.setBackground(((ImageView) featuredDappTile5.findViewById(R.id.speed_dial_tile_view_icon)), mDappsArray.getJSONObject(4).getString("imgUrl"));
-           remoteDappsHelper.setBackground(((ImageView) featuredDappTile6.findViewById(R.id.speed_dial_tile_view_icon)), mDappsArray.getJSONObject(5).getString("imgUrl"));
-           remoteDappsHelper.setBackground(((ImageView) featuredDappTile7.findViewById(R.id.speed_dial_tile_view_icon)), mDappsArray.getJSONObject(6).getString("imgUrl"));
-           remoteDappsHelper.setBackground(((ImageView) featuredDappTile8.findViewById(R.id.speed_dial_tile_view_icon)), mDappsArray.getJSONObject(7).getString("imgUrl"));
+           remoteDappsHelper.setBackground(((ImageView) featuredDappTile5.findViewById(R.id.speed_dial_tile_view_icon)), dapp5Obj.getString("imgUrl"));
+           remoteDappsHelper.setBackground(((ImageView) featuredDappTile6.findViewById(R.id.speed_dial_tile_view_icon)), dapp6Obj.getString("imgUrl"));
+           remoteDappsHelper.setBackground(((ImageView) featuredDappTile7.findViewById(R.id.speed_dial_tile_view_icon)), dapp7Obj.getString("imgUrl"));
+           remoteDappsHelper.setBackground(((ImageView) featuredDappTile8.findViewById(R.id.speed_dial_tile_view_icon)), dapp8Obj.getString("imgUrl"));
+
+           final String dapp1Url = dapp1Obj.getString("url");
+           final String dapp2Url = dapp2Obj.getString("url");
+           final String dapp3Url = dapp3Obj.getString("url");
+           final String dapp4Url = dapp4Obj.getString("url");
+           final String dapp5Url = dapp5Obj.getString("url");
+           final String dapp6Url = dapp6Obj.getString("url");
+           final String dapp7Url = dapp7Obj.getString("url");
+           final String dapp8Url = dapp8Obj.getString("url");
 
            featuredDappTile1.setOnClickListener(new View.OnClickListener() {
                @Override
                public void onClick(View view) {
                   try {
-                      loadUrl(mDappsArray.getJSONObject(0).getString("url"));
+                      loadUrl(dapp1Url);
+                      RewardsHelper.getInstance(view.getContext()).logEventAsync("featured_dapp", dapp1Url);
                   } catch (Exception e) {}
                }
            });
@@ -1862,7 +1979,8 @@ public class NewTabPageLayout extends LinearLayout implements VrModeObserver, Ba
                @Override
                public void onClick(View view) {
                  try {
-                     loadUrl(mDappsArray.getJSONObject(1).getString("url"));
+                     loadUrl(dapp2Url);
+                     RewardsHelper.getInstance(view.getContext()).logEventAsync("featured_dapp", dapp2Url);
                  } catch (Exception e) {}
                }
            });
@@ -1871,7 +1989,8 @@ public class NewTabPageLayout extends LinearLayout implements VrModeObserver, Ba
                @Override
                public void onClick(View view) {
                  try {
-                     loadUrl(mDappsArray.getJSONObject(2).getString("url"));
+                     loadUrl(dapp3Url);
+                     RewardsHelper.getInstance(view.getContext()).logEventAsync("featured_dapp", dapp3Url);
                  } catch (Exception e) {}
                }
            });
@@ -1880,7 +1999,8 @@ public class NewTabPageLayout extends LinearLayout implements VrModeObserver, Ba
                @Override
                public void onClick(View view) {
                  try {
-                     loadUrl(mDappsArray.getJSONObject(3).getString("url"));
+                     loadUrl(dapp4Url);
+                     RewardsHelper.getInstance(view.getContext()).logEventAsync("featured_dapp", dapp4Url);
                  } catch (Exception e) {}
                }
            });
@@ -1889,7 +2009,8 @@ public class NewTabPageLayout extends LinearLayout implements VrModeObserver, Ba
                @Override
                public void onClick(View view) {
                  try {
-                     loadUrl(mDappsArray.getJSONObject(4).getString("url"));
+                     loadUrl(dapp5Url);
+                     RewardsHelper.getInstance(view.getContext()).logEventAsync("featured_dapp", dapp5Url);
                  } catch (Exception e) {}
                }
            });
@@ -1898,7 +2019,8 @@ public class NewTabPageLayout extends LinearLayout implements VrModeObserver, Ba
                @Override
                public void onClick(View view) {
                  try {
-                     loadUrl(mDappsArray.getJSONObject(5).getString("url"));
+                     loadUrl(dapp6Url);
+                     RewardsHelper.getInstance(view.getContext()).logEventAsync("featured_dapp", dapp6Url);
                  } catch (Exception e) {}
                }
            });
@@ -1907,7 +2029,8 @@ public class NewTabPageLayout extends LinearLayout implements VrModeObserver, Ba
                @Override
                public void onClick(View view) {
                  try {
-                     loadUrl(mDappsArray.getJSONObject(6).getString("url"));
+                     loadUrl(dapp7Url);
+                     RewardsHelper.getInstance(view.getContext()).logEventAsync("featured_dapp", dapp7Url);
                  } catch (Exception e) {}
                }
            });
@@ -1916,11 +2039,13 @@ public class NewTabPageLayout extends LinearLayout implements VrModeObserver, Ba
                @Override
                public void onClick(View view) {
                  try {
-                     loadUrl(mDappsArray.getJSONObject(7).getString("url"));
+                     loadUrl(dapp8Url);
+                     RewardsHelper.getInstance(view.getContext()).logEventAsync("featured_dapp", dapp8Url);
                  } catch (Exception e) {}
                }
            });
-        } catch (Exception e) { }
+        } catch (Exception e) {
+        }
 
         View mViewMoreDappsBtn = findViewById(R.id.view_more_dapps_btn);
         mViewMoreDappsBtn.setOnClickListener(new View.OnClickListener() {
@@ -1929,6 +2054,23 @@ public class NewTabPageLayout extends LinearLayout implements VrModeObserver, Ba
                 loadUrl("https://carbon.website/app-store/");
             }
         });
+    }
+
+    private boolean jsonArrayContainString(String geo, JSONArray arr) {
+        try {
+          boolean found = false;
+          // Iterate through the JSONArray to find the string
+          for (int i = 0; i < arr.length(); i++) {
+              if (arr.getString(i).equals(geo)) {
+                  found = true;
+                  break; // Exit the loop as we found the string
+              }
+          }
+
+          return found;
+        } catch (Exception e) {
+          return false;
+        }
     }
 
     @Override

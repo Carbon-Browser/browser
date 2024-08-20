@@ -8,7 +8,7 @@ public class ChatDataObj {
     public boolean isLoading;
     public boolean shouldDisplay;
 
-    public ChatDataObj(String id, boolean isUserData, String text, boolean isLoading, boolean shouldDisplay ) {
+    public ChatDataObj(String id, boolean isUserData, String text, boolean isLoading, boolean shouldDisplay) {
         this.id = id;
         this.isUserData = isUserData;
         this.text = text;

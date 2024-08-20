@@ -3,7 +3,7 @@ package org.chromium.chrome.browser.rewards;
 import android.content.SharedPreferences;
 import org.chromium.base.ContextUtils;
 
-import com.amplitude.api.Amplitude;
+// import com.amplitude.api.Amplitude;
 
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -502,7 +502,7 @@ public class RewardsAPIBridge {
     public void logSearch() {
         if (mPrefs == null) mPrefs = ContextUtils.getAppSharedPreferences();
 
-        Amplitude.getInstance().logEvent("search_event");
+        // Amplitude.getInstance().logEventAsync("search_event");
 
         int nSearches = getSearches() + 1;
         mPrefs.edit().putInt("searches_count", nSearches).apply();

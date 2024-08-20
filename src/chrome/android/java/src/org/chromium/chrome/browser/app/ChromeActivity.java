@@ -252,8 +252,12 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.function.Consumer;
 
+import org.chromium.chrome.browser.rewards.v2.RewardsHelper;
 import org.chromium.components.adblock.AdblockController;
 import org.chromium.chrome.browser.tab.TLDUtils;
+
+import org.chromium.chrome.browser.mirada.MiradaActivity;
+// import com.amplitude.api.Amplitude;
 
 /**
  * A {@link AsyncInitializationActivity} that builds and manages a {@link CompositorViewHolder}
@@ -271,6 +275,7 @@ public abstract class ChromeActivity<C extends ChromeActivityComponent>
     private C mComponent;
 
     private AdblockController mAdblockController;
+    private RewardsHelper mRewardsHelper;
 
     private TLDUtils mTLDUtils;
 
@@ -1368,7 +1373,14 @@ public abstract class ChromeActivity<C extends ChromeActivityComponent>
         mAdblockController = new AdblockController();
         mAdblockController.bindInstance(mAdblockController);
 
+        mRewardsHelper = new RewardsHelper(this);
+        mRewardsHelper.bindInstance(mRewardsHelper);
+
         mTLDUtils = TLDUtils.getInstance(this, R.raw.standard_tld_13_12_23);
+
+        // Amplitude.getInstance().initialize(this, "10b35b2104bfe69bee62af0a7d9908ae").enableForegroundTracking(getApplication());
+
+        // Amplitude.getInstance().logEventAsync("app_opened_event");
     }
 
     /**
@@ -1616,6 +1628,10 @@ public abstract class ChromeActivity<C extends ChromeActivityComponent>
 
         if (mAdblockController != null) {
            mAdblockController = null;
+        }
+
+        if (mRewardsHelper != null) {
+          mRewardsHelper = null;
         }
 
         if (mTLDUtils != null) {
@@ -2647,6 +2663,16 @@ public abstract class ChromeActivity<C extends ChromeActivityComponent>
 
         if (id == R.id.managed_by_menu_id) {
             openChromeManagementPage();
+            return true;
+        }
+
+        if (id == R.id.ai_id) {
+            Intent intent = new Intent();
+            intent.setClass(this, MiradaActivity.class);
+
+            try {
+                startActivityForResult(intent, 123456);
+            } catch (Exception ignore) { }
             return true;
         }
 

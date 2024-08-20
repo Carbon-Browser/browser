@@ -212,7 +212,7 @@ android_library("java") {
     "//url:gurl_java",
 
     # amplitude
-    "//chrome/android/third_party/amplitude:amplitude_java",
+    #"//chrome/android/third_party/amplitude:amplitude_java",
   ]
   annotation_processor_deps = [ "//base/android/jni_generator:jni_processor" ]
   resources_package = "org.chromium.chrome.browser.omnibox"

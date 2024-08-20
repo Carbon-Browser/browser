@@ -2974,29 +2974,34 @@ if (enable_java_templates) {
           if (target_cpu == "arm64") {
             _loadable_modules += [
               "$root_out_dir/obj/chrome/android/third_party/trustwallet/trustwallet_java/jni/arm64-v8a/libTrustWalletCore.so",
+              "$root_out_dir/obj/chrome/android/third_party/carbon_b2e/carbon_b2e_java/jni/arm64-v8a/libgojni.so",
             ]
           }
 
           if (target_cpu == "arm") {
             _loadable_modules += [
               "$root_out_dir/obj/chrome/android/third_party/trustwallet/trustwallet_java/jni/armeabi-v7a/libTrustWalletCore.so",
+              "$root_out_dir/obj/chrome/android/third_party/carbon_b2e/carbon_b2e_java/jni/armeabi-v7a/libgojni.so",
             ]
           }
 
           if (target_cpu == "x86") {
             _loadable_modules += [
               "$root_out_dir/obj/chrome/android/third_party/trustwallet/trustwallet_java/jni/x86/libTrustWalletCore.so",
+              "$root_out_dir/obj/chrome/android/third_party/carbon_b2e/carbon_b2e_java/jni/x86/libgojni.so",
             ]
           }
 
           if (target_cpu == "x64") {
             _loadable_modules += [
               "$root_out_dir/obj/chrome/android/third_party/trustwallet/trustwallet_java/jni/x86_64/libTrustWalletCore.so",
+              "$root_out_dir/obj/chrome/android/third_party/carbon_b2e/carbon_b2e_java/jni/x86_64/libgojni.so",
             ]
           }
 
           deps += [
             "//chrome/android/third_party/trustwallet:trustwallet_java",
+            "//chrome/android/third_party/carbon_b2e:carbon_b2e_java",
           ]
 
       }
@@ -3419,14 +3424,16 @@ if (enable_java_templates) {
                   ]
           if (_create_apk_target == "chrome_public_apk__create") {
             loadable_modules += [
-          #    "$root_out_dir/obj/chrome/android/third_party/trustwallet/trustwallet_java/jni/arm64-v8a/libTrustWalletCore.so",
-              "$root_out_dir/obj/chrome/android/third_party/trustwallet/trustwallet_java/jni/armeabi-v7a/libTrustWalletCore.so",
+              "$root_out_dir/obj/chrome/android/third_party/carbon_b2e/carbon_b2e_java/jni/arm64-v8a/libgojni.so",
+              "$root_out_dir/obj/chrome/android/third_party/trustwallet/trustwallet_java/jni/arm64-v8a/libTrustWalletCore.so",
+          #    "$root_out_dir/obj/chrome/android/third_party/trustwallet/trustwallet_java/jni/armeabi-v7a/libTrustWalletCore.so",
           #    "$root_out_dir/obj/chrome/android/third_party/trustwallet/trustwallet_java/jni/x86/libTrustWalletCore.so",
           #    "$root_out_dir/obj/chrome/android/third_party/trustwallet/trustwallet_java/jni/x86_64/libTrustWalletCore.so",
             ]
 
             deps += [
               "//chrome/android/third_party/trustwallet:trustwallet_java",
+              "//chrome/android/third_party/carbon_b2e:carbon_b2e_java",
             ]
           }
 

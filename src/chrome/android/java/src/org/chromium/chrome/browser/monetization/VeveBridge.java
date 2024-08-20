@@ -3,8 +3,6 @@ package org.chromium.chrome.browser.monetization;
 import android.content.SharedPreferences;
 import org.chromium.base.ContextUtils;
 
-import com.amplitude.api.Amplitude;
-
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;

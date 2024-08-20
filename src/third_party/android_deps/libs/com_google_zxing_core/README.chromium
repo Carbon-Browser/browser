@@ -1,0 +1,14 @@
+Name: ZXing Core
+Short Name: core
+URL: 
+Version: 3.2.1
+License: Apache 2.0
+License File: LICENSE
+CPEPrefix: unknown
+Security Critical: yes
+
+Description:
+Core barcode encoding/decoding library
+
+Local Modifications:
+No modifications.
