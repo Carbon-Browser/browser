@@ -28,6 +28,7 @@
     "libs/com_android_tools_common",
     "libs/com_android_tools_layoutlib_layoutlib_api",
     "libs/com_android_tools_sdk_common",
+    "libs/com_getkeepsafe_relinker_relinker",
     "libs/com_github_ben_manes_caffeine_caffeine",
     "libs/com_github_bumptech_glide_annotations",
     "libs/com_github_bumptech_glide_disklrucache",

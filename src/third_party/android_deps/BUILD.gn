@@ -748,6 +748,13 @@ if (!limit_android_deps) {
   }
 
   # This is generated, do not edit. Update BuildConfigGenerator.groovy instead.
+  android_aar_prebuilt("com_getkeepsafe_relinker_relinker_java") {
+    aar_path = "libs/com_getkeepsafe_relinker_relinker/relinker-1.4.4.aar"
+    info_path = "libs/com_getkeepsafe_relinker_relinker/com_getkeepsafe_relinker_relinker.info"
+    enable_bytecode_checks = false
+  }
+
+  # This is generated, do not edit. Update BuildConfigGenerator.groovy instead.
   android_aar_prebuilt("com_github_bumptech_glide_glide_java") {
     aar_path = "libs/com_github_bumptech_glide_glide/glide-4.11.0.aar"
     info_path = "libs/com_github_bumptech_glide_glide/com_github_bumptech_glide_glide.info"

@@ -13,17 +13,6 @@ import android.graphics.Shader;
 import android.graphics.LinearGradient;
 import android.widget.TextView;
 
-import wallet.core.jni.CoinType;
-import wallet.core.jni.HDWallet;
-import wallet.core.jni.PrivateKey;
-import wallet.core.java.AnySigner;
-import wallet.core.jni.proto.Ethereum;
-import wallet.core.jni.BitcoinScript;
-import wallet.core.jni.BitcoinSigHashType;
-import wallet.core.jni.proto.Bitcoin;
-import wallet.core.jni.proto.Common;
-import wallet.core.jni.StoredKey;
-
 public class CreateWalletMenu extends Fragment {
     public CreateWalletMenu() {
         super(R.layout.wallet_fragment_create_menu);

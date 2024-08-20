@@ -45,7 +45,7 @@ public class MiradaActivity extends ChromeBaseAppCompatActivity implements Mirad
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        isLightTheme = ChromeSharedPreferences.getInstance().readInt("ui_theme_setting", ThemeType.DARK) == ThemeType.LIGHT;
+        isLightTheme = ChromeSharedPreferences.getInstance().readInt("ui_theme_setting", ThemeType.LIGHT) == ThemeType.LIGHT;
         setContentView(R.layout.mirada_activity);
 
         final String textColor = isLightTheme ? colorLightText : colorDarkText;

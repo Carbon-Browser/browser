@@ -723,7 +723,7 @@ if (current_toolchain == default_toolchain) {
       # amplitude
       "//chrome/android/third_party/amplitude:amplitude_java",
       # okhttp
-      "//chrome/android/third_party/amplitude:okhttp_java",
+      #"//chrome/android/third_party/amplitude:okhttp_java",
 
       # glide
       #"//chrome/android/third_party/glide:glide_java",
@@ -731,6 +731,9 @@ if (current_toolchain == default_toolchain) {
 
       # country code picker
       "//third_party/android_deps:com_hbb20_ccp_java",
+
+      #oksse
+      #"//third_party/android_deps:com_github_heremaps_oksse_java",
     ]
 
     ### Android UI module start

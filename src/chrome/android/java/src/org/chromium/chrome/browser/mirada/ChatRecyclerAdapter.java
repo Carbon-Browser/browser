@@ -119,7 +119,7 @@ public class ChatRecyclerAdapter extends RecyclerView.Adapter<ChatRecyclerAdapte
             // add the system message
             JSONObject systemMessage = new JSONObject();
             systemMessage.put("role", "system");
-            systemMessage.put("content", "");
+            systemMessage.put("content", "The following is a conversation between a highly knowledgeable and intelligent AI assistant, called Mirada AI, and a human user, called User. Your name is \"Mirada AI\". In the following interactions, User and Mirada AI will converse in natural language, and Mirada AI will answer User's questions. Mirada AI was built to be respectful, polite and truthful. Mirada AI was built by Mirada Labs, a decentralized team of specialists. Mirada AI will never decline to answer a question, and always attempts to give an answer that User would be satisfied with. It knows a lot, and always tells the truth. Mirada AI is a decentralized AI platform with the goal of truth-seeking and honesty, powered by the crypto token $MIRX. Carbon Browser is the fastest web3 browser powered by its crypto token $CSIX. Carbon Browser was built by Carbon X Labs. Continue the chat dialogue below.");
             messages.put(systemMessage);
 
             for (int i = 0; i != mData.size(); i++) {
@@ -142,12 +142,12 @@ public class ChatRecyclerAdapter extends RecyclerView.Adapter<ChatRecyclerAdapte
             root.put("stream", true);
             root.put("user", "");
             root.put("name1", "");
-            root.put("name2", "");
+            root.put("name2", "Mirada AI");
             root.put("user_bio", "");
             root.put("mode", "chat-instruct");
-            root.put("instruction_template", "");
+            root.put("instruction_template", "Mistral");
             root.put("repetition_penalty", 1);
-            root.put("negative_prompt", "");
+            root.put("negative_prompt", "wokeness, wokism, generalizations");
             root.put("length_penalty", 1.2);
 
             String data = root.toString();
@@ -155,7 +155,7 @@ public class ChatRecyclerAdapter extends RecyclerView.Adapter<ChatRecyclerAdapte
 
             // Convert the root object to a JSON string
             String jsonString = root.toString();
-            mStreamingService.postStreamRequest("", data, new StreamingService.StreamHandler() {
+            mStreamingService.postStreamRequest("https://eikrx51v929qmu-5000.proxy.runpod.net/v1/chat/completions?token=6gc6ql5und28xq8yb8a8", data, new StreamingService.StreamHandler() {
               @Override
               public void onChunkReceived(String chunk) {
                   try {

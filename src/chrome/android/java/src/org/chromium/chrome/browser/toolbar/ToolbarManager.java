@@ -1487,13 +1487,15 @@ public class ToolbarManager
               final JavaScriptCallback javascriptCallback = new JavaScriptCallback() {
                   @Override
                   public void handleJavaScriptResult(String jsonResult) {
-                      if (jsonResult.contains("carbonwallet")) {
-                          jsonResult = jsonResult.replaceAll("carbonwallet://", "");
-                          jsonResult = jsonResult.substring(1, jsonResult.length() - 1);
-                          jsonResult = jsonResult.replace("\\", "");
+                      try {
+                          if (jsonResult.contains("carbonwallet")) {
+                              jsonResult = jsonResult.replaceAll("carbonwallet://", "");
+                              jsonResult = jsonResult.substring(1, jsonResult.length() - 1);
+                              jsonResult = jsonResult.replace("\\", "");
 
-                          handleWalletInteraction(jsonResult);
-                      }
+                              handleWalletInteraction(jsonResult);
+                          }
+                      } catch (Exception ignore) {}
                   }
               };
               final Handler handler = new Handler();
@@ -1507,7 +1509,9 @@ public class ToolbarManager
                                   "    return \"empty\"; \n" +
                                   "})();";
 
-                      tab.getWebContents().evaluateJavaScript(source, javascriptCallback);
+                      try {
+                          tab.getWebContents().evaluateJavaScript(source, javascriptCallback);
+                      } catch (Exception ignore) {}
                       handler.postDelayed(this, 2000); // Repeat this the same runnable code block again another 1 seconds
                   }
               };

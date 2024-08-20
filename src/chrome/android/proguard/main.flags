@@ -2,9 +2,6 @@
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
--keep class wallet.core.jni.** { *; }
--keep class wallet.core.jni.proto.** { *; }
-
 # Every fragment must have an empty constructor, so it can be instantiated when
 # restoring its activity's state.
 -keep public class org.chromium.** extends androidx.fragment.app.Fragment {
@@ -47,3 +44,10 @@
 
 # Keep all classes in the wallet package and its subpackages
 -keep class org.chromium.chrome.browser.wallet.** { *; }
+
+-keep class wallet.core.jni.** { *; }
+-keep class wallet.core.jni.proto** { *; }
+
+-keep class com.trustwallet.core.** { *; }
+
+-keep class com.google.crypto.** { *; }

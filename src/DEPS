@@ -2386,6 +2386,17 @@ deps = {
       'dep_type': 'cipd',
   },
 
+  'src/third_party/android_deps/libs/com_getkeepsafe_relinker_relinker': {
+      'packages': [
+          {
+              'package': 'chromium/third_party/android_deps/libs/com_getkeepsafe_relinker_relinker',
+              'version': 'version:2@1.4.4.cr1',
+          },
+      ],
+      'condition': 'checkout_android',
+      'dep_type': 'cipd',
+  },
+
   'src/third_party/android_deps/libs/com_github_ben_manes_caffeine_caffeine': {
       'packages': [
           {

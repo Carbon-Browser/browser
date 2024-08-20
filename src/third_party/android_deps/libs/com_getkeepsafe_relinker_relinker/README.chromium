@@ -1,0 +1,15 @@
+Name: ReLinker
+Short Name: relinker
+URL: https://github.com/KeepSafe/ReLinker
+Version: 1.4.4
+License: Apache Version 2.0
+License File: LICENSE
+CPEPrefix: unknown
+Security Critical: yes
+Shipped: yes
+
+Description:
+A robust native library loader for Android
+
+Local Modifications:
+No modifications.

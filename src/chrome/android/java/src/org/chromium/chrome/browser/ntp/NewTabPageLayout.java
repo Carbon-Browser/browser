@@ -249,7 +249,7 @@ public class NewTabPageLayout extends LinearLayout implements BackgroundControll
 
     private AlertDialog mTokenDialog;
 
-    private boolean isDarkMode = true;
+    private boolean isDarkMode = false;
 
     public enum TokenTrackerEnum {
        CHART_DATA,
@@ -652,7 +652,12 @@ public class NewTabPageLayout extends LinearLayout implements BackgroundControll
         }
 
         NewTabPageLayout ntpLayout = findViewById(R.id.ntp_content);
+        RelativeLayout mNtpLayoutInner = findViewById(R.id.ntp_content_inner);
         ntpLayout.setBackgroundColor(Color.parseColor(backgroundColor));
+        mNtpLayoutInner.setBackgroundColor(Color.parseColor(backgroundColor));
+
+        TextView mTokenTrackerTitle = findViewById(R.id.token_tracker_title);
+        mTokenTrackerTitle.setTextColor(Color.parseColor(textColor));
 
         TextView mToggleTheme = findViewById(R.id.switch_theme);
         mToggleTheme.setOnClickListener(new View.OnClickListener() {
@@ -754,6 +759,8 @@ public class NewTabPageLayout extends LinearLayout implements BackgroundControll
         }
 
         try {
+            boolean isLightTheme = ChromeSharedPreferences.getInstance().readInt("ui_theme_setting", ThemeType.LIGHT) == ThemeType.LIGHT;
+
             JSONArray jsonArray = new JSONArray(result);
             for (int i = 0; i < jsonArray.length(); i++) {
                 JSONObject jsonObj = jsonArray.getJSONObject(i);
@@ -761,6 +768,8 @@ public class NewTabPageLayout extends LinearLayout implements BackgroundControll
                 for (TokenTrackerObj token : tokenTrackerObjects) {
                     if (id.equals(token.id)) {
                         final String externalUrl = "https://www.coingecko.com/en/coins/" + id;
+
+                        String textColor = isLightTheme ? "#000000" : "#ffffff";
 
                         final ImageView logo;
                         TextView priceTextView = null;
@@ -772,6 +781,7 @@ public class NewTabPageLayout extends LinearLayout implements BackgroundControll
                             priceTextView = (TextView) tokenLayout.findViewById(R.id.token_price);
                             capTextView = (TextView) tokenLayout.findViewById(R.id.token_cap);
                             tickerTextView = (TextView) tokenLayout.findViewById(R.id.token_ticker);
+
                             logo = tokenLayout.findViewById(R.id.logo);
                         } else if (token.position == 1) {
                             tokenLayout = mTokenTrackerContainer.findViewById(R.id.token_traker_2);
@@ -786,6 +796,10 @@ public class NewTabPageLayout extends LinearLayout implements BackgroundControll
                             tickerTextView = (TextView) tokenLayout.findViewById(R.id.token_ticker);
                             logo = tokenLayout.findViewById(R.id.logo);
                         }
+
+                        priceTextView.setTextColor(Color.parseColor(textColor));
+                        capTextView.setTextColor(Color.parseColor(textColor));
+                        tickerTextView.setTextColor(Color.parseColor(textColor));
 
                         tokenLayout.setOnClickListener(new View.OnClickListener() {
                             @Override

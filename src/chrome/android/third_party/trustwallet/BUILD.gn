@@ -2,8 +2,12 @@ import("//build/config/android/rules.gni")
 import("//build/config/android/rules.gni")
 
 android_aar_prebuilt("trustwallet_java") {
+
+
   extract_native_libraries = true
-  #ignore_native_libraries = true
+  ignore_manifest = true
+  ignore_proguard_configs = true
+
   aar_path = "trustwallet.aar"
   info_path ="trustwallet.info"
   deps = [
