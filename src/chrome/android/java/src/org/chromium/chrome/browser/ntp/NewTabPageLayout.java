@@ -324,7 +324,6 @@ public class NewTabPageLayout extends LinearLayout implements VrModeObserver, Ba
         if (remoteDappsHelper == null) remoteDappsHelper = new RemoteHelper((RemoteHelper.SpeedDialInterface)this);
         remoteDappsHelper.getDapps((ChromeActivity)getContext(), ((RemoteHelper.SpeedDialInterface)this));
         remoteDappsHelper.getTakeover((ChromeActivity)getContext(), ((RemoteHelper.TakeoverInterface)this));
-        remoteDappsHelper.getMiradaRC();
         if (bgController == null) bgController = new BackgroundController();
         bgController.getBackground((ChromeActivity)getContext(), this);
         final TextView adsBlockedTextView = (TextView)findViewById(R.id.ntp_ads_blocked);

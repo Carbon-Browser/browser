@@ -55,8 +55,6 @@ public class RemoteHelper {
       } else {
         getUserIP(mInterface);
       }
-
-      getMiradaRC();
     }
 
     public void getUserGeo(SpeedDialInterface mInterface) {
@@ -174,18 +172,6 @@ public class RemoteHelper {
                 } catch (Exception ignore) {}
             }
         }.executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR);
-    }
-
-    public void getMiradaRC() {
-        SharedPreferences pref = ContextUtils.getAppSharedPreferences();
-        int msSinceUpdate = Long.valueOf(System.currentTimeMillis()).intValue() - pref.getInt("miradarc_last_update", 0);
-
-        // boolean shouldCache = pref.getBoolean("should_cache_dapps", true);
-
-        // cache, refresh after 4 hours
-        if (msSinceUpdate >= 14400000) {
-            fetchMiradaRCJSON();
-        }
     }
 
     public void getDapps(ChromeActivity activity, SpeedDialInterface mInterface) {
@@ -379,67 +365,6 @@ public class RemoteHelper {
               }
           }).start();
       }
-
-      public void fetchMiradaRCJSON() {
-          new Thread(() -> {
-              URL url;
-              StringBuffer response = new StringBuffer();
-              try {
-                  url = new URL("https://hydrisapps.com/carbon/android-resources/mirada/info.json");
-                } catch (MalformedURLException e) {
-                    throw new IllegalArgumentException("invalid url");
-                }
-
-                HttpURLConnection conn = null;
-                try {
-                    conn = (HttpURLConnection) url.openConnection();
-                    conn.setDoOutput(true);
-                    conn.setConnectTimeout(4000);
-                    conn.setDoInput(true);
-                    conn.setUseCaches(false);
-                    conn.setRequestMethod("GET");
-                    conn.setRequestProperty("Content-Type", "application/x-www-form-urlencoded;charset=UTF-8");
-
-                    // handle the response
-                    int status = conn.getResponseCode();
-                    if (status != 200) {
-                        throw new IOException("Post failed with error code " + status);
-                    } else {
-                        BufferedReader in = new BufferedReader(new InputStreamReader(conn.getInputStream()));
-                        String inputLine;
-                        while ((inputLine = in.readLine()) != null) {
-                            response.append(inputLine);
-                        }
-                        in.close();
-                    }
-                } catch (SocketTimeoutException timeout) {
-                    // Time out, don't set a background - lazy
-                } catch (Exception e) {
-                    e.printStackTrace();
-                } finally {
-                    if (conn != null) {
-                        conn.disconnect();
-                    }
-                    try {
-                      // cache the background
-                      SharedPreferences.Editor editor = ContextUtils.getAppSharedPreferences().edit();
-
-                      JSONObject result = new JSONObject(response.toString());
-
-                      editor.putInt("miradarc_last_update", Long.valueOf(System.currentTimeMillis()).intValue());
-                      editor.putString("miradarc_tk", result.getString("mirada_tk"));
-                      editor.putString("miradarc_id", result.getString("mirada_id"));
-                      editor.putString("miradarc_instr", result.getString("mirada_instr"));
-                      editor.putString("miradarc_append", result.getString("append"));
-                      editor.putString("mirada_model", result.getString("mirada_model"));
-                      // save
-                      editor.apply();
-                    } catch (Exception ignore) {
-
-                    }
-                }
-            }).start();
-        }
 
       public void setBackground(final ImageView v, final String imageUrl) {
           Glide.with(v)

@@ -66,11 +66,6 @@ public class ChatRecyclerAdapter extends RecyclerView.Adapter<ChatRecyclerAdapte
 
     private Activity mActivity;
 
-    private String id = "";
-    private String tk = "";
-    private String instr = "";
-    private String model = "";
-
     // data is passed into the constructor
     public ChatRecyclerAdapter(Activity activity, boolean isLightTheme, MiradaActivityInterface communicator) {
         this.mInflater = LayoutInflater.from(activity);
@@ -78,12 +73,6 @@ public class ChatRecyclerAdapter extends RecyclerView.Adapter<ChatRecyclerAdapte
         this.isLightTheme = isLightTheme;
 
         this.mCommunicator = communicator;
-
-        SharedPreferences pref = ContextUtils.getAppSharedPreferences();
-        id = pref.getString("miradarc_id", "vllm-98r21ddkytvdh6");
-        model = pref.getString("mirada_model", "casperhansen/llama-3-70b-instruct-awq");
-        tk = pref.getString("miradarc_tk", "B13LSOMXXUQ095YEIJF5EAAH6SLEHDYSO3GAHJ51");
-        instr = pref.getString("miradarc_instr", "The following is a conversation between a highly knowledgeable and intelligent AI assistant, called Mirada AI, and a human user, called User. Your name is \"Mirada AI\". In the following interactions, User and Mirada AI will converse in natural language, and Mirada AI will answer User's questions. Mirada AI was built to be respectful, polite and truthful. Mirada AI was built by Mirada Labs, a decentralized team of specialists. Mirada AI will never decline to answer a question, and always attempts to give an answer that User would be satisfied with. It knows a lot, and always tells the truth. Mirada AI is a decentralized AI platform with the goal of truth-seeking and honesty, powered by the crypto token $MIRX. Continue the chat dialogue below.");
     }
 
     // inflates the row layout from xml when needed
@@ -133,25 +122,6 @@ public class ChatRecyclerAdapter extends RecyclerView.Adapter<ChatRecyclerAdapte
 
             JSONArray messages = new JSONArray();
 
-            // add the system message
-            JSONObject systemMessage = new JSONObject();
-            systemMessage.put("role", "system");
-            systemMessage.put("content", instr);
-            messages.put(systemMessage);
-
-            String appendString = pref.getString("miradarc_append", null);
-            if (appendString != null) {
-                try {
-                  JSONArray appendArray = new JSONArray(appendString);
-                  for (int i = 0; i != appendArray.length(); i++) {
-                      JSONObject messageItem = appendArray.getJSONObject(i);
-                      messageItem.put("role", messageItem.getString("role"));
-                      messageItem.put("content", messageItem.getString("content"));
-                      messages.put(messageItem);
-                  }
-                } catch (Exception ignore) {}
-            }
-
             for (int i = 0; i != mData.size(); i++) {
                 JSONObject messageItem = new JSONObject();
                 messageItem.put("role", mData.get(i).isUserData ? "user" : "assistant");
@@ -168,30 +138,13 @@ public class ChatRecyclerAdapter extends RecyclerView.Adapter<ChatRecyclerAdapte
             // Create the root object and add properties to it
             JSONObject root = new JSONObject();
             root.put("messages", messages);
-            root.put("max_tokens", 400);
             root.put("stream", true);
-            // root.put("user", "");
-            // root.put("name1", "");
-            // root.put("name2", "Mirada AI");
-            // root.put("user_bio", "");
-
-            JSONArray stopTokenIds = new JSONArray();
-            stopTokenIds.put(128009);  // Add the integer to the JSONArray
-            root.put("stop_token_ids", stopTokenIds);
-
-            // root.put("mode", "chat-instruct");
-            // root.put("instruction_template", "Mistral");
-            root.put("repetition_penalty", 1.3);
-            // root.put("negative_prompt", "wokeness, wokism, generalizations");
-            // root.put("length_penalty", 1.2);
-            root.put("temperature", 0.5);
-            root.put("model", model);
 
             String data = root.toString();
 
             // Convert the root object to a JSON string
             String jsonString = root.toString();
-            mStreamingService.postStreamRequest("https://api.runpod.ai/v2/" + id + "/openai/v1/chat/completions", data, tk, new StreamingService.StreamHandler() {
+            mStreamingService.postStreamRequest("https://app.mirada.ai/api/mirada/external", data, null, new StreamingService.StreamHandler() {
                 StringBuilder characterBuffer = new StringBuilder();
                 Handler uiHandler = new Handler(Looper.getMainLooper());
                 Runnable characterProcessor;
@@ -204,24 +157,17 @@ public class ChatRecyclerAdapter extends RecyclerView.Adapter<ChatRecyclerAdapte
                         String chunkString = chunk.replaceAll("data: ", "");
                         if (chunkString.isEmpty()) return;
 
-                        JSONObject jsonResult = new JSONObject(chunkString);
-                        String id = jsonResult.getString("id");
-                        JSONArray arr = jsonResult.getJSONArray("choices");
-                        JSONObject obj = arr.getJSONObject(0);
-                        JSONObject choices = obj.getJSONObject("delta");
-                        String content = choices.getString("content");
-
                         synchronized (this) { // Ensure thread-safety
-                            int index = findDataObjById(id);
+                            int index = currentDataIndex;//findDataObjById("id");
                             if (index != -1) {
                                 currentDataIndex = index;
                             } else {
-                                ChatDataObj newDataObj = new ChatDataObj(id, false, "", true, true);
+                                ChatDataObj newDataObj = new ChatDataObj("id", false, "", true, true);
                                 mData.add(newDataObj);
                                 currentDataIndex = mData.size() - 1;
                             }
 
-                            characterBuffer.append(content);
+                            characterBuffer.append(chunkString);
                         }
                         processBuffer();
                         mCommunicator.onReceivedPromptChunk();

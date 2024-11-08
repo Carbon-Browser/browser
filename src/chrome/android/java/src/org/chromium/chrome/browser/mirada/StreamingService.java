@@ -23,7 +23,7 @@ public class StreamingService {
                 connection = (HttpURLConnection) url.openConnection();
                 connection.setRequestMethod("POST");
                 connection.setRequestProperty("Content-Type", "application/json; charset=UTF-8");
-                connection.setRequestProperty("Authorization", "Bearer " + auth);
+                connection.setRequestProperty("Origin", "Carbon");
                 connection.setDoOutput(true);
 
                 try (OutputStream os = connection.getOutputStream()) {
