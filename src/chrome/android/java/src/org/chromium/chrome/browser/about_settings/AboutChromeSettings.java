@@ -49,7 +49,7 @@ public class AboutChromeSettings extends PreferenceFragmentCompat
         SettingsUtils.addPreferencesFromResource(this, R.xml.about_chrome_preferences);
 
         Preference p = findPreference(PREF_APPLICATION_VERSION);
-        p.setSummary("v7.5");
+        p.setSummary("v7.10");
         p.setOnPreferenceClickListener(this);
         p = findPreference(PREF_OS_VERSION);
         p.setSummary(AboutSettingsBridge.getOSVersion());

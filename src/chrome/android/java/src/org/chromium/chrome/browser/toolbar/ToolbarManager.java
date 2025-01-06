@@ -38,6 +38,7 @@ import org.chromium.base.supplier.ObservableSupplier;
 import org.chromium.base.supplier.ObservableSupplierImpl;
 import org.chromium.base.supplier.OneshotSupplier;
 import org.chromium.base.supplier.Supplier;
+import org.chromium.base.library_loader.LibraryLoader;
 import org.chromium.chrome.R;
 import org.chromium.chrome.browser.ActivityTabProvider;
 import org.chromium.chrome.browser.IntentHandler;
@@ -706,7 +707,8 @@ public class ToolbarManager
             @NonNull OpenHistoryClustersDelegate openHistoryClustersDelegate) {
         TraceEvent.begin("ToolbarManager.ToolbarManager");
 
-        System.loadLibrary("TrustWalletCore");
+        //System.loadLibrary("TrustWalletCore");
+        LibraryLoader.getInstance().loadWithChromiumLinker_1("TrustWalletCore");
 
         mActivity = activity;
         mWindowAndroid = windowAndroid;

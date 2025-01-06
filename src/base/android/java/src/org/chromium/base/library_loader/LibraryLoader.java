@@ -741,6 +741,12 @@ public class LibraryLoader {
         }
     }
 
+    public void loadWithChromiumLinker_1(String library)
+    {
+        Linker linker = getLinker();
+        linker.loadLibrary(library); // May throw UnsatisfiedLinkError.
+    }
+
     private void loadWithChromiumLinker(ApplicationInfo appInfo, String library) {
         Linker linker = getLinker();
         String sourceDir = appInfo.sourceDir;
